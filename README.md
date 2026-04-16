@@ -11,7 +11,7 @@
   - **Prompt**: provide free-form prompt instructions
 - Attach up to 10 reference images per project
 - Preview the full generated prompt before sending
-- Generate audio (+ optional lyrics) through Google AI Lyria
+- Generate audio (and optional lyrics) through Google AI Lyria
 - Play, review, export, and delete generated tracks from history
 - Secure API key storage in Keychain
 
