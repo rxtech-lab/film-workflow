@@ -10,31 +10,31 @@ struct SettingsView: View {
         Form {
             Section("Google AI API Key") {
                 SecureField("Enter your API key", text: $apiKey)
+                    #if os(macOS)
                     .textFieldStyle(.roundedBorder)
+                    #endif
 
-                Text("Your API key is stored securely in the macOS Keychain.")
+                Text("Your API key is stored securely in the Keychain.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
 
-                HStack {
-                    Button("Save") {
-                        saveKey()
-                    }
-                    .disabled(apiKey.trimmingCharacters(in: .whitespaces).isEmpty)
-
-                    if showSavedAlert {
-                        Text("Saved!")
-                            .font(.caption)
-                            .foregroundStyle(.green)
-                            .transition(.opacity)
-                    }
+                Button("Save") {
+                    saveKey()
                 }
+                .disabled(apiKey.trimmingCharacters(in: .whitespaces).isEmpty)
             }
         }
         .formStyle(.grouped)
+        #if os(macOS)
         .frame(width: 450, height: 200)
+        #endif
         .onAppear {
             loadKey()
+        }
+        .alert("Saved", isPresented: $showSavedAlert) {
+            Button("OK") {}
+        } message: {
+            Text("Your API key has been saved to the Keychain.")
         }
         .alert("Error", isPresented: $showError) {
             Button("OK") {}
@@ -53,14 +53,7 @@ struct SettingsView: View {
         do {
             let config = AppConfig(googleAIKey: apiKey)
             try config.saveToKeychain()
-            withAnimation {
-                showSavedAlert = true
-            }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-                withAnimation {
-                    showSavedAlert = false
-                }
-            }
+            showSavedAlert = true
         } catch {
             errorMessage = error.localizedDescription
             showError = true

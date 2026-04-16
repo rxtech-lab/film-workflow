@@ -92,6 +92,8 @@ struct LyriaClient {
               let firstCandidate = candidates.first,
               let content = firstCandidate["content"] as? [String: Any],
               let parts = content["parts"] as? [[String: Any]] else {
+            let raw = String(data: data, encoding: .utf8) ?? "<non-utf8 \(data.count) bytes>"
+            print("[LyriaClient] Invalid response. Raw body:\n\(raw)")
             throw LyriaError.invalidResponse
         }
 
@@ -111,6 +113,8 @@ struct LyriaClient {
         }
 
         guard let audio = audioData else {
+            let raw = String(data: data, encoding: .utf8) ?? "<non-utf8 \(data.count) bytes>"
+            print("[LyriaClient] No audio in response. Raw body:\n\(raw)")
             throw LyriaError.noAudioInResponse
         }
 
