@@ -1,0 +1,185 @@
+import SwiftUI
+import UniformTypeIdentifiers
+
+struct MusicProjectParametersView: View {
+    @Bindable var project: MusicProject
+    @State private var selectedInstruments: Set<MusicInstrument> = []
+    @State private var showImagePicker = false
+
+    var body: some View {
+        Form {
+            basicInfoSection
+            musicalParametersSection
+            instrumentsSection
+            referenceImagesSection
+        }
+        .formStyle(.grouped)
+        .navigationTitle(project.name)
+        .onAppear {
+            selectedInstruments = project.instrumentEnums
+        }
+        .onChange(of: selectedInstruments) { _, newValue in
+            project.instrumentEnums = newValue
+        }
+        .fileImporter(
+            isPresented: $showImagePicker,
+            allowedContentTypes: [.image],
+            allowsMultipleSelection: true
+        ) { result in
+            handleImageImport(result)
+        }
+    }
+
+    // MARK: - Sections
+
+    private var basicInfoSection: some View {
+        Section("Basic Info") {
+            TextField("Project Name", text: $project.name)
+
+            Picker("Input Mode", selection: $project.inputModeEnum) {
+                ForEach(InputMode.allCases) { mode in
+                    Text(mode.rawValue).tag(mode)
+                }
+            }
+        }
+    }
+
+    private var musicalParametersSection: some View {
+        Section("Musical Parameters") {
+            Picker("Genre", selection: $project.genreEnum) {
+                ForEach(MusicGenre.allCases) { genre in
+                    Text(genre.rawValue).tag(genre)
+                }
+            }
+
+            Picker("Mood", selection: $project.moodEnum) {
+                ForEach(Mood.allCases) { mood in
+                    Text(mood.rawValue).tag(mood)
+                }
+            }
+
+            Picker("BPM", selection: $project.bpmPreset) {
+                ForEach(BPMPreset.allCases) { bpm in
+                    Text(bpm.displayName).tag(bpm)
+                }
+            }
+
+            Picker("Key / Scale", selection: $project.keyScaleEnum) {
+                ForEach(KeyScale.allCases) { key in
+                    Text(key.rawValue).tag(key)
+                }
+            }
+
+            Picker("Duration", selection: $project.musicLengthEnum) {
+                ForEach(MusicLength.allCases) { length in
+                    Text(length.rawValue).tag(length)
+                }
+            }
+
+            Picker("Type", selection: $project.generationTypeEnum) {
+                ForEach(GenerationType.allCases) { type in
+                    Text(type.rawValue).tag(type)
+                }
+            }
+
+            if project.generationTypeEnum == .withLyrics {
+                Picker("Lyrics Language", selection: $project.lyricsLanguageEnum) {
+                    ForEach(LyricsLanguage.allCases) { lang in
+                        Text(lang.rawValue).tag(lang)
+                    }
+                }
+            }
+        }
+    }
+
+    private var instrumentsSection: some View {
+        Section("Instruments") {
+            LazyVGrid(columns: [
+                GridItem(.adaptive(minimum: 150), alignment: .leading)
+            ], alignment: .leading, spacing: 4) {
+                ForEach(MusicInstrument.allCases) { instrument in
+                    Toggle(instrument.rawValue, isOn: Binding(
+                        get: { selectedInstruments.contains(instrument) },
+                        set: { isOn in
+                            if isOn {
+                                selectedInstruments.insert(instrument)
+                            } else {
+                                selectedInstruments.remove(instrument)
+                            }
+                        }
+                    ))
+                    .toggleStyle(.checkbox)
+                }
+            }
+        }
+    }
+
+    private var referenceImagesSection: some View {
+        Section("Reference Images") {
+            if !project.referenceImagePaths.isEmpty {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        ForEach(Array(project.referenceImagePaths.enumerated()), id: \.offset) { index, path in
+                            let url = FileStorage.absoluteURL(for: path)
+                            ZStack(alignment: .topTrailing) {
+                                if let nsImage = NSImage(contentsOf: url) {
+                                    Image(nsImage: nsImage)
+                                        .resizable()
+                                        .aspectRatio(contentMode: .fill)
+                                        .frame(width: 100, height: 100)
+                                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                                }
+
+                                Button {
+                                    removeImage(at: index)
+                                } label: {
+                                    Image(systemName: "xmark.circle.fill")
+                                        .foregroundStyle(.white, .red)
+                                }
+                                .buttonStyle(.borderless)
+                                .offset(x: 4, y: -4)
+                            }
+                        }
+                    }
+                }
+                .frame(height: 110)
+            }
+
+            Button {
+                showImagePicker = true
+            } label: {
+                Label("Add Images", systemImage: "photo.on.rectangle.angled")
+            }
+            .disabled(project.referenceImagePaths.count >= 10)
+
+            if project.referenceImagePaths.count >= 10 {
+                Text("Maximum 10 images reached.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    // MARK: - Actions
+
+    private func handleImageImport(_ result: Result<[URL], Error>) {
+        switch result {
+        case .success(let urls):
+            let remaining = 10 - project.referenceImagePaths.count
+            for url in urls.prefix(remaining) {
+                guard url.startAccessingSecurityScopedResource() else { continue }
+                defer { url.stopAccessingSecurityScopedResource() }
+                if let relativePath = try? FileStorage.copyImage(from: url) {
+                    project.referenceImagePaths.append(relativePath)
+                }
+            }
+        case .failure:
+            break
+        }
+    }
+
+    private func removeImage(at index: Int) {
+        let path = project.referenceImagePaths.remove(at: index)
+        FileStorage.deleteFile(at: path)
+    }
+}
