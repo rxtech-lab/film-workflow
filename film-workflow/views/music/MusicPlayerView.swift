@@ -106,13 +106,15 @@ struct MusicPlayerView: View {
                     }
                     .buttonStyle(.borderless)
 
-                    Button {
-                        playerManager.stop()
-                    } label: {
-                        Image(systemName: "stop.fill")
-                            .font(.caption)
+                    if playerManager.isPlaying || playerManager.currentTime > 0 {
+                        Button {
+                            playerManager.stop()
+                        } label: {
+                            Image(systemName: "stop.fill")
+                                .font(.title3)
+                        }
+                        .buttonStyle(.borderless)
                     }
-                    .buttonStyle(.borderless)
 
                     Text(playerManager.formattedCurrentTime)
                         .font(.caption.monospacedDigit())

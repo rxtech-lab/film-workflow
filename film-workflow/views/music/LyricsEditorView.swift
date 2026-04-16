@@ -78,7 +78,7 @@ struct LyricEntryRow: View {
                 .frame(minHeight: 80)
                 .scrollContentBackground(.hidden)
                 .padding(4)
-                .background(Color(nsColor: .controlBackgroundColor))
+                .background(Color.platformControlBackground)
                 .clipShape(RoundedRectangle(cornerRadius: 6))
         }
         .padding(.vertical, 4)

@@ -13,6 +13,14 @@ struct ContentView: View {
                 Text("Coming soon")
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
+            #if !os(macOS)
+            Tab(Tabs.Settings.displayName, systemImage: Tabs.Settings.systemImage, value: Tabs.Settings) {
+                NavigationStack {
+                    SettingsView()
+                        .navigationTitle("Settings")
+                }
+            }
+            #endif
         }
     }
 }

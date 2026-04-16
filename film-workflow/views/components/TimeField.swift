@@ -12,11 +12,11 @@ struct TimeField: View {
             .font(.caption.monospacedDigit())
             .frame(width: 45, height: 20)
             .padding(.horizontal, 4)
-            .background(Color(nsColor: .controlBackgroundColor))
+            .background(Color.platformControlBackground)
             .clipShape(RoundedRectangle(cornerRadius: 4))
             .overlay(
                 RoundedRectangle(cornerRadius: 4)
-                    .stroke(Color(nsColor: .separatorColor), lineWidth: 0.5)
+                    .stroke(Color.platformSeparator, lineWidth: 0.5)
             )
             .onSubmit {
                 if let parsed = SongStructureEntry.parseTime(text) {

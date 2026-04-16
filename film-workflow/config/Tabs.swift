@@ -3,11 +3,13 @@ import Foundation
 enum Tabs: Codable, Identifiable, CaseIterable {
     case Music
     case Narrative
+    case Settings
 
     var id: String {
         switch self {
         case .Music: return "Music"
         case .Narrative: return "Narrative"
+        case .Settings: return "Settings"
         }
     }
 
@@ -17,6 +19,7 @@ enum Tabs: Codable, Identifiable, CaseIterable {
         switch self {
         case .Music: return "music.note"
         case .Narrative: return "text.book.closed"
+        case .Settings: return "gear"
         }
     }
 }

@@ -210,7 +210,7 @@ struct GeneratedMusicCard: View {
                         .padding(12)
                 }
                 .frame(maxHeight: 150)
-                .background(Color(nsColor: .textBackgroundColor).opacity(0.5))
+                .background(Color.platformTextBackground.opacity(0.5))
                 .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
                 .padding(.top, 8)
             } label: {
@@ -224,7 +224,7 @@ struct GeneratedMusicCard: View {
 
     private var cardBackground: some View {
         RoundedRectangle(cornerRadius: 12, style: .continuous)
-            .fill(Color(nsColor: .controlBackgroundColor))
+            .fill(Color.platformControlBackground)
     }
 
     private var cardBorder: some View {
@@ -247,8 +247,7 @@ struct GeneratedMusicCard: View {
         }
 
         Button {
-            NSPasteboard.general.clearContents()
-            NSPasteboard.general.setString(file.audioURL.path, forType: .string)
+            Pasteboard.copy(file.audioURL.path)
         } label: {
             Label("Copy Path", systemImage: "doc.on.doc")
         }

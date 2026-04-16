@@ -96,7 +96,7 @@ struct MusicProjectParametersView: View {
         Section("Instruments") {
             LazyVGrid(columns: [
                 GridItem(.adaptive(minimum: 150), alignment: .leading)
-            ], alignment: .leading, spacing: 4) {
+            ], alignment: .leading, spacing: 8) {
                 ForEach(MusicInstrument.allCases) { instrument in
                     Toggle(instrument.rawValue, isOn: Binding(
                         get: { selectedInstruments.contains(instrument) },
@@ -108,7 +108,12 @@ struct MusicProjectParametersView: View {
                             }
                         }
                     ))
+                    #if os(macOS)
                     .toggleStyle(.checkbox)
+                    #else
+                    .toggleStyle(.switch)
+                    .padding(.vertical, 6)
+                    #endif
                 }
             }
         }
@@ -122,8 +127,8 @@ struct MusicProjectParametersView: View {
                         ForEach(Array(project.referenceImagePaths.enumerated()), id: \.offset) { index, path in
                             let url = FileStorage.absoluteURL(for: path)
                             ZStack(alignment: .topTrailing) {
-                                if let nsImage = NSImage(contentsOf: url) {
-                                    Image(nsImage: nsImage)
+                                if let image = Image(contentsOfFile: url) {
+                                    image
                                         .resizable()
                                         .aspectRatio(contentMode: .fill)
                                         .frame(width: 100, height: 100)

@@ -27,8 +27,10 @@ struct film_workflowApp: App {
         }
         .modelContainer(sharedModelContainer)
 
+        #if os(macOS)
         Settings {
             SettingsView()
         }
+        #endif
     }
 }
