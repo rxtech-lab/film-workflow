@@ -47,6 +47,12 @@
 
 Run tests in Xcode (`Product > Test`) or via command line on a machine with Xcode tools installed.
 
+Example:
+
+```bash
+xcodebuild test -project film-workflow.xcodeproj -scheme film-workflow -destination 'platform=iOS Simulator,name=iPhone 15'
+```
+
 ## Notes
 
 - The **Narrative** tab is currently a placeholder (`Coming soon`).
