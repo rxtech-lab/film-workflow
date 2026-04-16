@@ -169,7 +169,7 @@ struct SongStructureEntryRow: View {
                 .frame(minHeight: 60)
                 .scrollContentBackground(.hidden)
                 .padding(4)
-                .background(Color(nsColor: .controlBackgroundColor))
+                .background(Color.platformControlBackground)
                 .clipShape(RoundedRectangle(cornerRadius: 6))
         }
         .padding(.vertical, 4)
