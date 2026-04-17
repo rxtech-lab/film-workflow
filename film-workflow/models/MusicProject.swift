@@ -9,6 +9,7 @@ final class MusicProject {
 
     var inputMode: String
     var promptText: String
+    var generalPrompt: String = ""
 
     var genre: String
     var instruments: [String]
@@ -32,6 +33,7 @@ final class MusicProject {
         self.updatedAt = Date()
         self.inputMode = InputMode.editor.rawValue
         self.promptText = ""
+        self.generalPrompt = ""
         self.genre = MusicGenre.cinematic.rawValue
         self.instruments = []
         self.bpm = 120
