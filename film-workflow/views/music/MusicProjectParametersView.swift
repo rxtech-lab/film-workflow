@@ -5,6 +5,7 @@ import PhotosUI
 #endif
 
 struct MusicProjectParametersView: View {
+    private let maxReferenceImages = 10
     @Bindable var project: MusicProject
     @State private var selectedInstruments: Set<MusicInstrument> = []
     @State private var showImagePicker = false
@@ -50,7 +51,7 @@ struct MusicProjectParametersView: View {
         .photosPicker(
             isPresented: $showPhotoPicker,
             selection: $selectedPhotoItems,
-            maxSelectionCount: max(0, 10 - project.referenceImagePaths.count),
+            maxSelectionCount: max(0, maxReferenceImages - project.referenceImagePaths.count),
             matching: .images
         )
         .onChange(of: selectedPhotoItems) { _, newItems in
@@ -205,9 +206,9 @@ struct MusicProjectParametersView: View {
             } label: {
                 Label("Add Images", systemImage: "photo.on.rectangle.angled")
             }
-            .disabled(project.referenceImagePaths.count >= 10)
+            .disabled(project.referenceImagePaths.count >= maxReferenceImages)
 
-            if project.referenceImagePaths.count >= 10 {
+            if project.referenceImagePaths.count >= maxReferenceImages {
                 Text("Maximum 10 images reached.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -220,7 +221,7 @@ struct MusicProjectParametersView: View {
     private func handleImageImport(_ result: Result<[URL], Error>) {
         switch result {
         case .success(let urls):
-            let remaining = 10 - project.referenceImagePaths.count
+            let remaining = maxReferenceImages - project.referenceImagePaths.count
             for url in urls.prefix(remaining) {
                 guard url.startAccessingSecurityScopedResource() else { continue }
                 defer { url.stopAccessingSecurityScopedResource() }
@@ -235,7 +236,7 @@ struct MusicProjectParametersView: View {
 
     #if os(iOS)
     private func handlePhotoImport(_ items: [PhotosPickerItem]) {
-        let remaining = 10 - project.referenceImagePaths.count
+        let remaining = maxReferenceImages - project.referenceImagePaths.count
         guard remaining > 0 else {
             selectedPhotoItems = []
             return
