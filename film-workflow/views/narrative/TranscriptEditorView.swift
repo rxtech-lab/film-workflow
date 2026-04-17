@@ -210,7 +210,8 @@ struct NarrativeParagraphRow: View {
             }
 
             TextEditor(text: $attributedContent, selection: trackingSelection)
-                .font(.body)
+                .font(.system(.body, design: .default))
+                .lineSpacing(8)
                 .frame(minHeight: 60)
                 .scrollContentBackground(.hidden)
                 .padding(6)
@@ -680,15 +681,18 @@ struct NarrativeParagraphRow: View {
         let ns = plain as NSString
         var result = AttributedString()
         var cursor = 0
+        let baseFont: Font = .system(.body, design: .default)
         for (index, match) in ShortcodeExpander.tokenMatches(in: plain).enumerated() {
             if match.range.location > cursor {
                 let before = ns.substring(with: NSRange(location: cursor, length: match.range.location - cursor))
-                result.append(AttributedString(before))
+                var beforeAttr = AttributedString(before)
+                beforeAttr.font = baseFont
+                result.append(beforeAttr)
             }
             var chip = AttributedString(match.raw)
             chip.foregroundColor = Color.accentColor
             chip.backgroundColor = Color.accentColor.opacity(0.15)
-            chip.font = .body.monospaced().weight(.medium)
+            chip.font = .system(.body, design: .monospaced).weight(.medium)
             var chipAttrs = AttributeContainer()
             chipAttrs[ChipIndexKey.self] = index
             chip.mergeAttributes(chipAttrs)
@@ -697,7 +701,9 @@ struct NarrativeParagraphRow: View {
         }
         if cursor < ns.length {
             let trailing = ns.substring(with: NSRange(location: cursor, length: ns.length - cursor))
-            result.append(AttributedString(trailing))
+            var trailingAttr = AttributedString(trailing)
+            trailingAttr.font = baseFont
+            result.append(trailingAttr)
         }
         return result
     }
@@ -888,7 +894,7 @@ struct NarrativeParagraphRow: View {
                 Button("None") { paragraph.emotion = ""; isCustomEmotion = false }
                 Divider()
                 ForEach(EmotionPreset.allCases) { preset in
-                    Button(preset.displayName) {
+                    Button(preset.localizedName) {
                         paragraph.emotion = preset.rawValue
                         isCustomEmotion = false
                     }

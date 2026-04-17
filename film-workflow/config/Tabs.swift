@@ -1,4 +1,5 @@
 import Foundation
+import SwiftUI
 
 enum Tabs: Codable, Identifiable, CaseIterable {
     case Music
@@ -13,7 +14,13 @@ enum Tabs: Codable, Identifiable, CaseIterable {
         }
     }
 
-    var displayName: String { id }
+    var displayName: LocalizedStringKey {
+        switch self {
+        case .Music: return "Music"
+        case .Narrative: return "Narrative"
+        case .Settings: return "Settings"
+        }
+    }
 
     var systemImage: String {
         switch self {

@@ -58,7 +58,11 @@ struct SongStructureEditorView: View {
                     Button {
                         addEntry(type: type)
                     } label: {
-                        Label("+ \(type.rawValue)", systemImage: iconForType(type))
+                        Label {
+                            Text("+ \(Text(type.localizedName))")
+                        } icon: {
+                            Image(systemName: iconForType(type))
+                        }
                     }
                     .buttonStyle(.bordered)
                 }

@@ -4,6 +4,12 @@ struct PromptBuilder {
     static func build(from project: MusicProject) -> String {
         var lines: [String] = []
 
+        let trimmedVibe = project.generalPrompt.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmedVibe.isEmpty {
+            lines.append("Overall vibe: \(trimmedVibe)")
+            lines.append("")
+        }
+
         // Generation type and genre
         let genType = project.generationTypeEnum
         let genre = project.genreEnum

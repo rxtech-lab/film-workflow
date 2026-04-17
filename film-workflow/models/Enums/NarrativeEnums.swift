@@ -1,4 +1,5 @@
 import Foundation
+import SwiftUI
 
 enum NarrativeProvider: String, CaseIterable, Codable, Identifiable {
     case gemini = "Gemini"
@@ -122,6 +123,45 @@ enum GeminiVoice: String, CaseIterable, Codable, Identifiable {
     }
 
     var displayName: String { "\(rawValue) — \(vibe)" }
+
+    var localizedVibe: LocalizedStringKey {
+        switch self {
+        case .zephyr: "Bright"
+        case .puck: "Upbeat"
+        case .charon: "Informative"
+        case .kore: "Firm"
+        case .fenrir: "Excitable"
+        case .leda: "Youthful"
+        case .orus: "Firm"
+        case .aoede: "Breezy"
+        case .callirrhoe: "Easy-going"
+        case .autonoe: "Bright"
+        case .enceladus: "Breathy"
+        case .iapetus: "Clear"
+        case .umbriel: "Easy-going"
+        case .algieba: "Smooth"
+        case .despina: "Smooth"
+        case .erinome: "Clear"
+        case .algenib: "Gravelly"
+        case .rasalgethi: "Informative"
+        case .laomedeia: "Upbeat"
+        case .achernar: "Soft"
+        case .alnilam: "Firm"
+        case .schedar: "Even"
+        case .gacrux: "Mature"
+        case .pulcherrima: "Forward"
+        case .achird: "Friendly"
+        case .zubenelgenubi: "Casual"
+        case .vindemiatrix: "Gentle"
+        case .sadachbia: "Lively"
+        case .sadaltager: "Knowledgeable"
+        case .sulafat: "Warm"
+        }
+    }
+
+    var localizedDisplayName: LocalizedStringKey {
+        "\(rawValue) — \(Text(localizedVibe))"
+    }
 }
 
 enum AzureRole: String, CaseIterable, Identifiable, Codable {
@@ -137,6 +177,20 @@ enum AzureRole: String, CaseIterable, Identifiable, Codable {
 
     var id: String { rawValue }
     var displayName: String { rawValue.isEmpty ? "Default" : rawValue }
+
+    var localizedName: LocalizedStringKey {
+        switch self {
+        case .none: "Default"
+        case .girl: "Girl"
+        case .boy: "Boy"
+        case .youngAdultFemale: "Young Adult Female"
+        case .youngAdultMale: "Young Adult Male"
+        case .olderAdultFemale: "Older Adult Female"
+        case .olderAdultMale: "Older Adult Male"
+        case .seniorFemale: "Senior Female"
+        case .seniorMale: "Senior Male"
+        }
+    }
 }
 
 enum AzureProsodyPreset {
@@ -164,4 +218,24 @@ enum EmotionPreset: String, CaseIterable, Codable, Identifiable {
 
     var id: String { rawValue }
     var displayName: String { rawValue }
+
+    var localizedName: LocalizedStringKey {
+        switch self {
+        case .enthusiastic: "enthusiastic"
+        case .agreement: "agreement"
+        case .animation: "animation"
+        case .amazement: "amazement"
+        case .laughter: "laughter"
+        case .whispers: "whispers"
+        case .excitedly: "excitedly"
+        case .shouting: "shouting"
+        case .sarcastically: "sarcastically"
+        case .sighs: "sighs"
+        case .reluctantly: "reluctantly"
+        case .tired: "tired"
+        case .bored: "bored"
+        case .happy: "happy"
+        case .sad: "sad"
+        }
+    }
 }

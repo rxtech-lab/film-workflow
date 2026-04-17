@@ -1,4 +1,5 @@
 import Foundation
+import SwiftUI
 
 enum MusicGenre: String, CaseIterable, Codable, Identifiable {
     case pop = "Pop"
@@ -21,6 +22,29 @@ enum MusicGenre: String, CaseIterable, Codable, Identifiable {
     case soul = "Soul"
 
     var id: String { rawValue }
+
+    var localizedName: LocalizedStringKey {
+        switch self {
+        case .pop: "Pop"
+        case .rock: "Rock"
+        case .jazz: "Jazz"
+        case .classical: "Classical"
+        case .electronic: "Electronic"
+        case .hiphop: "Hip Hop"
+        case .rnb: "R&B"
+        case .country: "Country"
+        case .folk: "Folk"
+        case .ambient: "Ambient"
+        case .cinematic: "Cinematic Orchestral"
+        case .lofi: "Lo-fi Hip Hop"
+        case .jazzFusion: "Jazz Fusion"
+        case .metal: "Metal"
+        case .blues: "Blues"
+        case .reggae: "Reggae"
+        case .latin: "Latin"
+        case .soul: "Soul"
+        }
+    }
 }
 
 enum MusicInstrument: String, CaseIterable, Codable, Identifiable {
@@ -46,6 +70,31 @@ enum MusicInstrument: String, CaseIterable, Codable, Identifiable {
     case organ = "Organ"
 
     var id: String { rawValue }
+
+    var localizedName: LocalizedStringKey {
+        switch self {
+        case .piano: "Piano"
+        case .acousticGuitar: "Acoustic Guitar"
+        case .electricGuitar: "Electric Guitar"
+        case .slideGuitar: "Slide Guitar"
+        case .bass: "Bass"
+        case .drums: "Drums"
+        case .strings: "Strings"
+        case .synth: "Synthesizer"
+        case .brass: "Brass"
+        case .woodwinds: "Woodwinds"
+        case .vocals: "Vocals"
+        case .percussion: "Percussion"
+        case .fenderRhodes: "Fender Rhodes Piano"
+        case .tr808: "TR-808 Drum Machine"
+        case .violin: "Violin"
+        case .cello: "Cello"
+        case .flute: "Flute"
+        case .saxophone: "Saxophone"
+        case .trumpet: "Trumpet"
+        case .organ: "Organ"
+        }
+    }
 }
 
 enum BPMPreset: Int, CaseIterable, Codable, Identifiable {
@@ -86,6 +135,27 @@ enum KeyScale: String, CaseIterable, Codable, Identifiable {
     case bMinor = "B Minor"
 
     var id: String { rawValue }
+
+    var localizedName: LocalizedStringKey {
+        switch self {
+        case .cMajor: "C Major"
+        case .cMinor: "C Minor"
+        case .dMajor: "D Major"
+        case .dMinor: "D Minor"
+        case .eMajor: "E Major"
+        case .eMinor: "E Minor"
+        case .fMajor: "F Major"
+        case .fMinor: "F Minor"
+        case .gMajor: "G Major"
+        case .gMinor: "G Minor"
+        case .aMajor: "A Major"
+        case .aMinor: "A Minor"
+        case .bFlatMajor: "Bb Major"
+        case .bFlatMinor: "Bb Minor"
+        case .bMajor: "B Major"
+        case .bMinor: "B Minor"
+        }
+    }
 }
 
 enum Mood: String, CaseIterable, Codable, Identifiable {
@@ -106,6 +176,26 @@ enum Mood: String, CaseIterable, Codable, Identifiable {
     case playful = "Playful"
 
     var id: String { rawValue }
+
+    var localizedName: LocalizedStringKey {
+        switch self {
+        case .happy: "Happy"
+        case .sad: "Sad"
+        case .energetic: "Energetic"
+        case .calm: "Calm"
+        case .dark: "Dark"
+        case .uplifting: "Uplifting"
+        case .mysterious: "Mysterious"
+        case .romantic: "Romantic"
+        case .aggressive: "Aggressive"
+        case .dreamy: "Dreamy"
+        case .nostalgic: "Nostalgic"
+        case .ethereal: "Ethereal"
+        case .epic: "Epic"
+        case .melancholic: "Melancholic"
+        case .playful: "Playful"
+        }
+    }
 }
 
 enum MusicLength: String, CaseIterable, Codable, Identifiable {
@@ -146,6 +236,13 @@ enum InputMode: String, CaseIterable, Codable, Identifiable {
     case editor = "Editor"
 
     var id: String { rawValue }
+
+    var localizedName: LocalizedStringKey {
+        switch self {
+        case .prompt: "Prompt"
+        case .editor: "Editor"
+        }
+    }
 }
 
 enum GenerationType: String, CaseIterable, Codable, Identifiable {
@@ -153,6 +250,13 @@ enum GenerationType: String, CaseIterable, Codable, Identifiable {
     case withoutLyrics = "Instrumental"
 
     var id: String { rawValue }
+
+    var localizedName: LocalizedStringKey {
+        switch self {
+        case .withLyrics: "With Lyrics"
+        case .withoutLyrics: "Instrumental"
+        }
+    }
 }
 
 enum SongSectionType: String, CaseIterable, Codable, Identifiable {
@@ -165,6 +269,17 @@ enum SongSectionType: String, CaseIterable, Codable, Identifiable {
 
     var id: String { rawValue }
     var tag: String { "[\(rawValue)]" }
+
+    var localizedName: LocalizedStringKey {
+        switch self {
+        case .intro: "Intro"
+        case .verse: "Verse"
+        case .chorus: "Chorus"
+        case .bridge: "Bridge"
+        case .outro: "Outro"
+        case .build: "Build"
+        }
+    }
 }
 
 enum LyricsLanguage: String, CaseIterable, Codable, Identifiable {
@@ -185,4 +300,24 @@ enum LyricsLanguage: String, CaseIterable, Codable, Identifiable {
     case vietnamese = "Vietnamese"
 
     var id: String { rawValue }
+
+    var localizedName: LocalizedStringKey {
+        switch self {
+        case .english: "English"
+        case .spanish: "Spanish"
+        case .french: "French"
+        case .german: "German"
+        case .italian: "Italian"
+        case .portuguese: "Portuguese"
+        case .japanese: "Japanese"
+        case .korean: "Korean"
+        case .chinese: "Chinese"
+        case .arabic: "Arabic"
+        case .hindi: "Hindi"
+        case .russian: "Russian"
+        case .turkish: "Turkish"
+        case .thai: "Thai"
+        case .vietnamese: "Vietnamese"
+        }
+    }
 }
