@@ -23,11 +23,37 @@ enum KeychainError: LocalizedError {
 
 struct AppConfig: Codable {
     var googleAIKey: String
+    var azureSpeechKey: String
+    var azureSpeechEndpoint: String
 
     private static let service = "com.rxlab.film-workflow"
-    private static let account = "googleAIKey"
+    private static let googleAccount = "googleAIKey"
+    private static let azureKeyAccount = "azureSpeechKey"
+    private static let azureEndpointAccount = "azureSpeechEndpoint"
 
     static func loadFromKeychain() throws -> AppConfig {
+        AppConfig(
+            googleAIKey: (try? loadString(account: googleAccount)) ?? "",
+            azureSpeechKey: (try? loadString(account: azureKeyAccount)) ?? "",
+            azureSpeechEndpoint: (try? loadString(account: azureEndpointAccount)) ?? ""
+        )
+    }
+
+    func saveToKeychain() throws {
+        try Self.saveString(googleAIKey, account: Self.googleAccount)
+        try Self.saveString(azureSpeechKey, account: Self.azureKeyAccount)
+        try Self.saveString(azureSpeechEndpoint, account: Self.azureEndpointAccount)
+    }
+
+    static func deleteFromKeychain() throws {
+        try deleteString(account: googleAccount)
+        try deleteString(account: azureKeyAccount)
+        try deleteString(account: azureEndpointAccount)
+    }
+
+    // MARK: - Keychain helpers
+
+    private static func loadString(account: String) throws -> String {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
@@ -47,23 +73,22 @@ struct AppConfig: Codable {
         }
 
         guard let data = result as? Data,
-              let key = String(data: data, encoding: .utf8) else {
+              let value = String(data: data, encoding: .utf8) else {
             throw KeychainError.encodingFailed
         }
 
-        return AppConfig(googleAIKey: key)
+        return value
     }
 
-    func saveToKeychain() throws {
-        guard let data = googleAIKey.data(using: .utf8) else {
+    private static func saveString(_ value: String, account: String) throws {
+        guard let data = value.data(using: .utf8) else {
             throw KeychainError.encodingFailed
         }
 
-        // Try to update first
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: Self.service,
-            kSecAttrAccount as String: Self.account
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: account
         ]
 
         let attributes: [String: Any] = [
@@ -73,7 +98,6 @@ struct AppConfig: Codable {
         let updateStatus = SecItemUpdate(query as CFDictionary, attributes as CFDictionary)
 
         if updateStatus == errSecItemNotFound {
-            // Item doesn't exist, add it
             var addQuery = query
             addQuery[kSecValueData as String] = data
 
@@ -86,7 +110,7 @@ struct AppConfig: Codable {
         }
     }
 
-    static func deleteFromKeychain() throws {
+    private static func deleteString(account: String) throws {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
