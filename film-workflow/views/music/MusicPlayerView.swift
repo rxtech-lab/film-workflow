@@ -12,6 +12,11 @@ class AudioPlayerManager {
 
     func load(url: URL) throws {
         stop()
+        #if os(iOS)
+        let session = AVAudioSession.sharedInstance()
+        try session.setCategory(.playback, mode: .default)
+        try session.setActive(true)
+        #endif
         player = try AVAudioPlayer(contentsOf: url)
         player?.prepareToPlay()
         duration = player?.duration ?? 0
