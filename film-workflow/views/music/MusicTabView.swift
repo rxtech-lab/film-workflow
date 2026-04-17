@@ -157,10 +157,9 @@ struct MusicTabView: View {
                                 }
                             }
                         }
-                        .padding()
                 }
                 #if os(macOS)
-                .frame(minWidth: 500, minHeight: 400)
+                .frame(minWidth: 700, minHeight: 400, maxHeight: 600)
                 #endif
             }
         }
@@ -383,33 +382,33 @@ struct MusicProjectDetailPanes: View {
         }
         .navigationTitle(project.name)
         #if os(iOS)
-        .navigationBarTitleDisplayMode(.inline)
+            .navigationBarTitleDisplayMode(.inline)
         #endif
-        .onChange(of: availablePanes) { _, newPanes in
-            if !newPanes.contains(selectedPane) {
-                selectedPane = newPanes.first ?? .parameters
+            .onChange(of: availablePanes) { _, newPanes in
+                if !newPanes.contains(selectedPane) {
+                    selectedPane = newPanes.first ?? .parameters
+                }
             }
-        }
-        .toolbar {
-            ToolbarItem(placement: .primaryAction) {
-                Button(action: onGenerate) {
-                    if isGenerating {
-                        ProgressView()
-                            .controlSize(.small)
-                    } else {
-                        Label("Generate", systemImage: "wand.and.stars")
+            .toolbar {
+                ToolbarItem(placement: .primaryAction) {
+                    Button(action: onGenerate) {
+                        if isGenerating {
+                            ProgressView()
+                                .controlSize(.small)
+                        } else {
+                            Label("Generate", systemImage: "wand.and.stars")
+                        }
                     }
+                    .disabled(isGenerating)
                 }
-                .disabled(isGenerating)
-            }
 
-            ToolbarItem(placement: .primaryAction) {
-                Button(action: onShowHistory) {
-                    Label("History", systemImage: "clock.arrow.circlepath")
+                ToolbarItem(placement: .primaryAction) {
+                    Button(action: onShowHistory) {
+                        Label("History", systemImage: "clock.arrow.circlepath")
+                    }
+                    .badge(project.generatedFiles.count)
                 }
-                .badge(project.generatedFiles.count)
             }
-        }
     }
 }
 
