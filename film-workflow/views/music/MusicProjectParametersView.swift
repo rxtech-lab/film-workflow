@@ -50,7 +50,7 @@ struct MusicProjectParametersView: View {
         .photosPicker(
             isPresented: $showPhotoPicker,
             selection: $selectedPhotoItems,
-            maxSelectionCount: max(1, 10 - project.referenceImagePaths.count),
+            maxSelectionCount: max(0, 10 - project.referenceImagePaths.count),
             matching: .images
         )
         .onChange(of: selectedPhotoItems) { _, newItems in
@@ -243,12 +243,17 @@ struct MusicProjectParametersView: View {
         let itemsToImport = Array(items.prefix(remaining))
         Task {
             for item in itemsToImport {
-                guard let data = try? await item.loadTransferable(type: Data.self) else { continue }
-                let ext = preferredImageExtension(from: item) ?? "jpg"
-                if let relativePath = try? FileStorage.saveImage(data, fileExtension: ext) {
+                do {
+                    guard let data = try await item.loadTransferable(type: Data.self) else { continue }
+                    let ext = preferredImageExtension(from: item) ?? "jpg"
+                    let relativePath = try FileStorage.saveImage(data, fileExtension: ext)
                     await MainActor.run {
                         project.referenceImagePaths.append(relativePath)
                     }
+                } catch {
+                    #if DEBUG
+                    print("Failed to import photo item: \(error)")
+                    #endif
                 }
             }
             await MainActor.run {
