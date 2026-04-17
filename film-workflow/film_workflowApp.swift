@@ -7,6 +7,8 @@ struct film_workflowApp: App {
         let schema = Schema([
             MusicProject.self,
             GeneratedMusic.self,
+            NarrativeProject.self,
+            GeneratedNarrative.self,
         ])
         let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
 

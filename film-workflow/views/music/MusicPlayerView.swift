@@ -2,7 +2,7 @@ import AVFoundation
 import SwiftUI
 
 @Observable
-class AudioPlayerManager {
+class AudioPlayerManager: NSObject, AVAudioPlayerDelegate {
     private var player: AVAudioPlayer?
     private var timer: Timer?
     var isPlaying = false
@@ -11,21 +11,30 @@ class AudioPlayerManager {
     var currentURL: URL?
 
     func load(url: URL) throws {
+        if currentURL == url, player != nil {
+            return
+        }
         stop()
         #if os(iOS)
         let session = AVAudioSession.sharedInstance()
         try session.setCategory(.playback, mode: .default)
         try session.setActive(true)
         #endif
-        player = try AVAudioPlayer(contentsOf: url)
-        player?.prepareToPlay()
-        duration = player?.duration ?? 0
+        let newPlayer = try AVAudioPlayer(contentsOf: url)
+        newPlayer.delegate = self
+        newPlayer.prepareToPlay()
+        player = newPlayer
+        duration = newPlayer.duration
         currentTime = 0
         currentURL = url
     }
 
     func play() {
-        player?.play()
+        guard let player else { return }
+        if player.currentTime >= player.duration {
+            player.currentTime = 0
+        }
+        player.play()
         isPlaying = true
         startTimer()
     }
@@ -57,22 +66,39 @@ class AudioPlayerManager {
         currentTime = time
     }
 
+    func audioPlayerDidFinishPlaying(_ player: AVAudioPlayer, successfully flag: Bool) {
+        isPlaying = false
+        currentTime = player.currentTime
+        stopTimer()
+    }
+
+    func audioPlayerDecodeErrorDidOccur(_ player: AVAudioPlayer, error: Error?) {
+        isPlaying = false
+        stopTimer()
+    }
+
     private func startTimer() {
-        timer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
-            guard let self else { return }
-            if let player = self.player {
-                self.currentTime = player.currentTime
-                if !player.isPlaying {
-                    self.isPlaying = false
-                    self.stopTimer()
-                }
+        stopTimer()
+        let newTimer = Timer(timeInterval: 0.1, repeats: true) { [weak self] _ in
+            guard let self, let player = self.player else { return }
+            self.currentTime = player.currentTime
+            if !player.isPlaying && self.isPlaying {
+                self.isPlaying = false
+                self.stopTimer()
             }
         }
+        RunLoop.main.add(newTimer, forMode: .common)
+        timer = newTimer
     }
 
     private func stopTimer() {
         timer?.invalidate()
         timer = nil
+    }
+
+    deinit {
+        timer?.invalidate()
+        player?.stop()
     }
 
     var formattedCurrentTime: String {
@@ -90,10 +116,26 @@ class AudioPlayerManager {
     }
 }
 
+enum AudioPlayerRegistry {
+    private static var managers: [URL: AudioPlayerManager] = [:]
+
+    static func manager(for url: URL) -> AudioPlayerManager {
+        if let existing = managers[url] {
+            return existing
+        }
+        let manager = AudioPlayerManager()
+        managers[url] = manager
+        return manager
+    }
+}
+
 struct MusicPlayerView: View {
     let url: URL
-    @State private var playerManager = AudioPlayerManager()
     @State private var loadError: String?
+
+    private var playerManager: AudioPlayerManager {
+        AudioPlayerRegistry.manager(for: url)
+    }
 
     var body: some View {
         VStack(spacing: 8) {
@@ -148,8 +190,12 @@ struct MusicPlayerView: View {
                 loadError = "Failed to load audio: \(error.localizedDescription)"
             }
         }
-        .onDisappear {
-            playerManager.stop()
+        .onChange(of: url) { _, newURL in
+            do {
+                try playerManager.load(url: newURL)
+            } catch {
+                loadError = "Failed to load audio: \(error.localizedDescription)"
+            }
         }
     }
 }

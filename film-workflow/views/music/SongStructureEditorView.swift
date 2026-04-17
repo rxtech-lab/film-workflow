@@ -72,7 +72,7 @@ struct SongStructureEditorView: View {
                 )
                 .frame(maxWidth: .infinity)
             } else {
-                ScrollView(showsIndicators: false) {
+                LazyVStack(spacing: 12) {
                     ForEach($entries) { $entry in
                         SongStructureEntryRow(
                             entry: $entry,
@@ -122,35 +122,61 @@ struct SongStructureEntryRow: View {
     var onDelete: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
+        VStack(alignment: .leading, spacing: 0) {
+            headerRow
+                .padding(.horizontal, 16)
+                .padding(.vertical, 10)
+
+            Divider()
+
+            bodyRow
+                .padding(16)
+        }
+        .background(Color.platformControlBackground.opacity(0.5))
+        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .strokeBorder(Color.primary.opacity(0.08), lineWidth: 1)
+        )
+    }
+
+    private var headerRow: some View {
+        HStack {
+            HStack(spacing: 6) {
+                Image(systemName: "music.note")
                 Text(entry.type.rawValue)
+                    .font(.subheadline)
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background(colorForType(entry.type).opacity(0.2))
+            .foregroundStyle(colorForType(entry.type))
+            .clipShape(Capsule())
+
+            Spacer()
+
+            Button(role: .destructive) {
+                onDelete()
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            }
+            .buttonStyle(.borderless)
+        }
+    }
+
+    private var bodyRow: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 4) {
+                Image(systemName: "clock")
+                    .foregroundStyle(.secondary)
                     .font(.caption)
-                    .fontWeight(.semibold)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 4)
-                    .background(colorForType(entry.type).opacity(0.2))
-                    .foregroundStyle(colorForType(entry.type))
-                    .clipShape(Capsule())
-
+                TimeField(time: $entry.startTime)
+                Text("–")
+                    .foregroundStyle(.secondary)
+                TimeField(time: $entry.endTime)
                 Spacer()
-
-                HStack(spacing: 4) {
-                    Image(systemName: "clock")
-                        .foregroundStyle(.secondary)
-                    TimeField(time: $entry.startTime)
-                    Text("–")
-                        .foregroundStyle(.secondary)
-                    TimeField(time: $entry.endTime)
-                }
-
-                Button(role: .destructive) {
-                    onDelete()
-                } label: {
-                    Image(systemName: "trash")
-                        .foregroundStyle(.red)
-                }
-                .buttonStyle(.borderless)
             }
 
             HStack(spacing: 8) {
@@ -168,11 +194,10 @@ struct SongStructureEntryRow: View {
                 .font(.body)
                 .frame(minHeight: 60)
                 .scrollContentBackground(.hidden)
-                .padding(4)
+                .padding(6)
                 .background(Color.platformControlBackground)
                 .clipShape(RoundedRectangle(cornerRadius: 6))
         }
-        .padding(.vertical, 4)
     }
 
     private func colorForType(_ type: SongSectionType) -> Color {
