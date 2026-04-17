@@ -44,14 +44,14 @@ struct NarrativeProjectParametersView: View {
 
             Picker("Provider", selection: $project.providerEnum) {
                 ForEach(NarrativeProvider.allCases) { provider in
-                    Text(provider.displayName).tag(provider)
+                    Text(verbatim: provider.displayName).tag(provider)
                 }
             }
 
             if project.providerEnum == .azure {
                 Picker("Output Format", selection: $project.azureOutputFormatEnum) {
                     ForEach(AzureAudioFormat.allCases) { format in
-                        Text(format.displayName).tag(format)
+                        Text(verbatim: format.displayName).tag(format)
                     }
                 }
             }
@@ -152,7 +152,7 @@ struct NarrativeProjectParametersView: View {
             HStack {
                 Picker("Voice", selection: speaker.voiceEnum) {
                     ForEach(GeminiVoice.allCases) { voice in
-                        Text(voice.displayName).tag(voice)
+                        Text(voice.localizedDisplayName).tag(voice)
                     }
                 }
 
@@ -249,7 +249,7 @@ struct NarrativeProjectParametersView: View {
                     Text("Role").frame(width: 70, alignment: .leading)
                     Picker("", selection: speaker.azureRoleEnum) {
                         ForEach(AzureRole.allCases) { role in
-                            Text(role.displayName).tag(role)
+                            Text(role.localizedName).tag(role)
                         }
                     }
                     .labelsHidden()

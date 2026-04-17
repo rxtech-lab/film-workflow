@@ -9,6 +9,7 @@ struct MusicProjectParametersView: View {
     var body: some View {
         Form {
             basicInfoSection
+            generalPromptSection
             musicalParametersSection
             instrumentsSection
             referenceImagesSection
@@ -38,9 +39,26 @@ struct MusicProjectParametersView: View {
 
             Picker("Input Mode", selection: $project.inputModeEnum) {
                 ForEach(InputMode.allCases) { mode in
-                    Text(mode.rawValue).tag(mode)
+                    Text(mode.localizedName).tag(mode)
                 }
             }
+        }
+    }
+
+    private var generalPromptSection: some View {
+        Section {
+            TextField("", text: $project.generalPrompt, axis: .vertical)
+                .lineLimit(3...6)
+                .textFieldStyle(.plain)
+                .multilineTextAlignment(.leading)
+                .labelsHidden()
+                .frame(maxWidth: .infinity, alignment: .leading)
+        } header: {
+            Text("Overall Vibe")
+        } footer: {
+            Text("Sets the overall feeling or atmosphere of the music. Included at the top of the generated prompt.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
         }
     }
 
@@ -48,13 +66,13 @@ struct MusicProjectParametersView: View {
         Section("Musical Parameters") {
             Picker("Genre", selection: $project.genreEnum) {
                 ForEach(MusicGenre.allCases) { genre in
-                    Text(genre.rawValue).tag(genre)
+                    Text(genre.localizedName).tag(genre)
                 }
             }
 
             Picker("Mood", selection: $project.moodEnum) {
                 ForEach(Mood.allCases) { mood in
-                    Text(mood.rawValue).tag(mood)
+                    Text(mood.localizedName).tag(mood)
                 }
             }
 
@@ -66,26 +84,26 @@ struct MusicProjectParametersView: View {
 
             Picker("Key / Scale", selection: $project.keyScaleEnum) {
                 ForEach(KeyScale.allCases) { key in
-                    Text(key.rawValue).tag(key)
+                    Text(key.localizedName).tag(key)
                 }
             }
 
             Picker("Duration", selection: $project.musicLengthEnum) {
                 ForEach(MusicLength.allCases) { length in
-                    Text(length.rawValue).tag(length)
+                    Text(verbatim: length.rawValue).tag(length)
                 }
             }
 
             Picker("Type", selection: $project.generationTypeEnum) {
                 ForEach(GenerationType.allCases) { type in
-                    Text(type.rawValue).tag(type)
+                    Text(type.localizedName).tag(type)
                 }
             }
 
             if project.generationTypeEnum == .withLyrics {
                 Picker("Lyrics Language", selection: $project.lyricsLanguageEnum) {
                     ForEach(LyricsLanguage.allCases) { lang in
-                        Text(lang.rawValue).tag(lang)
+                        Text(lang.localizedName).tag(lang)
                     }
                 }
             }
@@ -98,7 +116,7 @@ struct MusicProjectParametersView: View {
                 GridItem(.adaptive(minimum: 150), alignment: .leading)
             ], alignment: .leading, spacing: 8) {
                 ForEach(MusicInstrument.allCases) { instrument in
-                    Toggle(instrument.rawValue, isOn: Binding(
+                    Toggle(instrument.localizedName, isOn: Binding(
                         get: { selectedInstruments.contains(instrument) },
                         set: { isOn in
                             if isOn {
