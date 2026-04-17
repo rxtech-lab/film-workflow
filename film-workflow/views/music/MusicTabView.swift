@@ -157,7 +157,6 @@ struct MusicTabView: View {
                                 }
                             }
                         }
-                        .padding()
                 }
                 #if os(macOS)
                 .frame(minWidth: 700, minHeight: 400, maxHeight: 600)
