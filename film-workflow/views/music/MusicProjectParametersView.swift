@@ -1,10 +1,18 @@
 import SwiftUI
 import UniformTypeIdentifiers
+#if os(iOS)
+import PhotosUI
+#endif
 
 struct MusicProjectParametersView: View {
     @Bindable var project: MusicProject
     @State private var selectedInstruments: Set<MusicInstrument> = []
     @State private var showImagePicker = false
+    #if os(iOS)
+    @State private var showImageSourceDialog = false
+    @State private var showPhotoPicker = false
+    @State private var selectedPhotoItems: [PhotosPickerItem] = []
+    #endif
 
     var body: some View {
         Form {
@@ -29,6 +37,26 @@ struct MusicProjectParametersView: View {
         ) { result in
             handleImageImport(result)
         }
+        #if os(iOS)
+        .confirmationDialog("Select Image Source", isPresented: $showImageSourceDialog, titleVisibility: .visible) {
+            Button("Photo Library") {
+                showPhotoPicker = true
+            }
+            Button("Files") {
+                showImagePicker = true
+            }
+            Button("Cancel", role: .cancel) {}
+        }
+        .photosPicker(
+            isPresented: $showPhotoPicker,
+            selection: $selectedPhotoItems,
+            maxSelectionCount: max(1, 10 - project.referenceImagePaths.count),
+            matching: .images
+        )
+        .onChange(of: selectedPhotoItems) { _, newItems in
+            handlePhotoImport(newItems)
+        }
+        #endif
     }
 
     // MARK: - Sections
@@ -169,7 +197,11 @@ struct MusicProjectParametersView: View {
             }
 
             Button {
+                #if os(iOS)
+                showImageSourceDialog = true
+                #else
                 showImagePicker = true
+                #endif
             } label: {
                 Label("Add Images", systemImage: "photo.on.rectangle.angled")
             }
@@ -200,6 +232,37 @@ struct MusicProjectParametersView: View {
             break
         }
     }
+
+    #if os(iOS)
+    private func handlePhotoImport(_ items: [PhotosPickerItem]) {
+        let remaining = 10 - project.referenceImagePaths.count
+        guard remaining > 0 else {
+            selectedPhotoItems = []
+            return
+        }
+        let itemsToImport = Array(items.prefix(remaining))
+        Task {
+            for item in itemsToImport {
+                guard let data = try? await item.loadTransferable(type: Data.self) else { continue }
+                let ext = preferredImageExtension(from: item) ?? "jpg"
+                if let relativePath = try? FileStorage.saveImage(data, fileExtension: ext) {
+                    await MainActor.run {
+                        project.referenceImagePaths.append(relativePath)
+                    }
+                }
+            }
+            await MainActor.run {
+                selectedPhotoItems = []
+            }
+        }
+    }
+
+    private func preferredImageExtension(from item: PhotosPickerItem) -> String? {
+        item.supportedContentTypes
+            .first(where: { $0.conforms(to: .image) })?
+            .preferredFilenameExtension
+    }
+    #endif
 
     private func removeImage(at index: Int) {
         let path = project.referenceImagePaths.remove(at: index)

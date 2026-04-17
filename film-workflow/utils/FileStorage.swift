@@ -38,6 +38,15 @@ struct FileStorage {
         return "images/" + filename
     }
 
+    static func saveImage(_ data: Data, fileExtension: String = "jpg") throws -> String {
+        let ext = fileExtension.trimmingCharacters(in: CharacterSet(charactersIn: ".")).lowercased()
+        let finalExt = ext.isEmpty ? "jpg" : ext
+        let filename = UUID().uuidString + "." + finalExt
+        let dest = imagesDir.appendingPathComponent(filename)
+        try data.write(to: dest)
+        return "images/" + filename
+    }
+
     static func deleteFile(at relativePath: String) {
         let url = absoluteURL(for: relativePath)
         try? FileManager.default.removeItem(at: url)
