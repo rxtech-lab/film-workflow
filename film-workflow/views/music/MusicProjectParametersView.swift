@@ -246,8 +246,12 @@ struct MusicProjectParametersView: View {
             for item in itemsToImport {
                 do {
                     guard let data = try await item.loadTransferable(type: Data.self) else { continue }
-                    let ext = preferredImageExtension(from: item) ?? "jpg"
-                    let relativePath = try FileStorage.saveImage(data, fileExtension: ext)
+                    let relativePath: String
+                    if let ext = preferredImageExtension(from: item), !ext.isEmpty {
+                        relativePath = try FileStorage.saveImage(data, fileExtension: ext)
+                    } else {
+                        relativePath = try FileStorage.saveImage(data)
+                    }
                     await MainActor.run {
                         project.referenceImagePaths.append(relativePath)
                     }
