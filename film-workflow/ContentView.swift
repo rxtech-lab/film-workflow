@@ -10,8 +10,7 @@ struct ContentView: View {
                 MusicTabView()
             }
             Tab(Tabs.Narrative.displayName, systemImage: Tabs.Narrative.systemImage, value: Tabs.Narrative) {
-                Text("Coming soon")
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                NarrativeTabView()
             }
             #if !os(macOS)
             Tab(Tabs.Settings.displayName, systemImage: Tabs.Settings.systemImage, value: Tabs.Settings) {
@@ -27,5 +26,5 @@ struct ContentView: View {
 
 #Preview {
     ContentView()
-        .modelContainer(for: [MusicProject.self, GeneratedMusic.self], inMemory: true)
+        .modelContainer(for: [MusicProject.self, GeneratedMusic.self, NarrativeProject.self, GeneratedNarrative.self], inMemory: true)
 }
