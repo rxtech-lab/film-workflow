@@ -10,7 +10,6 @@ struct MusicProjectParametersView: View {
     @State private var selectedInstruments: Set<MusicInstrument> = []
     @State private var showImagePicker = false
     #if os(iOS)
-    @State private var showImageSourceDialog = false
     @State private var showPhotoPicker = false
     @State private var selectedPhotoItems: [PhotosPickerItem] = []
     #endif
@@ -39,15 +38,6 @@ struct MusicProjectParametersView: View {
             handleImageImport(result)
         }
         #if os(iOS)
-        .confirmationDialog("Select Image Source", isPresented: $showImageSourceDialog, titleVisibility: .visible) {
-            Button("Photo Library") {
-                showPhotoPicker = true
-            }
-            Button("Files") {
-                showImagePicker = true
-            }
-            Button("Cancel", role: .cancel) {}
-        }
         .photosPicker(
             isPresented: $showPhotoPicker,
             selection: $selectedPhotoItems,
@@ -129,6 +119,12 @@ struct MusicProjectParametersView: View {
                 }
             }
 
+            Picker("Output Format", selection: $project.outputFormatEnum) {
+                ForEach(AudioFormat.allCases) { format in
+                    Text(verbatim: format.displayName).tag(format)
+                }
+            }
+
             if project.generationTypeEnum == .withLyrics {
                 Picker("Lyrics Language", selection: $project.lyricsLanguageEnum) {
                     ForEach(LyricsLanguage.allCases) { lang in
@@ -189,7 +185,7 @@ struct MusicProjectParametersView: View {
                                         .foregroundStyle(.white, .red)
                                 }
                                 .buttonStyle(.borderless)
-                                .offset(x: 4, y: -4)
+                                .padding(4)
                             }
                         }
                     }
@@ -197,16 +193,30 @@ struct MusicProjectParametersView: View {
                 .frame(height: 110)
             }
 
-            Button {
-                #if os(iOS)
-                showImageSourceDialog = true
-                #else
-                showImagePicker = true
-                #endif
+            #if os(iOS)
+            Menu {
+                Button {
+                    showPhotoPicker = true
+                } label: {
+                    Label("Photo Library", systemImage: "photo.on.rectangle")
+                }
+                Button {
+                    showImagePicker = true
+                } label: {
+                    Label("Files", systemImage: "folder")
+                }
             } label: {
                 Label("Add Images", systemImage: "photo.on.rectangle.angled")
             }
             .disabled(project.referenceImagePaths.count >= maxReferenceImages)
+            #else
+            Button {
+                showImagePicker = true
+            } label: {
+                Label("Add Images", systemImage: "photo.on.rectangle.angled")
+            }
+            .disabled(project.referenceImagePaths.count >= maxReferenceImages)
+            #endif
 
             if project.referenceImagePaths.count >= maxReferenceImages {
                 Text("Maximum 10 images reached.")
