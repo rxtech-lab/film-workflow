@@ -1,10 +1,19 @@
 import SwiftUI
 import UniformTypeIdentifiers
+#if os(iOS)
+import PhotosUI
+#endif
 
 struct MusicProjectParametersView: View {
+    private let maxReferenceImages = 10
     @Bindable var project: MusicProject
     @State private var selectedInstruments: Set<MusicInstrument> = []
     @State private var showImagePicker = false
+    #if os(iOS)
+    @State private var showImageSourceDialog = false
+    @State private var showPhotoPicker = false
+    @State private var selectedPhotoItems: [PhotosPickerItem] = []
+    #endif
 
     var body: some View {
         Form {
@@ -29,6 +38,26 @@ struct MusicProjectParametersView: View {
         ) { result in
             handleImageImport(result)
         }
+        #if os(iOS)
+        .confirmationDialog("Select Image Source", isPresented: $showImageSourceDialog, titleVisibility: .visible) {
+            Button("Photo Library") {
+                showPhotoPicker = true
+            }
+            Button("Files") {
+                showImagePicker = true
+            }
+            Button("Cancel", role: .cancel) {}
+        }
+        .photosPicker(
+            isPresented: $showPhotoPicker,
+            selection: $selectedPhotoItems,
+            maxSelectionCount: max(0, maxReferenceImages - project.referenceImagePaths.count),
+            matching: .images
+        )
+        .onChange(of: selectedPhotoItems) { _, newItems in
+            handlePhotoImport(newItems)
+        }
+        #endif
     }
 
     // MARK: - Sections
@@ -169,13 +198,17 @@ struct MusicProjectParametersView: View {
             }
 
             Button {
+                #if os(iOS)
+                showImageSourceDialog = true
+                #else
                 showImagePicker = true
+                #endif
             } label: {
                 Label("Add Images", systemImage: "photo.on.rectangle.angled")
             }
-            .disabled(project.referenceImagePaths.count >= 10)
+            .disabled(project.referenceImagePaths.count >= maxReferenceImages)
 
-            if project.referenceImagePaths.count >= 10 {
+            if project.referenceImagePaths.count >= maxReferenceImages {
                 Text("Maximum 10 images reached.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -188,7 +221,7 @@ struct MusicProjectParametersView: View {
     private func handleImageImport(_ result: Result<[URL], Error>) {
         switch result {
         case .success(let urls):
-            let remaining = 10 - project.referenceImagePaths.count
+            let remaining = maxReferenceImages - project.referenceImagePaths.count
             for url in urls.prefix(remaining) {
                 guard url.startAccessingSecurityScopedResource() else { continue }
                 defer { url.stopAccessingSecurityScopedResource() }
@@ -200,6 +233,46 @@ struct MusicProjectParametersView: View {
             break
         }
     }
+
+    #if os(iOS)
+    private func handlePhotoImport(_ items: [PhotosPickerItem]) {
+        let remaining = maxReferenceImages - project.referenceImagePaths.count
+        guard remaining > 0 else {
+            selectedPhotoItems = []
+            return
+        }
+        let itemsToImport = Array(items.prefix(remaining))
+        Task {
+            for item in itemsToImport {
+                do {
+                    guard let data = try await item.loadTransferable(type: Data.self) else { continue }
+                    let relativePath: String
+                    if let ext = preferredImageExtension(from: item), !ext.isEmpty {
+                        relativePath = try FileStorage.saveImage(data, fileExtension: ext)
+                    } else {
+                        relativePath = try FileStorage.saveImage(data)
+                    }
+                    await MainActor.run {
+                        project.referenceImagePaths.append(relativePath)
+                    }
+                } catch {
+                    #if DEBUG
+                    print("Failed to import photo item: \(error)")
+                    #endif
+                }
+            }
+            await MainActor.run {
+                selectedPhotoItems = []
+            }
+        }
+    }
+
+    private func preferredImageExtension(from item: PhotosPickerItem) -> String? {
+        item.supportedContentTypes
+            .first(where: { $0.conforms(to: .image) })?
+            .preferredFilenameExtension
+    }
+    #endif
 
     private func removeImage(at index: Int) {
         let path = project.referenceImagePaths.remove(at: index)
