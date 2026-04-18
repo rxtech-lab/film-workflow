@@ -794,6 +794,12 @@
         }
       }
     },
+    "End" : {
+
+    },
+    "End time" : {
+
+    },
     "Energetic" : {
       "localizations" : {
         "zh-Hans" : {
@@ -943,6 +949,9 @@
           }
         }
       }
+    },
+    "Files" : {
+
     },
     "Firm" : {
       "localizations" : {
@@ -1534,6 +1543,46 @@
         }
       }
     },
+    "Move down" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "向下移动"
+          }
+        }
+      }
+    },
+    "Move Down" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "向下移动"
+          }
+        }
+      }
+    },
+    "Move up" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "向上移动"
+          }
+        }
+      }
+    },
+    "Move Up" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "向上移动"
+          }
+        }
+      }
+    },
     "Music" : {
       "localizations" : {
         "zh-Hans" : {
@@ -1764,6 +1813,16 @@
         }
       }
     },
+    "Parameters" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "参数"
+          }
+        }
+      }
+    },
     "Paste your region (e.g. \"eastus\") or any endpoint URL from the portal — we'll derive the TTS endpoint." : {
       "localizations" : {
         "zh-Hans" : {
@@ -1783,6 +1842,9 @@
           }
         }
       }
+    },
+    "Photo Library" : {
+
     },
     "Piano" : {
       "localizations" : {
@@ -1974,6 +2036,9 @@
         }
       }
     },
+    "Reorder" : {
+
+    },
     "Reset parameters" : {
       "localizations" : {
         "zh-Hans" : {
@@ -2113,6 +2178,9 @@
           }
         }
       }
+    },
+    "Section Time" : {
+
     },
     "Select a Narrative" : {
       "localizations" : {
@@ -2314,6 +2382,9 @@
         }
       }
     },
+    "Start" : {
+
+    },
     "Start Generation" : {
       "localizations" : {
         "zh-Hans" : {
@@ -2323,6 +2394,9 @@
           }
         }
       }
+    },
+    "Start time" : {
+
     },
     "Stop" : {
       "localizations" : {
@@ -2340,6 +2414,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "弦乐器"
+          }
+        }
+      }
+    },
+    "Structure" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "结构"
           }
         }
       }

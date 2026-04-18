@@ -19,6 +19,7 @@ final class MusicProject {
     var musicLength: String
     var generationType: String
     var lyricsLanguage: String
+    var outputFormat: String = AudioFormat.mp3.rawValue
 
     var songStructureEntries: [SongStructureEntry]
     var lyricEntries: [LyricEntry]
@@ -42,6 +43,7 @@ final class MusicProject {
         self.musicLength = MusicLength.min1.rawValue
         self.generationType = GenerationType.withLyrics.rawValue
         self.lyricsLanguage = LyricsLanguage.english.rawValue
+        self.outputFormat = AudioFormat.mp3.rawValue
         self.songStructureEntries = []
         self.lyricEntries = []
         self.referenceImagePaths = []
@@ -93,5 +95,10 @@ final class MusicProject {
     var lyricsLanguageEnum: LyricsLanguage {
         get { LyricsLanguage(rawValue: lyricsLanguage) ?? .english }
         set { lyricsLanguage = newValue.rawValue }
+    }
+
+    var outputFormatEnum: AudioFormat {
+        get { AudioFormat(rawValue: outputFormat) ?? .mp3 }
+        set { outputFormat = newValue.rawValue }
     }
 }

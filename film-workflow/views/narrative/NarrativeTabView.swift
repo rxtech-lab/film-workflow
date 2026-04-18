@@ -378,7 +378,7 @@ struct NarrativeProjectDetailPanes: View {
         VStack(spacing: 0) {
             Picker("", selection: $selectedPane) {
                 ForEach(Pane.allCases) { pane in
-                    Text(pane.rawValue).tag(pane)
+                    Text(LocalizedStringKey(pane.rawValue)).tag(pane)
                 }
             }
             .pickerStyle(.segmented)

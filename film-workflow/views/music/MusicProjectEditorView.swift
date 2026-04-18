@@ -41,7 +41,7 @@ struct MusicProjectEditorView: View {
         VStack(spacing: 0) {
             Picker("", selection: $selectedTab) {
                 ForEach(EditorTab.allCases, id: \.self) { tab in
-                    Text(tab.rawValue).tag(tab)
+                    Text(LocalizedStringKey(tab.rawValue)).tag(tab)
                 }
             }
             .pickerStyle(.segmented)
@@ -56,8 +56,11 @@ struct MusicProjectEditorView: View {
                 switch selectedTab {
                 case .structure:
                     ScrollView {
-                        SongStructureEditorView(entries: $project.songStructureEntries)
-                            .padding()
+                        SongStructureEditorView(
+                            entries: $project.songStructureEntries,
+                            duration: TimeInterval(project.musicLengthEnum.seconds)
+                        )
+                        .padding()
                     }
 
                 case .lyrics:

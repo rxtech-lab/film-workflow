@@ -287,6 +287,7 @@ struct MusicTabView: View {
             let response = try await LyriaClient.generate(
                 prompt: prompt,
                 imageDataPairs: imageDataPairs,
+                responseMimeType: project.outputFormatEnum.requestMimeType,
                 apiKey: config.googleAIKey
             )
 
@@ -347,7 +348,7 @@ struct MusicProjectDetailPanes: View {
         VStack(spacing: 0) {
             Picker("", selection: $selectedPane) {
                 ForEach(availablePanes) { pane in
-                    Text(pane.rawValue).tag(pane)
+                    Text(LocalizedStringKey(pane.rawValue)).tag(pane)
                 }
             }
             .pickerStyle(.segmented)
@@ -363,8 +364,11 @@ struct MusicProjectDetailPanes: View {
                     MusicProjectParametersView(project: project)
                 case .structure:
                     ScrollView {
-                        SongStructureEditorView(entries: $project.songStructureEntries)
-                            .padding()
+                        SongStructureEditorView(
+                            entries: $project.songStructureEntries,
+                            duration: TimeInterval(project.musicLengthEnum.seconds)
+                        )
+                        .padding()
                     }
                 case .lyrics:
                     ScrollView {
