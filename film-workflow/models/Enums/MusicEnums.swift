@@ -245,6 +245,34 @@ enum InputMode: String, CaseIterable, Codable, Identifiable {
     }
 }
 
+enum AudioFormat: String, CaseIterable, Codable, Identifiable {
+    case mp3 = "audio/mp3"
+    case wav = "audio/wav"
+
+    var id: String { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .mp3: return "MP3"
+        case .wav: return "WAV"
+        }
+    }
+
+    var fileExtension: String {
+        switch self {
+        case .mp3: return "mp3"
+        case .wav: return "wav"
+        }
+    }
+
+    var requestMimeType: String? {
+        switch self {
+        case .mp3: return nil
+        case .wav: return "audio/wav"
+        }
+    }
+}
+
 enum GenerationType: String, CaseIterable, Codable, Identifiable {
     case withLyrics = "With Lyrics"
     case withoutLyrics = "Instrumental"
