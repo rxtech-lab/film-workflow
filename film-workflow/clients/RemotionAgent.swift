@@ -129,7 +129,7 @@ enum RemotionAgent {
         \(project.compositionSource)
         ```
 
-        Project duration: \(project.durationSeconds)s (\(durationFrames) frames at \(fps) fps)
+        \(projectSettingsBlock(project: project, durationFrames: durationFrames, fps: fps))
 
         \(assetsBlock)
 
@@ -512,8 +512,30 @@ enum RemotionAgent {
 
     // MARK: - Prompt
 
+    private static func projectSettingsBlock(
+        project: RemotionProject,
+        durationFrames: Int,
+        fps: Int
+    ) -> String {
+        var lines: [String] = ["Project settings:"]
+        lines.append("- Name: \(project.name)")
+        lines.append("- Resolution: \(project.compositionWidth)×\(project.compositionHeight)")
+        lines.append("- Duration: \(project.durationSeconds)s (\(durationFrames) frames at \(fps) fps)")
+        lines.append("- Theme color: \(project.themeColorHex)")
+        let text = project.text.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !text.isEmpty {
+            lines.append("- Script / text:\n\(text)")
+        }
+        let standingPrompt = project.prompt.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !standingPrompt.isEmpty {
+            lines.append("- Project brief (keep edits consistent with this):\n\(standingPrompt)")
+        }
+        return lines.joined(separator: "\n")
+    }
+
     private static func systemPrompt(project: RemotionProject) -> String {
-        var prompt = """
+        _ = project
+        let prompt = """
         You are an expert Remotion (React) developer working in a sandboxed project directory. You have file-system tools (list_files, read_file, write_file, edit_file) and visual tools (take_screenshot, take_screenshots) for reviewing the current video.
 
         How to work:
@@ -539,10 +561,6 @@ enum RemotionAgent {
         - Do not add new packages — only react, react-dom, and remotion are available.
         - Valid TypeScript JSX only, no markdown fences inside files.
         """
-        let standingPrompt = project.prompt.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !standingPrompt.isEmpty {
-            prompt += "\n\nProject brief (keep edits consistent with this):\n\(standingPrompt)"
-        }
         return prompt
     }
 

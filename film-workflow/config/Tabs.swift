@@ -4,6 +4,7 @@ import SwiftUI
 enum Tabs: Codable, Identifiable, CaseIterable {
     case Music
     case Narrative
+    case ImageGen
     case Remotion
     case Settings
 
@@ -11,6 +12,7 @@ enum Tabs: Codable, Identifiable, CaseIterable {
         switch self {
         case .Music: return "Music"
         case .Narrative: return "Narrative"
+        case .ImageGen: return "ImageGen"
         case .Remotion: return "Remotion"
         case .Settings: return "Settings"
         }
@@ -20,6 +22,7 @@ enum Tabs: Codable, Identifiable, CaseIterable {
         switch self {
         case .Music: return "Music"
         case .Narrative: return "Narrative"
+        case .ImageGen: return "Image"
         case .Remotion: return "Remotion"
         case .Settings: return "Settings"
         }
@@ -29,6 +32,7 @@ enum Tabs: Codable, Identifiable, CaseIterable {
         switch self {
         case .Music: return "music.note"
         case .Narrative: return "text.book.closed"
+        case .ImageGen: return "photo.on.rectangle.angled"
         case .Remotion: return "film.stack"
         case .Settings: return "gear"
         }

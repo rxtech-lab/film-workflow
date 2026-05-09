@@ -1,2899 +1,3595 @@
 {
-  "sourceLanguage" : "en",
-  "strings" : {
-    "" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : ""
+  "sourceLanguage": "en",
+  "strings": {
+    "": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": ""
           }
         }
       }
     },
-    "–" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "–"
+    "–": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "–"
           }
         }
       }
     },
-    "%@ - %@" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "%1$@ - %2$@"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%1$@ - %2$@"
-          }
-        }
-      }
-    },
-    "%@ — %@" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "%1$@ — %2$@"
+    "%@ - %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "new",
+            "value": "%1$@ - %2$@"
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%1$@ — %2$@"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ - %2$@"
           }
         }
       }
     },
-    "%@ TTS is not supported yet." : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "暂不支持 %@ 文本转语音。"
+    "%@ — %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "new",
+            "value": "%1$@ — %2$@"
           }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ — %2$@"
+          }
+        }
+      }
+    },
+    "%@ TTS is not supported yet.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "暂不支持 %@ 文本转语音。"
+          }
+        }
+      }
+    },
+    "%lld%%": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld%%"
+          }
+        }
+      }
+    },
+    "+ %@": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "+ %@"
+          }
+        }
+      }
+    },
+    "A Major": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A大调"
+          }
+        }
+      }
+    },
+    "A Minor": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A小调"
+          }
+        }
+      }
+    },
+    "Acoustic Guitar": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "原声吉他"
+          }
+        }
+      }
+    },
+    "Add a paragraph for a speaker to start building your transcript.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "为演讲者添加一个段落以开始构建您的文稿。"
+          }
+        }
+      }
+    },
+    "Add Images": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "添加图片"
+          }
+        }
+      }
+    },
+    "Add Lyric Section": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "添加歌词段落"
+          }
+        }
+      }
+    },
+    "Add lyric sections to include lyrics in your song.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "添加歌词段落以在您的歌曲中包含歌词。"
+          }
+        }
+      }
+    },
+    "Add sections above to define your song structure.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在上方添加段落以定义您的歌曲结构。"
+          }
+        }
+      }
+    },
+    "Add Speaker": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "添加演讲者"
+          }
+        }
+      }
+    },
+    "Aggressive": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "激进"
+          }
+        }
+      }
+    },
+    "agreement": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "同意"
+          }
+        }
+      }
+    },
+    "amazement": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "惊讶"
+          }
+        }
+      }
+    },
+    "Ambient": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "氛围"
+          }
+        }
+      }
+    },
+    "animation": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "动画"
+          }
+        }
+      }
+    },
+    "API key": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "API 密钥"
+          }
         }
       }
     },
-    "%lld%%" : {
-
+    "Arabic": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "阿拉伯"
+          }
+        }
+      }
+    },
+    "Ask the model to edit the composition…": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "让模型修改合成…"
+          }
+        }
+      }
+    },
+    "Aspect Ratio": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "宽高比"
+          }
+        }
+      }
+    },
+    "Azure Speech": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Azure 语音"
+          }
+        }
+      }
+    },
+    "Azure supports multiple speakers per narration.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Azure 支持每个旁白使用多个演讲者。"
+          }
+        }
+      }
+    },
+    "B Major": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "B大调"
+          }
+        }
+      }
+    },
+    "B Minor": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "B小调"
+          }
+        }
+      }
+    },
+    "Background": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "背景"
+          }
+        }
+      }
+    },
+    "Basic": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "基础"
+          }
+        }
+      }
+    },
+    "Basic Info": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "基本信息"
+          }
+        }
+      }
+    },
+    "Bass": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "贝斯"
+          }
+        }
+      }
     },
-    "+ %@" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "+ %@"
+    "Bb Major": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "降B大调"
           }
         }
       }
     },
-    "A Major" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "A大调"
+    "Bb Minor": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "降B小调"
           }
         }
       }
     },
-    "A Minor" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "A小调"
+    "Blues": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "蓝调"
           }
         }
       }
     },
-    "Acoustic Guitar" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "原声吉他"
+    "bored": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无聊"
           }
         }
       }
     },
-    "Add a paragraph for a speaker to start building your transcript." : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "为演讲者添加一个段落以开始构建您的文稿。"
+    "Boy": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "男孩"
           }
         }
       }
     },
-    "Add Images" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "添加图片"
+    "BPM": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "BPM"
           }
         }
       }
     },
-    "Add Lyric Section" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "添加歌词段落"
+    "Brass": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "铜管乐器"
           }
         }
       }
     },
-    "Add lyric sections to include lyrics in your song." : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "添加歌词段落以在您的歌曲中包含歌词。"
+    "Breathy": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "气声"
           }
         }
       }
     },
-    "Add sections above to define your song structure." : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "在上方添加段落以定义您的歌曲结构。"
+    "Breezy": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "轻快"
           }
         }
       }
     },
-    "Add Speaker" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "添加演讲者"
+    "Bridge": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "桥段"
           }
         }
       }
     },
-    "Aggressive" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "激进"
+    "Bright": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "明亮"
           }
         }
       }
     },
-    "agreement" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "同意"
+    "Build": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "递进"
           }
         }
       }
     },
-    "amazement" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "惊讶"
+    "Builds a starting Composition.tsx from these inputs and launches Studio. Use the chat below to refine.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "根据这些输入构建初始 Composition.tsx 并启动 Studio。在下方聊天中继续优化。"
           }
         }
       }
     },
-    "Ambient" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "氛围"
+    "C Major": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "C大调"
           }
         }
       }
     },
-    "animation" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "动画"
+    "C Minor": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "C小调"
           }
         }
       }
     },
-    "API key" : {
-
+    "Calm": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "平静"
+          }
+        }
+      }
     },
-    "Arabic" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "阿拉伯"
+    "Cancel": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "取消"
           }
         }
       }
     },
-    "Ask the model to edit the composition…" : {
-
+    "Cancel rendering?": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "取消渲染？"
+          }
+        }
+      }
     },
-    "Azure Speech" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Azure 语音"
+    "Casual": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "休闲"
           }
         }
       }
     },
-    "Azure supports multiple speakers per narration." : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Azure 支持每个旁白使用多个演讲者。"
+    "Cello": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "大提琴"
           }
         }
       }
     },
-    "B Major" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "B大调"
+    "Chat": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "聊天"
           }
         }
       }
     },
-    "B Minor" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "B小调"
+    "Chat — refine the composition": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "聊天 — 优化合成"
           }
         }
       }
     },
-    "Basic" : {
-
+    "Chinese": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "中国风"
+          }
+        }
+      }
     },
-    "Basic Info" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "基本信息"
+    "Choose a narrative from the sidebar or create a new one.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "从侧边栏选择一个旁白或创建一个新的。"
           }
         }
       }
     },
-    "Bass" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "贝斯"
+    "Choose a narrative from the sidebar.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "从侧边栏选择一个旁白。"
           }
         }
       }
     },
-    "Bb Major" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "降B大调"
+    "Choose a project from the sidebar or create a new one.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "从侧边栏选择一个项目或新建一个。"
           }
         }
       }
     },
-    "Bb Minor" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "降B小调"
+    "Choose a project from the sidebar.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "从侧边栏选择一个项目。"
           }
         }
       }
     },
-    "Blues" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "蓝调"
+    "Choose…": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "选择…"
           }
         }
       }
     },
-    "bored" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "无聊"
+    "Chorus": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "副歌"
           }
         }
       }
     },
-    "Boy" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "男孩"
+    "Cinematic Orchestral": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "电影管弦乐"
           }
         }
       }
     },
-    "BPM" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "BPM"
+    "Classical": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "古典"
           }
         }
       }
     },
-    "Brass" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "铜管乐器"
+    "Clear": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "清晰"
           }
         }
       }
     },
-    "Breathy" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "气声"
+    "Clear All": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "全部清除"
           }
         }
       }
     },
-    "Breezy" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "轻快"
+    "Clear all chat messages?": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "清除所有聊天消息？"
           }
         }
       }
     },
-    "Bridge" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "桥段"
+    "Clear all messages": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "清除所有消息"
           }
         }
       }
     },
-    "Bright" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "明亮"
+    "Click \"Generate Initial Composition\" in the Form tab to start the Studio preview.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "点击\"表单\"标签页中的\"生成初始合成\"以开始 Studio 预览。"
           }
         }
       }
     },
-    "Build" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "递进"
+    "Composition is %lld × %lld @ %lldfps. Output will be %lld × %lld @ %lldfps.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "new",
+            "value": "Composition is %1$lld × %2$lld @ %3$lldfps. Output will be %4$lld × %5$lld @ %6$lldfps."
           }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "合成为 %1$lld × %2$lld @ %3$lldfps。输出将为 %4$lld × %5$lld @ %6$lldfps。"
+          }
         }
       }
     },
-    "Builds a starting Composition.tsx from these inputs and launches Studio. Use the chat below to refine." : {
-
+    "Composition.tsx": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Composition.tsx"
+          }
+        }
+      }
     },
-    "C Major" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "C大调"
+    "Compression": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "压缩"
           }
         }
       }
     },
-    "C Minor" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "C小调"
+    "Context": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "上下文"
           }
         }
       }
     },
-    "Calm" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "平静"
+    "Copy": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "复制"
           }
         }
       }
     },
-    "Cancel" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "取消"
+    "Copy Path": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "复制路径"
           }
         }
       }
     },
-    "Cancel rendering?" : {
-
+    "Could not load image at %@.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法加载位于 %@ 的图片。"
+          }
+        }
+      }
     },
-    "Casual" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "休闲"
+    "Country": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "乡村"
           }
         }
       }
     },
-    "Cello" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "大提琴"
+    "Custom…": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "自定义…"
           }
         }
       }
     },
-    "Chat" : {
-
+    "D Major": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "D大调"
+          }
+        }
+      }
     },
-    "Chat — refine the composition" : {
-
+    "D Minor": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "D小调"
+          }
+        }
+      }
     },
-    "Chinese" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "中国风"
+    "Dark": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "深沉"
           }
         }
       }
     },
-    "Choose a narrative from the sidebar or create a new one." : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "从侧边栏选择一个旁白或创建一个新的。"
+    "Default": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "默认"
           }
         }
       }
     },
-    "Choose a narrative from the sidebar." : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "从侧边栏选择一个旁白。"
+    "Default chat model": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "默认聊天模型"
           }
         }
       }
     },
-    "Choose a project from the sidebar or create a new one." : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "从侧边栏选择一个项目或新建一个。"
+    "Delete": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "删除"
           }
         }
       }
     },
-    "Choose a project from the sidebar." : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "从侧边栏选择一个项目。"
+    "Delete this music?": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "删除这首音乐？"
           }
         }
       }
     },
-    "Choose…" : {
-
+    "Delete this narration?": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "删除这段旁白？"
+          }
+        }
+      }
     },
-    "Chorus" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "副歌"
+    "Describe a change — e.g. \"make the title yellow\" or \"slow the fade to 1s\".": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "描述修改内容 — 例如\"将标题变为黄色\"或\"将淡入淡出减慢至 1 秒\"。"
           }
         }
       }
     },
-    "Cinematic Orchestral" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "电影管弦乐"
+    "Describe the overall vibe...": {
+      "extractionState": "stale",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "请描述歌曲的氛围是…"
           }
         }
       }
     },
-    "Classical" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "古典"
+    "Done": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "完成"
           }
         }
       }
     },
-    "Clear" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "清晰"
+    "Dreamy": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "梦幻"
           }
         }
       }
     },
-    "Clear All" : {
-
+    "Drums": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "鼓"
+          }
+        }
+      }
     },
-    "Clear all chat messages?" : {
-
+    "Duration": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "时长"
+          }
+        }
+      }
     },
-    "Clear all messages" : {
-
+    "E Major": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "E大调"
+          }
+        }
+      }
     },
-    "Click \"Generate Initial Composition\" in the Form tab to start the Studio preview." : {
-
+    "E Minor": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "E小调"
+          }
+        }
+      }
     },
-    "Composition is %lld × %lld @ %lldfps. Output will be %lld × %lld @ %lldfps." : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "Composition is %1$lld × %2$lld @ %3$lldfps. Output will be %4$lld × %5$lld @ %6$lldfps."
+    "Easy-going": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "随和"
           }
         }
       }
     },
-    "Composition.tsx" : {
-
+    "Edit shortcode parameters": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "编辑简码参数"
+          }
+        }
+      }
     },
-    "Context" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "上下文"
+    "Editor": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "编辑器"
           }
         }
       }
     },
-    "Copy" : {
-
+    "Electric Guitar": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "电吉他"
+          }
+        }
+      }
     },
-    "Copy Path" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "复制路径"
+    "Electronic": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "电子乐"
           }
         }
       }
     },
-    "Country" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "乡村"
+    "emotion": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "情感"
           }
         }
       }
     },
-    "Custom…" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "自定义…"
+    "End": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "结束"
           }
         }
       }
     },
-    "D Major" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "D大调"
+    "End time": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "结束时间"
           }
         }
       }
     },
-    "D Minor" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "D小调"
+    "Endpoint (e.g. https://api.openai.com/v1)": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "端点（例如 https://api.openai.com/v1）"
           }
         }
       }
     },
-    "Dark" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "深沉"
+    "Energetic": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "充满活力"
           }
         }
       }
     },
-    "Default" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "默认"
+    "English": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "英语"
           }
         }
       }
     },
-    "Delete" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "删除"
+    "Enter your API key": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "输入您的API 密钥"
           }
         }
       }
     },
-    "Delete this music?" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "删除这首音乐？"
+    "enthusiastic": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "热情"
           }
         }
       }
     },
-    "Delete this narration?" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "删除这段旁白？"
+    "Epic": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "史诗"
           }
         }
       }
     },
-    "Describe a change — e.g. \"make the title yellow\" or \"slow the fade to 1s\"." : {
-
+    "Error": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "错误"
+          }
+        }
+      }
     },
-    "Describe the overall vibe..." : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "请描述歌曲的氛围是…"
+    "Ethereal": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "空灵"
           }
         }
       }
     },
-    "Done" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "完成"
+    "Even": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "平稳"
           }
         }
       }
     },
-    "Dreamy" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "梦幻"
+    "Excitable": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "易激动"
           }
         }
       }
     },
-    "Drums" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "鼓"
+    "excitedly": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "兴奋地"
           }
         }
       }
     },
-    "Duration" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "时长"
+    "Export": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "导出"
           }
         }
       }
     },
-    "E Major" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "E大调"
+    "Export Video": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "导出视频"
           }
         }
       }
     },
-    "E Minor" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "E小调"
+    "Export…": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "导出…"
           }
         }
       }
     },
-    "Easy-going" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "随和"
+    "F Major": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "F大调"
           }
         }
       }
     },
-    "Edit shortcode parameters" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "编辑简码参数"
+    "F Minor": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "F小调"
           }
         }
       }
     },
-    "Editor" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "编辑器"
+    "Fender Rhodes Piano": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fender Rhodes 电钢琴"
           }
         }
       }
     },
-    "Electric Guitar" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "电吉他"
+    "Files": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "文件"
           }
         }
       }
     },
-    "Electronic" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "电子乐"
+    "Firm": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "坚定"
           }
         }
       }
     },
-    "emotion" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "情感"
+    "Flute": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "长笛"
           }
         }
       }
     },
-    "End" : {
-
+    "Folk": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "民谣"
+          }
+        }
+      }
     },
-    "End time" : {
-
+    "Form": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "表单"
+          }
+        }
+      }
     },
-    "Endpoint (e.g. https://api.openai.com/v1)" : {
-
+    "Format": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "格式"
+          }
+        }
+      }
     },
-    "Energetic" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "充满活力"
+    "Forward": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "直率"
           }
         }
       }
     },
-    "English" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "英语"
+    "Frame Rate": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "帧率"
           }
         }
       }
     },
-    "Enter your API key" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "输入您的API 密钥"
+    "French": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "法语"
           }
         }
       }
     },
-    "enthusiastic" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "热情"
+    "Friendly": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "友好"
           }
         }
       }
     },
-    "Epic" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "史诗"
+    "G Major": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "G大调"
           }
         }
       }
     },
-    "Error" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "错误"
+    "G Minor": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "G小调"
           }
         }
       }
     },
-    "Ethereal" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "空灵"
+    "Gemini supports up to 2 speakers per narration.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gemini的每段旁白最多支持 2 个演讲者。"
           }
         }
       }
     },
-    "Even" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "平稳"
+    "Generate": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "生成"
           }
         }
       }
     },
-    "Excitable" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "易激动"
+    "Generate Initial Composition": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "生成初始合成"
           }
         }
       }
     },
-    "excitedly" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "兴奋地"
+    "Generated Image": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "生成的图片"
           }
         }
       }
     },
-    "Export" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "导出"
+    "Generated Images": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "生成的图片"
           }
         }
       }
     },
-    "Export Video" : {
-
+    "Generated images will appear here.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "生成的图片将显示在这里。"
+          }
+        }
+      }
     },
-    "Export…" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "导出…"
+    "Generated Music": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "生成的音乐"
           }
         }
       }
     },
-    "F Major" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "F大调"
+    "Generated music will appear here after you click Generate.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "点击“生成”后，生成的音乐将显示在这里。"
           }
         }
       }
     },
-    "F Minor" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "F小调"
+    "Generated narration will appear here after you click Generate.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "点击“生成”后，生成的旁白将显示在这里。"
           }
         }
       }
     },
-    "Fender Rhodes Piano" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Fender Rhodes 电钢琴"
+    "Generated Narrative": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "生成的旁白"
           }
         }
       }
     },
-    "Files" : {
-
+    "Generated Narratives": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "生成的旁白"
+          }
+        }
+      }
     },
-    "Firm" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "坚定"
+    "Generating…": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "生成中…"
           }
         }
       }
     },
-    "Flute" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "长笛"
+    "Genre": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "流派"
           }
         }
       }
     },
-    "Folk" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "民谣"
+    "Gentle": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "温柔"
           }
         }
       }
     },
-    "Form" : {
-
+    "German": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "德语"
+          }
+        }
+      }
     },
-    "Forward" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "直率"
+    "Get a Gemini API key →": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "获取 Gemini API 密钥 →"
           }
         }
       }
     },
-    "Frame Rate" : {
-
+    "Get an Azure Speech key →": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "获取 Azure 语音密钥 →"
+          }
+        }
+      }
     },
-    "French" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "法语"
+    "Girl": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "女孩"
           }
         }
       }
     },
-    "Friendly" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "友好"
+    "Google": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Google"
           }
         }
       }
     },
-    "G Major" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "G大调"
+    "Google AI API Key": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Google AI API 密钥"
           }
         }
       }
     },
-    "G Minor" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "G小调"
+    "Google Imagen controls. Use a 5:4 / 2K ratio for landscape stills.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Google Imagen 控制。横向静态图请使用 5:4 / 2K 比例。"
           }
         }
       }
     },
-    "Gemini supports up to 2 speakers per narration." : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Gemini的每段旁白最多支持 2 个演讲者。"
+    "Gravelly": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "沙哑"
           }
         }
       }
     },
-    "Generate" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "生成"
+    "happy": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "开心"
           }
         }
       }
     },
-    "Generate Initial Composition" : {
-
+    "Happy": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "快乐"
+          }
+        }
+      }
     },
-    "Generated Music" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "生成的音乐"
+    "Height": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "高度"
           }
         }
       }
     },
-    "Generated music will appear here after you click Generate." : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "点击“生成”后，生成的音乐将显示在这里。"
+    "Hide Lyrics": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "隐藏歌词"
           }
         }
       }
     },
-    "Generated narration will appear here after you click Generate." : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "点击“生成”后，生成的旁白将显示在这里。"
+    "Hide Transcript": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "隐藏文稿"
           }
         }
       }
     },
-    "Generated Narrative" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "生成的旁白"
+    "Hindi": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "印地语"
           }
         }
       }
     },
-    "Generated Narratives" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "生成的旁白"
+    "Hip Hop": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "嘻哈"
           }
         }
       }
     },
-    "Generating…" : {
-
+    "History": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "历史记录"
+          }
+        }
+      }
     },
-    "Genre" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "流派"
+    "Image": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "图片"
           }
         }
       }
     },
-    "Gentle" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "温柔"
+    "Image Parameters": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "图片参数"
           }
         }
       }
     },
-    "German" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "德语"
+    "Image Unavailable": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "图片不可用"
           }
         }
       }
     },
-    "Get a Gemini API key →" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "获取 Gemini API 密钥 →"
+    "Images": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "图片"
           }
         }
       }
     },
-    "Get an Azure Speech key →" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "获取 Azure 语音密钥 →"
+    "Informative": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "知识性"
           }
         }
       }
     },
-    "Girl" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "女孩"
+    "Input Mode": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "输入模式"
           }
         }
       }
     },
-    "Google AI API Key" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Google AI API 密钥"
+    "Insert": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "插入"
           }
         }
       }
     },
-    "Gravelly" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "沙哑"
+    "Insert cue": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "插入提示点"
           }
         }
       }
     },
-    "happy" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "开心"
+    "Instrumental": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "纯音乐"
           }
         }
       }
     },
-    "Happy" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "快乐"
+    "Instruments": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "乐器"
           }
         }
       }
     },
-    "Hide Lyrics" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "隐藏歌词"
+    "Intro": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "前奏"
           }
         }
       }
     },
-    "Hide Transcript" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "隐藏文稿"
+    "Italian": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "意大利语"
           }
         }
       }
     },
-    "Hindi" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "印地语"
+    "Japanese": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "日语"
           }
         }
       }
     },
-    "Hip Hop" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "嘻哈"
+    "Jazz": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "爵士"
           }
         }
       }
     },
-    "History" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "历史记录"
+    "Jazz Fusion": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "融合爵士"
           }
         }
       }
     },
-    "Images" : {
-
+    "Keep Rendering": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "继续渲染"
+          }
+        }
+      }
     },
-    "Informative" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "知识性"
+    "Key / Scale": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "调 / 音阶"
           }
         }
       }
     },
-    "Input Mode" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "输入模式"
+    "Knowledgeable": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "博学"
           }
         }
       }
     },
-    "Insert" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "插入"
+    "Korean": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "韩语"
           }
         }
       }
     },
-    "Insert cue" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "插入提示点"
+    "Latin": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "拉丁"
           }
         }
       }
     },
-    "Instrumental" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "纯音乐"
+    "laughter": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "笑声"
           }
         }
       }
     },
-    "Instruments" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "乐器"
+    "Lively": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "活泼"
           }
         }
       }
     },
-    "Intro" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "前奏"
+    "Lo-fi Hip Hop": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lo-fi 嘻哈"
           }
         }
       }
     },
-    "Italian" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "意大利语"
+    "Loading voices…": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在加载语音…"
           }
         }
       }
     },
-    "Japanese" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "日语"
+    "Loading Voices…": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在加载语音…"
           }
         }
       }
     },
-    "Jazz" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "爵士"
+    "Lyrics": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "歌词"
           }
         }
       }
     },
-    "Jazz Fusion" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "融合爵士"
+    "Lyrics Disabled": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "歌词已禁用"
           }
         }
       }
     },
-    "Keep Rendering" : {
-
+    "Lyrics Language": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "歌词语言"
+          }
+        }
+      }
     },
-    "Key / Scale" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "调 / 音阶"
+    "Mature": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "成熟"
           }
         }
       }
     },
-    "Knowledgeable" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "博学"
+    "Maximum %lld images.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "最多 %lld 张图片。"
           }
         }
       }
     },
-    "Korean" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "韩语"
+    "Maximum 10 images reached.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已达 10 张图片上限。"
           }
         }
       }
     },
-    "Latin" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "拉丁"
+    "Melancholic": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "忧郁"
           }
         }
       }
     },
-    "laughter" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "笑声"
+    "Metal": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "金属乐"
           }
         }
       }
     },
-    "Lively" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "活泼"
+    "Model": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "模型"
           }
         }
       }
     },
-    "Lo-fi Hip Hop" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Lo-fi 嘻哈"
+    "Mood": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "情绪"
           }
         }
       }
     },
-    "Loading voices…" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "正在加载语音…"
+    "move": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "移动"
           }
         }
       }
     },
-    "Loading Voices…" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "正在加载语音…"
+    "Move down": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "向下移动"
           }
         }
       }
     },
-    "Lyrics" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "歌词"
+    "Move Down": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "向下移动"
           }
         }
       }
     },
-    "Lyrics Disabled" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "歌词已禁用"
+    "Move up": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "向上移动"
           }
         }
       }
     },
-    "Lyrics Language" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "歌词语言"
+    "Move Up": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "向上移动"
           }
         }
       }
     },
-    "Mature" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "成熟"
+    "Music": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "音乐"
           }
         }
       }
     },
-    "Maximum %lld images." : {
-
+    "Music (optional)": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "音乐（可选）"
+          }
+        }
+      }
     },
-    "Maximum 10 images reached." : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "已达 10 张图片上限。"
+    "Musical Parameters": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "音乐参数"
           }
         }
       }
     },
-    "Melancholic" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "忧郁"
+    "Mysterious": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "神秘"
           }
         }
       }
     },
-    "Metal" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "金属乐"
+    "Narrative": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "旁白"
           }
         }
       }
     },
-    "Model name (e.g. gpt-4o-mini)" : {
-
+    "Narratives": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "旁白"
+          }
+        }
+      }
     },
-    "Mood" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "情绪"
+    "New Narrative": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "新建旁白"
           }
         }
       }
     },
-    "move" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "移动"
+    "New Project": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "新建项目"
           }
         }
       }
     },
-    "Move down" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "向下移动"
+    "No Generated Music": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无生成的音乐"
           }
         }
       }
     },
-    "Move Down" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "向下移动"
+    "No Generated Narratives": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无生成的旁白"
           }
         }
       }
     },
-    "Move up" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "向上移动"
+    "No images yet": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "暂无图片"
           }
         }
       }
     },
-    "Move Up" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "向上移动"
+    "No Lyrics": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无歌词"
           }
         }
       }
     },
-    "Music" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "音乐"
+    "No music attached": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未附加音乐"
           }
         }
       }
     },
-    "Music (optional)" : {
-
+    "No Paragraphs": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无段落"
+          }
+        }
+      }
     },
-    "Musical Parameters" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "音乐参数"
+    "No Sections": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无分段"
           }
         }
       }
     },
-    "Mysterious" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "神秘"
+    "No voices loaded. Configure Azure in Settings and retry.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未加载任何语音。请在设置中配置 Azure 并重试。"
           }
         }
       }
     },
-    "Narrative" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "旁白"
+    "None": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无"
           }
         }
       }
     },
-    "Narratives" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "旁白"
+    "Nostalgic": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "怀旧"
           }
         }
       }
     },
-    "New Narrative" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "新建旁白"
+    "Notes": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "备注"
           }
         }
       }
     },
-    "New Project" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "新建项目"
+    "OK": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "确定"
           }
         }
       }
     },
-    "No Generated Music" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "无生成的音乐"
+    "Older Adult Female": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "中年女性"
           }
         }
       }
     },
-    "No Generated Narratives" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "无生成的旁白"
+    "Older Adult Male": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "中年男性"
           }
         }
       }
     },
-    "No Lyrics" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "无歌词"
+    "OpenAI": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "OpenAI"
           }
         }
       }
     },
-    "No music attached" : {
-
+    "OpenAI-compatible LLM": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "兼容 OpenAI 的 LLM"
+          }
+        }
+      }
     },
-    "No Paragraphs" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "无段落"
+    "Organ": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "风琴"
           }
         }
       }
     },
-    "No Sections" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "无分段"
+    "Output Format": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "输出格式"
           }
         }
       }
     },
-    "No voices loaded. Configure Azure in Settings and retry." : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "未加载任何语音。请在设置中配置 Azure 并重试。"
+    "Outro": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "尾奏"
           }
         }
       }
     },
-    "None" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "无"
+    "Overall Vibe": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "全局氛围"
           }
         }
       }
     },
-    "Nostalgic" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "怀旧"
+    "Parameters": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "参数"
           }
         }
       }
     },
-    "Notes" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "备注"
+    "Paste your region (e.g. \"eastus\") or any endpoint URL from the portal — we'll derive the TTS endpoint.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "粘贴你的区域（例如“eastus”）或来自门户的任意 终端节点 URL —— 我们将推导出 文本转语音 终端节点。"
           }
         }
       }
     },
-    "OK" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "确定"
+    "Percussion": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "打击乐器"
           }
         }
       }
     },
-    "Older Adult Female" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "中年女性"
+    "Photo Library": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "照片图库"
           }
         }
       }
     },
-    "Older Adult Male" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "中年男性"
+    "Piano": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "钢琴"
           }
         }
       }
     },
-    "OpenAI-compatible LLM" : {
-
+    "pick": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "选择"
+          }
+        }
+      }
     },
-    "Organ" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "风琴"
+    "Playful": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "俏皮"
           }
         }
       }
     },
-    "Output Format" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "输出格式"
+    "Pop": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "流行乐"
           }
         }
       }
     },
-    "Outro" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "尾奏"
+    "Portuguese": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "葡萄牙语"
           }
         }
       }
     },
-    "Overall Vibe" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "全局氛围"
+    "Preview voice": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "预览语音"
           }
         }
       }
     },
-    "Parameters" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "参数"
+    "Project Name": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "项目名称"
           }
         }
       }
     },
-    "Paste your region (e.g. \"eastus\") or any endpoint URL from the portal — we'll derive the TTS endpoint." : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "粘贴你的区域（例如“eastus”）或来自门户的任意 终端节点 URL —— 我们将推导出 文本转语音 终端节点。"
+    "Projects": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "项目"
           }
         }
       }
     },
-    "Percussion" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "打击乐器"
+    "Prompt": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "提示词"
           }
         }
       }
     },
-    "Photo Library" : {
-
+    "Prompt Preview": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "提示词预览"
+          }
+        }
+      }
     },
-    "Piano" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "钢琴"
+    "Provider": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "提供商"
           }
         }
       }
     },
-    "pick" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "选择"
+    "px": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "像素"
           }
         }
       }
     },
-    "Playful" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "俏皮"
+    "Quality": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "质量"
           }
         }
       }
     },
-    "Pop" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "流行乐"
+    "R&B": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "R&B"
           }
         }
       }
     },
-    "Portuguese" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "葡萄牙语"
+    "Reference Image": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "参考图片"
           }
         }
       }
     },
-    "Preview voice" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "预览语音"
+    "Reference Images": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "参考图像"
           }
         }
       }
     },
-    "Project Name" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "项目名称"
+    "Reference Images (%lld)": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "参考图像 (%lld)"
           }
         }
       }
     },
-    "Projects" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "项目"
+    "Refresh model list": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "刷新模型列表"
           }
         }
       }
     },
-    "Prompt" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "提示词"
+    "Reggae": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "雷鬼"
           }
         }
       }
     },
-    "Prompt Preview" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "提示词预览"
+    "Region or endpoint": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "区域或终端节点"
           }
         }
       }
     },
-    "Provider" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "提供商"
+    "reluctantly": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "勉强地"
           }
         }
       }
     },
-    "R&B" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "R&B"
+    "Remotion": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Remotion"
           }
         }
       }
     },
-    "Reference Image" : {
-
+    "Remotion Projects": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Remotion 项目"
+          }
+        }
+      }
     },
-    "Reference Images" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "参考图像"
+    "Remove": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "移除"
           }
         }
       }
     },
-    "Reference Images (%lld)" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "参考图像 (%lld)"
+    "Rename": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "重命名"
           }
         }
       }
     },
-    "Reggae" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "雷鬼"
+    "Rename Project": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "重命名项目"
           }
         }
       }
     },
-    "Region or endpoint" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "区域或终端节点"
+    "Render": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "渲染"
           }
         }
       }
     },
-    "reluctantly" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "勉强地"
+    "Render failed": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "渲染失败"
           }
         }
       }
     },
-    "Remotion" : {
-
+    "Render Now": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "立即渲染"
+          }
+        }
+      }
     },
-    "Remotion Projects" : {
-
+    "Rendering Video": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在渲染视频"
+          }
+        }
+      }
     },
-    "Remove" : {
-
+    "Reorder": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "重新排序"
+          }
+        }
+      }
     },
-    "Rename" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "重命名"
+    "Reset parameters": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "重置参数"
           }
         }
       }
     },
-    "Rename Project" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "重命名项目"
+    "Resolution": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "分辨率"
           }
         }
       }
     },
-    "Render" : {
-
+    "Retry": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "重试"
+          }
+        }
+      }
     },
-    "Render failed" : {
-
+    "Reveal": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "显示"
+          }
+        }
+      }
     },
-    "Render Now" : {
-
+    "Reveal in Finder": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在 Finder 中显示"
+          }
+        }
+      }
     },
-    "Rendering Video" : {
-
+    "Rock": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "摇滚乐"
+          }
+        }
+      }
     },
-    "Reorder" : {
-
+    "Role": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "角色"
+          }
+        }
+      }
     },
-    "Reset parameters" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "重置参数"
+    "Romantic": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "浪漫"
           }
         }
       }
     },
-    "Resolution" : {
-
+    "Running…": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "运行中…"
+          }
+        }
+      }
     },
-    "Retry" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "重试"
+    "Russian": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "俄语"
           }
         }
       }
     },
-    "Rock" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "摇滚乐"
+    "sad": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "悲伤"
           }
         }
       }
     },
-    "Role" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "角色"
+    "Sad": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "悲伤"
           }
         }
       }
     },
-    "Romantic" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "浪漫"
+    "sarcastically": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "讽刺地"
           }
         }
       }
     },
-    "Running…" : {
-
+    "Save": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "保存"
+          }
+        }
+      }
     },
-    "Russian" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "俄语"
+    "Save To": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "保存到"
           }
         }
       }
     },
-    "sad" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "悲伤"
+    "Saved": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已保存"
           }
         }
       }
     },
-    "Sad" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "悲伤"
+    "Saxophone": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "萨克斯风"
           }
         }
       }
     },
-    "sarcastically" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "讽刺地"
+    "Scene": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "场景"
           }
         }
       }
     },
-    "Save" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "保存"
+    "Scene Description": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "场景描述"
           }
         }
       }
     },
-    "Save To" : {
-
+    "Section Time": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "段落时间"
+          }
+        }
+      }
     },
-    "Saved" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "已保存"
+    "Select a model": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "选择模型"
           }
         }
       }
     },
-    "Saxophone" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "萨克斯风"
+    "Select a Narrative": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "选择旁白"
           }
         }
       }
     },
-    "Scene" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "场景"
+    "Select a Project": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "选择项目"
           }
         }
       }
     },
-    "Scene Description" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "场景描述"
+    "Senior Female": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "老年女性"
           }
         }
       }
     },
-    "Section Time" : {
-
+    "Senior Male": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "老年男性"
+          }
+        }
+      }
     },
-    "Select a Narrative" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "选择旁白"
+    "Set": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "设置"
           }
         }
       }
     },
-    "Select a Project" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "选择项目"
+    "Sets the overall feeling or atmosphere of the music. Included at the top of the generated prompt.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "请在此描述全局的音乐氛围，这部分将会包含在具体生成的音乐提示词中"
           }
         }
       }
     },
-    "Senior Female" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "老年女性"
+    "Settings": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "设置"
           }
         }
       }
     },
-    "Senior Male" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "老年男性"
+    "Shortcode": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "简码"
           }
         }
       }
     },
-    "Set" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "设置"
+    "shouting": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "大喊"
           }
         }
       }
     },
-    "Sets the overall feeling or atmosphere of the music. Included at the top of the generated prompt." : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "请在此描述全局的音乐氛围，这部分将会包含在具体生成的音乐提示词中"
+    "Show Lyrics": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "显示歌词"
           }
         }
       }
     },
-    "Settings" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "设置"
+    "Show Transcript": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "显示文稿"
           }
         }
       }
     },
-    "Shortcode" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "简码"
+    "sighs": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "叹气"
           }
         }
       }
     },
-    "shouting" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "大喊"
+    "Size": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "尺寸"
           }
         }
       }
     },
-    "Show Lyrics" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "显示歌词"
+    "Slide Guitar": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "滑棒吉他"
           }
         }
       }
     },
-    "Show Transcript" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "显示文稿"
+    "Smooth": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "舒缓"
           }
         }
       }
     },
-    "sighs" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "叹气"
+    "Soft": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "轻柔"
           }
         }
       }
     },
-    "Slide Guitar" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "滑棒吉他"
+    "Song Structure": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "歌曲结构"
           }
         }
       }
     },
-    "Smooth" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "舒缓"
+    "Soul": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "灵魂乐"
           }
         }
       }
     },
-    "Soft" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "轻柔"
+    "Spanish": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "西班牙语"
           }
         }
       }
     },
-    "Song Structure" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "歌曲结构"
+    "Speaker name": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "演讲者名称"
           }
         }
       }
     },
-    "Soul" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "灵魂乐"
+    "Speakers": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "演讲者"
           }
         }
       }
     },
-    "Spanish" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "西班牙语"
+    "Start": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "开始"
           }
         }
       }
     },
-    "Speaker name" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "演讲者名称"
+    "Start Generation": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "开始生成"
           }
         }
       }
     },
-    "Speakers" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "演讲者"
+    "Start time": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "开始时间"
           }
         }
       }
     },
-    "Start" : {
-
+    "Starting Remotion Studio…": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在启动 Remotion Studio…"
+          }
+        }
+      }
     },
-    "Start Generation" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "开始生成"
+    "Stop": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "停止"
           }
         }
       }
     },
-    "Start time" : {
-
+    "Stop generating": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "停止生成"
+          }
+        }
+      }
     },
-    "Starting Remotion Studio…" : {
-
+    "Stop Rendering": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "停止渲染"
+          }
+        }
+      }
     },
-    "Stop" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "停止"
+    "Strings": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "弦乐器"
           }
         }
       }
     },
-    "Stop generating" : {
-
+    "Structure": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "结构"
+          }
+        }
+      }
     },
-    "Stop Rendering" : {
-
+    "Studio preview is paused while rendering.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "渲染期间 Studio 预览已暂停。"
+          }
+        }
+      }
     },
-    "Strings" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "弦乐器"
+    "Style degree": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "风格强度"
           }
         }
       }
     },
-    "Structure" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "结构"
+    "Subscription key": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "订阅密钥"
           }
         }
       }
     },
-    "Studio preview is paused while rendering." : {
-
+    "Switch generation type to \"With Lyrics\" to enable the lyrics editor.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "将生成类型切换为“带歌词”，以启用歌词编辑器。"
+          }
+        }
+      }
     },
-    "Style degree" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "风格强度"
+    "Synthesizer": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "合成器"
           }
         }
       }
     },
-    "Subscription key" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "订阅密钥"
+    "Tell the model what kind of video to build (style, motion, mood, structure). Used both for the initial generation and as context for follow-up chat edits.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "告诉模型要构建什么样的视频（风格、动效、氛围、结构）。用于初始生成以及后续聊天编辑的上下文。"
           }
         }
       }
     },
-    "Switch generation type to \"With Lyrics\" to enable the lyrics editor." : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "将生成类型切换为“带歌词”，以启用歌词编辑器。"
+    "Test Connection": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "测试连接"
           }
         }
       }
     },
-    "Synthesizer" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "合成器"
+    "Text Overlay": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "文字叠加"
           }
         }
       }
     },
-    "Tell the model what kind of video to build (style, motion, mood, structure). Used both for the initial generation and as context for follow-up chat edits." : {
-
+    "Thai": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "泰语"
+          }
+        }
+      }
     },
-    "Test Connection" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "测试连接"
+    "The partial video file will be removed.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "将删除已生成的部分视频文件。"
           }
         }
       }
     },
-    "Text Overlay" : {
-
+    "Theme Color": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "主题颜色"
+          }
+        }
+      }
     },
-    "Thai" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "泰语"
+    "This permanently deletes all messages in this chat. The composition itself is not affected.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "将永久删除此聊天中的所有消息。合成本身不会受影响。"
           }
         }
       }
     },
-    "The partial video file will be removed." : {
-
+    "This will permanently remove the audio file.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "这将永久删除该音频文件。"
+          }
+        }
+      }
     },
-    "Theme Color" : {
-
+    "tired": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "疲惫"
+          }
+        }
+      }
     },
-    "This permanently deletes all messages in this chat. The composition itself is not affected." : {
-
+    "TR-808 Drum Machine": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "TR-808 鼓机"
+          }
+        }
+      }
     },
-    "This will permanently remove the audio file." : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "这将永久删除该音频文件。"
+    "Transcript": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "转录文本"
           }
         }
       }
     },
-    "tired" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "疲惫"
+    "Transparent background": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "透明背景"
           }
         }
       }
     },
-    "TR-808 Drum Machine" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "TR-808 鼓机"
+    "Transparent background requires PNG or WebP output.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "透明背景需要 PNG 或 WebP 输出格式。"
           }
         }
       }
     },
-    "Transcript" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "转录文本"
+    "Trumpet": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "小号"
           }
         }
       }
     },
-    "Trumpet" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "小号"
+    "Turkish": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "土耳其语"
           }
         }
       }
     },
-    "Turkish" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "土耳其语"
+    "Type": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "类型"
           }
         }
       }
     },
-    "Type" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "类型"
+    "Upbeat": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "欢快"
           }
         }
       }
     },
-    "Upbeat" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "欢快"
+    "Uplifting": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "振奋"
           }
         }
       }
     },
-    "Uplifting" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "振奋"
+    "Used as a visual style guide passed to the LLM during chat edits.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "作为视觉风格参考，在聊天编辑时传递给 LLM。"
           }
         }
       }
     },
-    "Used as a visual style guide passed to the LLM during chat edits." : {
-
+    "Used to generate and edit Remotion compositions. Works with OpenAI, Azure OpenAI, OpenRouter, Ollama, LM Studio, etc.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "用于生成和编辑 Remotion 合成。支持 OpenAI、Azure OpenAI、OpenRouter、Ollama、LM Studio 等。"
+          }
+        }
+      }
     },
-    "Used to generate and edit Remotion compositions. Works with OpenAI, Azure OpenAI, OpenRouter, Ollama, LM Studio, etc." : {
-
+    "Verse": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "主歌"
+          }
+        }
+      }
     },
-    "Verse" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "主歌"
+    "Vietnamese": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "越南语"
           }
         }
       }
     },
-    "Vietnamese" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "越南语"
+    "View Source": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "查看源代码"
           }
         }
       }
     },
-    "View Source" : {
-
+    "Violin": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "小提琴"
+          }
+        }
+      }
     },
-    "Violin" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "小提琴"
+    "Vocals": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "人声"
           }
         }
       }
     },
-    "Vocals" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "人声"
+    "Voice": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "语音"
           }
         }
       }
     },
-    "Voice" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "语音"
+    "Voice parameters": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "语音参数"
           }
         }
       }
     },
-    "Voice parameters" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "语音参数"
+    "Warm": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "温暖"
           }
         }
       }
     },
-    "Warm" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "温暖"
+    "whispers": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "低语"
           }
         }
       }
     },
-    "whispers" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "低语"
+    "Width": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "宽度"
           }
         }
       }
     },
-    "With Lyrics" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "带歌词"
+    "With Lyrics": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "带歌词"
           }
         }
       }
     },
-    "Woodwinds" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "木管乐器"
+    "Woodwinds": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "木管乐器"
           }
         }
       }
     },
-    "Young Adult Female" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "青年女性"
+    "Young Adult Female": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "青年女性"
           }
         }
       }
     },
-    "Young Adult Male" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "青年男性"
+    "Young Adult Male": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "青年男性"
           }
         }
       }
     },
-    "Your API key is stored securely in the Keychain." : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "您的API 密钥安全地存储在钥匙串中。"
+    "Your API key is stored securely in the Keychain.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "您的API 密钥安全地存储在钥匙串中。"
           }
         }
       }
     },
-    "Your keys have been saved to the Keychain." : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "您的密钥已保存到钥匙串中。"
+    "Your keys have been saved to the Keychain.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "您的密钥已保存到钥匙串中。"
           }
         }
       }
     },
-    "Youthful" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "年轻"
+    "Youthful": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "年轻"
           }
         }
       }
     }
   },
-  "version" : "1.1"
+  "version": "1.1"
 }

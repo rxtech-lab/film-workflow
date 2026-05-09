@@ -11,6 +11,8 @@ struct film_workflowApp: App {
             GeneratedNarrative.self,
             RemotionProject.self,
             RemotionMessage.self,
+            ImageGenProject.self,
+            GeneratedImage.self,
         ])
         let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
 
