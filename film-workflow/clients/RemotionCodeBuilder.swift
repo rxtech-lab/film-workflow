@@ -28,7 +28,15 @@ struct RemotionCodeBuilder {
 
     // MARK: - LLM-driven seed
 
-    /// Copies the project's assets into its public/ dir and returns the asset basenames the LLM can reference.
+    /// Copies the project's assets into its public/ dir and returns the asset names
+    /// (including subfolder prefix, e.g. "upload/foo.png") the LLM can reference via
+    /// staticFile(...).
+    ///
+    /// Layout:
+    /// - public/upload/    — user-uploaded images (project.imagePaths)
+    /// - public/reference/ — reference image used as style guide
+    /// - public/generated/ — images created by the agent's generate_image tool
+    /// - public/           — music + other top-level assets
     static func prepareAssets(project: RemotionProject) throws -> SeededAssets {
         let dir = FileStorage.remotionProjectDir(id: project.id)
         let publicDir = dir.appendingPathComponent("public", isDirectory: true)
@@ -38,17 +46,17 @@ struct RemotionCodeBuilder {
 
         var imageNames: [String] = []
         for relativePath in project.imagePaths {
-            if let name = copyAsset(relativePath: relativePath, intoPublic: publicDir) {
+            if let name = copyAsset(relativePath: relativePath, intoPublic: publicDir, subfolder: "upload") {
                 imageNames.append(name)
             }
         }
         var referenceImageName: String?
         if let ref = project.referenceImagePath {
-            referenceImageName = copyAsset(relativePath: ref, intoPublic: publicDir)
+            referenceImageName = copyAsset(relativePath: ref, intoPublic: publicDir, subfolder: "reference")
         }
         var musicName: String?
         if let music = project.musicFilePath {
-            musicName = copyAsset(relativePath: music, intoPublic: publicDir)
+            musicName = copyAsset(relativePath: music, intoPublic: publicDir, subfolder: nil)
         }
         return SeededAssets(
             imageNames: imageNames,
@@ -156,12 +164,23 @@ struct RemotionCodeBuilder {
     // MARK: - Asset copying
 
     @discardableResult
-    private static func copyAsset(relativePath: String, intoPublic publicDir: URL) -> String? {
+    private static func copyAsset(relativePath: String, intoPublic publicDir: URL, subfolder: String?) -> String? {
         let src = FileStorage.absoluteURL(for: relativePath)
         guard FileManager.default.fileExists(atPath: src.path) else { return nil }
-        // Keep file name stable to avoid re-copying on every seed.
         let fileName = src.lastPathComponent
-        let dst = publicDir.appendingPathComponent(fileName)
+
+        let targetDir: URL
+        let returnedName: String
+        if let sub = subfolder, !sub.isEmpty {
+            targetDir = publicDir.appendingPathComponent(sub, isDirectory: true)
+            returnedName = "\(sub)/\(fileName)"
+            try? FileManager.default.createDirectory(at: targetDir, withIntermediateDirectories: true)
+        } else {
+            targetDir = publicDir
+            returnedName = fileName
+        }
+
+        let dst = targetDir.appendingPathComponent(fileName)
         if !FileManager.default.fileExists(atPath: dst.path) {
             do {
                 try FileManager.default.copyItem(at: src, to: dst)
@@ -169,7 +188,7 @@ struct RemotionCodeBuilder {
                 return nil
             }
         }
-        return fileName
+        return returnedName
     }
 
     // MARK: - Seed payload
@@ -187,13 +206,13 @@ struct RemotionCodeBuilder {
             lines.append("Text overlay: \(project.text)")
         }
         if !assets.imageNames.isEmpty {
-            lines.append("Images (in public/, reference via staticFile()): \(assets.imageNames.joined(separator: ", "))")
+            lines.append("Uploaded images (call staticFile() with these EXACT paths): \(assets.imageNames.joined(separator: ", "))")
         }
         if let ref = assets.referenceImageName {
-            lines.append("Reference image (style guide, do NOT render): \(ref)")
+            lines.append("Reference image at \(ref) (style guide, do NOT render)")
         }
         if let music = assets.musicName {
-            lines.append("Music file (in public/): \(music)")
+            lines.append("Music file at public/ root: \(music)")
         }
         let userPrompt = project.prompt.trimmingCharacters(in: .whitespacesAndNewlines)
         if !userPrompt.isEmpty {
@@ -283,7 +302,7 @@ struct RemotionCodeBuilder {
 
     Hard requirements:
     - Use the exact frame rate, width, and height provided in the project metadata for COMPOSITION_FPS, COMPOSITION_WIDTH, COMPOSITION_HEIGHT. Set COMPOSITION_DURATION_IN_FRAMES to the requested seconds × COMPOSITION_FPS.
-    - Reference assets via staticFile("filename.ext"). Files in public/ are exposed by basename only. Do NOT render the reference image; treat it as a style guide.
+    - Reference assets via staticFile("path"). Pass the EXACT path provided in the project metadata — uploaded images live under upload/ (e.g. staticFile("upload/foo.png")), the reference image lives under reference/ (do NOT render it; treat as style guide), agent-generated images live under generated/, and music sits at the public/ root.
     - Allowed imports: only `remotion` and `react` (already in package.json). Use AbsoluteFill, Sequence, Img, Audio, Video, useCurrentFrame, useVideoConfig, interpolate, spring, staticFile, etc. Sub-components import their own primitives directly from `remotion`/`react`.
     - Animate thoughtfully: use interpolate() for fades/slides, spring() for bounces. Avoid plain static frames unless asked.
     - Valid TypeScript JSX only — no markdown fences inside files, no FILE markers other than the first line of each block.

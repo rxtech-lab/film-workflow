@@ -2,16 +2,14 @@
 import Combine
 import SwiftData
 import SwiftUI
+import Textual
 
 struct RemotionChatView: View {
     @Bindable var project: RemotionProject
     @Binding var reloadToken: Int
 
     @Environment(\.modelContext) private var modelContext
-    @State private var input: String = ""
-    @State private var isSending: Bool = false
-    @State private var errorMessage: String?
-    @State private var chatTask: Task<Void, Never>?
+    @Environment(RemotionChatController.self) private var controller
     @State private var showClearConfirm: Bool = false
 
     private var orderedMessages: [RemotionMessage] {
@@ -19,7 +17,14 @@ struct RemotionChatView: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
+        let session = controller.session(for: project.id)
+        let isSending = session.isSending
+        let inputBinding = Binding<String>(
+            get: { controller.session(for: project.id).input },
+            set: { controller.setInput($0, for: project.id) }
+        )
+
+        return VStack(spacing: 0) {
             HStack {
                 Text("Chat — refine the composition")
                     .font(.subheadline.bold())
@@ -36,44 +41,50 @@ struct RemotionChatView: View {
             .padding(.horizontal, 12)
             .padding(.vertical, 6)
 
-            ScrollViewReader { proxy in
-                ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 8) {
-                        if orderedMessages.isEmpty {
-                            Text("Describe a change — e.g. \"make the title yellow\" or \"slow the fade to 1s\".")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                                .padding()
-                        }
-                        ForEach(orderedMessages) { msg in
-                            messageRow(msg)
-                                .id(msg.id)
-                        }
-                        if isSending {
-                            TypingIndicator()
-                                .id("typing-indicator")
-                                .padding(.horizontal, 4)
-                        }
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 8) {
+                    if orderedMessages.isEmpty {
+                        Text("Describe a change — e.g. \"make the title yellow\" or \"slow the fade to 1s\".")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .padding()
                     }
-                    .padding(8)
-                }
-                .onChange(of: orderedMessages.count) { _, _ in
-                    if let last = orderedMessages.last {
-                        withAnimation(.easeOut(duration: 0.15)) {
-                            proxy.scrollTo(last.id, anchor: .bottom)
-                        }
+                    ForEach(orderedMessages) { msg in
+                        messageRow(msg)
+                            .id(ChatScrollAnchor.message(msg.id))
+                    }
+                    if isSending {
+                        TypingIndicator()
+                            .id(ChatScrollAnchor.typing)
+                            .padding(.horizontal, 4)
                     }
                 }
-                .onChange(of: isSending) { _, sending in
-                    if sending {
-                        withAnimation(.easeOut(duration: 0.15)) {
-                            proxy.scrollTo("typing-indicator", anchor: .bottom)
-                        }
+                .padding(.top, 8)
+                .padding(.bottom, 108)
+                .padding(.horizontal, 16)
+                .scrollTargetLayout()
+            }
+            .defaultScrollAnchor(.bottom)
+            .scrollPosition(id: Binding<ChatScrollAnchor?>(
+                get: { controller.session(for: project.id).scrollAnchor },
+                set: { controller.setScrollAnchor($0, for: project.id) }
+            ), anchor: .bottom)
+            .onChange(of: orderedMessages.count) { _, _ in
+                if let last = orderedMessages.last {
+                    withAnimation(.easeOut(duration: 0.15)) {
+                        controller.setScrollAnchor(.message(last.id), for: project.id)
+                    }
+                }
+            }
+            .onChange(of: isSending) { _, sending in
+                if sending {
+                    withAnimation(.easeOut(duration: 0.15)) {
+                        controller.setScrollAnchor(.typing, for: project.id)
                     }
                 }
             }
 
-            if let err = errorMessage {
+            if let err = session.errorMessage {
                 Text(err)
                     .font(.caption)
                     .foregroundStyle(.red)
@@ -82,8 +93,8 @@ struct RemotionChatView: View {
             }
 
             Divider()
-            HStack(alignment: .bottom, spacing: 8) {
-                TextField("Ask the model to edit the composition…", text: $input, axis: .vertical)
+            HStack(alignment: .center, spacing: 8) {
+                TextField("Ask the model to edit the composition…", text: inputBinding, axis: .vertical)
                     .lineLimit(1...4)
                     .textFieldStyle(.roundedBorder)
                     .disabled(isSending)
@@ -91,20 +102,34 @@ struct RemotionChatView: View {
 
                 if isSending {
                     Button {
-                        chatTask?.cancel()
+                        controller.cancel(projectId: project.id)
                     } label: {
                         Image(systemName: "stop.fill")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(.white)
+                            .frame(width: 32, height: 32)
+                            .glassEffect(.regular.tint(.red).interactive(), in: .circle)
                     }
+                    .buttonStyle(.plain)
                     .help("Stop generating")
                     .keyboardShortcut(".", modifiers: [.command])
                 } else {
+                    let isDisabled = session.input.trimmingCharacters(in: .whitespaces).isEmpty || project.compositionSource.isEmpty
                     Button {
                         send()
                     } label: {
                         Image(systemName: "paperplane.fill")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(.white)
+                            .frame(width: 32, height: 32)
+                            .glassEffect(
+                                .regular.tint(isDisabled ? .gray : .accentColor).interactive(),
+                                in: .circle
+                            )
                     }
+                    .buttonStyle(.plain)
                     .keyboardShortcut(.return, modifiers: [.command])
-                    .disabled(input.trimmingCharacters(in: .whitespaces).isEmpty || project.compositionSource.isEmpty)
+                    .disabled(isDisabled)
                 }
             }
             .padding(8)
@@ -125,8 +150,11 @@ struct RemotionChatView: View {
     @ViewBuilder
     private func messageRow(_ msg: RemotionMessage) -> some View {
         if msg.kind == RemotionMessageKind.tool.rawValue {
-            ToolCardView(message: msg)
-                .frame(maxWidth: .infinity, alignment: .leading)
+            HStack(spacing: 0) {
+                ToolCardView(message: msg)
+                    .frame(maxWidth: 400, alignment: .leading)
+                Spacer(minLength: 0)
+            }
         } else if msg.role == RemotionMessageRole.user.rawValue {
             HStack {
                 Spacer(minLength: 40)
@@ -140,9 +168,9 @@ struct RemotionChatView: View {
                     )
             }
         } else {
-            Text(renderMarkdown(msg.content))
-                .font(.callout)
-                .textSelection(.enabled)
+            StructuredText(markdown: msg.content)
+                .textual.structuredTextStyle(.gitHub)
+                .textual.textSelection(.enabled)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal, 4)
                 .padding(.vertical, 2)
@@ -152,10 +180,11 @@ struct RemotionChatView: View {
     // MARK: - Send
 
     private func send() {
-        let instruction = input.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !instruction.isEmpty, !isSending else { return }
+        let session = controller.session(for: project.id)
+        let instruction = session.input.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !instruction.isEmpty, !session.isSending else { return }
         guard !project.compositionSource.isEmpty else {
-            errorMessage = "Generate the initial composition first."
+            controller.setError("Generate the initial composition first.", for: project.id)
             return
         }
 
@@ -163,102 +192,26 @@ struct RemotionChatView: View {
         do {
             config = try AppConfig.loadFromKeychain()
         } catch {
-            errorMessage = "Could not load credentials: \(error.localizedDescription)"
+            controller.setError("Could not load credentials: \(error.localizedDescription)", for: project.id)
             return
         }
         guard !config.openAIEndpoint.isEmpty,
               !config.openAIKey.isEmpty,
               !config.openAIModel.isEmpty else {
-            errorMessage = "Set OpenAI endpoint, key, and model in Settings first."
+            controller.setError("Set OpenAI endpoint, key, and model in Settings first.", for: project.id)
             return
         }
 
-        let userMsg = RemotionMessage(role: RemotionMessageRole.user.rawValue, content: instruction, project: project)
-        modelContext.insert(userMsg)
-        project.messages.append(userMsg)
-        input = ""
-        isSending = true
-        errorMessage = nil
-
-        let bindable = project
-        let history = orderedMessages
-        let modelContext = self.modelContext
-        chatTask = Task { @MainActor in
-            defer {
-                isSending = false
-                chatTask = nil
+        controller.send(
+            instruction: instruction,
+            project: project,
+            history: orderedMessages,
+            config: config,
+            modelContext: modelContext,
+            onCompleted: { anyFileWritten in
+                if anyFileWritten { reloadToken += 1 }
             }
-            do {
-                let stream = RemotionAgent.runEdit(
-                    project: bindable,
-                    userInstruction: instruction,
-                    history: history,
-                    config: config
-                )
-
-                var anyFileWritten = false
-                var pendingToolMessages: [String: RemotionMessage] = [:]
-                for try await event in stream {
-                    switch event {
-                    case .status:
-                        // Status updates are ephemeral — surfaced via the typing indicator only.
-                        break
-                    case .toolCall(let id, let name, let args):
-                        let msg = RemotionMessage(
-                            role: RemotionMessageRole.assistant.rawValue,
-                            content: "",
-                            project: bindable,
-                            kind: .tool,
-                            toolName: name,
-                            toolArgs: args,
-                            toolStatus: .pending,
-                            toolCallId: id
-                        )
-                        modelContext.insert(msg)
-                        bindable.messages.append(msg)
-                        pendingToolMessages[id] = msg
-                    case .toolResult(let id, _, let summary, let ok):
-                        if let msg = pendingToolMessages.removeValue(forKey: id) {
-                            msg.toolResult = summary
-                            msg.toolStatus = (ok ? RemotionToolStatus.ok : .failed).rawValue
-                        }
-                    case .assistantText(let text):
-                        appendAssistant(text, project: bindable, modelContext: modelContext)
-                    case .fileWritten(let path, let content):
-                        anyFileWritten = true
-                        if path == "src/Composition.tsx" {
-                            bindable.compositionSource = content
-                        }
-                    case .completed:
-                        if anyFileWritten {
-                            bindable.updatedAt = Date()
-                            reloadToken += 1
-                        }
-                    }
-                }
-                // Anything still pending at end-of-stream means the loop exited mid-call (rare).
-                for msg in pendingToolMessages.values {
-                    msg.toolStatus = RemotionToolStatus.failed.rawValue
-                    if msg.toolResult == nil { msg.toolResult = "no result" }
-                }
-            } catch is CancellationError {
-                // user-initiated, no error UI
-            } catch {
-                errorMessage = error.localizedDescription
-            }
-        }
-    }
-
-    private func appendAssistant(_ content: String, project: RemotionProject, modelContext: ModelContext) {
-        let trimmed = content.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return }
-        let msg = RemotionMessage(
-            role: RemotionMessageRole.assistant.rawValue,
-            content: trimmed,
-            project: project
         )
-        modelContext.insert(msg)
-        project.messages.append(msg)
     }
 
     private func clearAllMessages() {
@@ -267,24 +220,17 @@ struct RemotionChatView: View {
         for msg in messages {
             modelContext.delete(msg)
         }
-        errorMessage = nil
+        controller.setError(nil, for: project.id)
     }
 
-    private func renderMarkdown(_ source: String) -> AttributedString {
-        if let parsed = try? AttributedString(
-            markdown: source,
-            options: AttributedString.MarkdownParsingOptions(
-                interpretedSyntax: .inlineOnlyPreservingWhitespace
-            )
-        ) {
-            return parsed
-        }
-        return AttributedString(source)
-    }
 }
+
 
 private struct ToolCardView: View {
     let message: RemotionMessage
+    @State private var showDetails: Bool = false
+
+    private static let maxDisplayChars: Int = 200
 
     private var status: RemotionToolStatus {
         guard let raw = message.toolStatus,
@@ -295,48 +241,63 @@ private struct ToolCardView: View {
     }
 
     var body: some View {
-        HStack(alignment: .top, spacing: 8) {
-            iconView
-                .frame(width: 16, height: 16)
-                .padding(.top, 2)
+        Button {
+            showDetails = true
+        } label: {
+            HStack(alignment: .top, spacing: 8) {
+                iconView
+                    .frame(width: 16, height: 16)
+                    .padding(.top, 2)
 
-            VStack(alignment: .leading, spacing: 2) {
-                HStack(spacing: 6) {
-                    Text(message.toolName ?? "tool")
-                        .font(.caption.weight(.semibold))
-                        .monospaced()
-                    if let args = compactArgs(message.toolArgs), !args.isEmpty {
-                        Text(args)
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack(spacing: 6) {
+                        Text(message.toolName ?? "tool")
+                            .font(.caption.weight(.semibold))
+                            .monospaced()
+                        if let args = compactArgs(message.toolArgs), !args.isEmpty {
+                            Text(truncate(args))
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                                .truncationMode(.middle)
+                        }
+                    }
+                    if let result = message.toolResult, !result.isEmpty {
+                        Text(truncate(result))
+                            .font(.caption)
+                            .foregroundStyle(status == .failed ? .red : .secondary)
                             .lineLimit(1)
-                            .truncationMode(.middle)
+                            .truncationMode(.tail)
+                    } else if status == .pending {
+                        Text("Running…")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
                     }
                 }
-                if let result = message.toolResult, !result.isEmpty {
-                    Text(result)
-                        .font(.caption)
-                        .foregroundStyle(status == .failed ? .red : .secondary)
-                        .lineLimit(3)
-                } else if status == .pending {
-                    Text("Running…")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-            }
 
-            Spacer(minLength: 0)
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
+            .background(
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(Color.secondary.opacity(0.08))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 8)
+                    .strokeBorder(borderColor.opacity(0.5), lineWidth: 0.5)
+            )
+            .contentShape(Rectangle())
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 8)
-        .background(
-            RoundedRectangle(cornerRadius: 8)
-                .fill(Color.secondary.opacity(0.08))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 8)
-                .strokeBorder(borderColor.opacity(0.5), lineWidth: 0.5)
-        )
+        .buttonStyle(.plain)
+        .sheet(isPresented: $showDetails) {
+            ToolCallDetailSheet(message: message)
+        }
+    }
+
+    private func truncate(_ s: String) -> String {
+        guard s.count > Self.maxDisplayChars else { return s }
+        return String(s.prefix(Self.maxDisplayChars)) + "…"
     }
 
     @ViewBuilder
@@ -375,6 +336,107 @@ private struct ToolCardView: View {
             return joined.isEmpty ? nil : joined
         }
         return raw
+    }
+}
+
+private struct ToolCallDetailSheet: View {
+    let message: RemotionMessage
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text(message.toolName ?? "tool")
+                    .font(.headline)
+                    .monospaced()
+                Spacer()
+                Button("Done") { dismiss() }
+                    .keyboardShortcut(.defaultAction)
+            }
+
+            section(
+                title: "Parameters",
+                content: prettifyJSON(message.toolArgs),
+                language: "json"
+            )
+            section(
+                title: "Result",
+                content: prettifyResult(message.toolResult),
+                language: resultLanguage(message.toolResult),
+                isError: (message.toolStatus == RemotionToolStatus.failed.rawValue)
+            )
+        }
+        .padding(16)
+        .frame(minWidth: 520, minHeight: 360)
+    }
+
+    @ViewBuilder
+    private func section(
+        title: String,
+        content: String?,
+        language: String,
+        isError: Bool = false
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.secondary)
+            ScrollView {
+                Group {
+                    if let content, !content.isEmpty {
+                        StructuredText(markdown: "```\(language)\n\(content)\n```")
+                            .textual.structuredTextStyle(.gitHub)
+                            .textual.textSelection(.enabled)
+                    } else {
+                        Text("—")
+                            .font(.system(.caption, design: .monospaced))
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(8)
+            }
+            .frame(maxHeight: 260)
+            .background(
+                RoundedRectangle(cornerRadius: 6)
+                    .fill(Color.secondary.opacity(0.08))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 6)
+                    .strokeBorder(
+                        (isError ? Color.red : Color.clear).opacity(0.5),
+                        lineWidth: 0.5
+                    )
+            )
+        }
+    }
+
+    private func prettifyJSON(_ raw: String?) -> String? {
+        guard let raw, !raw.isEmpty else { return nil }
+        if let data = raw.data(using: .utf8),
+           let obj = try? JSONSerialization.jsonObject(with: data),
+           let pretty = try? JSONSerialization.data(
+               withJSONObject: obj,
+               options: [.prettyPrinted, .sortedKeys]
+           ),
+           let s = String(data: pretty, encoding: .utf8) {
+            return s
+        }
+        return raw
+    }
+
+    private func prettifyResult(_ raw: String?) -> String? {
+        guard let raw, !raw.isEmpty else { return nil }
+        // If the result happens to be JSON (most tool results are), pretty-print it.
+        if let pretty = prettifyJSON(raw), pretty != raw { return pretty }
+        return raw
+    }
+
+    private func resultLanguage(_ raw: String?) -> String {
+        guard let raw, !raw.isEmpty else { return "" }
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.hasPrefix("{") || trimmed.hasPrefix("[") { return "json" }
+        return ""
     }
 }
 

@@ -9,6 +9,7 @@
 /* Begin PBXBuildFile section */
 		DF4F815C2F91465100DE82DA /* appicon.icon in Resources */ = {isa = PBXBuildFile; fileRef = DF4F815B2F91465100DE82DA /* appicon.icon */; };
 		DFAA0001000000000000A0A1 /* RemotionRuntime in Resources */ = {isa = PBXBuildFile; fileRef = DFAA0001000000000000A0A2 /* RemotionRuntime */; };
+		DFC60EA52FAF81D200B99679 /* Textual in Frameworks */ = {isa = PBXBuildFile; productRef = DFC60EA42FAF81D200B99679 /* Textual */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -59,6 +60,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				DFC60EA52FAF81D200B99679 /* Textual in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -122,6 +124,7 @@
 			);
 			name = "film-workflow";
 			packageProductDependencies = (
+				DFC60EA42FAF81D200B99679 /* Textual */,
 			);
 			productName = "film-workflow";
 			productReference = DF4F80FA2F9120D300DE82DA /* film-workflow.app */;
@@ -206,6 +209,9 @@
 			);
 			mainGroup = DF4F80F12F9120D300DE82DA;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				DFC60EA32FAF81D200B99679 /* XCRemoteSwiftPackageReference "textual" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = DF4F80FB2F9120D300DE82DA /* Products */;
 			projectDirPath = "";
@@ -666,6 +672,25 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		DFC60EA32FAF81D200B99679 /* XCRemoteSwiftPackageReference "textual" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/gonzalezreal/textual";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 0.3.1;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		DFC60EA42FAF81D200B99679 /* Textual */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = DFC60EA32FAF81D200B99679 /* XCRemoteSwiftPackageReference "textual" */;
+			productName = Textual;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = DF4F80F22F9120D300DE82DA /* Project object */;
 }

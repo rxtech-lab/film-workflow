@@ -21,6 +21,9 @@
         }
       }
     },
+    "—" : {
+
+    },
     "%@ - %@" : {
       "localizations" : {
         "en" : {
@@ -64,7 +67,14 @@
       }
     },
     "%lld%%" : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld%%"
+          }
+        }
+      }
     },
     "+ %@" : {
       "localizations" : {
@@ -217,7 +227,14 @@
       }
     },
     "API key" : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "API 密钥"
+          }
+        }
+      }
     },
     "Arabic" : {
       "localizations" : {
@@ -230,7 +247,24 @@
       }
     },
     "Ask the model to edit the composition…" : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "让模型修改合成…"
+          }
+        }
+      }
+    },
+    "Aspect Ratio" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "宽高比"
+          }
+        }
+      }
     },
     "Azure Speech" : {
       "localizations" : {
@@ -272,8 +306,25 @@
         }
       }
     },
+    "Background" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "背景"
+          }
+        }
+      }
+    },
     "Basic" : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "基础"
+          }
+        }
+      }
     },
     "Basic Info" : {
       "localizations" : {
@@ -416,7 +467,14 @@
       }
     },
     "Builds a starting Composition.tsx from these inputs and launches Studio. Use the chat below to refine." : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "根据这些输入构建初始 Composition.tsx 并启动 Studio。在下方聊天中继续优化。"
+          }
+        }
+      }
     },
     "C Major" : {
       "localizations" : {
@@ -459,7 +517,14 @@
       }
     },
     "Cancel rendering?" : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "取消渲染？"
+          }
+        }
+      }
     },
     "Casual" : {
       "localizations" : {
@@ -482,10 +547,24 @@
       }
     },
     "Chat" : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "聊天"
+          }
+        }
+      }
     },
     "Chat — refine the composition" : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "聊天 — 优化合成"
+          }
+        }
+      }
     },
     "Chinese" : {
       "localizations" : {
@@ -538,7 +617,14 @@
       }
     },
     "Choose…" : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "选择…"
+          }
+        }
+      }
     },
     "Chorus" : {
       "localizations" : {
@@ -581,16 +667,44 @@
       }
     },
     "Clear All" : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "全部清除"
+          }
+        }
+      }
     },
     "Clear all chat messages?" : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "清除所有聊天消息？"
+          }
+        }
+      }
     },
     "Clear all messages" : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "清除所有消息"
+          }
+        }
+      }
     },
     "Click \"Generate Initial Composition\" in the Form tab to start the Studio preview." : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "点击\"表单\"标签页中的\"生成初始合成\"以开始 Studio 预览。"
+          }
+        }
+      }
     },
     "Composition is %lld × %lld @ %lldfps. Output will be %lld × %lld @ %lldfps." : {
       "localizations" : {
@@ -599,11 +713,34 @@
             "state" : "new",
             "value" : "Composition is %1$lld × %2$lld @ %3$lldfps. Output will be %4$lld × %5$lld @ %6$lldfps."
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "合成为 %1$lld × %2$lld @ %3$lldfps。输出将为 %4$lld × %5$lld @ %6$lldfps。"
+          }
         }
       }
     },
     "Composition.tsx" : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Composition.tsx"
+          }
+        }
+      }
+    },
+    "Compression" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "压缩"
+          }
+        }
+      }
     },
     "Context" : {
       "localizations" : {
@@ -616,7 +753,14 @@
       }
     },
     "Copy" : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "复制"
+          }
+        }
+      }
     },
     "Copy Path" : {
       "localizations" : {
@@ -624,6 +768,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "复制路径"
+          }
+        }
+      }
+    },
+    "Could not load image at %@." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法加载位于 %@ 的图片。"
           }
         }
       }
@@ -688,6 +842,19 @@
         }
       }
     },
+    "Default chat model" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "默认聊天模型"
+          }
+        }
+      }
+    },
+    "Default image model" : {
+
+    },
     "Delete" : {
       "localizations" : {
         "zh-Hans" : {
@@ -719,7 +886,14 @@
       }
     },
     "Describe a change — e.g. \"make the title yellow\" or \"slow the fade to 1s\"." : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "描述修改内容 — 例如\"将标题变为黄色\"或\"将淡入淡出减慢至 1 秒\"。"
+          }
+        }
+      }
     },
     "Describe the overall vibe..." : {
       "extractionState" : "stale",
@@ -761,6 +935,9 @@
           }
         }
       }
+    },
+    "Duplicate" : {
+
     },
     "Duration" : {
       "localizations" : {
@@ -853,13 +1030,34 @@
       }
     },
     "End" : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "结束"
+          }
+        }
+      }
     },
     "End time" : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "结束时间"
+          }
+        }
+      }
     },
     "Endpoint (e.g. https://api.openai.com/v1)" : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "端点（例如 https://api.openai.com/v1）"
+          }
+        }
+      }
     },
     "Energetic" : {
       "localizations" : {
@@ -972,7 +1170,14 @@
       }
     },
     "Export Video" : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "导出视频"
+          }
+        }
+      }
     },
     "Export…" : {
       "localizations" : {
@@ -1015,7 +1220,14 @@
       }
     },
     "Files" : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "文件"
+          }
+        }
+      }
     },
     "Firm" : {
       "localizations" : {
@@ -1048,7 +1260,24 @@
       }
     },
     "Form" : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "表单"
+          }
+        }
+      }
+    },
+    "Format" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "格式"
+          }
+        }
+      }
     },
     "Forward" : {
       "localizations" : {
@@ -1061,7 +1290,14 @@
       }
     },
     "Frame Rate" : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "帧率"
+          }
+        }
+      }
     },
     "French" : {
       "localizations" : {
@@ -1124,7 +1360,44 @@
       }
     },
     "Generate Initial Composition" : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "生成初始合成"
+          }
+        }
+      }
+    },
+    "Generated Image" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "生成的图片"
+          }
+        }
+      }
+    },
+    "Generated Images" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "生成的图片"
+          }
+        }
+      }
+    },
+    "Generated images will appear here." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "生成的图片将显示在这里。"
+          }
+        }
+      }
     },
     "Generated Music" : {
       "localizations" : {
@@ -1177,7 +1450,14 @@
       }
     },
     "Generating…" : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "生成中…"
+          }
+        }
+      }
     },
     "Genre" : {
       "localizations" : {
@@ -1239,12 +1519,32 @@
         }
       }
     },
+    "Google" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Google"
+          }
+        }
+      }
+    },
     "Google AI API Key" : {
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Google AI API 密钥"
+          }
+        }
+      }
+    },
+    "Google Imagen controls. Use a 5:4 / 2K ratio for landscape stills." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Google Imagen 控制。横向静态图请使用 5:4 / 2K 比例。"
           }
         }
       }
@@ -1275,6 +1575,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "快乐"
+          }
+        }
+      }
+    },
+    "Height" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "高度"
           }
         }
       }
@@ -1329,7 +1639,47 @@
         }
       }
     },
+    "Image" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "图片"
+          }
+        }
+      }
+    },
+    "Image Parameters" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "图片参数"
+          }
+        }
+      }
+    },
+    "Image Unavailable" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "图片不可用"
+          }
+        }
+      }
+    },
     "Images" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "图片"
+          }
+        }
+      }
+    },
+    "Images you generate via the chat appear here." : {
 
     },
     "Informative" : {
@@ -1443,7 +1793,14 @@
       }
     },
     "Keep Rendering" : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "继续渲染"
+          }
+        }
+      }
     },
     "Key / Scale" : {
       "localizations" : {
@@ -1576,7 +1933,14 @@
       }
     },
     "Maximum %lld images." : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "最多 %lld 张图片。"
+          }
+        }
+      }
     },
     "Maximum 10 images reached." : {
       "localizations" : {
@@ -1608,8 +1972,15 @@
         }
       }
     },
-    "Model name (e.g. gpt-4o-mini)" : {
-
+    "Model" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "模型"
+          }
+        }
+      }
     },
     "Mood" : {
       "localizations" : {
@@ -1682,7 +2053,14 @@
       }
     },
     "Music (optional)" : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "音乐（可选）"
+          }
+        }
+      }
     },
     "Musical Parameters" : {
       "localizations" : {
@@ -1764,6 +2142,16 @@
         }
       }
     },
+    "No images yet" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "暂无图片"
+          }
+        }
+      }
+    },
     "No Lyrics" : {
       "localizations" : {
         "zh-Hans" : {
@@ -1775,7 +2163,14 @@
       }
     },
     "No music attached" : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "未附加音乐"
+          }
+        }
+      }
     },
     "No Paragraphs" : {
       "localizations" : {
@@ -1867,8 +2262,25 @@
         }
       }
     },
+    "OpenAI" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenAI"
+          }
+        }
+      }
+    },
     "OpenAI-compatible LLM" : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "兼容 OpenAI 的 LLM"
+          }
+        }
+      }
     },
     "Organ" : {
       "localizations" : {
@@ -1941,7 +2353,14 @@
       }
     },
     "Photo Library" : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "照片图库"
+          }
+        }
+      }
     },
     "Piano" : {
       "localizations" : {
@@ -2053,6 +2472,26 @@
         }
       }
     },
+    "px" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "像素"
+          }
+        }
+      }
+    },
+    "Quality" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "质量"
+          }
+        }
+      }
+    },
     "R&B" : {
       "localizations" : {
         "zh-Hans" : {
@@ -2064,7 +2503,14 @@
       }
     },
     "Reference Image" : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "参考图片"
+          }
+        }
+      }
     },
     "Reference Images" : {
       "localizations" : {
@@ -2082,6 +2528,19 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "参考图像 (%lld)"
+          }
+        }
+      }
+    },
+    "Refresh" : {
+
+    },
+    "Refresh model list" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "刷新模型列表"
           }
         }
       }
@@ -2117,13 +2576,34 @@
       }
     },
     "Remotion" : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Remotion"
+          }
+        }
+      }
     },
     "Remotion Projects" : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Remotion 项目"
+          }
+        }
+      }
     },
     "Remove" : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "移除"
+          }
+        }
+      }
     },
     "Rename" : {
       "localizations" : {
@@ -2146,19 +2626,54 @@
       }
     },
     "Render" : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "渲染"
+          }
+        }
+      }
     },
     "Render failed" : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "渲染失败"
+          }
+        }
+      }
     },
     "Render Now" : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "立即渲染"
+          }
+        }
+      }
     },
     "Rendering Video" : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在渲染视频"
+          }
+        }
+      }
     },
     "Reorder" : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "重新排序"
+          }
+        }
+      }
     },
     "Reset parameters" : {
       "localizations" : {
@@ -2171,7 +2686,14 @@
       }
     },
     "Resolution" : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "分辨率"
+          }
+        }
+      }
     },
     "Retry" : {
       "localizations" : {
@@ -2179,6 +2701,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "重试"
+          }
+        }
+      }
+    },
+    "Reveal" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "显示"
+          }
+        }
+      }
+    },
+    "Reveal in Finder" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在 Finder 中显示"
           }
         }
       }
@@ -2214,7 +2756,14 @@
       }
     },
     "Running…" : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "运行中…"
+          }
+        }
+      }
     },
     "Russian" : {
       "localizations" : {
@@ -2267,7 +2816,14 @@
       }
     },
     "Save To" : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "保存到"
+          }
+        }
+      }
     },
     "Saved" : {
       "localizations" : {
@@ -2278,6 +2834,9 @@
           }
         }
       }
+    },
+    "Saved under public/generated/. Reference them in the composition via staticFile(\"generated/<name>\")." : {
+
     },
     "Saxophone" : {
       "localizations" : {
@@ -2310,7 +2869,24 @@
       }
     },
     "Section Time" : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "段落时间"
+          }
+        }
+      }
+    },
+    "Select a model" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "选择模型"
+          }
+        }
+      }
     },
     "Select a Narrative" : {
       "localizations" : {
@@ -2432,6 +3008,16 @@
         }
       }
     },
+    "Size" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "尺寸"
+          }
+        }
+      }
+    },
     "Slide Guitar" : {
       "localizations" : {
         "zh-Hans" : {
@@ -2513,7 +3099,14 @@
       }
     },
     "Start" : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "开始"
+          }
+        }
+      }
     },
     "Start Generation" : {
       "localizations" : {
@@ -2526,10 +3119,24 @@
       }
     },
     "Start time" : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "开始时间"
+          }
+        }
+      }
     },
     "Starting Remotion Studio…" : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在启动 Remotion Studio…"
+          }
+        }
+      }
     },
     "Stop" : {
       "localizations" : {
@@ -2542,10 +3149,24 @@
       }
     },
     "Stop generating" : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "停止生成"
+          }
+        }
+      }
     },
     "Stop Rendering" : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "停止渲染"
+          }
+        }
+      }
     },
     "Strings" : {
       "localizations" : {
@@ -2568,7 +3189,14 @@
       }
     },
     "Studio preview is paused while rendering." : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "渲染期间 Studio 预览已暂停。"
+          }
+        }
+      }
     },
     "Style degree" : {
       "localizations" : {
@@ -2611,7 +3239,14 @@
       }
     },
     "Tell the model what kind of video to build (style, motion, mood, structure). Used both for the initial generation and as context for follow-up chat edits." : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "告诉模型要构建什么样的视频（风格、动效、氛围、结构）。用于初始生成以及后续聊天编辑的上下文。"
+          }
+        }
+      }
     },
     "Test Connection" : {
       "localizations" : {
@@ -2624,7 +3259,14 @@
       }
     },
     "Text Overlay" : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "文字叠加"
+          }
+        }
+      }
     },
     "Thai" : {
       "localizations" : {
@@ -2637,13 +3279,34 @@
       }
     },
     "The partial video file will be removed." : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "将删除已生成的部分视频文件。"
+          }
+        }
+      }
     },
     "Theme Color" : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "主题颜色"
+          }
+        }
+      }
     },
     "This permanently deletes all messages in this chat. The composition itself is not affected." : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "将永久删除此聊天中的所有消息。合成本身不会受影响。"
+          }
+        }
+      }
     },
     "This will permanently remove the audio file." : {
       "localizations" : {
@@ -2681,6 +3344,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "转录文本"
+          }
+        }
+      }
+    },
+    "Transparent background" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "透明背景"
+          }
+        }
+      }
+    },
+    "Transparent background requires PNG or WebP output." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "透明背景需要 PNG 或 WebP 输出格式。"
           }
         }
       }
@@ -2736,10 +3419,27 @@
       }
     },
     "Used as a visual style guide passed to the LLM during chat edits." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "作为视觉风格参考，在聊天编辑时传递给 LLM。"
+          }
+        }
+      }
+    },
+    "Used by the Remotion agent's generate_image tool. Reuses the OpenAI endpoint and key above." : {
 
     },
     "Used to generate and edit Remotion compositions. Works with OpenAI, Azure OpenAI, OpenRouter, Ollama, LM Studio, etc." : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "用于生成和编辑 Remotion 合成。支持 OpenAI、Azure OpenAI、OpenRouter、Ollama、LM Studio 等。"
+          }
+        }
+      }
     },
     "Verse" : {
       "localizations" : {
@@ -2762,7 +3462,14 @@
       }
     },
     "View Source" : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "查看源代码"
+          }
+        }
+      }
     },
     "Violin" : {
       "localizations" : {
@@ -2820,6 +3527,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "低语"
+          }
+        }
+      }
+    },
+    "Width" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "宽度"
           }
         }
       }
