@@ -7,6 +7,10 @@ struct ImageGenProjectParametersView: View {
     @State private var isLoadingModels = false
     @State private var modelsError: String?
 
+    @State private var googleImagenModels: [GoogleModelInfo] = []
+    @State private var isLoadingGoogleModels = false
+    @State private var googleModelsError: String?
+
     private var googleStyleForm: Bool {
         if project.providerEnum == .google { return true }
         if project.providerEnum == .openai
@@ -75,6 +79,43 @@ struct ImageGenProjectParametersView: View {
                 }
             }
 
+            if project.providerEnum == .google {
+                Section {
+                    HStack {
+                        Picker("Model", selection: $project.googleModel) {
+                            if project.googleModel.isEmpty {
+                                Text("Select a model").tag("")
+                            } else if !googleImagenModels.contains(where: { $0.id == project.googleModel }) {
+                                Text(project.googleModel).tag(project.googleModel)
+                            }
+                            ForEach(googleImagenModels) { model in
+                                Text(model.id).tag(model.id)
+                            }
+                        }
+
+                        Button {
+                            Task { await loadGoogleImagenModels(forceRefresh: true) }
+                        } label: {
+                            if isLoadingGoogleModels {
+                                ProgressView().controlSize(.small)
+                            } else {
+                                Image(systemName: "arrow.clockwise")
+                            }
+                        }
+                        .disabled(isLoadingGoogleModels)
+                        .help("Refresh model list")
+                    }
+
+                    if let googleModelsError {
+                        Text(googleModelsError)
+                            .font(.caption)
+                            .foregroundStyle(.red)
+                    }
+                } header: {
+                    Text("Model")
+                }
+            }
+
             if googleStyleForm {
                 googleParametersSection
             } else {
@@ -85,11 +126,15 @@ struct ImageGenProjectParametersView: View {
         .onAppear {
             if project.providerEnum == .openai {
                 Task { await loadImageModels(forceRefresh: false) }
+            } else if project.providerEnum == .google {
+                Task { await loadGoogleImagenModels(forceRefresh: false) }
             }
         }
         .onChange(of: project.providerEnum) { _, newValue in
             if newValue == .openai {
                 Task { await loadImageModels(forceRefresh: false) }
+            } else if newValue == .google {
+                Task { await loadGoogleImagenModels(forceRefresh: false) }
             }
         }
     }
@@ -247,6 +292,27 @@ struct ImageGenProjectParametersView: View {
             openAIImageModels = models
         } catch {
             modelsError = error.localizedDescription
+        }
+    }
+
+    @MainActor
+    private func loadGoogleImagenModels(forceRefresh: Bool) async {
+        guard let config = try? AppConfig.loadFromKeychain(),
+              !config.googleAIKey.isEmpty else {
+            googleModelsError = "Configure the Google AI API key in Settings."
+            return
+        }
+        isLoadingGoogleModels = true
+        googleModelsError = nil
+        defer { isLoadingGoogleModels = false }
+        do {
+            let models = try await GoogleModelsClient.shared.imagenModels(
+                apiKey: config.googleAIKey,
+                forceRefresh: forceRefresh
+            )
+            googleImagenModels = models
+        } catch {
+            googleModelsError = error.localizedDescription
         }
     }
 }

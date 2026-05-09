@@ -7,6 +7,7 @@ enum ImageGenError: LocalizedError {
     case apiError(String)
     case httpError(Int, String?)
     case noImageInResponse
+    case notImageModel(String)
 
     var errorDescription: String? {
         switch self {
@@ -25,6 +26,8 @@ enum ImageGenError: LocalizedError {
             return "HTTP error: \(code)"
         case .noImageInResponse:
             return "No image data found in the response."
+        case .notImageModel(let id):
+            return "Model \"\(id)\" is not configured as an image-generation model."
         }
     }
 }
@@ -39,22 +42,23 @@ struct ImageGenResult {
 struct ImageGenClient {
     // MARK: - Google (Imagen via Gemini API)
 
-    private static let googleImagenEndpoint =
-        "https://generativelanguage.googleapis.com/v1beta/models/imagen-4.0-generate-001:predict"
-
     static func generateGoogle(
         prompt: String,
+        model: String,
         aspectRatio: ImageAspectRatio,
         resolution: ImageResolution,
         apiKey: String
     ) async throws -> ImageGenResult {
         let trimmedKey = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
         let trimmedPrompt = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmedKey.isEmpty, !trimmedPrompt.isEmpty else {
+        let trimmedModel = model.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedKey.isEmpty, !trimmedPrompt.isEmpty, !trimmedModel.isEmpty else {
             throw ImageGenError.missingConfig
         }
 
-        let url = URL(string: googleImagenEndpoint)!
+        guard let url = URL(string: "https://generativelanguage.googleapis.com/v1beta/models/\(trimmedModel):predict") else {
+            throw ImageGenError.invalidEndpoint
+        }
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -192,6 +196,61 @@ struct ImageGenClient {
         }
 
         throw ImageGenError.noImageInResponse
+    }
+
+    // MARK: - Shared entry point
+
+    /// Shared OpenAI image-generation entry point used by the Image Gen tab and the
+    /// Remotion agent's `generate_image` tool. Calls into `generateOpenAI` so both
+    /// flows go through the same HTTP path.
+    ///
+    /// `transparent` is best-effort: if true and the model id heuristically supports
+    /// transparency, we send `background=transparent`. The API may still reject the
+    /// flag — callers should propagate that error so the LLM can retry without
+    /// transparent or ask the user to switch models.
+    static func generateImage(
+        prompt: String,
+        model: String,
+        endpoint: String,
+        apiKey: String,
+        size: ImageSize? = nil,
+        customSize: String? = nil,
+        quality: ImageQuality? = nil,
+        format: ImageFormat? = nil,
+        compression: Int? = nil,
+        background: ImageBackground? = nil,
+        transparent: Bool = false
+    ) async throws -> ImageGenResult {
+        let trimmedModel = model.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedModel.isEmpty else {
+            throw ImageGenError.notImageModel("(empty)")
+        }
+
+        let effectiveTransparent = transparent && Self.modelLikelySupportsTransparent(trimmedModel)
+
+        return try await generateOpenAI(
+            prompt: prompt,
+            model: trimmedModel,
+            endpoint: endpoint,
+            apiKey: apiKey,
+            size: size,
+            customSize: customSize,
+            quality: quality,
+            format: format,
+            compression: compression,
+            background: background,
+            transparent: effectiveTransparent
+        )
+    }
+
+    /// Heuristic: gpt-image-* family supports transparent backgrounds. dall-e-2/3 do
+    /// not. Anything else falls through to optimistic — we attempt and let the API
+    /// surface an error.
+    static func modelLikelySupportsTransparent(_ id: String) -> Bool {
+        let lower = id.lowercased()
+        if lower.contains("dall-e") { return false }
+        if lower.contains("gpt-image") { return true }
+        return true
     }
 
     // MARK: - Helpers

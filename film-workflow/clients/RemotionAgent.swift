@@ -9,6 +9,8 @@ enum RemotionAgentError: LocalizedError {
     case fileNotFound(String)
     case oldStringNotFound(path: String)
     case oldStringNotUnique(path: String, count: Int)
+    case imageGenNotConfigured
+    case imageGenFailed(message: String, transparentRequested: Bool)
 
     var errorDescription: String? {
         switch self {
@@ -26,6 +28,13 @@ enum RemotionAgentError: LocalizedError {
             return "edit_file: old_string was not found in \(p)"
         case .oldStringNotUnique(let p, let count):
             return "edit_file: old_string matches \(count) places in \(p) — make it unique"
+        case .imageGenNotConfigured:
+            return "Default image model is not configured. Ask the user to set it in Settings → AI Provider → Default image model."
+        case .imageGenFailed(let message, let transparentRequested):
+            if transparentRequested {
+                return "Image generation failed (transparent requested): \(message). Try transparent=false, or ask the user to pick a different image model in Settings."
+            }
+            return "Image generation failed: \(message)"
         }
     }
 }
@@ -39,6 +48,12 @@ enum RemotionAgentEvent {
     case fileWritten(path: String, content: String)
     /// Emitted once when the loop exits cleanly (model returned no further tool calls).
     case completed
+}
+
+extension Notification.Name {
+    /// Posted after the agent's `generate_image` tool writes a new file under
+    /// `<projectDir>/public/generated/`. `object` is the project's UUID.
+    static let remotionGeneratedImageWritten = Notification.Name("remotionGeneratedImageWritten")
 }
 
 enum RemotionAgent {
@@ -118,7 +133,7 @@ enum RemotionAgent {
         if publicAssets.isEmpty {
             assetsBlock = "Available static assets in public/: (none)"
         } else {
-            assetsBlock = "Available static assets in public/ — reference ONLY these basenames via staticFile(\"…\"):\n" +
+            assetsBlock = "Available static assets in public/ — call staticFile(\"…\") with the EXACT path shown (subfolders included). Layout: upload/ = user-uploaded images, reference/ = style guide (do NOT render), generated/ = images you produced via generate_image, root = music & misc.\n" +
                 publicAssets.map { "- \($0)" }.joined(separator: "\n")
         }
 
@@ -166,12 +181,18 @@ enum RemotionAgent {
                 return
             }
 
+            let assistantMsgIdx = messages.count
             messages.append(OpenAIRichMessage(
                 role: "assistant",
                 content: response.content,
                 toolCalls: response.toolCalls
             ))
 
+            // Tool results from this assistant turn must be appended in a contiguous
+            // block immediately after the assistant message — Anthropic (via the
+            // Vercel AI Gateway) rejects interleaved roles. Any user-role follow-ups
+            // (e.g. screenshot images) are deferred until after the tool_result block.
+            var pendingUserFollowups: [OpenAIRichMessage] = []
             for call in response.toolCalls {
                 try Task.checkCancellation()
                 emit(.toolCall(id: call.id, name: call.name, args: call.argumentsJSON))
@@ -185,6 +206,7 @@ enum RemotionAgent {
                         fps: fps,
                         runId: String(runId),
                         messages: &messages,
+                        pendingUserFollowups: &pendingUserFollowups,
                         emit: emit
                     )
                 } catch is CancellationError {
@@ -199,12 +221,56 @@ enum RemotionAgent {
                     ))
                 }
             }
+
+            // Safety net: ensure every tool_call from the assistant message has a
+            // matching tool_result before we send the next request. Any id that
+            // didn't get a result (e.g. dispatch threw before appending) gets a
+            // "no result" stub so the conversation stays well-formed.
+            ensureToolResults(
+                forAssistantAt: assistantMsgIdx,
+                expectedCalls: response.toolCalls,
+                in: &messages
+            )
+
+            // Now it's safe to append deferred user-role messages (e.g. screenshot
+            // image attachments) — all tool_results are already in place.
+            messages.append(contentsOf: pendingUserFollowups)
         }
 
         throw RemotionAgentError.maxIterationsExceeded
     }
 
     // MARK: - Tool dispatch
+
+    private static func ensureToolResults(
+        forAssistantAt assistantIdx: Int,
+        expectedCalls: [OpenAIToolCall],
+        in messages: inout [OpenAIRichMessage]
+    ) {
+        guard assistantIdx >= 0, assistantIdx < messages.count else { return }
+
+        // Walk forward from the assistant message and collect tool messages
+        // belonging to this turn (contiguous tool-role messages).
+        var present: Set<String> = []
+        var idx = assistantIdx + 1
+        while idx < messages.count, messages[idx].role == "tool" {
+            if let id = messages[idx].toolCallId { present.insert(id) }
+            idx += 1
+        }
+
+        for call in expectedCalls where !present.contains(call.id) {
+            messages.insert(
+                OpenAIRichMessage(
+                    role: "tool",
+                    content: "{\"ok\":false,\"error\":\"no result\"}",
+                    toolCallId: call.id,
+                    name: call.name
+                ),
+                at: idx
+            )
+            idx += 1
+        }
+    }
 
     private static func dispatch(
         call: OpenAIToolCall,
@@ -214,6 +280,7 @@ enum RemotionAgent {
         fps: Int,
         runId: String,
         messages: inout [OpenAIRichMessage],
+        pendingUserFollowups: inout [OpenAIRichMessage],
         emit: (RemotionAgentEvent) -> Void
     ) async throws {
         let args = parseArgs(call.argumentsJSON)
@@ -240,7 +307,7 @@ enum RemotionAgent {
                 toolCallId: call.id,
                 name: call.name
             ))
-            messages.append(OpenAIRichMessage(
+            pendingUserFollowups.append(OpenAIRichMessage(
                 role: "user",
                 parts: [.text("Screenshot at \(summary):"), .imageURL(dataURL)]
             ))
@@ -275,7 +342,68 @@ enum RemotionAgent {
                 parts.append(.text("Frame \(r.frame) (\(String(format: "%.2f", Double(r.frame) / Double(fps)))s):"))
                 parts.append(.imageURL(dataURL))
             }
-            messages.append(OpenAIRichMessage(role: "user", parts: parts))
+            pendingUserFollowups.append(OpenAIRichMessage(role: "user", parts: parts))
+
+        case "generate_image":
+            guard let promptArg = (args["prompt"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines),
+                  !promptArg.isEmpty else {
+                throw RemotionAgentError.invalidToolArguments(name: call.name, raw: call.argumentsJSON)
+            }
+            let transparent = (args["transparent"] as? Bool) ?? false
+            let hint = (args["filename_hint"] as? String) ?? ""
+
+            let imageConfig = (try? AppConfig.loadFromKeychain())
+            let trimmedModel = imageConfig?.defaultImageModel.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            let trimmedEndpoint = imageConfig?.openAIEndpoint.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            let trimmedKey = imageConfig?.openAIKey.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            guard !trimmedModel.isEmpty, !trimmedEndpoint.isEmpty, !trimmedKey.isEmpty else {
+                throw RemotionAgentError.imageGenNotConfigured
+            }
+
+            emit(.status("Generating image (\(transparent ? "transparent" : "opaque"))…"))
+
+            let result: ImageGenResult
+            do {
+                result = try await ImageGenClient.generateImage(
+                    prompt: promptArg,
+                    model: trimmedModel,
+                    endpoint: trimmedEndpoint,
+                    apiKey: trimmedKey,
+                    format: .png,
+                    transparent: transparent
+                )
+            } catch {
+                throw RemotionAgentError.imageGenFailed(
+                    message: error.localizedDescription,
+                    transparentRequested: transparent
+                )
+            }
+
+            let generatedDir = projectDir
+                .appendingPathComponent("public", isDirectory: true)
+                .appendingPathComponent("generated", isDirectory: true)
+            try FileManager.default.createDirectory(at: generatedDir, withIntermediateDirectories: true)
+            let basename = makeImageBasename(hint: hint, ext: result.fileExtension, in: generatedDir)
+            let dest = generatedDir.appendingPathComponent(basename)
+            try result.imageData.write(to: dest)
+
+            let transparentApplied = transparent && ImageGenClient.modelLikelySupportsTransparent(trimmedModel)
+            let staticName = "generated/\(basename)"
+            let summary = "saved public/\(staticName) (\(result.imageData.count) bytes\(transparentApplied ? ", transparent" : ""))"
+            emit(.toolResult(id: call.id, name: call.name, summary: summary, ok: true))
+            emit(.fileWritten(path: "public/\(staticName)", content: ""))
+            NotificationCenter.default.post(
+                name: .remotionGeneratedImageWritten,
+                object: project.id
+            )
+            messages.append(OpenAIRichMessage(
+                role: "tool",
+                content: "{\"ok\":true,\"filename\":\(jsonString(staticName))," +
+                         "\"transparent_applied\":\(transparentApplied)," +
+                         "\"model\":\(jsonString(trimmedModel))}",
+                toolCallId: call.id,
+                name: call.name
+            ))
 
         case "list_files":
             let entries = RemotionProjectFiles.list(projectDir: projectDir)
@@ -429,6 +557,28 @@ enum RemotionAgent {
                 ]
             ),
             OpenAIToolDefinition(
+                name: "generate_image",
+                description: "Generate a new image from a text prompt and save it into public/generated/ inside the project. The response's `filename` field is the path you must pass to staticFile() (e.g. \"generated/<name>.png\"). Uses the default image model configured in Settings. Set transparent=true for a transparent background (PNG only); only some models support it — if the API rejects transparency, retry with transparent=false or tell the user to pick a different image model in Settings.",
+                parametersSchema: [
+                    "type": "object",
+                    "properties": [
+                        "prompt": [
+                            "type": "string",
+                            "description": "Detailed image description. Be specific about subject, style, lighting, framing."
+                        ],
+                        "transparent": [
+                            "type": "boolean",
+                            "description": "Best-effort transparent background. PNG only. Defaults to false."
+                        ],
+                        "filename_hint": [
+                            "type": "string",
+                            "description": "Optional short slug used in the saved filename (alphanumeric + dashes). Helps you recall it later."
+                        ]
+                    ],
+                    "required": ["prompt"]
+                ]
+            ),
+            OpenAIToolDefinition(
                 name: "list_files",
                 description: "List all source files in the project (relative paths). Excludes node_modules, build artifacts, and screenshot scratch dirs. Use this to discover the project layout before reading or editing.",
                 parametersSchema: [
@@ -536,13 +686,14 @@ enum RemotionAgent {
     private static func systemPrompt(project: RemotionProject) -> String {
         _ = project
         let prompt = """
-        You are an expert Remotion (React) developer working in a sandboxed project directory. You have file-system tools (list_files, read_file, write_file, edit_file) and visual tools (take_screenshot, take_screenshots) for reviewing the current video.
+        You are an expert Remotion (React) developer working in a sandboxed project directory. You have file-system tools (list_files, read_file, write_file, edit_file), visual tools (take_screenshot, take_screenshots) for reviewing the current video, and an image-generation tool (generate_image) that drops a new PNG into public/ for you to reference via staticFile().
 
         How to work:
         - Before non-trivial visual changes, call take_screenshot for one moment, or take_screenshots for an evenly-spaced sweep.
         - Use list_files when unsure of the layout. Use read_file to inspect a file before editing.
         - Use edit_file for targeted partial changes — specify a unique old_string and the new_string. If the file doesn't exist yet, edit_file creates it with new_string as the content.
         - Use write_file when creating a new file or replacing a whole file.
+        - Use generate_image when you need new artwork (backgrounds, logos, characters, decorations) and the user hasn't supplied a suitable asset. Pass transparent=true for logos / overlay graphics that must sit on top of other elements; if the API rejects transparent for the configured model, retry with transparent=false or ask the user to switch models in Settings.
         - When you're done, simply STOP calling tools and reply with a short natural-language summary of what you changed. The loop ends as soon as you stop calling tools.
 
         File layout — STRICTLY one component per file:
@@ -555,8 +706,8 @@ enum RemotionAgent {
 
         Hard requirements:
         - src/Composition.tsx must export: COMPOSITION_FPS, COMPOSITION_DURATION_IN_FRAMES, COMPOSITION_WIDTH, COMPOSITION_HEIGHT, and MyComposition. Root.tsx imports these by name.
-        - Reference local assets via staticFile("filename.ext"). Files placed under public/ are exposed by their basename only.
-        - NEVER invent asset filenames. Only call staticFile() with a basename listed in the per-turn "Available static assets in public/" block, or one you confirmed via list_files. If you need an image that isn't there, say so in your reply instead of guessing a name.
+        - Reference local assets via staticFile("path"). Use the EXACT path from the per-turn asset block — public/ is split into upload/, reference/, generated/, plus root for music. Examples: staticFile("upload/photo.jpg"), staticFile("generated/forest-a1b2c3.png"), staticFile("song.mp3"). Never strip or rewrite the subfolder prefix.
+        - NEVER invent asset filenames. Only call staticFile() with a path listed in the per-turn asset block, one you confirmed via list_files, or one you just produced via generate_image (its returned `filename` already includes the generated/ prefix). If you need an image that isn't there, call generate_image or ask the user.
         - Use Remotion primitives: AbsoluteFill, Sequence, Img, Audio, Video, useCurrentFrame, useVideoConfig, interpolate, spring.
         - Do not add new packages — only react, react-dom, and remotion are available.
         - Valid TypeScript JSX only, no markdown fences inside files.
@@ -568,15 +719,56 @@ enum RemotionAgent {
 
     private static func listPublicAssets(projectDir: URL) -> [String] {
         let publicDir = projectDir.appendingPathComponent("public", isDirectory: true)
-        guard let entries = try? FileManager.default.contentsOfDirectory(
-            at: publicDir,
-            includingPropertiesForKeys: [.isRegularFileKey],
-            options: [.skipsHiddenFiles]
-        ) else { return [] }
-        return entries
-            .filter { (try? $0.resourceValues(forKeys: [.isRegularFileKey]).isRegularFile) == true }
-            .map { $0.lastPathComponent }
-            .sorted()
+        let fm = FileManager.default
+
+        func filesAt(_ dir: URL, prefix: String) -> [String] {
+            guard let entries = try? fm.contentsOfDirectory(
+                at: dir,
+                includingPropertiesForKeys: [.isRegularFileKey],
+                options: [.skipsHiddenFiles]
+            ) else { return [] }
+            return entries
+                .filter { (try? $0.resourceValues(forKeys: [.isRegularFileKey]).isRegularFile) == true }
+                .map { prefix.isEmpty ? $0.lastPathComponent : "\(prefix)/\($0.lastPathComponent)" }
+        }
+
+        var names: [String] = []
+        names.append(contentsOf: filesAt(publicDir, prefix: ""))
+        for sub in ["upload", "reference", "generated"] {
+            let subDir = publicDir.appendingPathComponent(sub, isDirectory: true)
+            names.append(contentsOf: filesAt(subDir, prefix: sub))
+        }
+        return names.sorted()
+    }
+
+    private static func makeImageBasename(hint: String, ext: String, in publicDir: URL) -> String {
+        let allowed = Set("abcdefghijklmnopqrstuvwxyz0123456789-")
+        let chars = hint.lowercased().map { c -> Character in
+            allowed.contains(c) ? c : "-"
+        }
+        var collapsed = ""
+        var lastDash = false
+        for c in chars {
+            if c == "-" {
+                if !lastDash { collapsed.append(c) }
+                lastDash = true
+            } else {
+                collapsed.append(c)
+                lastDash = false
+            }
+        }
+        var base = collapsed.trimmingCharacters(in: CharacterSet(charactersIn: "-"))
+        if base.isEmpty { base = "image" }
+        if base.count > 40 { base = String(base.prefix(40)) }
+
+        let suffix = String(UUID().uuidString.prefix(6).lowercased())
+        let safeExt = ext.isEmpty ? "png" : ext
+        let candidate = "\(base)-\(suffix).\(safeExt)"
+
+        if FileManager.default.fileExists(atPath: publicDir.appendingPathComponent(candidate).path) {
+            return "\(base)-\(UUID().uuidString.lowercased()).\(safeExt)"
+        }
+        return candidate
     }
 
     private static func parseArgs(_ raw: String) -> [String: Any] {

@@ -7,6 +7,7 @@ struct AIProviderSettingsView: View {
     @State private var openAIEndpoint: String = ""
     @State private var openAIKey: String = ""
     @State private var openAIModel: String = ""
+    @State private var defaultImageModel: String = ""
     @State private var showSavedAlert = false
     @State private var errorMessage: String?
     @State private var showError = false
@@ -16,6 +17,10 @@ struct AIProviderSettingsView: View {
     @State private var chatModels: [OpenAIModelInfo] = []
     @State private var isLoadingChatModels = false
     @State private var chatModelsError: String?
+
+    @State private var imageModels: [OpenAIModelInfo] = []
+    @State private var isLoadingImageModels = false
+    @State private var imageModelsError: String?
 
     var body: some View {
         Form {
@@ -138,6 +143,45 @@ struct AIProviderSettingsView: View {
             }
 
             Section {
+                HStack {
+                    Picker("Default image model", selection: $defaultImageModel) {
+                        Text("None").tag("")
+                        if !defaultImageModel.isEmpty,
+                           !imageModels.contains(where: { $0.id == defaultImageModel }) {
+                            Text(defaultImageModel).tag(defaultImageModel)
+                        }
+                        ForEach(imageModels) { model in
+                            Text(model.id).tag(model.id)
+                        }
+                    }
+
+                    Button {
+                        Task { await loadImageModels(forceRefresh: true) }
+                    } label: {
+                        if isLoadingImageModels {
+                            ProgressView().controlSize(.small)
+                        } else {
+                            Image(systemName: "arrow.clockwise")
+                        }
+                    }
+                    .disabled(isLoadingImageModels || canFetchChatModels == false)
+                    .help("Refresh model list")
+                }
+
+                if let imageModelsError {
+                    Text(imageModelsError)
+                        .font(.caption)
+                        .foregroundStyle(.red)
+                }
+            } header: {
+                Text("Default image model")
+            } footer: {
+                Text("Used by the Remotion agent's generate_image tool. Reuses the OpenAI endpoint and key above.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Section {
                 Button("Save") {
                     saveKeys()
                 }
@@ -148,6 +192,7 @@ struct AIProviderSettingsView: View {
         .onAppear {
             loadKeys()
             Task { await loadChatModels(forceRefresh: false) }
+            Task { await loadImageModels(forceRefresh: false) }
         }
         .alert("Saved", isPresented: $showSavedAlert) {
             Button("OK") {}
@@ -173,6 +218,7 @@ struct AIProviderSettingsView: View {
             || !openAIEndpoint.trimmingCharacters(in: .whitespaces).isEmpty
             || !openAIKey.trimmingCharacters(in: .whitespaces).isEmpty
             || !openAIModel.trimmingCharacters(in: .whitespaces).isEmpty
+            || !defaultImageModel.trimmingCharacters(in: .whitespaces).isEmpty
     }
 
     private func loadKeys() {
@@ -183,6 +229,7 @@ struct AIProviderSettingsView: View {
             openAIEndpoint = config.openAIEndpoint
             openAIKey = config.openAIKey
             openAIModel = config.openAIModel
+            defaultImageModel = config.defaultImageModel
         }
     }
 
@@ -194,7 +241,8 @@ struct AIProviderSettingsView: View {
                 azureSpeechEndpoint: azureEndpoint,
                 openAIEndpoint: openAIEndpoint,
                 openAIKey: openAIKey,
-                openAIModel: openAIModel
+                openAIModel: openAIModel,
+                defaultImageModel: defaultImageModel
             )
             try config.saveToKeychain()
             showSavedAlert = true
@@ -223,6 +271,24 @@ struct AIProviderSettingsView: View {
     }
 
     @MainActor
+    private func loadImageModels(forceRefresh: Bool) async {
+        guard canFetchChatModels else { return }
+        isLoadingImageModels = true
+        imageModelsError = nil
+        defer { isLoadingImageModels = false }
+        do {
+            let models = try await OpenAIModelsClient.shared.imageModels(
+                endpoint: openAIEndpoint,
+                apiKey: openAIKey,
+                forceRefresh: forceRefresh
+            )
+            imageModels = models
+        } catch {
+            imageModelsError = error.localizedDescription
+        }
+    }
+
+    @MainActor
     private func testAzure() async {
         isTestingAzure = true
         azureTestResult = nil
@@ -235,7 +301,8 @@ struct AIProviderSettingsView: View {
                 azureSpeechEndpoint: azureEndpoint,
                 openAIEndpoint: openAIEndpoint,
                 openAIKey: openAIKey,
-                openAIModel: openAIModel
+                openAIModel: openAIModel,
+                defaultImageModel: defaultImageModel
             )
             try config.saveToKeychain()
         } catch {

@@ -36,64 +36,18 @@ struct RemotionPreviewWebView: NSViewRepresentable {
       if (window.__rxStudioHider) return;
       window.__rxStudioHider = true;
 
-      // Hide a small set of Studio chrome elements via precise selectors.
-      // Each rule targets a single, specific element — nothing structural.
+      // Topbar's menu-initiator button sits in a wrapper div with no aria-label.
+      // The playback bar also uses __remotion-studio-menu-initiator (for the
+      // "Preview Size" and "Playback Rate" dropdowns), but those wrappers carry
+      // aria-label, so :not([aria-label]) keeps them visible.
       var styleEl = document.createElement('style');
-      styleEl.textContent = [
-        // Menu dropdown initiator on the topbar.
-        'button.__remotion-studio-menu-initiator { display: none !important; }',
-        // Sidebar toggles — Studio puts the title on a child <div>.
-        'button:has(> div[title*="Toggle Left Sidebar"]) { display: none !important; }',
-        'button:has(> div[title*="Toggle Right Sidebar"]) { display: none !important; }'
-      ].join('\\n');
+      styleEl.textContent =
+        'div.css-reset:has(> div:not([aria-label]) > button.__remotion-studio-menu-initiator) { display: none !important; }' +
+        'html, body, * { -webkit-user-select: none !important; user-select: none !important; -webkit-touch-callout: none !important; }' +
+        'input, textarea, [contenteditable="true"], [contenteditable=""] { -webkit-user-select: text !important; user-select: text !important; }';
       (document.head || document.documentElement).appendChild(styleEl);
 
-      var matchesRender = function (el) {
-        if (!el) return false;
-        var label = (el.getAttribute && el.getAttribute('aria-label')) || '';
-        if (/render/i.test(label)) return true;
-        var title = (el.getAttribute && el.getAttribute('title')) || '';
-        if (/render/i.test(title)) return true;
-        var text = (el.textContent || '').trim();
-        return /^render$/i.test(text);
-      };
-
-      var matchesUpdate = function (el) {
-        if (!el) return false;
-        var label = (el.getAttribute && el.getAttribute('aria-label')) || '';
-        if (/upgrade|update available|new update/i.test(label)) return true;
-        var title = (el.getAttribute && el.getAttribute('title')) || '';
-        if (/upgrade|update available|new update/i.test(title)) return true;
-        return false;
-      };
-
-      var matchesPanelToggle = function (el) {
-        if (!el) return false;
-        var label = (el.getAttribute && el.getAttribute('aria-label')) || '';
-        if (/(show|hide|toggle|expand|collapse).*(panel|sidebar|sidebars)/i.test(label)) return true;
-        if (/(left|right).*(panel|sidebar)/i.test(label)) return true;
-        var title = (el.getAttribute && el.getAttribute('title')) || '';
-        if (/(show|hide|toggle|expand|collapse).*(panel|sidebar|sidebars)/i.test(title)) return true;
-        if (/(left|right).*(panel|sidebar)/i.test(title)) return true;
-        return false;
-      };
-
-      var hideButtons = function () {
-        var nodes = document.querySelectorAll('button, a[role="button"]');
-        for (var i = 0; i < nodes.length; i++) {
-          var n = nodes[i];
-          if (n.dataset && n.dataset.rxHidden === '1') continue;
-          if (matchesRender(n) || matchesUpdate(n) || matchesPanelToggle(n)) {
-            n.style.display = 'none';
-            if (n.dataset) n.dataset.rxHidden = '1';
-          }
-        }
-      };
-
       var hideUpdateModal = function () {
-        // Only target real modal containers — never search arbitrary text nodes,
-        // since that can match strings inside the user's composition (or studio
-        // chrome) and end up hiding wide ancestors.
         var dialogs = document.querySelectorAll('[role="dialog"], [aria-modal="true"]');
         for (var i = 0; i < dialogs.length; i++) {
           var d = dialogs[i];
@@ -106,12 +60,7 @@ struct RemotionPreviewWebView: NSViewRepresentable {
         }
       };
 
-      var run = function () {
-        hideButtons();
-        hideUpdateModal();
-      };
-
-      run();
+      hideUpdateModal();
 
       var pending = false;
       var observer = new MutationObserver(function () {
@@ -119,7 +68,7 @@ struct RemotionPreviewWebView: NSViewRepresentable {
         pending = true;
         requestAnimationFrame(function () {
           pending = false;
-          run();
+          hideUpdateModal();
         });
       });
       observer.observe(document.documentElement, { childList: true, subtree: true });

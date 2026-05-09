@@ -28,6 +28,7 @@ struct AppConfig: Codable {
     var openAIEndpoint: String
     var openAIKey: String
     var openAIModel: String
+    var defaultImageModel: String
 
     private static let service = "com.rxlab.film-workflow"
     private static let googleAccount = "googleAIKey"
@@ -36,6 +37,7 @@ struct AppConfig: Codable {
     private static let openAIEndpointAccount = "openAIEndpoint"
     private static let openAIKeyAccount = "openAIKey"
     private static let openAIModelAccount = "openAIModel"
+    private static let defaultImageModelAccount = "defaultImageModel"
 
     static func loadFromKeychain() throws -> AppConfig {
         AppConfig(
@@ -44,7 +46,8 @@ struct AppConfig: Codable {
             azureSpeechEndpoint: (try? loadString(account: azureEndpointAccount)) ?? "",
             openAIEndpoint: (try? loadString(account: openAIEndpointAccount)) ?? "",
             openAIKey: (try? loadString(account: openAIKeyAccount)) ?? "",
-            openAIModel: (try? loadString(account: openAIModelAccount)) ?? ""
+            openAIModel: (try? loadString(account: openAIModelAccount)) ?? "",
+            defaultImageModel: (try? loadString(account: defaultImageModelAccount)) ?? ""
         )
     }
 
@@ -55,6 +58,7 @@ struct AppConfig: Codable {
         try Self.saveString(openAIEndpoint, account: Self.openAIEndpointAccount)
         try Self.saveString(openAIKey, account: Self.openAIKeyAccount)
         try Self.saveString(openAIModel, account: Self.openAIModelAccount)
+        try Self.saveString(defaultImageModel, account: Self.defaultImageModelAccount)
     }
 
     static func deleteFromKeychain() throws {
@@ -64,6 +68,7 @@ struct AppConfig: Codable {
         try deleteString(account: openAIEndpointAccount)
         try deleteString(account: openAIKeyAccount)
         try deleteString(account: openAIModelAccount)
+        try deleteString(account: defaultImageModelAccount)
     }
 
     // MARK: - Keychain helpers

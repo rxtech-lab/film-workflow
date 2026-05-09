@@ -35,6 +35,9 @@ struct film_workflowApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView()
+            #if os(macOS)
+                .environment(RemotionChatController.shared)
+            #endif
         }
         .modelContainer(sharedModelContainer)
 

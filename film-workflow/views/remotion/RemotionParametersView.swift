@@ -12,6 +12,7 @@ struct RemotionParametersView: View {
     @State private var showImagePicker = false
     @State private var showReferencePicker = false
     @State private var showMusicPicker = false
+    @State private var generatedImages: [URL] = []
 
     var body: some View {
         Form {
@@ -19,6 +20,7 @@ struct RemotionParametersView: View {
             promptSection
             imagesSection
             referenceImageSection
+            generatedImagesSection
             musicSection
             generateSection
         }
@@ -27,6 +29,12 @@ struct RemotionParametersView: View {
         .onChange(of: project.compositionHeight) { _, _ in syncCompositionConstants() }
         .onChange(of: project.compositionFps) { _, _ in syncCompositionConstants() }
         .onChange(of: project.durationSeconds) { _, _ in syncCompositionConstants() }
+        .task { refreshGeneratedImages() }
+        .onReceive(NotificationCenter.default.publisher(for: .remotionGeneratedImageWritten)) { note in
+            if let id = note.object as? UUID, id == project.id {
+                refreshGeneratedImages()
+            }
+        }
     }
 
     // MARK: - Sections
@@ -201,6 +209,64 @@ struct RemotionParametersView: View {
             }
 
             Text("Used as a visual style guide passed to the LLM during chat edits.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    @ViewBuilder
+    private var generatedImagesSection: some View {
+        Section {
+            if generatedImages.isEmpty {
+                Text("Images you generate via the chat appear here.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            } else {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        ForEach(generatedImages, id: \.self) { url in
+                            ZStack(alignment: .topTrailing) {
+                                if let image = Image(contentsOfFile: url) {
+                                    image
+                                        .resizable()
+                                        .aspectRatio(contentMode: .fill)
+                                        .frame(width: 100, height: 100)
+                                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                                } else {
+                                    RoundedRectangle(cornerRadius: 8)
+                                        .fill(Color.secondary.opacity(0.15))
+                                        .frame(width: 100, height: 100)
+                                        .overlay(Image(systemName: "photo").foregroundStyle(.secondary))
+                                }
+                                Button {
+                                    deleteGeneratedImage(at: url)
+                                } label: {
+                                    Image(systemName: "xmark.circle.fill")
+                                        .foregroundStyle(.white, .red)
+                                }
+                                .buttonStyle(.borderless)
+                                .padding(4)
+                            }
+                            .help(url.lastPathComponent)
+                        }
+                    }
+                }
+                .frame(height: 110)
+            }
+        } header: {
+            HStack {
+                Text("Generated Images")
+                Spacer()
+                Button {
+                    refreshGeneratedImages()
+                } label: {
+                    Image(systemName: "arrow.clockwise")
+                }
+                .buttonStyle(.borderless)
+                .help("Refresh")
+            }
+        } footer: {
+            Text("Saved under public/generated/. Reference them in the composition via staticFile(\"generated/<name>\").")
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
@@ -401,6 +467,36 @@ struct RemotionParametersView: View {
     private func removeImage(at index: Int) {
         let path = project.imagePaths.remove(at: index)
         FileStorage.deleteFile(at: path)
+    }
+
+    private func generatedDir() -> URL {
+        FileStorage.remotionProjectDir(id: project.id)
+            .appendingPathComponent("public", isDirectory: true)
+            .appendingPathComponent("generated", isDirectory: true)
+    }
+
+    private func refreshGeneratedImages() {
+        let dir = generatedDir()
+        guard let entries = try? FileManager.default.contentsOfDirectory(
+            at: dir,
+            includingPropertiesForKeys: [.contentModificationDateKey, .isRegularFileKey],
+            options: [.skipsHiddenFiles]
+        ) else {
+            generatedImages = []
+            return
+        }
+        generatedImages = entries
+            .filter { (try? $0.resourceValues(forKeys: [.isRegularFileKey]).isRegularFile) == true }
+            .sorted { lhs, rhs in
+                let l = (try? lhs.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast
+                let r = (try? rhs.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast
+                return l > r
+            }
+    }
+
+    private func deleteGeneratedImage(at url: URL) {
+        try? FileManager.default.removeItem(at: url)
+        refreshGeneratedImages()
     }
 }
 

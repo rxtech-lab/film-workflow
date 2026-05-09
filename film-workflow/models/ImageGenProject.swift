@@ -11,6 +11,7 @@ final class ImageGenProject {
     var prompt: String
 
     // Google / google-routed OpenAI parameters.
+    var googleModel: String = ""
     var googleAspectRatio: String
     var googleResolution: String
 
@@ -34,6 +35,7 @@ final class ImageGenProject {
         self.updatedAt = Date()
         self.provider = ImageProvider.openai.rawValue
         self.prompt = ""
+        self.googleModel = ""
         self.googleAspectRatio = ImageAspectRatio.r1x1.rawValue
         self.googleResolution = ImageResolution.r1k.rawValue
         self.openAIModel = ""

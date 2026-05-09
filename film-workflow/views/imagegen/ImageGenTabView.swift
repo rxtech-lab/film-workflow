@@ -189,6 +189,9 @@ struct ImageGenTabView: View {
         if project.providerEnum == .openai && project.openAIModel.trimmingCharacters(in: .whitespaces).isEmpty {
             return false
         }
+        if project.providerEnum == .google && project.googleModel.trimmingCharacters(in: .whitespaces).isEmpty {
+            return false
+        }
         return true
     }
 
@@ -202,11 +205,12 @@ struct ImageGenTabView: View {
 
             let result: ImageGenResult
             if project.providerEnum == .google {
-                guard !config.googleAIKey.isEmpty else {
+                guard !config.googleAIKey.isEmpty, !project.googleModel.isEmpty else {
                     throw ImageGenError.missingConfig
                 }
                 result = try await ImageGenClient.generateGoogle(
                     prompt: project.prompt,
+                    model: project.googleModel,
                     aspectRatio: project.googleAspectRatioEnum,
                     resolution: project.googleResolutionEnum,
                     apiKey: config.googleAIKey
@@ -231,7 +235,7 @@ struct ImageGenTabView: View {
                     let customSize: String? = project.openAISizeEnum == .custom
                         ? "\(project.openAICustomWidth)x\(project.openAICustomHeight)"
                         : nil
-                    result = try await ImageGenClient.generateOpenAI(
+                    result = try await ImageGenClient.generateImage(
                         prompt: project.prompt,
                         model: project.openAIModel,
                         endpoint: config.openAIEndpoint,
