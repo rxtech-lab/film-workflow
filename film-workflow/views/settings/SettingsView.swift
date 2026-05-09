@@ -3,11 +3,13 @@ import SwiftUI
 struct SettingsView: View {
     enum Section: String, CaseIterable, Identifiable {
         case aiProvider = "AI Provider"
+        case mcpServer = "MCP Server"
         var id: String { rawValue }
         var displayName: LocalizedStringKey { LocalizedStringKey(rawValue) }
         var systemImage: String {
             switch self {
             case .aiProvider: return "sparkles"
+            case .mcpServer: return "network"
             }
         }
     }
@@ -33,12 +35,14 @@ struct SettingsView: View {
                 switch selectedSection {
                 case .aiProvider:
                     AIProviderSettingsView()
+                case .mcpServer:
+                    MCPSettingsView()
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         #if os(macOS)
-        .frame(width: 560, height: 520)
+        .frame(width: 560, height: 600)
         #endif
     }
 }

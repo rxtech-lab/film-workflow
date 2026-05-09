@@ -24,6 +24,9 @@
     "—" : {
 
     },
+    "(not generated)" : {
+
+    },
     "%@ - %@" : {
       "localizations" : {
         "en" : {
@@ -85,6 +88,9 @@
           }
         }
       }
+    },
+    "7711" : {
+
     },
     "A Major" : {
       "localizations" : {
@@ -195,6 +201,9 @@
           }
         }
       }
+    },
+    "All interfaces (0.0.0.0)" : {
+
     },
     "amazement" : {
       "localizations" : {
@@ -316,6 +325,9 @@
         }
       }
     },
+    "Base port" : {
+
+    },
     "Basic" : {
       "localizations" : {
         "zh-Hans" : {
@@ -365,6 +377,12 @@
           }
         }
       }
+    },
+    "Bearer token" : {
+
+    },
+    "Bind" : {
+
     },
     "Blues" : {
       "localizations" : {
@@ -742,6 +760,9 @@
         }
       }
     },
+    "Connect from Claude Code" : {
+
+    },
     "Context" : {
       "localizations" : {
         "zh-Hans" : {
@@ -761,6 +782,9 @@
           }
         }
       }
+    },
+    "Copy command" : {
+
     },
     "Copy Path" : {
       "localizations" : {
@@ -1029,6 +1053,9 @@
         }
       }
     },
+    "Enable MCP server" : {
+
+    },
     "End" : {
       "localizations" : {
         "zh-Hans" : {
@@ -1188,6 +1215,9 @@
           }
         }
       }
+    },
+    "Exposes project tools (narrative, music, image, remotion) over an HTTP MCP endpoint. Auto-starts when this app launches." : {
+
     },
     "F Major" : {
       "localizations" : {
@@ -1589,6 +1619,9 @@
         }
       }
     },
+    "Hide" : {
+
+    },
     "Hide Lyrics" : {
       "localizations" : {
         "zh-Hans" : {
@@ -1638,6 +1671,9 @@
           }
         }
       }
+    },
+    "If the configured port is in use, the next free port (up to base+9) will be used instead. The actual port is shown below." : {
+
     },
     "Image" : {
       "localizations" : {
@@ -1892,6 +1928,9 @@
         }
       }
     },
+    "Localhost only (127.0.0.1)" : {
+
+    },
     "Lyrics" : {
       "localizations" : {
         "zh-Hans" : {
@@ -1951,6 +1990,9 @@
           }
         }
       }
+    },
+    "MCP Server" : {
+
     },
     "Melancholic" : {
       "localizations" : {
@@ -2101,6 +2143,9 @@
           }
         }
       }
+    },
+    "Network" : {
+
     },
     "New Narrative" : {
       "localizations" : {
@@ -2545,6 +2590,9 @@
         }
       }
     },
+    "Regenerate token" : {
+
+    },
     "Reggae" : {
       "localizations" : {
         "zh-Hans" : {
@@ -2674,6 +2722,12 @@
           }
         }
       }
+    },
+    "Required only when bound to all interfaces. Localhost requests skip the check." : {
+
+    },
+    "Required when bound to 0.0.0.0. Send `Authorization: Bearer <token>` on every request." : {
+
     },
     "Reset parameters" : {
       "localizations" : {
@@ -2978,6 +3032,9 @@
         }
       }
     },
+    "Show" : {
+
+    },
     "Show Lyrics" : {
       "localizations" : {
         "zh-Hans" : {
@@ -3137,6 +3194,9 @@
           }
         }
       }
+    },
+    "Status" : {
+
     },
     "Stop" : {
       "localizations" : {
