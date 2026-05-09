@@ -16,6 +16,10 @@ final class RemotionProject {
     var musicFilePath: String?
     var prompt: String = ""
 
+    var compositionWidth: Int = 1920
+    var compositionHeight: Int = 1080
+    var compositionFps: Int = 30
+
     var compositionSource: String
 
     @Relationship(deleteRule: .cascade, inverse: \RemotionMessage.project)
@@ -33,6 +37,9 @@ final class RemotionProject {
         self.referenceImagePath = nil
         self.musicFilePath = nil
         self.prompt = ""
+        self.compositionWidth = 1920
+        self.compositionHeight = 1080
+        self.compositionFps = 30
         self.compositionSource = ""
         self.messages = []
     }

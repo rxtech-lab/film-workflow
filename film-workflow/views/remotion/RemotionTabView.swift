@@ -42,10 +42,14 @@ struct RemotionTabView: View {
                 renamingProject: $renamingProject,
                 renameText: $renameText,
                 showSourceSheet: $showSourceSheet,
-                sourceText: selectedProject?.compositionSource ?? "",
+                sourceProjectId: selectedProject?.id,
+                sourceRefreshToken: reloadToken,
                 showExportSheet: $showExportSheet,
                 exportOptions: $exportOptions,
                 projectName: selectedProject?.name ?? "video",
+                sourceWidth: selectedProject?.compositionWidth ?? 1920,
+                sourceHeight: selectedProject?.compositionHeight ?? 1080,
+                sourceFps: selectedProject?.compositionFps ?? 30,
                 showConfirmExport: $showConfirmExport,
                 confirmTitle: confirmTitle,
                 confirmMessage: confirmMessage,
@@ -97,7 +101,11 @@ struct RemotionTabView: View {
                 Button {
                     beginExport(project: project)
                 } label: {
-                    Label("Render", systemImage: "square.and.arrow.down")
+                    if showProgressSheet {
+                        ProgressView().controlSize(.small)
+                    } else {
+                        Label("Render", systemImage: "wand.and.stars")
+                    }
                 }
                 .disabled(showProgressSheet || project.compositionSource.isEmpty)
             }
@@ -265,6 +273,18 @@ struct RemotionTabView: View {
             Task { await runtime.stop() }
             return
         }
+
+        // Reconcile on-disk composition with the project's current resolution/fps/duration
+        // before Studio boots, so the preview reflects the SwiftUI settings on first load.
+        let patched = RemotionCodeBuilder.patchProjectConstants(
+            in: project.compositionSource,
+            project: project
+        )
+        if patched != project.compositionSource {
+            project.compositionSource = patched
+        }
+        try? RemotionCodeBuilder.writeComposition(project: project, source: patched)
+
         Task {
             do {
                 try await runtime.start(projectId: id)
@@ -290,9 +310,14 @@ struct RemotionTabView: View {
     private func beginExport(project: RemotionProject) {
         guard !showProgressSheet else { return }
         pendingProjectId = project.id
+        let res = ExportResolution.allCases.first(where: {
+            $0.size.width == project.compositionWidth &&
+            $0.size.height == project.compositionHeight
+        }) ?? .p1080
+        let fps = ExportFrameRate(rawValue: project.compositionFps) ?? .fps30
         exportOptions = RemotionExportOptions(
-            resolution: .p1080,
-            frameRate: .fps30,
+            resolution: res,
+            frameRate: fps,
             destination: defaultDestinationURL(for: project)
         )
         showExportSheet = true
@@ -365,11 +390,15 @@ private struct SheetsModifier: ViewModifier {
     @Binding var renameText: String
 
     @Binding var showSourceSheet: Bool
-    let sourceText: String
+    let sourceProjectId: UUID?
+    let sourceRefreshToken: Int
 
     @Binding var showExportSheet: Bool
     @Binding var exportOptions: RemotionExportOptions?
     let projectName: String
+    let sourceWidth: Int
+    let sourceHeight: Int
+    let sourceFps: Int
 
     @Binding var showConfirmExport: Bool
     let confirmTitle: String
@@ -395,8 +424,13 @@ private struct SheetsModifier: ViewModifier {
                 }
             }
             .sheet(isPresented: $showSourceSheet) {
-                RemotionSourceSheetView(source: sourceText) {
-                    showSourceSheet = false
+                if let id = sourceProjectId {
+                    RemotionSourceSheetView(
+                        projectId: id,
+                        refreshToken: sourceRefreshToken
+                    ) {
+                        showSourceSheet = false
+                    }
                 }
             }
             .sheet(isPresented: $showExportSheet) {
@@ -431,6 +465,9 @@ private struct SheetsModifier: ViewModifier {
         if exportOptions != nil {
             RemotionExportSheet(
                 projectName: projectName,
+                sourceWidth: sourceWidth,
+                sourceHeight: sourceHeight,
+                sourceFps: sourceFps,
                 options: Binding(
                     get: { exportOptions ?? RemotionExportOptions(destination: URL(fileURLWithPath: "/")) },
                     set: { exportOptions = $0 }

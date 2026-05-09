@@ -57,7 +57,8 @@ struct RemotionCodeBuilder {
         )
     }
 
-    /// Asks the LLM to write src/Composition.tsx from scratch using the form fields and the user prompt.
+    /// Asks the LLM to write src/Composition.tsx (and optionally extra component files) from scratch
+    /// using the form fields and the user prompt. Returns the contents of src/Composition.tsx.
     static func seedWithLLM(project: RemotionProject, config: AppConfig) async throws -> String {
         guard !config.openAIEndpoint.isEmpty,
               !config.openAIKey.isEmpty,
@@ -81,13 +82,33 @@ struct RemotionCodeBuilder {
             model: config.openAIModel
         )
 
-        let extracted = extractTSX(from: raw)
-        guard !extracted.isEmpty else { throw RemotionCodeBuilderError.noResponse }
+        let files = extractFiles(from: raw)
+        guard let composition = files.first(where: { $0.path == "src/Composition.tsx" })?.content,
+              !composition.isEmpty else {
+            throw RemotionCodeBuilderError.noResponse
+        }
 
         let dir = FileStorage.remotionProjectDir(id: project.id)
-        let srcDir = dir.appendingPathComponent("src", isDirectory: true)
-        try writeComposition(source: extracted, to: srcDir)
-        return extracted
+        for file in files {
+            try writeProjectFile(file, in: dir)
+        }
+        return composition
+    }
+
+    private static func writeProjectFile(_ file: SeededFile, in projectDir: URL) throws {
+        // Reject path traversal / absolute paths.
+        let trimmed = file.path.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.hasPrefix("/"), !trimmed.contains("..") else { return }
+        let target = projectDir.appendingPathComponent(trimmed)
+        try FileManager.default.createDirectory(
+            at: target.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        do {
+            try file.content.write(to: target, atomically: true, encoding: .utf8)
+        } catch {
+            throw RemotionCodeBuilderError.sourceWriteFailed(error.localizedDescription)
+        }
     }
 
     static func writeComposition(source: String, to srcDir: URL) throws {
@@ -106,54 +127,30 @@ struct RemotionCodeBuilder {
         try writeComposition(source: source, to: srcDir)
     }
 
-    // MARK: - LLM editing
+    /// Rewrites COMPOSITION_WIDTH / COMPOSITION_HEIGHT / COMPOSITION_FPS /
+    /// COMPOSITION_DURATION_IN_FRAMES exports inside an existing Composition.tsx so the
+    /// project's resolution / fps / duration settings stay authoritative.
+    static func patchProjectConstants(in source: String, project: RemotionProject) -> String {
+        let fps = max(1, project.compositionFps)
+        let frames = max(1, Int((project.durationSeconds * Double(fps)).rounded()))
+        var s = source
+        s = replaceTopLevelConst(s, name: "COMPOSITION_WIDTH", value: project.compositionWidth)
+        s = replaceTopLevelConst(s, name: "COMPOSITION_HEIGHT", value: project.compositionHeight)
+        s = replaceTopLevelConst(s, name: "COMPOSITION_FPS", value: fps)
+        s = replaceTopLevelConst(s, name: "COMPOSITION_DURATION_IN_FRAMES", value: frames)
+        return s
+    }
 
-    static func applyEdit(
-        project: RemotionProject,
-        userInstruction: String,
-        history: [RemotionMessage],
-        config: AppConfig
-    ) async throws -> String {
-        var systemPrompt = editSystemPrompt
-        let standingPrompt = project.prompt.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !standingPrompt.isEmpty {
-            systemPrompt += "\n\nProject brief (keep edits consistent with this):\n\(standingPrompt)"
-        }
-
-        var messages: [OpenAIChatMessage] = []
-        messages.append(OpenAIChatMessage(role: "system", content: systemPrompt))
-
-        let priorTurns = history.suffix(20)
-        for msg in priorTurns where msg.role != RemotionMessageRole.system.rawValue {
-            messages.append(OpenAIChatMessage(role: msg.role, content: msg.content))
-        }
-
-        let userPayload = """
-        Current src/Composition.tsx:
-
-        ```tsx
-        \(project.compositionSource)
-        ```
-
-        Instruction: \(userInstruction)
-
-        Return ONLY the full updated contents of src/Composition.tsx in a single ```tsx code block.
-        """
-
-        messages.append(OpenAIChatMessage(role: "user", content: userPayload))
-
-        let raw = try await OpenAIClient.chat(
-            messages: messages,
-            endpoint: config.openAIEndpoint,
-            apiKey: config.openAIKey,
-            model: config.openAIModel
+    private static func replaceTopLevelConst(_ source: String, name: String, value: Int) -> String {
+        let escaped = NSRegularExpression.escapedPattern(for: name)
+        let pattern = #"export\s+const\s+\#(escaped)\b[^=]*=\s*\d+(?:\.\d+)?"#
+        guard let re = try? NSRegularExpression(pattern: pattern) else { return source }
+        let range = NSRange(source.startIndex..., in: source)
+        return re.stringByReplacingMatches(
+            in: source,
+            range: range,
+            withTemplate: "export const \(name) = \(value)"
         )
-
-        let extracted = extractTSX(from: raw)
-        guard !extracted.isEmpty else {
-            throw RemotionCodeBuilderError.noResponse
-        }
-        return extracted
     }
 
     // MARK: - Asset copying
@@ -178,10 +175,13 @@ struct RemotionCodeBuilder {
     // MARK: - Seed payload
 
     private static func buildSeedUserPayload(project: RemotionProject, assets: SeededAssets) -> String {
-        let durationFrames = max(1, Int((project.durationSeconds * 30).rounded()))
+        let fps = max(1, project.compositionFps)
+        let durationFrames = max(1, Int((project.durationSeconds * Double(fps)).rounded()))
         var lines: [String] = []
         lines.append("Project name: \(project.name)")
-        lines.append("Duration: \(project.durationSeconds) seconds (= \(durationFrames) frames at 30 fps)")
+        lines.append("Duration: \(project.durationSeconds) seconds (= \(durationFrames) frames at \(fps) fps)")
+        lines.append("Resolution: \(project.compositionWidth) × \(project.compositionHeight)")
+        lines.append("Frame rate: \(fps) fps")
         lines.append("Theme color (hex): \(project.themeColorHex)")
         if !project.text.trimmingCharacters(in: .whitespaces).isEmpty {
             lines.append("Text overlay: \(project.text)")
@@ -208,46 +208,85 @@ struct RemotionCodeBuilder {
 
     // MARK: - LLM response extraction
 
-    private static func extractTSX(from raw: String) -> String {
-        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-        // Look for ```tsx ... ``` or ```ts ... ``` or ``` ... ```
-        let patterns = ["```tsx\n", "```typescript\n", "```ts\n", "```jsx\n", "```\n"]
-        for pat in patterns {
-            if let startRange = trimmed.range(of: pat) {
-                let afterStart = trimmed[startRange.upperBound...]
-                if let endRange = afterStart.range(of: "```") {
-                    return String(afterStart[..<endRange.lowerBound])
-                        .trimmingCharacters(in: .whitespacesAndNewlines)
-                }
-            }
-        }
-        // No fence — assume whole body is the TSX.
-        return trimmed
+    private struct SeededFile {
+        let path: String
+        let content: String
     }
 
-    private static let editSystemPrompt = """
-    You are an expert Remotion (React) developer. You edit the file src/Composition.tsx of a Remotion project.
+    /// Extracts one or more files from the model response. The LLM is instructed to wrap each
+    /// file in a fenced code block whose first line is `// FILE: src/path/to/file.tsx`.
+    /// If no file marker is found, the first code block is treated as src/Composition.tsx.
+    private static func extractFiles(from raw: String) -> [SeededFile] {
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        let blocks = scanFencedBlocks(in: trimmed)
 
-    Rules:
-    - Always return the FULL contents of src/Composition.tsx in a single ```tsx code block. No prose outside the code block.
-    - Preserve and export: COMPOSITION_FPS, COMPOSITION_DURATION_IN_FRAMES, COMPOSITION_WIDTH, COMPOSITION_HEIGHT, and MyComposition. The Root.tsx imports these by name.
-    - Reference local assets via staticFile("filename.ext"). Files placed under public/ are exposed by their basename only.
-    - Use Remotion primitives: AbsoluteFill, Sequence, Img, Audio, Video, useCurrentFrame, useVideoConfig, interpolate, spring.
-    - Do not import any package not already in package.json (only react, react-dom, remotion).
-    - The file must be valid TypeScript JSX — no markdown, no commentary in the code.
-    """
+        var results: [SeededFile] = []
+        for block in blocks {
+            let (path, body) = stripFileHeader(block)
+            results.append(SeededFile(path: path ?? "src/Composition.tsx", content: body))
+        }
+
+        if results.isEmpty {
+            // No fences — assume the whole reply is Composition.tsx.
+            results.append(SeededFile(path: "src/Composition.tsx", content: trimmed))
+        }
+
+        // Deduplicate by path, last wins.
+        var byPath: [String: String] = [:]
+        for r in results { byPath[r.path] = r.content }
+        return byPath.map { SeededFile(path: $0.key, content: $0.value) }
+    }
+
+    private static func scanFencedBlocks(in text: String) -> [String] {
+        var blocks: [String] = []
+        var remaining = text[...]
+        while let openRange = remaining.range(of: "```") {
+            let afterOpen = remaining[openRange.upperBound...]
+            // Skip the language tag line (everything up to and including the first newline).
+            guard let nlRange = afterOpen.range(of: "\n") else { break }
+            let bodyStart = nlRange.upperBound
+            let bodyTail = afterOpen[bodyStart...]
+            guard let closeRange = bodyTail.range(of: "```") else { break }
+            let body = bodyTail[..<closeRange.lowerBound]
+            blocks.append(String(body).trimmingCharacters(in: .whitespacesAndNewlines))
+            remaining = bodyTail[closeRange.upperBound...]
+        }
+        return blocks
+    }
+
+    private static func stripFileHeader(_ block: String) -> (String?, String) {
+        let lines = block.split(separator: "\n", omittingEmptySubsequences: false)
+        guard let first = lines.first else { return (nil, block) }
+        let trimmed = first.trimmingCharacters(in: .whitespaces)
+        let markers = ["// FILE:", "//FILE:", "// file:", "//file:"]
+        for marker in markers {
+            if trimmed.uppercased().hasPrefix(marker.uppercased()) {
+                let path = trimmed.dropFirst(marker.count).trimmingCharacters(in: .whitespaces)
+                let rest = lines.dropFirst().joined(separator: "\n")
+                return (path.isEmpty ? nil : path, rest.trimmingCharacters(in: .whitespacesAndNewlines))
+            }
+        }
+        return (nil, block)
+    }
 
     private static let seedSystemPrompt = """
-    You are an expert Remotion (React) developer. Author the file src/Composition.tsx for a fresh Remotion project, creatively interpreting the user's brief.
+    You are an expert Remotion (React) developer. Author a fresh Remotion project, creatively interpreting the user's brief.
+
+    File layout — ALWAYS split the project into multiple small files, one component per file:
+    - src/Composition.tsx — the orchestration entry point. Exports COMPOSITION_FPS, COMPOSITION_DURATION_IN_FRAMES, COMPOSITION_WIDTH, COMPOSITION_HEIGHT, and MyComposition. Should be LEAN: only Sequence/AbsoluteFill timeline composition that imports sub-components. Avoid inlining helper components here.
+    - src/components/<Name>.tsx — every reusable visual element, scene, logo, title card, transition, animation, etc. lives in its own file. One default-exported component per file. Pick descriptive PascalCase filenames.
+
+    Output format — emit one fenced ```tsx code block per file. The FIRST line inside each block MUST be a marker comment of the form:
+        // FILE: src/Composition.tsx
+        // FILE: src/components/ChatGPTLogo.tsx
+    Always include src/Composition.tsx. Add as many src/components/*.tsx files as the design needs (typically 2–6). No prose outside the code blocks.
 
     Hard requirements:
-    - Output ONLY the full contents of src/Composition.tsx in a single ```tsx code block. No prose outside the block.
-    - Export these exact symbols: COMPOSITION_FPS (number), COMPOSITION_DURATION_IN_FRAMES (number), COMPOSITION_WIDTH (number), COMPOSITION_HEIGHT (number), and MyComposition (React component). The Root.tsx imports these by name.
-    - Use 30 for COMPOSITION_FPS, 1920 for COMPOSITION_WIDTH, 1080 for COMPOSITION_HEIGHT. Set COMPOSITION_DURATION_IN_FRAMES to the requested seconds × 30.
+    - Use the exact frame rate, width, and height provided in the project metadata for COMPOSITION_FPS, COMPOSITION_WIDTH, COMPOSITION_HEIGHT. Set COMPOSITION_DURATION_IN_FRAMES to the requested seconds × COMPOSITION_FPS.
     - Reference assets via staticFile("filename.ext"). Files in public/ are exposed by basename only. Do NOT render the reference image; treat it as a style guide.
-    - Allowed imports: only `remotion` and `react` (already in package.json). Use AbsoluteFill, Sequence, Img, Audio, Video, useCurrentFrame, useVideoConfig, interpolate, spring, staticFile, etc.
+    - Allowed imports: only `remotion` and `react` (already in package.json). Use AbsoluteFill, Sequence, Img, Audio, Video, useCurrentFrame, useVideoConfig, interpolate, spring, staticFile, etc. Sub-components import their own primitives directly from `remotion`/`react`.
     - Animate thoughtfully: use interpolate() for fades/slides, spring() for bounces. Avoid plain static frames unless asked.
-    - Valid TypeScript JSX only — no comments outside the code, no markdown inside the code.
+    - Valid TypeScript JSX only — no markdown fences inside files, no FILE markers other than the first line of each block.
     """
 }
 #endif

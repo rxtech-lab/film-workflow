@@ -580,15 +580,24 @@
         }
       }
     },
+    "Clear All" : {
+
+    },
+    "Clear all chat messages?" : {
+
+    },
+    "Clear all messages" : {
+
+    },
     "Click \"Generate Initial Composition\" in the Form tab to start the Studio preview." : {
 
     },
-    "Composition is 1920 × 1080 @ 30fps. Output will be %lld × %lld @ %lldfps." : {
+    "Composition is %lld × %lld @ %lldfps. Output will be %lld × %lld @ %lldfps." : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "new",
-            "value" : "Composition is 1920 × 1080 @ 30fps. Output will be %1$lld × %2$lld @ %3$lldfps."
+            "value" : "Composition is %1$lld × %2$lld @ %3$lldfps. Output will be %4$lld × %5$lld @ %6$lldfps."
           }
         }
       }
@@ -2204,6 +2213,9 @@
         }
       }
     },
+    "Running…" : {
+
+    },
     "Russian" : {
       "localizations" : {
         "zh-Hans" : {
@@ -2529,6 +2541,9 @@
         }
       }
     },
+    "Stop generating" : {
+
+    },
     "Stop Rendering" : {
 
     },
@@ -2625,6 +2640,9 @@
 
     },
     "Theme Color" : {
+
+    },
+    "This permanently deletes all messages in this chat. The composition itself is not affected." : {
 
     },
     "This will permanently remove the audio file." : {

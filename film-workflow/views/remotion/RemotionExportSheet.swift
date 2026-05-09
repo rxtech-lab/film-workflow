@@ -56,6 +56,9 @@ struct RemotionExportOptions: Equatable {
 
 struct RemotionExportSheet: View {
     let projectName: String
+    let sourceWidth: Int
+    let sourceHeight: Int
+    let sourceFps: Int
     @Binding var options: RemotionExportOptions
     var onCancel: () -> Void
     var onExport: () -> Void
@@ -149,7 +152,7 @@ struct RemotionExportSheet: View {
 
     private var summary: some View {
         let (w, h) = options.resolution.size
-        return Text("Composition is 1920 × 1080 @ 30fps. Output will be \(w) × \(h) @ \(options.frameRate.rawValue)fps.")
+        return Text("Composition is \(sourceWidth) × \(sourceHeight) @ \(sourceFps)fps. Output will be \(w) × \(h) @ \(options.frameRate.rawValue)fps.")
             .font(.caption)
             .foregroundStyle(.secondary)
             .padding(.top, 4)

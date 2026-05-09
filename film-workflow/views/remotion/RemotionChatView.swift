@@ -1,4 +1,5 @@
 #if os(macOS)
+import Combine
 import SwiftData
 import SwiftUI
 
@@ -10,6 +11,8 @@ struct RemotionChatView: View {
     @State private var input: String = ""
     @State private var isSending: Bool = false
     @State private var errorMessage: String?
+    @State private var chatTask: Task<Void, Never>?
+    @State private var showClearConfirm: Bool = false
 
     private var orderedMessages: [RemotionMessage] {
         project.messages.sorted(by: { $0.createdAt < $1.createdAt })
@@ -21,9 +24,14 @@ struct RemotionChatView: View {
                 Text("Chat — refine the composition")
                     .font(.subheadline.bold())
                 Spacer()
-                if isSending {
-                    ProgressView().controlSize(.small)
+                Button {
+                    showClearConfirm = true
+                } label: {
+                    Image(systemName: "trash")
                 }
+                .buttonStyle(.borderless)
+                .help("Clear all messages")
+                .disabled(orderedMessages.isEmpty || isSending)
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 6)
@@ -41,6 +49,11 @@ struct RemotionChatView: View {
                             messageRow(msg)
                                 .id(msg.id)
                         }
+                        if isSending {
+                            TypingIndicator()
+                                .id("typing-indicator")
+                                .padding(.horizontal, 4)
+                        }
                     }
                     .padding(8)
                 }
@@ -48,6 +61,13 @@ struct RemotionChatView: View {
                     if let last = orderedMessages.last {
                         withAnimation(.easeOut(duration: 0.15)) {
                             proxy.scrollTo(last.id, anchor: .bottom)
+                        }
+                    }
+                }
+                .onChange(of: isSending) { _, sending in
+                    if sending {
+                        withAnimation(.easeOut(duration: 0.15)) {
+                            proxy.scrollTo("typing-indicator", anchor: .bottom)
                         }
                     }
                 }
@@ -69,36 +89,67 @@ struct RemotionChatView: View {
                     .disabled(isSending)
                     .onSubmit { send() }
 
-                Button {
-                    send()
-                } label: {
-                    Image(systemName: "paperplane.fill")
+                if isSending {
+                    Button {
+                        chatTask?.cancel()
+                    } label: {
+                        Image(systemName: "stop.fill")
+                    }
+                    .help("Stop generating")
+                    .keyboardShortcut(".", modifiers: [.command])
+                } else {
+                    Button {
+                        send()
+                    } label: {
+                        Image(systemName: "paperplane.fill")
+                    }
+                    .keyboardShortcut(.return, modifiers: [.command])
+                    .disabled(input.trimmingCharacters(in: .whitespaces).isEmpty || project.compositionSource.isEmpty)
                 }
-                .keyboardShortcut(.return, modifiers: [.command])
-                .disabled(isSending || input.trimmingCharacters(in: .whitespaces).isEmpty || project.compositionSource.isEmpty)
             }
             .padding(8)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .confirmationDialog(
+            "Clear all chat messages?",
+            isPresented: $showClearConfirm,
+            titleVisibility: .visible
+        ) {
+            Button("Clear All", role: .destructive) { clearAllMessages() }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This permanently deletes all messages in this chat. The composition itself is not affected.")
+        }
     }
 
     @ViewBuilder
     private func messageRow(_ msg: RemotionMessage) -> some View {
-        let isUser = msg.role == RemotionMessageRole.user.rawValue
-        HStack {
-            if isUser { Spacer(minLength: 40) }
-            Text(msg.content)
+        if msg.kind == RemotionMessageKind.tool.rawValue {
+            ToolCardView(message: msg)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        } else if msg.role == RemotionMessageRole.user.rawValue {
+            HStack {
+                Spacer(minLength: 40)
+                Text(msg.content)
+                    .font(.callout)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background(
+                        RoundedRectangle(cornerRadius: 8)
+                            .fill(Color.accentColor.opacity(0.18))
+                    )
+            }
+        } else {
+            Text(renderMarkdown(msg.content))
                 .font(.callout)
-                .padding(.horizontal, 10)
-                .padding(.vertical, 6)
-                .background(
-                    RoundedRectangle(cornerRadius: 8)
-                        .fill(isUser ? Color.accentColor.opacity(0.18) : Color.secondary.opacity(0.12))
-                )
-                .frame(maxWidth: .infinity, alignment: isUser ? .trailing : .leading)
-            if !isUser { Spacer(minLength: 40) }
+                .textSelection(.enabled)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 4)
+                .padding(.vertical, 2)
         }
     }
+
+    // MARK: - Send
 
     private func send() {
         let instruction = input.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -131,30 +182,220 @@ struct RemotionChatView: View {
 
         let bindable = project
         let history = orderedMessages
-        Task {
+        let modelContext = self.modelContext
+        chatTask = Task { @MainActor in
+            defer {
+                isSending = false
+                chatTask = nil
+            }
             do {
-                let newSource = try await RemotionCodeBuilder.applyEdit(
+                let stream = RemotionAgent.runEdit(
                     project: bindable,
                     userInstruction: instruction,
                     history: history,
                     config: config
                 )
-                try RemotionCodeBuilder.writeComposition(project: bindable, source: newSource)
-                bindable.compositionSource = newSource
-                bindable.updatedAt = Date()
 
-                let assistantMsg = RemotionMessage(
-                    role: RemotionMessageRole.assistant.rawValue,
-                    content: "Updated Composition.tsx (\(newSource.count) chars).",
-                    project: bindable
-                )
-                modelContext.insert(assistantMsg)
-                bindable.messages.append(assistantMsg)
-                reloadToken += 1
+                var anyFileWritten = false
+                var pendingToolMessages: [String: RemotionMessage] = [:]
+                for try await event in stream {
+                    switch event {
+                    case .status:
+                        // Status updates are ephemeral — surfaced via the typing indicator only.
+                        break
+                    case .toolCall(let id, let name, let args):
+                        let msg = RemotionMessage(
+                            role: RemotionMessageRole.assistant.rawValue,
+                            content: "",
+                            project: bindable,
+                            kind: .tool,
+                            toolName: name,
+                            toolArgs: args,
+                            toolStatus: .pending,
+                            toolCallId: id
+                        )
+                        modelContext.insert(msg)
+                        bindable.messages.append(msg)
+                        pendingToolMessages[id] = msg
+                    case .toolResult(let id, _, let summary, let ok):
+                        if let msg = pendingToolMessages.removeValue(forKey: id) {
+                            msg.toolResult = summary
+                            msg.toolStatus = (ok ? RemotionToolStatus.ok : .failed).rawValue
+                        }
+                    case .assistantText(let text):
+                        appendAssistant(text, project: bindable, modelContext: modelContext)
+                    case .fileWritten(let path, let content):
+                        anyFileWritten = true
+                        if path == "src/Composition.tsx" {
+                            bindable.compositionSource = content
+                        }
+                    case .completed:
+                        if anyFileWritten {
+                            bindable.updatedAt = Date()
+                            reloadToken += 1
+                        }
+                    }
+                }
+                // Anything still pending at end-of-stream means the loop exited mid-call (rare).
+                for msg in pendingToolMessages.values {
+                    msg.toolStatus = RemotionToolStatus.failed.rawValue
+                    if msg.toolResult == nil { msg.toolResult = "no result" }
+                }
+            } catch is CancellationError {
+                // user-initiated, no error UI
             } catch {
                 errorMessage = error.localizedDescription
             }
-            isSending = false
+        }
+    }
+
+    private func appendAssistant(_ content: String, project: RemotionProject, modelContext: ModelContext) {
+        let trimmed = content.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        let msg = RemotionMessage(
+            role: RemotionMessageRole.assistant.rawValue,
+            content: trimmed,
+            project: project
+        )
+        modelContext.insert(msg)
+        project.messages.append(msg)
+    }
+
+    private func clearAllMessages() {
+        let messages = project.messages
+        project.messages.removeAll()
+        for msg in messages {
+            modelContext.delete(msg)
+        }
+        errorMessage = nil
+    }
+
+    private func renderMarkdown(_ source: String) -> AttributedString {
+        if let parsed = try? AttributedString(
+            markdown: source,
+            options: AttributedString.MarkdownParsingOptions(
+                interpretedSyntax: .inlineOnlyPreservingWhitespace
+            )
+        ) {
+            return parsed
+        }
+        return AttributedString(source)
+    }
+}
+
+private struct ToolCardView: View {
+    let message: RemotionMessage
+
+    private var status: RemotionToolStatus {
+        guard let raw = message.toolStatus,
+              let s = RemotionToolStatus(rawValue: raw) else {
+            return .pending
+        }
+        return s
+    }
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 8) {
+            iconView
+                .frame(width: 16, height: 16)
+                .padding(.top, 2)
+
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 6) {
+                    Text(message.toolName ?? "tool")
+                        .font(.caption.weight(.semibold))
+                        .monospaced()
+                    if let args = compactArgs(message.toolArgs), !args.isEmpty {
+                        Text(args)
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                    }
+                }
+                if let result = message.toolResult, !result.isEmpty {
+                    Text(result)
+                        .font(.caption)
+                        .foregroundStyle(status == .failed ? .red : .secondary)
+                        .lineLimit(3)
+                } else if status == .pending {
+                    Text("Running…")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .background(
+            RoundedRectangle(cornerRadius: 8)
+                .fill(Color.secondary.opacity(0.08))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .strokeBorder(borderColor.opacity(0.5), lineWidth: 0.5)
+        )
+    }
+
+    @ViewBuilder
+    private var iconView: some View {
+        switch status {
+        case .pending:
+            ProgressView().controlSize(.small).scaleEffect(0.7)
+        case .ok:
+            Image(systemName: "checkmark.circle.fill")
+                .foregroundStyle(.green)
+        case .failed:
+            Image(systemName: "xmark.octagon.fill")
+                .foregroundStyle(.red)
+        }
+    }
+
+    private var borderColor: Color {
+        switch status {
+        case .pending: return .secondary
+        case .ok: return .green
+        case .failed: return .red
+        }
+    }
+
+    private func compactArgs(_ raw: String?) -> String? {
+        guard let raw, !raw.isEmpty else { return nil }
+        // Try to compact JSON to a single line; if it fails, return raw.
+        if let data = raw.data(using: .utf8),
+           let obj = try? JSONSerialization.jsonObject(with: data),
+           let dict = obj as? [String: Any] {
+            let joined = dict.keys.sorted().compactMap { key -> String? in
+                guard let v = dict[key] else { return nil }
+                let s = "\(v)"
+                return "\(key)=\(s)"
+            }.joined(separator: " ")
+            return joined.isEmpty ? nil : joined
+        }
+        return raw
+    }
+}
+
+private struct TypingIndicator: View {
+    @State private var phase: Int = 0
+    private let timer = Timer.publish(every: 0.4, on: .main, in: .common).autoconnect()
+
+    var body: some View {
+        HStack(spacing: 4) {
+            ForEach(0..<3) { i in
+                Circle()
+                    .fill(Color.secondary)
+                    .frame(width: 6, height: 6)
+                    .opacity(phase == i ? 1.0 : 0.3)
+                    .animation(.easeInOut(duration: 0.3), value: phase)
+            }
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .onReceive(timer) { _ in
+            phase = (phase + 1) % 3
         }
     }
 }

@@ -23,27 +23,10 @@ struct RemotionParametersView: View {
             generateSection
         }
         .formStyle(.grouped)
-        .fileImporter(
-            isPresented: $showImagePicker,
-            allowedContentTypes: [.image],
-            allowsMultipleSelection: true
-        ) { result in
-            handleImageImport(result)
-        }
-        .fileImporter(
-            isPresented: $showReferencePicker,
-            allowedContentTypes: [.image],
-            allowsMultipleSelection: false
-        ) { result in
-            handleReferenceImport(result)
-        }
-        .fileImporter(
-            isPresented: $showMusicPicker,
-            allowedContentTypes: [.audio],
-            allowsMultipleSelection: false
-        ) { result in
-            handleMusicImport(result)
-        }
+        .onChange(of: project.compositionWidth) { _, _ in syncCompositionConstants() }
+        .onChange(of: project.compositionHeight) { _, _ in syncCompositionConstants() }
+        .onChange(of: project.compositionFps) { _, _ in syncCompositionConstants() }
+        .onChange(of: project.durationSeconds) { _, _ in syncCompositionConstants() }
     }
 
     // MARK: - Sections
@@ -68,17 +51,58 @@ struct RemotionParametersView: View {
                     .foregroundStyle(.secondary)
                     .monospacedDigit()
             }
-            Slider(value: $project.durationSeconds, in: 1...60, step: 0.5)
+            Slider(
+                value: Binding(
+                    get: { project.durationSeconds },
+                    set: { project.durationSeconds = (($0 * 2).rounded() / 2) }
+                ),
+                in: 1...60
+            )
 
             ColorPicker("Theme Color", selection: themeColorBinding, supportsOpacity: false)
+
+            HStack {
+                Text("Resolution")
+                Spacer()
+                Picker("", selection: resolutionBinding) {
+                    ForEach(ExportResolution.allCases) { res in
+                        Text(res.label).tag(res)
+                    }
+                }
+                .labelsHidden()
+                .pickerStyle(.menu)
+                .frame(maxWidth: 220)
+            }
+
+            HStack {
+                Text("Frame Rate")
+                Spacer()
+                Picker("", selection: frameRateBinding) {
+                    ForEach(ExportFrameRate.allCases) { fps in
+                        Text(fps.label).tag(fps)
+                    }
+                }
+                .labelsHidden()
+                .pickerStyle(.segmented)
+                .frame(maxWidth: 220)
+            }
         }
     }
 
     private var promptSection: some View {
         Section {
-            TextField("", text: $project.prompt, axis: .vertical)
-                .lineLimit(3...10)
-                .textFieldStyle(.roundedBorder)
+            TextEditor(text: $project.prompt)
+                .font(.body)
+                .multilineTextAlignment(.leading)
+                .scrollContentBackground(.hidden)
+                .frame(minHeight: 72, maxHeight: 220)
+                .padding(6)
+                .background(Color(NSColor.textBackgroundColor))
+                .clipShape(RoundedRectangle(cornerRadius: 6))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 6)
+                        .strokeBorder(Color.secondary.opacity(0.35))
+                )
         } header: {
             Text("Prompt")
         } footer: {
@@ -123,6 +147,13 @@ struct RemotionParametersView: View {
                 Label("Add Images", systemImage: "photo.on.rectangle.angled")
             }
             .disabled(project.imagePaths.count >= maxImages)
+            .fileImporter(
+                isPresented: $showImagePicker,
+                allowedContentTypes: [.image],
+                allowsMultipleSelection: true
+            ) { result in
+                handleImageImport(result)
+            }
 
             if project.imagePaths.count >= maxImages {
                 Text("Maximum \(maxImages) images.")
@@ -151,6 +182,13 @@ struct RemotionParametersView: View {
 
                 VStack(alignment: .leading, spacing: 8) {
                     Button("Choose…") { showReferencePicker = true }
+                        .fileImporter(
+                            isPresented: $showReferencePicker,
+                            allowedContentTypes: [.image],
+                            allowsMultipleSelection: false
+                        ) { result in
+                            handleReferenceImport(result)
+                        }
                     if project.referenceImagePath != nil {
                         Button("Remove", role: .destructive) {
                             if let p = project.referenceImagePath {
@@ -182,6 +220,13 @@ struct RemotionParametersView: View {
                 }
                 Spacer()
                 Button("Choose…") { showMusicPicker = true }
+                    .fileImporter(
+                        isPresented: $showMusicPicker,
+                        allowedContentTypes: [.audio],
+                        allowsMultipleSelection: false
+                    ) { result in
+                        handleMusicImport(result)
+                    }
                 if project.musicFilePath != nil {
                     Button("Remove", role: .destructive) {
                         if let m = project.musicFilePath {
@@ -225,6 +270,28 @@ struct RemotionParametersView: View {
         )
     }
 
+    private var resolutionBinding: Binding<ExportResolution> {
+        Binding(
+            get: {
+                ExportResolution.allCases.first(where: {
+                    $0.size.width == project.compositionWidth &&
+                    $0.size.height == project.compositionHeight
+                }) ?? .p1080
+            },
+            set: { res in
+                project.compositionWidth = res.size.width
+                project.compositionHeight = res.size.height
+            }
+        )
+    }
+
+    private var frameRateBinding: Binding<ExportFrameRate> {
+        Binding(
+            get: { ExportFrameRate(rawValue: project.compositionFps) ?? .fps30 },
+            set: { project.compositionFps = $0.rawValue }
+        )
+    }
+
     // MARK: - Actions
 
     private func seed() {
@@ -248,8 +315,14 @@ struct RemotionParametersView: View {
         let bindable = project
         Task {
             do {
-                let source = try await RemotionCodeBuilder.seedWithLLM(project: bindable, config: config)
-                bindable.compositionSource = source
+                let raw = try await RemotionCodeBuilder.seedWithLLM(project: bindable, config: config)
+                // Force the composition's constants to match the project settings even if the
+                // model hardcoded different values.
+                let normalized = RemotionCodeBuilder.patchProjectConstants(in: raw, project: bindable)
+                if normalized != raw {
+                    try? RemotionCodeBuilder.writeComposition(project: bindable, source: normalized)
+                }
+                bindable.compositionSource = normalized
                 bindable.updatedAt = Date()
                 statusMessage = "Starting Remotion Studio…"
                 try await RemotionRuntime.shared.start(projectId: projectId)
@@ -272,6 +345,7 @@ struct RemotionParametersView: View {
                     project.imagePaths.append(path)
                 }
             }
+            syncAssetsToPublic()
         case .failure:
             break
         }
@@ -287,6 +361,7 @@ struct RemotionParametersView: View {
         if let path = try? FileStorage.copyImage(from: url) {
             project.referenceImagePath = path
         }
+        syncAssetsToPublic()
     }
 
     private func handleMusicImport(_ result: Result<[URL], Error>) {
@@ -303,9 +378,24 @@ struct RemotionParametersView: View {
                 FileStorage.deleteFile(at: oldPath)
             }
             project.musicFilePath = "images/" + filename
+            syncAssetsToPublic()
         } catch {
             // ignore
         }
+    }
+
+    private func syncAssetsToPublic() {
+        _ = try? RemotionCodeBuilder.prepareAssets(project: project)
+    }
+
+    private func syncCompositionConstants() {
+        let current = project.compositionSource
+        guard !current.isEmpty else { return }
+        let patched = RemotionCodeBuilder.patchProjectConstants(in: current, project: project)
+        guard patched != current else { return }
+        project.compositionSource = patched
+        project.updatedAt = Date()
+        try? RemotionCodeBuilder.writeComposition(project: project, source: patched)
     }
 
     private func removeImage(at index: Int) {
