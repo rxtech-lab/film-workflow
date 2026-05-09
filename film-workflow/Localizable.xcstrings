@@ -63,6 +63,9 @@
         }
       }
     },
+    "%lld%%" : {
+
+    },
     "+ %@" : {
       "localizations" : {
         "zh-Hans" : {
@@ -213,6 +216,9 @@
         }
       }
     },
+    "API key" : {
+
+    },
     "Arabic" : {
       "localizations" : {
         "zh-Hans" : {
@@ -222,6 +228,9 @@
           }
         }
       }
+    },
+    "Ask the model to edit the composition…" : {
+
     },
     "Azure Speech" : {
       "localizations" : {
@@ -262,6 +271,9 @@
           }
         }
       }
+    },
+    "Basic" : {
+
     },
     "Basic Info" : {
       "localizations" : {
@@ -403,6 +415,9 @@
         }
       }
     },
+    "Builds a starting Composition.tsx from these inputs and launches Studio. Use the chat below to refine." : {
+
+    },
     "C Major" : {
       "localizations" : {
         "zh-Hans" : {
@@ -443,6 +458,9 @@
         }
       }
     },
+    "Cancel rendering?" : {
+
+    },
     "Casual" : {
       "localizations" : {
         "zh-Hans" : {
@@ -462,6 +480,12 @@
           }
         }
       }
+    },
+    "Chat" : {
+
+    },
+    "Chat — refine the composition" : {
+
     },
     "Chinese" : {
       "localizations" : {
@@ -513,6 +537,9 @@
         }
       }
     },
+    "Choose…" : {
+
+    },
     "Chorus" : {
       "localizations" : {
         "zh-Hans" : {
@@ -553,6 +580,22 @@
         }
       }
     },
+    "Click \"Generate Initial Composition\" in the Form tab to start the Studio preview." : {
+
+    },
+    "Composition is 1920 × 1080 @ 30fps. Output will be %lld × %lld @ %lldfps." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Composition is 1920 × 1080 @ 30fps. Output will be %1$lld × %2$lld @ %3$lldfps."
+          }
+        }
+      }
+    },
+    "Composition.tsx" : {
+
+    },
     "Context" : {
       "localizations" : {
         "zh-Hans" : {
@@ -562,6 +605,9 @@
           }
         }
       }
+    },
+    "Copy" : {
+
     },
     "Copy Path" : {
       "localizations" : {
@@ -662,6 +708,9 @@
           }
         }
       }
+    },
+    "Describe a change — e.g. \"make the title yellow\" or \"slow the fade to 1s\"." : {
+
     },
     "Describe the overall vibe..." : {
       "extractionState" : "stale",
@@ -800,6 +849,9 @@
     "End time" : {
 
     },
+    "Endpoint (e.g. https://api.openai.com/v1)" : {
+
+    },
     "Energetic" : {
       "localizations" : {
         "zh-Hans" : {
@@ -910,6 +962,9 @@
         }
       }
     },
+    "Export Video" : {
+
+    },
     "Export…" : {
       "localizations" : {
         "zh-Hans" : {
@@ -983,6 +1038,9 @@
         }
       }
     },
+    "Form" : {
+
+    },
     "Forward" : {
       "localizations" : {
         "zh-Hans" : {
@@ -992,6 +1050,9 @@
           }
         }
       }
+    },
+    "Frame Rate" : {
+
     },
     "French" : {
       "localizations" : {
@@ -1053,6 +1114,9 @@
         }
       }
     },
+    "Generate Initial Composition" : {
+
+    },
     "Generated Music" : {
       "localizations" : {
         "zh-Hans" : {
@@ -1102,6 +1166,9 @@
           }
         }
       }
+    },
+    "Generating…" : {
+
     },
     "Genre" : {
       "localizations" : {
@@ -1253,6 +1320,9 @@
         }
       }
     },
+    "Images" : {
+
+    },
     "Informative" : {
       "localizations" : {
         "zh-Hans" : {
@@ -1362,6 +1432,9 @@
           }
         }
       }
+    },
+    "Keep Rendering" : {
+
     },
     "Key / Scale" : {
       "localizations" : {
@@ -1493,6 +1566,9 @@
         }
       }
     },
+    "Maximum %lld images." : {
+
+    },
     "Maximum 10 images reached." : {
       "localizations" : {
         "zh-Hans" : {
@@ -1522,6 +1598,9 @@
           }
         }
       }
+    },
+    "Model name (e.g. gpt-4o-mini)" : {
+
     },
     "Mood" : {
       "localizations" : {
@@ -1592,6 +1671,9 @@
           }
         }
       }
+    },
+    "Music (optional)" : {
+
     },
     "Musical Parameters" : {
       "localizations" : {
@@ -1683,6 +1765,9 @@
         }
       }
     },
+    "No music attached" : {
+
+    },
     "No Paragraphs" : {
       "localizations" : {
         "zh-Hans" : {
@@ -1772,6 +1857,9 @@
           }
         }
       }
+    },
+    "OpenAI-compatible LLM" : {
+
     },
     "Organ" : {
       "localizations" : {
@@ -1966,6 +2054,9 @@
         }
       }
     },
+    "Reference Image" : {
+
+    },
     "Reference Images" : {
       "localizations" : {
         "zh-Hans" : {
@@ -2016,6 +2107,15 @@
         }
       }
     },
+    "Remotion" : {
+
+    },
+    "Remotion Projects" : {
+
+    },
+    "Remove" : {
+
+    },
     "Rename" : {
       "localizations" : {
         "zh-Hans" : {
@@ -2036,6 +2136,18 @@
         }
       }
     },
+    "Render" : {
+
+    },
+    "Render failed" : {
+
+    },
+    "Render Now" : {
+
+    },
+    "Rendering Video" : {
+
+    },
     "Reorder" : {
 
     },
@@ -2048,6 +2160,9 @@
           }
         }
       }
+    },
+    "Resolution" : {
+
     },
     "Retry" : {
       "localizations" : {
@@ -2138,6 +2253,9 @@
           }
         }
       }
+    },
+    "Save To" : {
+
     },
     "Saved" : {
       "localizations" : {
@@ -2398,6 +2516,9 @@
     "Start time" : {
 
     },
+    "Starting Remotion Studio…" : {
+
+    },
     "Stop" : {
       "localizations" : {
         "zh-Hans" : {
@@ -2407,6 +2528,9 @@
           }
         }
       }
+    },
+    "Stop Rendering" : {
+
     },
     "Strings" : {
       "localizations" : {
@@ -2427,6 +2551,9 @@
           }
         }
       }
+    },
+    "Studio preview is paused while rendering." : {
+
     },
     "Style degree" : {
       "localizations" : {
@@ -2468,6 +2595,9 @@
         }
       }
     },
+    "Tell the model what kind of video to build (style, motion, mood, structure). Used both for the initial generation and as context for follow-up chat edits." : {
+
+    },
     "Test Connection" : {
       "localizations" : {
         "zh-Hans" : {
@@ -2478,6 +2608,9 @@
         }
       }
     },
+    "Text Overlay" : {
+
+    },
     "Thai" : {
       "localizations" : {
         "zh-Hans" : {
@@ -2487,6 +2620,12 @@
           }
         }
       }
+    },
+    "The partial video file will be removed." : {
+
+    },
+    "Theme Color" : {
+
     },
     "This will permanently remove the audio file." : {
       "localizations" : {
@@ -2578,6 +2717,12 @@
         }
       }
     },
+    "Used as a visual style guide passed to the LLM during chat edits." : {
+
+    },
+    "Used to generate and edit Remotion compositions. Works with OpenAI, Azure OpenAI, OpenRouter, Ollama, LM Studio, etc." : {
+
+    },
     "Verse" : {
       "localizations" : {
         "zh-Hans" : {
@@ -2597,6 +2742,9 @@
           }
         }
       }
+    },
+    "View Source" : {
+
     },
     "Violin" : {
       "localizations" : {
