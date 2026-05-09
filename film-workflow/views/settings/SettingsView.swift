@@ -4,6 +4,9 @@ struct SettingsView: View {
     @State private var googleKey: String = ""
     @State private var azureKey: String = ""
     @State private var azureEndpoint: String = ""
+    @State private var openAIEndpoint: String = ""
+    @State private var openAIKey: String = ""
+    @State private var openAIModel: String = ""
     @State private var showSavedAlert = false
     @State private var errorMessage: String?
     @State private var showError = false
@@ -78,6 +81,36 @@ struct SettingsView: View {
             }
 
             Section {
+                TextField("Endpoint (e.g. https://api.openai.com/v1)", text: $openAIEndpoint)
+                    #if os(macOS)
+                    .textFieldStyle(.roundedBorder)
+                    #else
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled(true)
+                    .keyboardType(.URL)
+                    #endif
+
+                SecureField("API key", text: $openAIKey)
+                    #if os(macOS)
+                    .textFieldStyle(.roundedBorder)
+                    #endif
+
+                TextField("Model name (e.g. gpt-4o-mini)", text: $openAIModel)
+                    #if os(macOS)
+                    .textFieldStyle(.roundedBorder)
+                    #else
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled(true)
+                    #endif
+            } header: {
+                Text("OpenAI-compatible LLM")
+            } footer: {
+                Text("Used to generate and edit Remotion compositions. Works with OpenAI, Azure OpenAI, OpenRouter, Ollama, LM Studio, etc.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Section {
                 Button("Save") {
                     saveKeys()
                 }
@@ -107,6 +140,9 @@ struct SettingsView: View {
         !googleKey.trimmingCharacters(in: .whitespaces).isEmpty
             || !azureKey.trimmingCharacters(in: .whitespaces).isEmpty
             || !azureEndpoint.trimmingCharacters(in: .whitespaces).isEmpty
+            || !openAIEndpoint.trimmingCharacters(in: .whitespaces).isEmpty
+            || !openAIKey.trimmingCharacters(in: .whitespaces).isEmpty
+            || !openAIModel.trimmingCharacters(in: .whitespaces).isEmpty
     }
 
     private func loadKeys() {
@@ -114,6 +150,9 @@ struct SettingsView: View {
             googleKey = config.googleAIKey
             azureKey = config.azureSpeechKey
             azureEndpoint = config.azureSpeechEndpoint
+            openAIEndpoint = config.openAIEndpoint
+            openAIKey = config.openAIKey
+            openAIModel = config.openAIModel
         }
     }
 
@@ -122,7 +161,10 @@ struct SettingsView: View {
             let config = AppConfig(
                 googleAIKey: googleKey,
                 azureSpeechKey: azureKey,
-                azureSpeechEndpoint: azureEndpoint
+                azureSpeechEndpoint: azureEndpoint,
+                openAIEndpoint: openAIEndpoint,
+                openAIKey: openAIKey,
+                openAIModel: openAIModel
             )
             try config.saveToKeychain()
             showSavedAlert = true
@@ -143,7 +185,10 @@ struct SettingsView: View {
             let config = AppConfig(
                 googleAIKey: googleKey,
                 azureSpeechKey: azureKey,
-                azureSpeechEndpoint: azureEndpoint
+                azureSpeechEndpoint: azureEndpoint,
+                openAIEndpoint: openAIEndpoint,
+                openAIKey: openAIKey,
+                openAIModel: openAIModel
             )
             try config.saveToKeychain()
         } catch {

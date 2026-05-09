@@ -9,6 +9,8 @@ struct film_workflowApp: App {
             GeneratedMusic.self,
             NarrativeProject.self,
             GeneratedNarrative.self,
+            RemotionProject.self,
+            RemotionMessage.self,
         ])
         let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
 
@@ -21,6 +23,11 @@ struct film_workflowApp: App {
 
     init() {
         FileStorage.ensureDirectories()
+        #if os(macOS)
+        // Clean up any bun/node/remotion processes left behind by an unclean exit
+        // of a previous app launch (Bun's Chromium grandchildren survive Process.terminate).
+        ProcessTreeKiller.killOrphans(matching: FileStorage.remotionRoot.path)
+        #endif
     }
 
     var body: some Scene {

@@ -25,17 +25,26 @@ struct AppConfig: Codable {
     var googleAIKey: String
     var azureSpeechKey: String
     var azureSpeechEndpoint: String
+    var openAIEndpoint: String
+    var openAIKey: String
+    var openAIModel: String
 
     private static let service = "com.rxlab.film-workflow"
     private static let googleAccount = "googleAIKey"
     private static let azureKeyAccount = "azureSpeechKey"
     private static let azureEndpointAccount = "azureSpeechEndpoint"
+    private static let openAIEndpointAccount = "openAIEndpoint"
+    private static let openAIKeyAccount = "openAIKey"
+    private static let openAIModelAccount = "openAIModel"
 
     static func loadFromKeychain() throws -> AppConfig {
         AppConfig(
             googleAIKey: (try? loadString(account: googleAccount)) ?? "",
             azureSpeechKey: (try? loadString(account: azureKeyAccount)) ?? "",
-            azureSpeechEndpoint: (try? loadString(account: azureEndpointAccount)) ?? ""
+            azureSpeechEndpoint: (try? loadString(account: azureEndpointAccount)) ?? "",
+            openAIEndpoint: (try? loadString(account: openAIEndpointAccount)) ?? "",
+            openAIKey: (try? loadString(account: openAIKeyAccount)) ?? "",
+            openAIModel: (try? loadString(account: openAIModelAccount)) ?? ""
         )
     }
 
@@ -43,12 +52,18 @@ struct AppConfig: Codable {
         try Self.saveString(googleAIKey, account: Self.googleAccount)
         try Self.saveString(azureSpeechKey, account: Self.azureKeyAccount)
         try Self.saveString(azureSpeechEndpoint, account: Self.azureEndpointAccount)
+        try Self.saveString(openAIEndpoint, account: Self.openAIEndpointAccount)
+        try Self.saveString(openAIKey, account: Self.openAIKeyAccount)
+        try Self.saveString(openAIModel, account: Self.openAIModelAccount)
     }
 
     static func deleteFromKeychain() throws {
         try deleteString(account: googleAccount)
         try deleteString(account: azureKeyAccount)
         try deleteString(account: azureEndpointAccount)
+        try deleteString(account: openAIEndpointAccount)
+        try deleteString(account: openAIKeyAccount)
+        try deleteString(account: openAIModelAccount)
     }
 
     // MARK: - Keychain helpers

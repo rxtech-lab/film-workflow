@@ -1,0 +1,4 @@
+bun
+template/node_modules/
+template/.remotion/
+template/out/

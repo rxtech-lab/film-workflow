@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		DF4F815C2F91465100DE82DA /* appicon.icon in Resources */ = {isa = PBXBuildFile; fileRef = DF4F815B2F91465100DE82DA /* appicon.icon */; };
+		DFAA0001000000000000A0A1 /* RemotionRuntime in Resources */ = {isa = PBXBuildFile; fileRef = DFAA0001000000000000A0A2 /* RemotionRuntime */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -32,6 +33,7 @@
 		DF4F81092F9120D400DE82DA /* film-workflowTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "film-workflowTests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 		DF4F81132F9120D400DE82DA /* film-workflowUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "film-workflowUITests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 		DF4F815B2F91465100DE82DA /* appicon.icon */ = {isa = PBXFileReference; lastKnownFileType = folder.iconcomposer.icon; path = appicon.icon; sourceTree = "<group>"; };
+		DFAA0001000000000000A0A2 /* RemotionRuntime */ = {isa = PBXFileReference; lastKnownFileType = folder; path = RemotionRuntime; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -81,6 +83,7 @@
 			isa = PBXGroup;
 			children = (
 				DF4F815B2F91465100DE82DA /* appicon.icon */,
+				DFAA0001000000000000A0A2 /* RemotionRuntime */,
 				DF4F80FC2F9120D300DE82DA /* film-workflow */,
 				DF4F810C2F9120D400DE82DA /* film-workflowTests */,
 				DF4F81162F9120D400DE82DA /* film-workflowUITests */,
@@ -105,6 +108,7 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = DF4F811D2F9120D400DE82DA /* Build configuration list for PBXNativeTarget "film-workflow" */;
 			buildPhases = (
+				DFAA0001000000000000A0A3 /* Build Remotion Runtime */,
 				DF4F80F62F9120D300DE82DA /* Sources */,
 				DF4F80F72F9120D300DE82DA /* Frameworks */,
 				DF4F80F82F9120D300DE82DA /* Resources */,
@@ -220,6 +224,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				DF4F815C2F91465100DE82DA /* appicon.icon in Resources */,
+				DFAA0001000000000000A0A1 /* RemotionRuntime in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -238,6 +243,28 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXResourcesBuildPhase section */
+
+/* Begin PBXShellScriptBuildPhase section */
+		DFAA0001000000000000A0A3 /* Build Remotion Runtime */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			name = "Build Remotion Runtime";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/bash;
+			shellScript = "if [ \"$PLATFORM_NAME\" != \"macosx\" ]; then\n  echo \"Skipping Remotion runtime build on $PLATFORM_NAME\"\n  exit 0\nfi\nbash \"$SRCROOT/scripts/build-remotion-runtime.sh\"\n";
+		};
+/* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		DF4F80F62F9120D300DE82DA /* Sources */ = {
@@ -315,7 +342,7 @@
 				DEVELOPMENT_TEAM = P9KK452K8P;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
-				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				GCC_C_LANGUAGE_STANDARD = gnu17;
 				GCC_DYNAMIC_NO_PIC = NO;
 				GCC_NO_COMMON_BLOCKS = YES;
@@ -379,7 +406,7 @@
 				DEVELOPMENT_TEAM = P9KK452K8P;
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
-				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				GCC_C_LANGUAGE_STANDARD = gnu17;
 				GCC_NO_COMMON_BLOCKS = YES;
 				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
@@ -402,11 +429,12 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = appicon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				"CODE_SIGN_ENTITLEMENTS[sdk=macosx*]" = "film-workflow/film-workflow.entitlements";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = P9KK452K8P;
-				"ENABLE_APP_SANDBOX[sdk=macosx*]" = YES;
+				"ENABLE_APP_SANDBOX[sdk=macosx*]" = NO;
 				"ENABLE_HARDENED_RUNTIME[sdk=macosx*]" = YES;
 				"ENABLE_INCOMING_NETWORK_CONNECTIONS[sdk=macosx*]" = YES;
 				"ENABLE_OUTGOING_NETWORK_CONNECTIONS[sdk=macosx*]" = YES;
@@ -462,11 +490,12 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = appicon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				"CODE_SIGN_ENTITLEMENTS[sdk=macosx*]" = "film-workflow/film-workflow.entitlements";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = P9KK452K8P;
-				"ENABLE_APP_SANDBOX[sdk=macosx*]" = YES;
+				"ENABLE_APP_SANDBOX[sdk=macosx*]" = NO;
 				"ENABLE_HARDENED_RUNTIME[sdk=macosx*]" = YES;
 				"ENABLE_INCOMING_NETWORK_CONNECTIONS[sdk=macosx*]" = YES;
 				"ENABLE_OUTGOING_NETWORK_CONNECTIONS[sdk=macosx*]" = YES;
