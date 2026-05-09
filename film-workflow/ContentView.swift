@@ -12,6 +12,11 @@ struct ContentView: View {
             Tab(Tabs.Narrative.displayName, systemImage: Tabs.Narrative.systemImage, value: Tabs.Narrative) {
                 NarrativeTabView()
             }
+            #if os(macOS)
+            Tab(Tabs.Remotion.displayName, systemImage: Tabs.Remotion.systemImage, value: Tabs.Remotion) {
+                RemotionTabView()
+            }
+            #endif
             #if !os(macOS)
             Tab(Tabs.Settings.displayName, systemImage: Tabs.Settings.systemImage, value: Tabs.Settings) {
                 NavigationStack {
@@ -27,5 +32,5 @@ struct ContentView: View {
 
 #Preview {
     ContentView()
-        .modelContainer(for: [MusicProject.self, GeneratedMusic.self, NarrativeProject.self, GeneratedNarrative.self], inMemory: true)
+        .modelContainer(for: [MusicProject.self, GeneratedMusic.self, NarrativeProject.self, GeneratedNarrative.self, RemotionProject.self, RemotionMessage.self], inMemory: true)
 }

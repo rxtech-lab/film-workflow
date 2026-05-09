@@ -14,10 +14,24 @@ struct FileStorage {
         appSupportURL.appendingPathComponent("images", isDirectory: true)
     }
 
+    static var remotionRoot: URL {
+        appSupportURL.appendingPathComponent("remotion", isDirectory: true)
+    }
+
+    static var remotionProjectsDir: URL {
+        remotionRoot.appendingPathComponent("projects", isDirectory: true)
+    }
+
+    static func remotionProjectDir(id: UUID) -> URL {
+        remotionProjectsDir.appendingPathComponent(id.uuidString, isDirectory: true)
+    }
+
     static func ensureDirectories() {
         let fm = FileManager.default
         try? fm.createDirectory(at: generatedDir, withIntermediateDirectories: true)
         try? fm.createDirectory(at: imagesDir, withIntermediateDirectories: true)
+        try? fm.createDirectory(at: remotionRoot, withIntermediateDirectories: true)
+        try? fm.createDirectory(at: remotionProjectsDir, withIntermediateDirectories: true)
     }
 
     static func saveAudio(_ data: Data, extension ext: String) throws -> String {
