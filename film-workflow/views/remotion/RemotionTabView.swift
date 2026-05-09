@@ -5,6 +5,7 @@ import UniformTypeIdentifiers
 
 struct RemotionTabView: View {
     @Environment(\.modelContext) private var modelContext
+    @Environment(RemotionChatController.self) private var chatController
     @Query(sort: \RemotionProject.updatedAt, order: .reverse) private var projects: [RemotionProject]
 
     @State private var selectedProject: RemotionProject?
@@ -139,6 +140,9 @@ struct RemotionTabView: View {
                         renameText = project.name
                         renamingProject = project
                     }
+                    Button("Duplicate") {
+                        duplicateProject(project)
+                    }
                     Divider()
                     Button("Delete", role: .destructive) {
                         deleteProject(project)
@@ -248,11 +252,82 @@ struct RemotionTabView: View {
         selectedProject = project
     }
 
+    private func duplicateProject(_ source: RemotionProject) {
+        let copy = RemotionProject(name: source.name + " Copy")
+        copy.text = source.text
+        copy.durationSeconds = source.durationSeconds
+        copy.themeColorHex = source.themeColorHex
+        copy.prompt = source.prompt
+        copy.compositionWidth = source.compositionWidth
+        copy.compositionHeight = source.compositionHeight
+        copy.compositionFps = source.compositionFps
+        copy.compositionSource = source.compositionSource
+
+        copy.imagePaths = source.imagePaths.compactMap(copyStoredFile(atRelative:))
+        copy.referenceImagePath = source.referenceImagePath.flatMap(copyStoredFile(atRelative:))
+        copy.musicFilePath = source.musicFilePath.flatMap(copyStoredFile(atRelative:))
+
+        let srcDir = FileStorage.remotionProjectDir(id: source.id)
+        let dstDir = FileStorage.remotionProjectDir(id: copy.id)
+        if FileManager.default.fileExists(atPath: srcDir.path) {
+            try? FileManager.default.createDirectory(
+                at: dstDir.deletingLastPathComponent(),
+                withIntermediateDirectories: true
+            )
+            try? FileManager.default.removeItem(at: dstDir)
+            try? FileManager.default.copyItem(at: srcDir, to: dstDir)
+        }
+
+        modelContext.insert(copy)
+
+        for msg in source.messages.sorted(by: { $0.createdAt < $1.createdAt }) {
+            let copiedMsg = RemotionMessage(
+                role: msg.role,
+                content: msg.content,
+                project: copy,
+                kind: RemotionMessageKind(rawValue: msg.kind) ?? .text,
+                toolName: msg.toolName,
+                toolArgs: msg.toolArgs,
+                toolResult: msg.toolResult,
+                toolStatus: msg.toolStatus.flatMap { RemotionToolStatus(rawValue: $0) },
+                toolCallId: msg.toolCallId
+            )
+            modelContext.insert(copiedMsg)
+            copy.messages.append(copiedMsg)
+        }
+
+        selectedProject = copy
+    }
+
+    private func copyStoredFile(atRelative relativePath: String) -> String? {
+        let src = FileStorage.absoluteURL(for: relativePath)
+        guard FileManager.default.fileExists(atPath: src.path) else { return nil }
+        let parts = relativePath.split(separator: "/", maxSplits: 1, omittingEmptySubsequences: false)
+        guard parts.count == 2 else { return nil }
+        let folder = String(parts[0])
+        let ext = src.pathExtension
+        let newName = UUID().uuidString + (ext.isEmpty ? "" : "." + ext)
+        let dst = FileStorage.appSupportURL
+            .appendingPathComponent(folder, isDirectory: true)
+            .appendingPathComponent(newName)
+        do {
+            try FileManager.default.createDirectory(
+                at: dst.deletingLastPathComponent(),
+                withIntermediateDirectories: true
+            )
+            try FileManager.default.copyItem(at: src, to: dst)
+            return folder + "/" + newName
+        } catch {
+            return nil
+        }
+    }
+
     private func deleteProject(_ project: RemotionProject) {
         if selectedProject?.id == project.id {
             selectedProject = nil
             Task { await runtime.stop() }
         }
+        chatController.clear(projectId: project.id)
         for path in project.imagePaths {
             FileStorage.deleteFile(at: path)
         }

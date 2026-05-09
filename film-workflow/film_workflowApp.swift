@@ -11,6 +11,8 @@ struct film_workflowApp: App {
             GeneratedNarrative.self,
             RemotionProject.self,
             RemotionMessage.self,
+            ImageGenProject.self,
+            GeneratedImage.self,
         ])
         let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
 
@@ -33,6 +35,9 @@ struct film_workflowApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView()
+            #if os(macOS)
+                .environment(RemotionChatController.shared)
+            #endif
         }
         .modelContainer(sharedModelContainer)
 
