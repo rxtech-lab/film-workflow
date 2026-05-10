@@ -25,7 +25,7 @@ enum RemotionProjectService {
 
         copy.imagePaths = source.imagePaths.compactMap(copyStoredFile(atRelative:))
         copy.referenceImagePath = source.referenceImagePath.flatMap(copyStoredFile(atRelative:))
-        copy.musicFilePath = source.musicFilePath.flatMap(copyStoredFile(atRelative:))
+        copy.audioFilePaths = source.audioFilePaths.compactMap(copyStoredFile(atRelative:))
 
         let srcDir = FileStorage.remotionProjectDir(id: source.id)
         let dstDir = FileStorage.remotionProjectDir(id: copy.id)
@@ -68,7 +68,7 @@ enum RemotionProjectService {
             FileStorage.deleteFile(at: path)
         }
         if let p = project.referenceImagePath { FileStorage.deleteFile(at: p) }
-        if let m = project.musicFilePath { FileStorage.deleteFile(at: m) }
+        for m in project.audioFilePaths { FileStorage.deleteFile(at: m) }
         let dir = FileStorage.remotionProjectDir(id: project.id)
         try? FileManager.default.removeItem(at: dir)
         context.delete(project)

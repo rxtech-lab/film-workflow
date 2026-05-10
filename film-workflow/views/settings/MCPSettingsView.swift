@@ -5,7 +5,7 @@ struct MCPSettingsView: View {
     @State private var server = MCPServer.shared
     @State private var portText: String = ""
     @State private var revealToken: Bool = false
-    @State private var copyConfirmation: String?
+    @State private var copiedKey: String?
 
     var body: some View {
         Form {
@@ -72,8 +72,7 @@ struct MCPSettingsView: View {
                             .font(.system(.body, design: .monospaced))
                             .textSelection(.enabled)
                         Spacer()
-                        Button("Copy") { copyToClipboard(url, label: "URL") }
-                            .buttonStyle(.borderless)
+                        copyIconButton(key: "url", value: url)
                     }
                 }
                 if let err = server.lastError {
@@ -96,8 +95,7 @@ struct MCPSettingsView: View {
                             revealToken.toggle()
                         }
                         .buttonStyle(.borderless)
-                        Button("Copy") { copyToClipboard(token, label: "Token") }
-                            .buttonStyle(.borderless)
+                        copyIconButton(key: "token", value: token)
                     } else {
                         Text("(not generated)")
                             .foregroundStyle(.secondary)
@@ -122,18 +120,14 @@ struct MCPSettingsView: View {
             if let url = server.displayURL, settings.enabled {
                 Section("Connect from Claude Code") {
                     let cmd = connectCommand(url: url, bindAll: settings.bindAll, token: settings.token)
-                    Text(cmd)
-                        .font(.system(.caption, design: .monospaced))
-                        .textSelection(.enabled)
-                    Button("Copy command") { copyToClipboard(cmd, label: "Command") }
-                        .buttonStyle(.borderless)
+                    HStack(alignment: .top) {
+                        Text(cmd)
+                            .font(.system(.caption, design: .monospaced))
+                            .textSelection(.enabled)
+                        Spacer()
+                        copyIconButton(key: "command", value: cmd)
+                    }
                 }
-            }
-
-            if let confirmation = copyConfirmation {
-                Text(confirmation)
-                    .font(.caption)
-                    .foregroundStyle(.green)
             }
         }
         .formStyle(.grouped)
@@ -168,25 +162,39 @@ struct MCPSettingsView: View {
         return String(repeating: "•", count: 12) + suffix
     }
 
-    private func copyToClipboard(_ s: String, label: String) {
+    @ViewBuilder
+    private func copyIconButton(key: String, value: String) -> some View {
+        let copied = copiedKey == key
+        Button {
+            copyToClipboard(value, key: key)
+        } label: {
+            Image(systemName: copied ? "checkmark" : "doc.on.doc")
+                .foregroundStyle(copied ? .green : .accentColor)
+                .contentTransition(.symbolEffect(.replace))
+        }
+        .buttonStyle(.borderless)
+        .help(copied ? "Copied" : "Copy")
+    }
+
+    private func copyToClipboard(_ s: String, key: String) {
         #if os(macOS)
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(s, forType: .string)
         #else
         UIPasteboard.general.string = s
         #endif
-        copyConfirmation = "\(label) copied to clipboard"
+        copiedKey = key
         Task { @MainActor in
             try? await Task.sleep(nanoseconds: 1_500_000_000)
-            copyConfirmation = nil
+            if copiedKey == key { copiedKey = nil }
         }
     }
 
     private func connectCommand(url: String, bindAll: Bool, token: String?) -> String {
         if bindAll, let token, !token.isEmpty {
-            return "claude mcp add film \(url) -H \"Authorization: Bearer \(token)\""
+            return "claude mcp add --transport http film \(url) -H \"Authorization: Bearer \(token)\""
         }
-        return "claude mcp add film \(url)"
+        return "claude mcp add --transport http film \(url)"
     }
 }
 

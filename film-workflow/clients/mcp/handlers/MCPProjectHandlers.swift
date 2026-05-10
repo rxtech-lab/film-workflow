@@ -104,7 +104,7 @@ enum MCPProjectHandlers {
             return try getProject(type: type, id: id, context: context)
         case "create_project":
             let displayName = (arguments["name"] as? String) ?? "Untitled Project"
-            return try createProject(type: type, name: displayName, context: context)
+            return try await createProject(type: type, name: displayName, context: context)
         case "update_project":
             guard let id = arguments["id"] as? String,
                   let fields = arguments["fields"] as? [String: Any] else {
@@ -183,7 +183,7 @@ enum MCPProjectHandlers {
 
     // MARK: - Create
 
-    private static func createProject(type: ProjectType, name: String, context: ModelContext) throws -> [String: Any] {
+    private static func createProject(type: ProjectType, name: String, context: ModelContext) async throws -> [String: Any] {
         switch type {
         case .narrative:
             let p = NarrativeProject(name: name)
@@ -205,7 +205,30 @@ enum MCPProjectHandlers {
             let p = RemotionProject(name: name)
             context.insert(p)
             try context.save()
-            return MCPToolRegistry.jsonResult(remotionSummary(p))
+            // Seed a default no-AI composition so callers get a ready-to-preview
+            // project without a round-trip to the LLM agent. Then bring up Studio.
+            let source = RemotionCodeBuilder.defaultComposition(project: p)
+            p.compositionSource = source
+            try? RemotionCodeBuilder.writeComposition(project: p, source: source)
+            try? context.save()
+
+            var studioStatus: String = "starting"
+            var studioURL: String?
+            do {
+                try await RemotionRuntime.shared.start(projectId: p.id)
+                studioURL = RemotionRuntime.shared.currentURL?.absoluteString
+                studioStatus = "running"
+            } catch {
+                studioStatus = "failed: \(error.localizedDescription)"
+            }
+
+            var summary = remotionSummary(p)
+            summary["studio"] = [
+                "status": studioStatus,
+                "url": studioURL as Any
+            ] as [String: Any]
+            summary["compositionSource"] = source
+            return MCPToolRegistry.jsonResult(summary)
             #else
             throw MCPToolError.macOSOnly
             #endif
@@ -578,7 +601,7 @@ enum MCPProjectHandlers {
         out["compositionSource"] = p.compositionSource
         out["imagePaths"] = p.imagePaths
         out["referenceImagePath"] = p.referenceImagePath as Any
-        out["musicFilePath"] = p.musicFilePath as Any
+        out["audioFilePaths"] = p.audioFilePaths
         return out
     }
     #endif
@@ -688,7 +711,30 @@ enum MCPProjectHandlers {
         if let n = fields["compositionWidth"] as? Int { p.compositionWidth = n }
         if let n = fields["compositionHeight"] as? Int { p.compositionHeight = n }
         if let n = fields["compositionFps"] as? Int { p.compositionFps = n }
-        if let s = fields["compositionSource"] as? String { p.compositionSource = s }
+
+        let providedSource = fields["compositionSource"] as? String
+        if let s = providedSource { p.compositionSource = s }
+
+        // Keep src/Composition.tsx on disk in sync. Remotion's still/render CLI
+        // reads durationInFrames / fps / width / height from the COMPOSITION_*
+        // exports in this file (see RemotionRuntime/template/src/Root.tsx). If we
+        // only update the SwiftData model, `bun remotion still --frame N` keeps
+        // clamping to the old durationInFrames.
+        let constantKeys = ["durationSeconds", "compositionWidth", "compositionHeight", "compositionFps"]
+        let touchedConstants = constantKeys.contains(where: { fields[$0] != nil })
+        if providedSource != nil || touchedConstants {
+            var source = p.compositionSource
+            if touchedConstants && !source.isEmpty {
+                let patched = RemotionCodeBuilder.patchProjectConstants(in: source, project: p)
+                if patched != source {
+                    source = patched
+                    p.compositionSource = patched
+                }
+            }
+            if !source.isEmpty {
+                try? RemotionCodeBuilder.writeComposition(project: p, source: source)
+            }
+        }
     }
     #endif
 

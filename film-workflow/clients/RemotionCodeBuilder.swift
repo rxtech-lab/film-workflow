@@ -15,7 +15,7 @@ enum RemotionCodeBuilderError: LocalizedError {
 struct SeededAssets {
     let imageNames: [String]
     let referenceImageName: String?
-    let musicName: String?
+    let audioNames: [String]
 }
 
 struct RemotionCodeBuilder {
@@ -30,7 +30,7 @@ struct RemotionCodeBuilder {
     /// - public/upload/    — user-uploaded images (project.imagePaths)
     /// - public/reference/ — reference image used as style guide
     /// - public/generated/ — images created by the agent's generate_image tool
-    /// - public/           — music + other top-level assets
+    /// - public/audio/     — attached audio files (project.audioFilePaths)
     static func prepareAssets(project: RemotionProject) throws -> SeededAssets {
         let dir = FileStorage.remotionProjectDir(id: project.id)
         let publicDir = dir.appendingPathComponent("public", isDirectory: true)
@@ -48,15 +48,47 @@ struct RemotionCodeBuilder {
         if let ref = project.referenceImagePath {
             referenceImageName = copyAsset(relativePath: ref, intoPublic: publicDir, subfolder: "reference")
         }
-        var musicName: String?
-        if let music = project.musicFilePath {
-            musicName = copyAsset(relativePath: music, intoPublic: publicDir, subfolder: nil)
+        var audioNames: [String] = []
+        for audio in project.audioFilePaths {
+            if let name = copyAsset(relativePath: audio, intoPublic: publicDir, subfolder: "audio") {
+                audioNames.append(name)
+            }
         }
         return SeededAssets(
             imageNames: imageNames,
             referenceImageName: referenceImageName,
-            musicName: musicName
+            audioNames: audioNames
         )
+    }
+
+    /// Build a no-AI default Composition.tsx scaffold seeded from the project's
+    /// settings. Used by MCP `create_project(type="remotion")` so callers get a
+    /// ready-to-preview project without round-tripping through the LLM agent.
+    static func defaultComposition(project: RemotionProject) -> String {
+        let fps = max(1, project.compositionFps)
+        let frames = max(1, Int((project.durationSeconds * Double(fps)).rounded()))
+        let safeName = project.name
+            .replacingOccurrences(of: "\\", with: "\\\\")
+            .replacingOccurrences(of: "\"", with: "\\\"")
+        let theme = project.themeColorHex.isEmpty ? "#1E1E1E" : project.themeColorHex
+        return """
+        import { AbsoluteFill, useCurrentFrame, interpolate } from "remotion";
+
+        export const COMPOSITION_FPS = \(fps);
+        export const COMPOSITION_DURATION_IN_FRAMES = \(frames);
+        export const COMPOSITION_WIDTH = \(project.compositionWidth);
+        export const COMPOSITION_HEIGHT = \(project.compositionHeight);
+
+        export const MyComposition: React.FC = () => {
+          const frame = useCurrentFrame();
+          const opacity = interpolate(frame, [0, 30], [0, 1], { extrapolateRight: "clamp" });
+          return (
+            <AbsoluteFill style={{ backgroundColor: "\(theme)", justifyContent: "center", alignItems: "center" }}>
+              <h1 style={{ color: "white", fontFamily: "Helvetica, Arial, sans-serif", opacity }}>\(safeName)</h1>
+            </AbsoluteFill>
+          );
+        };
+        """
     }
 
     static func writeComposition(source: String, to srcDir: URL) throws {

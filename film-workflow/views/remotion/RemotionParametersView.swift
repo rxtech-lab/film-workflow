@@ -15,22 +15,27 @@ struct RemotionParametersView: View {
 
     @State private var showImagePicker = false
     @State private var showReferencePicker = false
-    @State private var showMusicPicker = false
+    @State private var showAudioPicker = false
     @State private var generatedImages: [URL] = []
     @State private var pendingDeletion: PendingDeletion?
     @State private var showDeleteAlert = false
+    @State private var runtime = RemotionRuntime.shared
+
+    private var isStudioRunning: Bool {
+        runtime.currentURL != nil && runtime.currentProjectId == project.id
+    }
 
     private enum PendingDeletion: Identifiable {
         case uploadedImage(index: Int)
         case referenceImage
-        case music
+        case audio(index: Int)
         case generatedImage(url: URL)
 
         var id: String {
             switch self {
             case .uploadedImage(let i): return "upload-\(i)"
             case .referenceImage: return "reference"
-            case .music: return "music"
+            case .audio(let i): return "audio-\(i)"
             case .generatedImage(let url): return "gen-\(url.path)"
             }
         }
@@ -39,7 +44,7 @@ struct RemotionParametersView: View {
             switch self {
             case .uploadedImage: return "Delete this image?"
             case .referenceImage: return "Delete the reference image?"
-            case .music: return "Delete the music file?"
+            case .audio: return "Delete this audio file?"
             case .generatedImage: return "Delete this generated image?"
             }
         }
@@ -50,6 +55,38 @@ struct RemotionParametersView: View {
     }
 
     var body: some View {
+        formContent
+            .formStyle(.grouped)
+            .alert(
+                pendingDeletion?.title ?? "Delete?",
+                isPresented: $showDeleteAlert,
+                presenting: pendingDeletion
+            ) { _ in
+                Button("Delete", role: .destructive) {
+                    if let item = pendingDeletion { performDeletion(item) }
+                    pendingDeletion = nil
+                }
+                Button("Cancel", role: .cancel) { pendingDeletion = nil }
+            } message: { item in
+                Text(item.message)
+            }
+            .onChange(of: pendingDeletion?.id) { _, newId in
+                showDeleteAlert = newId != nil
+            }
+            .onChange(of: project.compositionWidth) { _, _ in syncCompositionConstants() }
+            .onChange(of: project.compositionHeight) { _, _ in syncCompositionConstants() }
+            .onChange(of: project.compositionFps) { _, _ in syncCompositionConstants() }
+            .onChange(of: project.durationSeconds) { _, _ in syncCompositionConstants() }
+            .task { refreshGeneratedImages() }
+            .onReceive(NotificationCenter.default.publisher(for: .remotionGeneratedImageWritten)) { note in
+                if let id = note.object as? UUID, id == project.id {
+                    refreshGeneratedImages()
+                }
+            }
+    }
+
+    @ViewBuilder
+    private var formContent: some View {
         Form {
             basicSection
             promptSection
@@ -58,32 +95,6 @@ struct RemotionParametersView: View {
             generatedImagesSection
             musicSection
             generateSection
-        }
-        .formStyle(.grouped)
-        .alert(
-            pendingDeletion?.title ?? "Delete?",
-            isPresented: $showDeleteAlert
-        ) {
-            Button("Delete", role: .destructive) {
-                if let item = pendingDeletion { performDeletion(item) }
-                pendingDeletion = nil
-            }
-            Button("Cancel", role: .cancel) { pendingDeletion = nil }
-        } message: {
-            Text(pendingDeletion?.message ?? "")
-        }
-        .onChange(of: pendingDeletion?.id) { _, newId in
-            showDeleteAlert = newId != nil
-        }
-        .onChange(of: project.compositionWidth) { _, _ in syncCompositionConstants() }
-        .onChange(of: project.compositionHeight) { _, _ in syncCompositionConstants() }
-        .onChange(of: project.compositionFps) { _, _ in syncCompositionConstants() }
-        .onChange(of: project.durationSeconds) { _, _ in syncCompositionConstants() }
-        .task { refreshGeneratedImages() }
-        .onReceive(NotificationCenter.default.publisher(for: .remotionGeneratedImageWritten)) { note in
-            if let id = note.object as? UUID, id == project.id {
-                refreshGeneratedImages()
-            }
         }
     }
 
@@ -340,54 +351,74 @@ struct RemotionParametersView: View {
     }
 
     private var musicSection: some View {
-        Section("Music (optional)") {
-            HStack {
-                if let m = project.musicFilePath {
+        Section {
+            ForEach(Array(project.audioFilePaths.enumerated()), id: \.offset) { index, path in
+                HStack {
                     Image(systemName: "waveform")
                         .foregroundStyle(Color.accentColor)
-                    Text(URL(fileURLWithPath: m).lastPathComponent)
+                    Text(URL(fileURLWithPath: path).lastPathComponent)
                         .lineLimit(1)
-                } else {
-                    Text("No music attached")
-                        .foregroundStyle(.secondary)
-                }
-                Spacer()
-                Button("Choose…") { showMusicPicker = true }
-                    .fileImporter(
-                        isPresented: $showMusicPicker,
-                        allowedContentTypes: [.audio],
-                        allowsMultipleSelection: false
-                    ) { result in
-                        handleMusicImport(result)
+                        .truncationMode(.middle)
+                    Spacer()
+                    Button(role: .destructive) {
+                        pendingDeletion = .audio(index: index)
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .symbolRenderingMode(.palette)
+                            .foregroundStyle(.white, .red)
                     }
-                if project.musicFilePath != nil {
-                    Button("Remove", role: .destructive) {
-                        pendingDeletion = .music
+                    .buttonStyle(.borderless)
+                }
+                .contextMenu {
+                    Button("Delete", role: .destructive) {
+                        pendingDeletion = .audio(index: index)
                     }
                 }
             }
+
+            Button {
+                showAudioPicker = true
+            } label: {
+                Label("Add Audio", systemImage: "waveform")
+            }
+            .fileImporter(
+                isPresented: $showAudioPicker,
+                allowedContentTypes: [.audio],
+                allowsMultipleSelection: true
+            ) { result in
+                handleAudioImport(result)
+            }
+        } header: {
+            Text("Audio (optional)")
+        } footer: {
+            Text("Music, SFX, narration — anything audio. Files are copied into public/audio/. Reference them via staticFile(\"audio/<name>\").")
+                .font(.caption)
+                .foregroundStyle(.secondary)
         }
     }
 
+    @ViewBuilder
     private var generateSection: some View {
-        Section {
-            Button {
-                seed()
-            } label: {
-                HStack {
-                    if isSeeding { ProgressView().controlSize(.small) }
-                    Text(isSeeding ? "Generating…" : "Generate Initial Composition")
+        if !isStudioRunning {
+            Section {
+                Button {
+                    seed()
+                } label: {
+                    HStack {
+                        if isSeeding { ProgressView().controlSize(.small) }
+                        Text(isSeeding ? "Generating…" : "Generate Initial Composition")
+                    }
                 }
-            }
-            .disabled(isSeeding)
+                .disabled(isSeeding)
 
-            if let status = statusMessage {
-                Text(status).font(.caption).foregroundStyle(.secondary)
+                if let status = statusMessage {
+                    Text(status).font(.caption).foregroundStyle(.secondary)
+                }
+            } footer: {
+                Text("Builds a starting Composition.tsx from these inputs and launches Studio. Use the chat below to refine.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
-        } footer: {
-            Text("Builds a starting Composition.tsx from these inputs and launches Studio. Use the chat below to refine.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
         }
     }
 
@@ -516,24 +547,23 @@ struct RemotionParametersView: View {
         syncAssetsToPublic()
     }
 
-    private func handleMusicImport(_ result: Result<[URL], Error>) {
-        guard case .success(let urls) = result, let url = urls.first else { return }
-        guard url.startAccessingSecurityScopedResource() else { return }
-        defer { url.stopAccessingSecurityScopedResource() }
-        do {
-            let data = try Data(contentsOf: url)
-            let ext = url.pathExtension.isEmpty ? "mp3" : url.pathExtension
-            let filename = UUID().uuidString + "." + ext
-            let dest = FileStorage.imagesDir.appendingPathComponent(filename)
-            try data.write(to: dest)
-            if let oldPath = project.musicFilePath {
-                FileStorage.deleteFile(at: oldPath)
+    private func handleAudioImport(_ result: Result<[URL], Error>) {
+        guard case .success(let urls) = result else { return }
+        for url in urls {
+            guard url.startAccessingSecurityScopedResource() else { continue }
+            defer { url.stopAccessingSecurityScopedResource() }
+            do {
+                let data = try Data(contentsOf: url)
+                let ext = url.pathExtension.isEmpty ? "mp3" : url.pathExtension
+                let filename = UUID().uuidString + "." + ext
+                let dest = FileStorage.imagesDir.appendingPathComponent(filename)
+                try data.write(to: dest)
+                project.audioFilePaths.append("images/" + filename)
+            } catch {
+                continue
             }
-            project.musicFilePath = "images/" + filename
-            syncAssetsToPublic()
-        } catch {
-            // ignore
         }
+        syncAssetsToPublic()
     }
 
     private func syncAssetsToPublic() {
@@ -563,12 +593,11 @@ struct RemotionParametersView: View {
                 deletePublicCopy(relativePath: path, subfolder: "reference")
             }
             project.referenceImagePath = nil
-        case .music:
-            if let path = project.musicFilePath {
-                FileStorage.deleteFile(at: path)
-                deletePublicCopy(relativePath: path, subfolder: nil)
-            }
-            project.musicFilePath = nil
+        case .audio(let index):
+            guard project.audioFilePaths.indices.contains(index) else { return }
+            let path = project.audioFilePaths.remove(at: index)
+            FileStorage.deleteFile(at: path)
+            deletePublicCopy(relativePath: path, subfolder: "audio")
         case .generatedImage(let url):
             try? FileManager.default.removeItem(at: url)
             refreshGeneratedImages()

@@ -22,10 +22,24 @@
       }
     },
     "—" : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "—"
+          }
+        }
+      }
     },
     "(not generated)" : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "(未生成)"
+          }
+        }
+      }
     },
     "%@ - %@" : {
       "localizations" : {
@@ -90,7 +104,14 @@
       }
     },
     "7711" : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "7711"
+          }
+        }
+      }
     },
     "A Major" : {
       "localizations" : {
@@ -131,6 +152,9 @@
           }
         }
       }
+    },
+    "Add Audio" : {
+
     },
     "Add Images" : {
       "localizations" : {
@@ -202,8 +226,25 @@
         }
       }
     },
+    "AI Provider" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "AI 服务商"
+          }
+        }
+      }
+    },
     "All interfaces (0.0.0.0)" : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "所有网络接口 (0.0.0.0)"
+          }
+        }
+      }
     },
     "amazement" : {
       "localizations" : {
@@ -275,6 +316,9 @@
         }
       }
     },
+    "Audio (optional)" : {
+
+    },
     "Azure Speech" : {
       "localizations" : {
         "zh-Hans" : {
@@ -326,7 +370,14 @@
       }
     },
     "Base port" : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "基础端口"
+          }
+        }
+      }
     },
     "Basic" : {
       "localizations" : {
@@ -379,10 +430,24 @@
       }
     },
     "Bearer token" : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bearer 令牌"
+          }
+        }
+      }
     },
     "Bind" : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "绑定"
+          }
+        }
+      }
     },
     "Blues" : {
       "localizations" : {
@@ -761,7 +826,14 @@
       }
     },
     "Connect from Claude Code" : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "从 Claude Code 连接"
+          }
+        }
+      }
     },
     "Context" : {
       "localizations" : {
@@ -769,6 +841,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "上下文"
+          }
+        }
+      }
+    },
+    "Copied" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已复制"
           }
         }
       }
@@ -782,9 +864,6 @@
           }
         }
       }
-    },
-    "Copy command" : {
-
     },
     "Copy Path" : {
       "localizations" : {
@@ -877,7 +956,14 @@
       }
     },
     "Default image model" : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "默认图像模型"
+          }
+        }
+      }
     },
     "Delete" : {
       "localizations" : {
@@ -961,7 +1047,14 @@
       }
     },
     "Duplicate" : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "复制"
+          }
+        }
+      }
     },
     "Duration" : {
       "localizations" : {
@@ -1054,7 +1147,14 @@
       }
     },
     "Enable MCP server" : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "启用 MCP 服务器"
+          }
+        }
+      }
     },
     "End" : {
       "localizations" : {
@@ -1217,7 +1317,14 @@
       }
     },
     "Exposes project tools (narrative, music, image, remotion) over an HTTP MCP endpoint. Auto-starts when this app launches." : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "通过 HTTP MCP 端点暴露项目工具(叙事、音乐、图像、Remotion)。应用启动时自动运行。"
+          }
+        }
+      }
     },
     "F Major" : {
       "localizations" : {
@@ -1620,7 +1727,14 @@
       }
     },
     "Hide" : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "隐藏"
+          }
+        }
+      }
     },
     "Hide Lyrics" : {
       "localizations" : {
@@ -1673,7 +1787,14 @@
       }
     },
     "If the configured port is in use, the next free port (up to base+9) will be used instead. The actual port is shown below." : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "如果配置的端口已被占用,将使用下一个可用端口(最多 base+9)。实际端口显示如下。"
+          }
+        }
+      }
     },
     "Image" : {
       "localizations" : {
@@ -1716,7 +1837,14 @@
       }
     },
     "Images you generate via the chat appear here." : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "通过聊天生成的图像将显示在此处。"
+          }
+        }
+      }
     },
     "Informative" : {
       "localizations" : {
@@ -1929,7 +2057,14 @@
       }
     },
     "Localhost only (127.0.0.1)" : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "仅本地 (127.0.0.1)"
+          }
+        }
+      }
     },
     "Lyrics" : {
       "localizations" : {
@@ -1992,7 +2127,14 @@
       }
     },
     "MCP Server" : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "MCP 服务器"
+          }
+        }
+      }
     },
     "Melancholic" : {
       "localizations" : {
@@ -2095,6 +2237,7 @@
       }
     },
     "Music (optional)" : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -2103,6 +2246,9 @@
           }
         }
       }
+    },
+    "Music, SFX, narration — anything audio. Files are copied into public/audio/. Reference them via staticFile(\"audio/<name>\")." : {
+
     },
     "Musical Parameters" : {
       "localizations" : {
@@ -2145,7 +2291,14 @@
       }
     },
     "Network" : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "网络"
+          }
+        }
+      }
     },
     "New Narrative" : {
       "localizations" : {
@@ -2208,6 +2361,7 @@
       }
     },
     "No music attached" : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -2578,7 +2732,14 @@
       }
     },
     "Refresh" : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "刷新"
+          }
+        }
+      }
     },
     "Refresh model list" : {
       "localizations" : {
@@ -2591,7 +2752,14 @@
       }
     },
     "Regenerate token" : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "重新生成令牌"
+          }
+        }
+      }
     },
     "Reggae" : {
       "localizations" : {
@@ -2724,10 +2892,24 @@
       }
     },
     "Required only when bound to all interfaces. Localhost requests skip the check." : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "仅在绑定到所有接口时需要。本地请求会跳过此检查。"
+          }
+        }
+      }
     },
     "Required when bound to 0.0.0.0. Send `Authorization: Bearer <token>` on every request." : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "绑定到 0.0.0.0 时必填。每次请求需发送 `Authorization: Bearer <token>`。"
+          }
+        }
+      }
     },
     "Reset parameters" : {
       "localizations" : {
@@ -2890,7 +3072,14 @@
       }
     },
     "Saved under public/generated/. Reference them in the composition via staticFile(\"generated/<name>\")." : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "保存于 public/generated/ 目录下。在合成中通过 staticFile(\"generated/<name>\") 引用。"
+          }
+        }
+      }
     },
     "Saxophone" : {
       "localizations" : {
@@ -3033,7 +3222,14 @@
       }
     },
     "Show" : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "显示"
+          }
+        }
+      }
     },
     "Show Lyrics" : {
       "localizations" : {
@@ -3196,7 +3392,14 @@
       }
     },
     "Status" : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "状态"
+          }
+        }
+      }
     },
     "Stop" : {
       "localizations" : {
@@ -3489,7 +3692,14 @@
       }
     },
     "Used by the Remotion agent's generate_image tool. Reuses the OpenAI endpoint and key above." : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "由 Remotion 智能体的 generate_image 工具使用。复用上方的 OpenAI 端点与密钥。"
+          }
+        }
+      }
     },
     "Used to generate and edit Remotion compositions. Works with OpenAI, Azure OpenAI, OpenRouter, Ollama, LM Studio, etc." : {
       "localizations" : {

@@ -32,7 +32,7 @@ enum RemotionMCPHandlers {
         ),
         MCPToolDescriptor(
             name: "remotion_write_file",
-            description: "Write (create or overwrite) a file in a remotion project. Parent directories are created.",
+            description: "Write (create or overwrite) a file in a remotion project. Parent directories are created. NOTE: package.json, package-lock.json, bun.lockb, tsconfig.json, remotion.config.ts and anything under node_modules/ are protected and will be rejected — do not attempt to add npm packages.",
             inputSchema: [
                 "type": "object",
                 "properties": [
@@ -45,7 +45,7 @@ enum RemotionMCPHandlers {
         ),
         MCPToolDescriptor(
             name: "remotion_edit_file",
-            description: "Targeted edit. If file exists: replace a single exact occurrence of old_string with new_string (must occur exactly once; pass empty old_string to overwrite). If file doesn't exist: create it with new_string.",
+            description: "Targeted edit. If file exists: replace a single exact occurrence of old_string with new_string (must occur exactly once; pass empty old_string to overwrite). If file doesn't exist: create it with new_string. Same protected-paths list as remotion_write_file applies.",
             inputSchema: [
                 "type": "object",
                 "properties": [
@@ -94,8 +94,83 @@ enum RemotionMCPHandlers {
                 ],
                 "required": ["project_id", "prompt"]
             ]
+        ),
+        MCPToolDescriptor(
+            name: "remotion_add_image",
+            description: "Attach an image asset to a remotion project (max 10) by copying a file from disk. Format-agnostic — PNG / JPEG / WebP / GIF / SVG / AVIF / BMP — the file's extension is preserved; never re-encode the bytes elsewhere before calling this tool. Reads `source_path` (absolute or file:// URL on the local filesystem), copies it into the app's image library, appends the relative path to the project's imagePaths, and stages it into public/upload/ so `staticFile(\"upload/<filename>\")` resolves. Returns `path` (project-relative) and `static_path` (the staticFile arg).",
+            inputSchema: [
+                "type": "object",
+                "properties": [
+                    "project_id": ["type": "string"] as [String: Any],
+                    "source_path": ["type": "string", "description": "Absolute filesystem path or file:// URL of the image on the local machine. The file is copied (not moved); the source is left untouched."] as [String: Any]
+                ],
+                "required": ["project_id", "source_path"]
+            ]
+        ),
+        MCPToolDescriptor(
+            name: "remotion_remove_image",
+            description: "Detach a user-uploaded image from a remotion project. Identify it by zero-based `index` in imagePaths or by `path` (the relative path stored in imagePaths). Deletes the underlying file and the corresponding public/upload/ copy.",
+            inputSchema: [
+                "type": "object",
+                "properties": [
+                    "project_id": ["type": "string"] as [String: Any],
+                    "index": ["type": "integer", "minimum": 0, "description": "Zero-based index in imagePaths. One of `index` or `path` is required."] as [String: Any],
+                    "path": ["type": "string", "description": "Relative path stored in imagePaths (e.g. \"images/<uuid>.png\"). One of `index` or `path` is required."] as [String: Any]
+                ],
+                "required": ["project_id"]
+            ]
+        ),
+        MCPToolDescriptor(
+            name: "remotion_add_audio",
+            description: "Attach any audio file to a remotion project by copying it from disk. Covers ALL audio kinds — background music, sound effects, foley, voiceover / narration, ambience, dialogue stems, jingles, etc. Format-agnostic: mp3, wav, m4a, aac, ogg, flac, etc.; the file's extension is preserved, never re-encode. Reads `source_path` (absolute or file:// URL on the local filesystem), copies into the app's library, appends the relative path to the project's audioFilePaths, and stages into public/audio/ so `staticFile(\"audio/<filename>\")` resolves from <Audio src={…} />. Returns `path` (project-relative) and `static_path` (the staticFile arg). Multiple tracks are supported — call this tool once per file.",
+            inputSchema: [
+                "type": "object",
+                "properties": [
+                    "project_id": ["type": "string"] as [String: Any],
+                    "source_path": ["type": "string", "description": "Absolute filesystem path or file:// URL of the audio file on the local machine. The file is copied (not moved); the source is left untouched."] as [String: Any]
+                ],
+                "required": ["project_id", "source_path"]
+            ]
+        ),
+        MCPToolDescriptor(
+            name: "remotion_remove_audio",
+            description: "Detach an audio file (music, SFX, narration, etc.) from a remotion project. Identify it by zero-based `index` in audioFilePaths or by `path` (the relative path stored in audioFilePaths). Deletes the underlying file and the corresponding public/audio/ copy.",
+            inputSchema: [
+                "type": "object",
+                "properties": [
+                    "project_id": ["type": "string"] as [String: Any],
+                    "index": ["type": "integer", "minimum": 0, "description": "Zero-based index in audioFilePaths. One of `index` or `path` is required."] as [String: Any],
+                    "path": ["type": "string", "description": "Relative path stored in audioFilePaths (e.g. \"images/<uuid>.mp3\"). One of `index` or `path` is required."] as [String: Any]
+                ],
+                "required": ["project_id"]
+            ]
         )
     ]
+
+    private static let maxUploadedImages = 10
+
+    /// Resolves the `source_path` argument (absolute filesystem path or `file://` URL)
+    /// into a URL pointing at an existing regular file on disk. The user/agent is
+    /// expected to hand us a real local path; we don't fetch over the network.
+    private static func resolveLocalSourcePath(_ arguments: [String: Any]) throws -> URL {
+        guard let raw = (arguments["source_path"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !raw.isEmpty else {
+            throw MCPToolError.invalidArguments("missing source_path")
+        }
+        let url: URL
+        if raw.hasPrefix("file://"), let parsed = URL(string: raw) {
+            url = parsed
+        } else if raw.hasPrefix("/") {
+            url = URL(fileURLWithPath: raw)
+        } else {
+            throw MCPToolError.invalidArguments("source_path must be an absolute path or file:// URL")
+        }
+        var isDir: ObjCBool = false
+        guard FileManager.default.fileExists(atPath: url.path, isDirectory: &isDir), !isDir.boolValue else {
+            throw MCPToolError.invalidArguments("source_path does not point to a readable file: \(url.path)")
+        }
+        return url
+    }
 
     static let toolNames: Set<String> = Set(descriptors.map(\.name))
 
@@ -216,6 +291,98 @@ enum RemotionMCPHandlers {
                 "content": contentParts,
                 "structuredContent": ["frames": structured]
             ]
+
+        case "remotion_add_image":
+            if project.imagePaths.count >= maxUploadedImages {
+                throw MCPToolError.invalidArguments("project already has the maximum of \(maxUploadedImages) uploaded images")
+            }
+            let sourceURL = try resolveLocalSourcePath(arguments)
+            let imageData = try Data(contentsOf: sourceURL)
+            let ext = sourceURL.pathExtension.isEmpty ? "png" : sourceURL.pathExtension.lowercased()
+            let stored = try FileStorage.saveImage(imageData, fileExtension: ext)
+            project.imagePaths.append(stored)
+            project.updatedAt = Date()
+            try context.save()
+            _ = try? RemotionCodeBuilder.prepareAssets(project: project)
+            let publicName = (stored as NSString).lastPathComponent
+            return MCPToolRegistry.jsonResult([
+                "ok": true,
+                "path": stored,
+                "static_path": "upload/\(publicName)",
+                "index": project.imagePaths.count - 1,
+                "bytes": imageData.count
+            ] as [String: Any])
+
+        case "remotion_remove_image":
+            var resolvedIndex: Int?
+            if let n = arguments["index"] as? Int { resolvedIndex = n }
+            else if let n = arguments["index"] as? Double { resolvedIndex = Int(n) }
+            if resolvedIndex == nil, let p = arguments["path"] as? String {
+                resolvedIndex = project.imagePaths.firstIndex(of: p)
+            }
+            guard let idx = resolvedIndex, project.imagePaths.indices.contains(idx) else {
+                throw MCPToolError.invalidArguments("provide a valid `index` or `path` matching an entry in imagePaths")
+            }
+            let removedPath = project.imagePaths.remove(at: idx)
+            FileStorage.deleteFile(at: removedPath)
+            let uploadCopy = projectDir
+                .appendingPathComponent("public", isDirectory: true)
+                .appendingPathComponent("upload", isDirectory: true)
+                .appendingPathComponent((removedPath as NSString).lastPathComponent)
+            try? FileManager.default.removeItem(at: uploadCopy)
+            project.updatedAt = Date()
+            try context.save()
+            return MCPToolRegistry.jsonResult([
+                "ok": true,
+                "removed_path": removedPath,
+                "remaining": project.imagePaths.count
+            ] as [String: Any])
+
+        case "remotion_add_audio":
+            let sourceURL = try resolveLocalSourcePath(arguments)
+            let audioData = try Data(contentsOf: sourceURL)
+            let ext = sourceURL.pathExtension.isEmpty ? "mp3" : sourceURL.pathExtension.lowercased()
+            let filename = UUID().uuidString + "." + ext
+            let dest = FileStorage.imagesDir.appendingPathComponent(filename)
+            try FileManager.default.createDirectory(at: FileStorage.imagesDir, withIntermediateDirectories: true)
+            try audioData.write(to: dest)
+            let stored = "images/" + filename
+            project.audioFilePaths.append(stored)
+            project.updatedAt = Date()
+            try context.save()
+            _ = try? RemotionCodeBuilder.prepareAssets(project: project)
+            return MCPToolRegistry.jsonResult([
+                "ok": true,
+                "path": stored,
+                "static_path": "audio/\(filename)",
+                "index": project.audioFilePaths.count - 1,
+                "bytes": audioData.count
+            ] as [String: Any])
+
+        case "remotion_remove_audio":
+            var resolvedIndex: Int?
+            if let n = arguments["index"] as? Int { resolvedIndex = n }
+            else if let n = arguments["index"] as? Double { resolvedIndex = Int(n) }
+            if resolvedIndex == nil, let p = arguments["path"] as? String {
+                resolvedIndex = project.audioFilePaths.firstIndex(of: p)
+            }
+            guard let idx = resolvedIndex, project.audioFilePaths.indices.contains(idx) else {
+                throw MCPToolError.invalidArguments("provide a valid `index` or `path` matching an entry in audioFilePaths")
+            }
+            let removedPath = project.audioFilePaths.remove(at: idx)
+            FileStorage.deleteFile(at: removedPath)
+            let publicCopy = projectDir
+                .appendingPathComponent("public", isDirectory: true)
+                .appendingPathComponent("audio", isDirectory: true)
+                .appendingPathComponent((removedPath as NSString).lastPathComponent)
+            try? FileManager.default.removeItem(at: publicCopy)
+            project.updatedAt = Date()
+            try context.save()
+            return MCPToolRegistry.jsonResult([
+                "ok": true,
+                "removed_path": removedPath,
+                "remaining": project.audioFilePaths.count
+            ] as [String: Any])
 
         case "remotion_generate_image":
             guard let prompt = arguments["prompt"] as? String, !prompt.isEmpty else {

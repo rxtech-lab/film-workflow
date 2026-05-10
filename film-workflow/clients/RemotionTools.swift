@@ -11,6 +11,7 @@ enum RemotionToolsError: LocalizedError {
     case oldStringNotUnique(path: String, count: Int)
     case imageGenNotConfigured
     case imageGenFailed(message: String, transparentRequested: Bool)
+    case protectedPath(String)
 
     var errorDescription: String? {
         switch self {
@@ -24,6 +25,8 @@ enum RemotionToolsError: LocalizedError {
                 return "Image generation failed (transparent requested): \(message). Try transparent=false."
             }
             return "Image generation failed: \(message)"
+        case .protectedPath(let p):
+            return "Path is protected and cannot be modified by tools: \(p). Edit Composition.tsx / src/components instead."
         }
     }
 }
@@ -31,6 +34,17 @@ enum RemotionToolsError: LocalizedError {
 enum RemotionTools {
     /// Cap a single read_file response to avoid blowing the context window.
     static let maxReadBytes = 200_000
+
+    /// Files tools must NEVER modify. Bun + Remotion package management is owned
+    /// by the runtime; if an LLM rewrites these we end up with broken/inconsistent
+    /// projects. Reads are still allowed.
+    static let writeProtectedPaths: Set<String> = [
+        "package.json",
+        "package-lock.json",
+        "bun.lockb",
+        "tsconfig.json",
+        "remotion.config.ts"
+    ]
 
     // MARK: - File ops
 
@@ -46,6 +60,18 @@ enum RemotionTools {
             throw RemotionToolsError.pathOutsideProject(relative)
         }
         return candidate
+    }
+
+    /// Throws if the relative path targets a runtime-managed file or a path
+    /// inside `node_modules/`.
+    static func ensureWritable(_ relative: String) throws {
+        let trimmed = relative.trimmingCharacters(in: .whitespacesAndNewlines)
+        if writeProtectedPaths.contains(trimmed) {
+            throw RemotionToolsError.protectedPath(trimmed)
+        }
+        if trimmed == "node_modules" || trimmed.hasPrefix("node_modules/") {
+            throw RemotionToolsError.protectedPath(trimmed)
+        }
     }
 
     struct ReadResult {
@@ -67,6 +93,7 @@ enum RemotionTools {
     }
 
     static func writeFile(projectDir: URL, path: String, content: String) throws {
+        try ensureWritable(path)
         let url = try resolveProjectPath(path, projectDir: projectDir)
         try FileManager.default.createDirectory(
             at: url.deletingLastPathComponent(),
@@ -87,6 +114,7 @@ enum RemotionTools {
         oldString: String,
         newString: String
     ) throws -> EditResult {
+        try ensureWritable(path)
         let url = try resolveProjectPath(path, projectDir: projectDir)
         let exists = FileManager.default.fileExists(atPath: url.path)
         if !exists {
