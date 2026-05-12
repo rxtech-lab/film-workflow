@@ -60,7 +60,23 @@ struct RemotionPreviewWebView: NSViewRepresentable {
         }
       };
 
+      // The render trigger is a plain <button> with the text "Render" — Remotion
+      // Studio doesn't expose a stable selector for it, so match by text and hide
+      // the button itself (no surrounding wrapper to collapse).
+      var hideRenderButton = function () {
+        var buttons = document.querySelectorAll('button');
+        for (var i = 0; i < buttons.length; i++) {
+          var b = buttons[i];
+          if (b.dataset && b.dataset.rxHidden === '1') continue;
+          if ((b.textContent || '').trim() === 'Render') {
+            b.style.display = 'none';
+            if (b.dataset) b.dataset.rxHidden = '1';
+          }
+        }
+      };
+
       hideUpdateModal();
+      hideRenderButton();
 
       var pending = false;
       var observer = new MutationObserver(function () {
@@ -69,6 +85,7 @@ struct RemotionPreviewWebView: NSViewRepresentable {
         requestAnimationFrame(function () {
           pending = false;
           hideUpdateModal();
+          hideRenderButton();
         });
       });
       observer.observe(document.documentElement, { childList: true, subtree: true });

@@ -1,4 +1,5 @@
 #if os(macOS)
+import SwiftData
 import SwiftUI
 import UniformTypeIdentifiers
 
@@ -9,12 +10,83 @@ struct RemotionParametersView: View {
     @Binding var statusMessage: String?
     @Binding var isSeeding: Bool
 
+    @Environment(\.modelContext) private var modelContext
+    @Environment(RemotionChatController.self) private var chatController
+
     @State private var showImagePicker = false
     @State private var showReferencePicker = false
-    @State private var showMusicPicker = false
+    @State private var showAudioPicker = false
     @State private var generatedImages: [URL] = []
+    @State private var pendingDeletion: PendingDeletion?
+    @State private var showDeleteAlert = false
+    @State private var runtime = RemotionRuntime.shared
+
+    private var isStudioRunning: Bool {
+        runtime.currentURL != nil && runtime.currentProjectId == project.id
+    }
+
+    private enum PendingDeletion: Identifiable {
+        case uploadedImage(index: Int)
+        case referenceImage
+        case audio(index: Int)
+        case generatedImage(url: URL)
+
+        var id: String {
+            switch self {
+            case .uploadedImage(let i): return "upload-\(i)"
+            case .referenceImage: return "reference"
+            case .audio(let i): return "audio-\(i)"
+            case .generatedImage(let url): return "gen-\(url.path)"
+            }
+        }
+
+        var title: String {
+            switch self {
+            case .uploadedImage: return "Delete this image?"
+            case .referenceImage: return "Delete the reference image?"
+            case .audio: return "Delete this audio file?"
+            case .generatedImage: return "Delete this generated image?"
+            }
+        }
+
+        var message: String {
+            "The file will be removed from disk and cannot be recovered."
+        }
+    }
 
     var body: some View {
+        formContent
+            .formStyle(.grouped)
+            .alert(
+                pendingDeletion?.title ?? "Delete?",
+                isPresented: $showDeleteAlert,
+                presenting: pendingDeletion
+            ) { _ in
+                Button("Delete", role: .destructive) {
+                    if let item = pendingDeletion { performDeletion(item) }
+                    pendingDeletion = nil
+                }
+                Button("Cancel", role: .cancel) { pendingDeletion = nil }
+            } message: { item in
+                Text(item.message)
+            }
+            .onChange(of: pendingDeletion?.id) { _, newId in
+                showDeleteAlert = newId != nil
+            }
+            .onChange(of: project.compositionWidth) { _, _ in syncCompositionConstants() }
+            .onChange(of: project.compositionHeight) { _, _ in syncCompositionConstants() }
+            .onChange(of: project.compositionFps) { _, _ in syncCompositionConstants() }
+            .onChange(of: project.durationSeconds) { _, _ in syncCompositionConstants() }
+            .task { refreshGeneratedImages() }
+            .onReceive(NotificationCenter.default.publisher(for: .remotionGeneratedImageWritten)) { note in
+                if let id = note.object as? UUID, id == project.id {
+                    refreshGeneratedImages()
+                }
+            }
+    }
+
+    @ViewBuilder
+    private var formContent: some View {
         Form {
             basicSection
             promptSection
@@ -23,17 +95,6 @@ struct RemotionParametersView: View {
             generatedImagesSection
             musicSection
             generateSection
-        }
-        .formStyle(.grouped)
-        .onChange(of: project.compositionWidth) { _, _ in syncCompositionConstants() }
-        .onChange(of: project.compositionHeight) { _, _ in syncCompositionConstants() }
-        .onChange(of: project.compositionFps) { _, _ in syncCompositionConstants() }
-        .onChange(of: project.durationSeconds) { _, _ in syncCompositionConstants() }
-        .task { refreshGeneratedImages() }
-        .onReceive(NotificationCenter.default.publisher(for: .remotionGeneratedImageWritten)) { note in
-            if let id = note.object as? UUID, id == project.id {
-                refreshGeneratedImages()
-            }
         }
     }
 
@@ -134,14 +195,20 @@ struct RemotionParametersView: View {
                                         .frame(width: 100, height: 100)
                                         .clipShape(RoundedRectangle(cornerRadius: 8))
                                 }
-                                Button {
-                                    removeImage(at: index)
-                                } label: {
-                                    Image(systemName: "xmark.circle.fill")
-                                        .foregroundStyle(.white, .red)
+                                Image(systemName: "xmark.circle.fill")
+                                    .symbolRenderingMode(.palette)
+                                    .foregroundStyle(.white, .red)
+                                    .imageScale(.large)
+                                    .padding(6)
+                                    .contentShape(Rectangle())
+                                    .onTapGesture {
+                                        pendingDeletion = .uploadedImage(index: index)
+                                    }
+                            }
+                            .contextMenu {
+                                Button("Delete", role: .destructive) {
+                                    pendingDeletion = .uploadedImage(index: index)
                                 }
-                                .buttonStyle(.borderless)
-                                .padding(4)
                             }
                         }
                     }
@@ -181,6 +248,11 @@ struct RemotionParametersView: View {
                         .aspectRatio(contentMode: .fill)
                         .frame(width: 80, height: 80)
                         .clipShape(RoundedRectangle(cornerRadius: 6))
+                        .contextMenu {
+                            Button("Delete", role: .destructive) {
+                                pendingDeletion = .referenceImage
+                            }
+                        }
                 } else {
                     RoundedRectangle(cornerRadius: 6)
                         .fill(Color.secondary.opacity(0.15))
@@ -199,10 +271,7 @@ struct RemotionParametersView: View {
                         }
                     if project.referenceImagePath != nil {
                         Button("Remove", role: .destructive) {
-                            if let p = project.referenceImagePath {
-                                FileStorage.deleteFile(at: p)
-                            }
-                            project.referenceImagePath = nil
+                            pendingDeletion = .referenceImage
                         }
                     }
                 }
@@ -238,16 +307,25 @@ struct RemotionParametersView: View {
                                         .frame(width: 100, height: 100)
                                         .overlay(Image(systemName: "photo").foregroundStyle(.secondary))
                                 }
-                                Button {
-                                    deleteGeneratedImage(at: url)
-                                } label: {
-                                    Image(systemName: "xmark.circle.fill")
-                                        .foregroundStyle(.white, .red)
-                                }
-                                .buttonStyle(.borderless)
-                                .padding(4)
+                                Image(systemName: "xmark.circle.fill")
+                                    .symbolRenderingMode(.palette)
+                                    .foregroundStyle(.white, .red)
+                                    .imageScale(.large)
+                                    .padding(6)
+                                    .contentShape(Rectangle())
+                                    .onTapGesture {
+                                        pendingDeletion = .generatedImage(url: url)
+                                    }
                             }
                             .help(url.lastPathComponent)
+                            .contextMenu {
+                                Button("Reveal in Finder") {
+                                    NSWorkspace.shared.activateFileViewerSelecting([url])
+                                }
+                                Button("Delete", role: .destructive) {
+                                    pendingDeletion = .generatedImage(url: url)
+                                }
+                            }
                         }
                     }
                 }
@@ -273,57 +351,74 @@ struct RemotionParametersView: View {
     }
 
     private var musicSection: some View {
-        Section("Music (optional)") {
-            HStack {
-                if let m = project.musicFilePath {
+        Section {
+            ForEach(Array(project.audioFilePaths.enumerated()), id: \.offset) { index, path in
+                HStack {
                     Image(systemName: "waveform")
                         .foregroundStyle(Color.accentColor)
-                    Text(URL(fileURLWithPath: m).lastPathComponent)
+                    Text(URL(fileURLWithPath: path).lastPathComponent)
                         .lineLimit(1)
-                } else {
-                    Text("No music attached")
-                        .foregroundStyle(.secondary)
-                }
-                Spacer()
-                Button("Choose…") { showMusicPicker = true }
-                    .fileImporter(
-                        isPresented: $showMusicPicker,
-                        allowedContentTypes: [.audio],
-                        allowsMultipleSelection: false
-                    ) { result in
-                        handleMusicImport(result)
+                        .truncationMode(.middle)
+                    Spacer()
+                    Button(role: .destructive) {
+                        pendingDeletion = .audio(index: index)
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .symbolRenderingMode(.palette)
+                            .foregroundStyle(.white, .red)
                     }
-                if project.musicFilePath != nil {
-                    Button("Remove", role: .destructive) {
-                        if let m = project.musicFilePath {
-                            FileStorage.deleteFile(at: m)
-                        }
-                        project.musicFilePath = nil
+                    .buttonStyle(.borderless)
+                }
+                .contextMenu {
+                    Button("Delete", role: .destructive) {
+                        pendingDeletion = .audio(index: index)
                     }
                 }
             }
+
+            Button {
+                showAudioPicker = true
+            } label: {
+                Label("Add Audio", systemImage: "waveform")
+            }
+            .fileImporter(
+                isPresented: $showAudioPicker,
+                allowedContentTypes: [.audio],
+                allowsMultipleSelection: true
+            ) { result in
+                handleAudioImport(result)
+            }
+        } header: {
+            Text("Audio (optional)")
+        } footer: {
+            Text("Music, SFX, narration — anything audio. Files are copied into public/audio/. Reference them via staticFile(\"audio/<name>\").")
+                .font(.caption)
+                .foregroundStyle(.secondary)
         }
     }
 
+    @ViewBuilder
     private var generateSection: some View {
-        Section {
-            Button {
-                seed()
-            } label: {
-                HStack {
-                    if isSeeding { ProgressView().controlSize(.small) }
-                    Text(isSeeding ? "Generating…" : "Generate Initial Composition")
+        if !isStudioRunning {
+            Section {
+                Button {
+                    seed()
+                } label: {
+                    HStack {
+                        if isSeeding { ProgressView().controlSize(.small) }
+                        Text(isSeeding ? "Generating…" : "Generate Initial Composition")
+                    }
                 }
-            }
-            .disabled(isSeeding)
+                .disabled(isSeeding)
 
-            if let status = statusMessage {
-                Text(status).font(.caption).foregroundStyle(.secondary)
+                if let status = statusMessage {
+                    Text(status).font(.caption).foregroundStyle(.secondary)
+                }
+            } footer: {
+                Text("Builds a starting Composition.tsx from these inputs and launches Studio. Use the chat below to refine.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
-        } footer: {
-            Text("Builds a starting Composition.tsx from these inputs and launches Studio. Use the chat below to refine.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
         }
     }
 
@@ -376,28 +471,50 @@ struct RemotionParametersView: View {
         }
 
         isSeeding = true
-        statusMessage = "Generating composition with the model…"
+        statusMessage = "Generating composition with the agent…"
         let projectId = project.id
         let bindable = project
-        Task {
-            do {
-                let raw = try await RemotionCodeBuilder.seedWithLLM(project: bindable, config: config)
-                // Force the composition's constants to match the project settings even if the
-                // model hardcoded different values.
-                let normalized = RemotionCodeBuilder.patchProjectConstants(in: raw, project: bindable)
-                if normalized != raw {
-                    try? RemotionCodeBuilder.writeComposition(project: bindable, source: normalized)
+        let history = bindable.messages.sorted(by: { $0.createdAt < $1.createdAt })
+        let instruction = """
+        Generate the initial Remotion composition from scratch. Create src/Composition.tsx (with the required COMPOSITION_* exports and MyComposition) plus any src/components/*.tsx files the design needs, using the project settings, brief, and assets shown above. Animate thoughtfully — interpolate/spring rather than static frames.
+        """
+
+        chatController.send(
+            instruction: instruction,
+            project: bindable,
+            history: history,
+            config: config,
+            modelContext: modelContext,
+            onCompleted: { anyFileWritten in
+                guard anyFileWritten else {
+                    isSeeding = false
+                    statusMessage = "Agent finished without writing any files."
+                    return
                 }
-                bindable.compositionSource = normalized
-                bindable.updatedAt = Date()
+                // Force constants to match the project settings even if the model hardcoded
+                // different values.
+                let current = bindable.compositionSource
+                let patched = RemotionCodeBuilder.patchProjectConstants(in: current, project: bindable)
+                if patched != current {
+                    bindable.compositionSource = patched
+                    try? RemotionCodeBuilder.writeComposition(project: bindable, source: patched)
+                }
                 statusMessage = "Starting Remotion Studio…"
-                try await RemotionRuntime.shared.start(projectId: projectId)
-                statusMessage = "Studio running. Refine via chat below."
-            } catch {
+                Task { @MainActor in
+                    do {
+                        try await RemotionRuntime.shared.start(projectId: projectId)
+                        statusMessage = "Studio running. Refine via the Chat tab."
+                    } catch {
+                        statusMessage = error.localizedDescription
+                    }
+                    isSeeding = false
+                }
+            },
+            onError: { error in
                 statusMessage = error.localizedDescription
+                isSeeding = false
             }
-            isSeeding = false
-        }
+        )
     }
 
     private func handleImageImport(_ result: Result<[URL], Error>) {
@@ -430,24 +547,23 @@ struct RemotionParametersView: View {
         syncAssetsToPublic()
     }
 
-    private func handleMusicImport(_ result: Result<[URL], Error>) {
-        guard case .success(let urls) = result, let url = urls.first else { return }
-        guard url.startAccessingSecurityScopedResource() else { return }
-        defer { url.stopAccessingSecurityScopedResource() }
-        do {
-            let data = try Data(contentsOf: url)
-            let ext = url.pathExtension.isEmpty ? "mp3" : url.pathExtension
-            let filename = UUID().uuidString + "." + ext
-            let dest = FileStorage.imagesDir.appendingPathComponent(filename)
-            try data.write(to: dest)
-            if let oldPath = project.musicFilePath {
-                FileStorage.deleteFile(at: oldPath)
+    private func handleAudioImport(_ result: Result<[URL], Error>) {
+        guard case .success(let urls) = result else { return }
+        for url in urls {
+            guard url.startAccessingSecurityScopedResource() else { continue }
+            defer { url.stopAccessingSecurityScopedResource() }
+            do {
+                let data = try Data(contentsOf: url)
+                let ext = url.pathExtension.isEmpty ? "mp3" : url.pathExtension
+                let filename = UUID().uuidString + "." + ext
+                let dest = FileStorage.imagesDir.appendingPathComponent(filename)
+                try data.write(to: dest)
+                project.audioFilePaths.append("images/" + filename)
+            } catch {
+                continue
             }
-            project.musicFilePath = "images/" + filename
-            syncAssetsToPublic()
-        } catch {
-            // ignore
         }
+        syncAssetsToPublic()
     }
 
     private func syncAssetsToPublic() {
@@ -464,9 +580,43 @@ struct RemotionParametersView: View {
         try? RemotionCodeBuilder.writeComposition(project: project, source: patched)
     }
 
-    private func removeImage(at index: Int) {
-        let path = project.imagePaths.remove(at: index)
-        FileStorage.deleteFile(at: path)
+    private func performDeletion(_ item: PendingDeletion) {
+        switch item {
+        case .uploadedImage(let index):
+            guard project.imagePaths.indices.contains(index) else { return }
+            let path = project.imagePaths.remove(at: index)
+            FileStorage.deleteFile(at: path)
+            deletePublicCopy(relativePath: path, subfolder: "upload")
+        case .referenceImage:
+            if let path = project.referenceImagePath {
+                FileStorage.deleteFile(at: path)
+                deletePublicCopy(relativePath: path, subfolder: "reference")
+            }
+            project.referenceImagePath = nil
+        case .audio(let index):
+            guard project.audioFilePaths.indices.contains(index) else { return }
+            let path = project.audioFilePaths.remove(at: index)
+            FileStorage.deleteFile(at: path)
+            deletePublicCopy(relativePath: path, subfolder: "audio")
+        case .generatedImage(let url):
+            try? FileManager.default.removeItem(at: url)
+            refreshGeneratedImages()
+        }
+    }
+
+    private func deletePublicCopy(relativePath: String, subfolder: String?) {
+        let publicDir = FileStorage.remotionProjectDir(id: project.id)
+            .appendingPathComponent("public", isDirectory: true)
+        let fileName = (relativePath as NSString).lastPathComponent
+        let target: URL
+        if let sub = subfolder, !sub.isEmpty {
+            target = publicDir
+                .appendingPathComponent(sub, isDirectory: true)
+                .appendingPathComponent(fileName)
+        } else {
+            target = publicDir.appendingPathComponent(fileName)
+        }
+        try? FileManager.default.removeItem(at: target)
     }
 
     private func generatedDir() -> URL {
@@ -494,10 +644,6 @@ struct RemotionParametersView: View {
             }
     }
 
-    private func deleteGeneratedImage(at url: URL) {
-        try? FileManager.default.removeItem(at: url)
-        refreshGeneratedImages()
-    }
 }
 
 // MARK: - Color hex helpers

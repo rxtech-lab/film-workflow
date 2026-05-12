@@ -13,7 +13,7 @@ final class RemotionProject {
     var themeColorHex: String
     var imagePaths: [String]
     var referenceImagePath: String?
-    var musicFilePath: String?
+    var audioFilePaths: [String] = []
     var prompt: String = ""
 
     var compositionWidth: Int = 1920
@@ -35,7 +35,7 @@ final class RemotionProject {
         self.themeColorHex = "#1E1E1E"
         self.imagePaths = []
         self.referenceImagePath = nil
-        self.musicFilePath = nil
+        self.audioFilePaths = []
         self.prompt = ""
         self.compositionWidth = 1920
         self.compositionHeight = 1080

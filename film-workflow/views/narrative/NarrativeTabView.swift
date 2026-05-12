@@ -279,69 +279,15 @@ struct NarrativeTabView: View {
 
         do {
             let config = try AppConfig.loadFromKeychain()
-
-            switch project.providerEnum {
-            case .gemini:
-                let transcript = NarrativePromptBuilder.build(from: project)
-                let response = try await GeminiTTSClient.generate(
-                    transcript: transcript,
-                    speakers: project.speakers,
-                    apiKey: config.googleAIKey
-                )
-                let relativePath = try FileStorage.saveAudio(response.audioData, extension: "wav")
-                let generatedFile = GeneratedNarrative(
-                    audioFilePath: relativePath,
-                    transcriptText: transcript,
-                    project: project,
-                    providerName: project.providerEnum.displayName,
-                    speakerSummary: speakerSummary(for: project)
-                )
-                modelContext.insert(generatedFile)
-
-            case .azure:
-                let ssml = AzureSSMLBuilder.build(from: project)
-                let response = try await AzureTTSClient.generate(
-                    project: project,
-                    apiKey: config.azureSpeechKey,
-                    endpoint: config.azureSpeechEndpoint,
-                    format: project.azureOutputFormatEnum
-                )
-                let relativePath = try FileStorage.saveAudio(
-                    response.audioData, extension: response.fileExtension)
-                let generatedFile = GeneratedNarrative(
-                    audioFilePath: relativePath,
-                    transcriptText: ssml,
-                    project: project,
-                    providerName: project.providerEnum.displayName,
-                    speakerSummary: speakerSummary(for: project)
-                )
-                modelContext.insert(generatedFile)
-            }
-
-            project.updatedAt = Date()
+            try await NarrativeGenerationService.generate(
+                project: project,
+                context: modelContext,
+                config: config
+            )
         } catch {
             errorMessage = error.localizedDescription
             showError = true
         }
-    }
-
-    private func speakerSummary(for project: NarrativeProject) -> String {
-        let names = project.speakers
-            .map { speaker -> String in
-                let voiceName: String
-                switch project.providerEnum {
-                case .azure:
-                    voiceName = speaker.azureVoice
-                case .gemini:
-                    voiceName = speaker.geminiVoice.isEmpty ? speaker.voice : speaker.geminiVoice
-                }
-                if voiceName.isEmpty {
-                    return speaker.displayName
-                }
-                return "\(speaker.displayName) \(voiceName)"
-            }
-            .filter { !$0.isEmpty }
-        return names.joined(separator: ", ")
     }
 
     private func previewText(for project: NarrativeProject) -> String {

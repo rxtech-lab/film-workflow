@@ -38,6 +38,9 @@ struct film_workflowApp: App {
             #if os(macOS)
                 .environment(RemotionChatController.shared)
             #endif
+                .task {
+                    MCPServer.shared.bootstrap(container: sharedModelContainer)
+                }
         }
         .modelContainer(sharedModelContainer)
 
