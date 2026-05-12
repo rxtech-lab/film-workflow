@@ -133,7 +133,7 @@ enum RemotionAgent {
         if publicAssets.isEmpty {
             assetsBlock = "Available static assets in public/: (none)"
         } else {
-            assetsBlock = "Available static assets in public/ — call staticFile(\"…\") with the EXACT path shown (subfolders included). Layout: upload/ = user-uploaded images, reference/ = style guide (do NOT render), generated/ = images you produced via generate_image, root = music & misc.\n" +
+            assetsBlock = "Available static assets in public/ — call staticFile(\"…\") with the EXACT path shown (subfolders included). Layout: upload/ = user-uploaded images, reference/ = style guide (do NOT render), generated/ = images you produced via generate_image, audio/ = music, SFX, narration & other audio tracks.\n" +
                 publicAssets.map { "- \($0)" }.joined(separator: "\n")
         }
 
@@ -446,6 +446,7 @@ enum RemotionAgent {
                   let content = args["content"] as? String else {
                 throw RemotionAgentError.invalidToolArguments(name: call.name, raw: call.argumentsJSON)
             }
+            try RemotionTools.ensureWritable(pathArg)
             let url = try resolveProjectPath(pathArg, projectDir: projectDir)
             try FileManager.default.createDirectory(
                 at: url.deletingLastPathComponent(),
@@ -465,6 +466,7 @@ enum RemotionAgent {
             guard let pathArg = args["path"] as? String, !pathArg.isEmpty else {
                 throw RemotionAgentError.invalidToolArguments(name: call.name, raw: call.argumentsJSON)
             }
+            try RemotionTools.ensureWritable(pathArg)
             let oldString = (args["old_string"] as? String) ?? ""
             let newString = (args["new_string"] as? String) ?? ""
             let url = try resolveProjectPath(pathArg, projectDir: projectDir)
@@ -706,7 +708,7 @@ enum RemotionAgent {
 
         Hard requirements:
         - src/Composition.tsx must export: COMPOSITION_FPS, COMPOSITION_DURATION_IN_FRAMES, COMPOSITION_WIDTH, COMPOSITION_HEIGHT, and MyComposition. Root.tsx imports these by name.
-        - Reference local assets via staticFile("path"). Use the EXACT path from the per-turn asset block — public/ is split into upload/, reference/, generated/, plus root for music. Examples: staticFile("upload/photo.jpg"), staticFile("generated/forest-a1b2c3.png"), staticFile("song.mp3"). Never strip or rewrite the subfolder prefix.
+        - Reference local assets via staticFile("path"). Use the EXACT path from the per-turn asset block — public/ is split into upload/, reference/, generated/, audio/. Examples: staticFile("upload/photo.jpg"), staticFile("generated/forest-a1b2c3.png"), staticFile("audio/song.mp3"). Never strip or rewrite the subfolder prefix.
         - NEVER invent asset filenames. Only call staticFile() with a path listed in the per-turn asset block, one you confirmed via list_files, or one you just produced via generate_image (its returned `filename` already includes the generated/ prefix). If you need an image that isn't there, call generate_image or ask the user.
         - Use Remotion primitives: AbsoluteFill, Sequence, Img, Audio, Video, useCurrentFrame, useVideoConfig, interpolate, spring.
         - Do not add new packages — only react, react-dom, and remotion are available.

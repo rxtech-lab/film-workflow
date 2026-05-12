@@ -63,7 +63,8 @@ final class RemotionChatController {
         config: AppConfig,
         modelContext: ModelContext,
         onFileWritten: @escaping (_ path: String, _ content: String) -> Void = { _, _ in },
-        onCompleted: @escaping (_ anyFileWritten: Bool) -> Void = { _ in }
+        onCompleted: @escaping (_ anyFileWritten: Bool) -> Void = { _ in },
+        onError: @escaping (_ error: Error) -> Void = { _ in }
     ) {
         let projectId = project.id
         var session = sessions[projectId] ?? Session()
@@ -158,6 +159,7 @@ final class RemotionChatController {
                 var s = self.sessions[projectId] ?? Session()
                 s.errorMessage = error.localizedDescription
                 self.sessions[projectId] = s
+                onError(error)
             }
         }
 
