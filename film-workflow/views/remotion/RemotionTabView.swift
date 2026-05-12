@@ -64,6 +64,13 @@ struct RemotionTabView: View {
             .onChange(of: selectedProject?.id) { _, newId in
                 handleSelection(projectId: newId)
             }
+            .onAppear {
+                // Returning from another tab: onDisappear stopped Studio, and
+                // selectedProject didn't change so onChange won't re-fire. Re-boot it.
+                if !showProgressSheet, let id = selectedProject?.id {
+                    handleSelection(projectId: id)
+                }
+            }
             .onDisappear {
                 Task { await runtime.stop() }
             }
@@ -235,7 +242,9 @@ struct RemotionTabView: View {
                     Image(systemName: "play.rectangle")
                         .font(.largeTitle)
                         .foregroundStyle(.secondary)
-                    Text("Click \"Generate Initial Composition\" in the Form tab to start the Studio preview.")
+                    Text(project.createdViaMCP
+                         ? "Loading the Studio preview…"
+                         : "Click \"Generate Initial Composition\" in the Form tab to start the Studio preview.")
                         .multilineTextAlignment(.center)
                         .foregroundStyle(.secondary)
                         .padding(.horizontal)
@@ -271,8 +280,25 @@ struct RemotionTabView: View {
             Task { await runtime.stop() }
             return
         }
-        guard let project = projects.first(where: { $0.id == id }),
-              !project.compositionSource.isEmpty else {
+        guard let project = projects.first(where: { $0.id == id }) else {
+            Task { await runtime.stop() }
+            return
+        }
+
+        // The DB copy of compositionSource can lag behind disk — e.g. an MCP/agent
+        // write that touched src/Composition.tsx directly. If we have a composition on
+        // disk, trust it and bring the model back in sync rather than showing the
+        // "Generate Initial Composition" placeholder.
+        if project.compositionSource.isEmpty {
+            let onDisk = FileStorage.remotionProjectDir(id: id)
+                .appendingPathComponent("src", isDirectory: true)
+                .appendingPathComponent("Composition.tsx")
+            if let recovered = try? String(contentsOf: onDisk, encoding: .utf8),
+               !recovered.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                project.compositionSource = recovered
+            }
+        }
+        guard !project.compositionSource.isEmpty else {
             Task { await runtime.stop() }
             return
         }

@@ -32,7 +32,7 @@ enum RemotionMCPHandlers {
         ),
         MCPToolDescriptor(
             name: "remotion_write_file",
-            description: "Write (create or overwrite) a file in a remotion project. Parent directories are created. NOTE: package.json, package-lock.json, bun.lockb, tsconfig.json, remotion.config.ts and anything under node_modules/ are protected and will be rejected — do not attempt to add npm packages.",
+            description: "Write (create or overwrite) a file in a remotion project. Parent directories are created. NOTE: package.json, package-lock.json, bun.lockb, tsconfig.json, remotion.config.ts and anything under node_modules/ are protected and will be rejected — you cannot add npm packages. Available packages to import: react, react-dom, remotion, mapbox-gl, react-map-gl, @tsparticles/react, @tsparticles/engine, @tsparticles/slim.",
             inputSchema: [
                 "type": "object",
                 "properties": [
@@ -172,6 +172,29 @@ enum RemotionMCPHandlers {
         return url
     }
 
+    /// Mirror an on-disk edit of `src/Composition.tsx` back into `project.compositionSource`.
+    ///
+    /// The in-app chat controller does this for its own writes; the MCP write/edit tools
+    /// must too. Otherwise `compositionSource` goes stale, and the next time the Form tab
+    /// tweaks a setting it runs `syncCompositionConstants()` — which rewrites Composition.tsx
+    /// from the stale `compositionSource`, silently reverting the agent's work on disk.
+    private static func syncCompositionSourceIfNeeded(
+        project: RemotionProject,
+        projectDir: URL,
+        path: String,
+        content: String,
+        context: ModelContext
+    ) {
+        guard
+            let target = try? RemotionTools.resolveProjectPath(path, projectDir: projectDir),
+            let composition = try? RemotionTools.resolveProjectPath("src/Composition.tsx", projectDir: projectDir),
+            target.standardizedFileURL.path == composition.standardizedFileURL.path
+        else { return }
+        project.compositionSource = content
+        project.updatedAt = Date()
+        try? context.save()
+    }
+
     static let toolNames: Set<String> = Set(descriptors.map(\.name))
 
     static func canHandle(_ name: String) -> Bool { toolNames.contains(name) }
@@ -211,6 +234,9 @@ enum RemotionMCPHandlers {
                 throw MCPToolError.invalidArguments("missing path or content")
             }
             try RemotionTools.writeFile(projectDir: projectDir, path: path, content: content)
+            syncCompositionSourceIfNeeded(
+                project: project, projectDir: projectDir, path: path, content: content, context: context
+            )
             return MCPToolRegistry.jsonResult([
                 "ok": true, "path": path, "bytes": content.utf8.count
             ] as [String: Any])
@@ -223,6 +249,9 @@ enum RemotionMCPHandlers {
             let newStr = (arguments["new_string"] as? String) ?? ""
             let res = try RemotionTools.editFile(
                 projectDir: projectDir, path: path, oldString: oldStr, newString: newStr
+            )
+            syncCompositionSourceIfNeeded(
+                project: project, projectDir: projectDir, path: res.path, content: res.content, context: context
             )
             return MCPToolRegistry.jsonResult([
                 "ok": true, "path": res.path, "summary": res.summary,

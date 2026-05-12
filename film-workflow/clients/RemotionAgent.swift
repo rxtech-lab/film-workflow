@@ -711,7 +711,7 @@ enum RemotionAgent {
         - Reference local assets via staticFile("path"). Use the EXACT path from the per-turn asset block — public/ is split into upload/, reference/, generated/, audio/. Examples: staticFile("upload/photo.jpg"), staticFile("generated/forest-a1b2c3.png"), staticFile("audio/song.mp3"). Never strip or rewrite the subfolder prefix.
         - NEVER invent asset filenames. Only call staticFile() with a path listed in the per-turn asset block, one you confirmed via list_files, or one you just produced via generate_image (its returned `filename` already includes the generated/ prefix). If you need an image that isn't there, call generate_image or ask the user.
         - Use Remotion primitives: AbsoluteFill, Sequence, Img, Audio, Video, useCurrentFrame, useVideoConfig, interpolate, spring.
-        - Do not add new packages — only react, react-dom, and remotion are available.
+        - Do not run package installs. Available packages to import: react, react-dom, remotion, mapbox-gl + react-map-gl (import the map component from "react-map-gl/mapbox", set mapboxgl.accessToken before rendering, and add `import "mapbox-gl/dist/mapbox-gl.css"`), and the tsparticles v3 stack (@tsparticles/react, @tsparticles/engine, @tsparticles/slim). Don't import anything else.
         - Valid TypeScript JSX only, no markdown fences inside files.
         """
         return prompt
