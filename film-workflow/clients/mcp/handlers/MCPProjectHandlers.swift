@@ -203,6 +203,7 @@ enum MCPProjectHandlers {
         case .remotion:
             #if os(macOS)
             let p = RemotionProject(name: name)
+            p.createdViaMCP = true
             context.insert(p)
             try context.save()
             // Seed a default no-AI composition so callers get a ready-to-preview
