@@ -2036,6 +2036,9 @@
         }
       }
     },
+    "Loading the Studio preview…" : {
+
+    },
     "Loading voices…" : {
       "localizations" : {
         "zh-Hans" : {

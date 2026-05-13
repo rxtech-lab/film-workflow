@@ -7,8 +7,13 @@
   },
   "dependencies": {
     "@remotion/cli": "4.0.459",
+    "@tsparticles/engine": "3.9.1",
+    "@tsparticles/react": "3.0.0",
+    "@tsparticles/slim": "3.9.1",
+    "mapbox-gl": "3.23.1",
     "react": "19.2.0",
     "react-dom": "19.2.0",
+    "react-map-gl": "8.1.1",
     "remotion": "4.0.459"
   },
   "devDependencies": {

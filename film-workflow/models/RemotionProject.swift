@@ -22,6 +22,11 @@ final class RemotionProject {
 
     var compositionSource: String
 
+    /// True when the project was created through the MCP `create_project` tool,
+    /// which seeds a default composition and boots Studio immediately. Such
+    /// projects never show the "Generate Initial Composition" button.
+    var createdViaMCP: Bool = false
+
     @Relationship(deleteRule: .cascade, inverse: \RemotionMessage.project)
     var messages: [RemotionMessage]
 
@@ -41,6 +46,7 @@ final class RemotionProject {
         self.compositionHeight = 1080
         self.compositionFps = 30
         self.compositionSource = ""
+        self.createdViaMCP = false
         self.messages = []
     }
 }

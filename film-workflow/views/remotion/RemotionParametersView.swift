@@ -399,7 +399,7 @@ struct RemotionParametersView: View {
 
     @ViewBuilder
     private var generateSection: some View {
-        if !isStudioRunning {
+        if !isStudioRunning && !project.createdViaMCP {
             Section {
                 Button {
                     seed()
