@@ -381,7 +381,13 @@ struct NarrativeProjectParametersView: View {
     private func removeSpeaker(id: UUID) {
         guard project.speakers.count > 1 else { return }
         project.speakers.removeAll { $0.id == id }
-        project.paragraphs.removeAll { $0.speakerId == id }
+        // Keep the content: reassign the removed speaker's paragraphs to the first
+        // remaining speaker rather than deleting them.
+        if let fallbackId = project.speakers.first?.id {
+            for index in project.paragraphs.indices where project.paragraphs[index].speakerId == id {
+                project.paragraphs[index].speakerId = fallbackId
+            }
+        }
         project.updatedAt = Date()
     }
 

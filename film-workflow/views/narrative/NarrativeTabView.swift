@@ -13,6 +13,8 @@ struct NarrativeTabView: View {
     @State private var renameText: String = ""
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
     @State private var isGenerating = false
+    @State private var generationProgress: NarrativeGenerationProgress?
+    @State private var generationTask: Task<Void, Never>?
     @State private var errorMessage: String?
     @State private var showError = false
     @State private var showGeneratedSheet = false
@@ -192,7 +194,29 @@ struct NarrativeTabView: View {
         }
         .sheet(isPresented: $showPromptSheet) {
             if let project = selectedProject {
-                promptPreviewSheet(for: project)
+                PromptPreviewSheet(
+                    project: project,
+                    isGenerating: isGenerating,
+                    canGenerate: canGenerate(project),
+                    onCancel: { showPromptSheet = false },
+                    onStart: {
+                        showPromptSheet = false
+                        generationTask = Task { await generate(project: project) }
+                    }
+                )
+            }
+        }
+        .sheet(isPresented: Binding(
+            get: { generationProgress != nil },
+            set: { if !$0 { generationProgress = nil } }
+        )) {
+            // Content is re-evaluated as `generationProgress` advances, so the dialog updates
+            // live (chunk N of M → stitching) while staying presented.
+            if let progress = generationProgress {
+                NarrativeGenerationProgressView(progress: progress) {
+                    generationTask?.cancel()
+                }
+                .interactiveDismissDisabled()
             }
         }
         .sheet(item: $renamingProject) { project in
@@ -204,45 +228,6 @@ struct NarrativeTabView: View {
                 renamingProject = nil
             }
         }
-    }
-
-    // MARK: - Prompt Preview
-
-    @ViewBuilder
-    private func promptPreviewSheet(for project: NarrativeProject) -> some View {
-        let transcript = previewText(for: project)
-
-        NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 12) {
-                    Text(transcript)
-                        .font(.system(.caption, design: .monospaced))
-                        .textSelection(.enabled)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                }
-                .padding()
-            }
-            .navigationTitle(previewTitle(for: project))
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") {
-                        showPromptSheet = false
-                    }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button {
-                        showPromptSheet = false
-                        Task { await generate(project: project) }
-                    } label: {
-                        Label("Start Generation", systemImage: "wand.and.stars")
-                    }
-                    .disabled(isGenerating || !canGenerate(project))
-                }
-            }
-        }
-        #if os(macOS)
-            .frame(minWidth: 500, minHeight: 400)
-        #endif
     }
 
     // MARK: - Helpers
@@ -275,32 +260,125 @@ struct NarrativeTabView: View {
 
     private func generate(project: NarrativeProject) async {
         isGenerating = true
-        defer { isGenerating = false }
+        defer {
+            isGenerating = false
+            generationProgress = nil
+            generationTask = nil
+        }
 
         do {
             let config = try AppConfig.loadFromKeychain()
             try await NarrativeGenerationService.generate(
                 project: project,
                 context: modelContext,
-                config: config
+                config: config,
+                onProgress: { progress in
+                    generationProgress = progress
+                }
             )
+        } catch is CancellationError {
+            // User cancelled — silently dismiss without an error alert.
+        } catch let urlError as URLError where urlError.code == .cancelled {
+            // In-flight URLSession requests surface cancellation as URLError.cancelled.
         } catch {
             errorMessage = error.localizedDescription
             showError = true
         }
     }
 
-    private func previewText(for project: NarrativeProject) -> String {
-        switch project.providerEnum {
-        case .gemini: return NarrativePromptBuilder.build(from: project)
-        case .azure: return AzureSSMLBuilder.build(from: project)
-        }
-    }
+}
 
-    private func previewTitle(for project: NarrativeProject) -> String {
+/// Prompt/SSML preview shown before generation. Builds the preview **off the main actor** and shows a
+/// progress indicator while it does, so opening this sheet for a long transcript no longer freezes the
+/// UI (the old synchronous build inside the view body was the freeze on tapping "Generate").
+private struct PromptPreviewSheet: View {
+    let project: NarrativeProject
+    let isGenerating: Bool
+    let canGenerate: Bool
+    let onCancel: () -> Void
+    let onStart: () -> Void
+
+    @State private var transcript: String?
+    @State private var didTruncate = false
+
+    /// Cap the *displayed* text — SwiftUI's text layout chokes on very large strings even off-main.
+    /// The full transcript is still what gets synthesized; this only limits the preview.
+    private let displayLimit = 12_000
+
+    private var title: String {
         switch project.providerEnum {
         case .gemini: return "Transcript Preview"
         case .azure: return "SSML Preview"
+        }
+    }
+
+    var body: some View {
+        NavigationStack {
+            Group {
+                if let transcript {
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 12) {
+                            if didTruncate {
+                                Text("Preview truncated for display. The full transcript will still be generated.")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                            Text(transcript)
+                                .font(.system(.caption, design: .monospaced))
+                                .textSelection(.enabled)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                        .padding()
+                    }
+                } else {
+                    VStack(spacing: 12) {
+                        ProgressView()
+                        Text("Building preview…")
+                            .foregroundStyle(.secondary)
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                }
+            }
+            .navigationTitle(title)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel", action: onCancel)
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(action: onStart) {
+                        Label("Start Generation", systemImage: "wand.and.stars")
+                    }
+                    .disabled(isGenerating || !canGenerate)
+                }
+            }
+        }
+        #if os(macOS)
+            .frame(minWidth: 500, minHeight: 400)
+        #endif
+        .task {
+            // Snapshot the main-actor model, then build the preview off-main (see NarrativePreviewBuilder).
+            let provider = project.providerEnum
+            let speakers = project.speakers
+            let paragraphs = project.paragraphs
+            let scene = project.sceneDescription
+            let notes = project.notes
+            let context = project.context
+
+            let full = await NarrativePreviewBuilder.build(
+                provider: provider,
+                speakers: speakers,
+                paragraphs: paragraphs,
+                scene: scene,
+                notes: notes,
+                context: context
+            )
+            if full.count > displayLimit {
+                transcript = String(full.prefix(displayLimit))
+                didTruncate = true
+            } else {
+                transcript = full
+                didTruncate = false
+            }
         }
     }
 }
