@@ -480,7 +480,7 @@ enum MCPProjectHandlers {
     private static func remotionSummary(_ p: NSObject) -> [String: Any] { [:] }
     #endif
 
-    private static func narrativeFull(_ p: NarrativeProject) -> [String: Any] {
+    static func narrativeFull(_ p: NarrativeProject) -> [String: Any] {
         var out = narrativeSummary(p)
         out["provider"] = p.provider
         out["sceneDescription"] = p.sceneDescription

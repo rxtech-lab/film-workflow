@@ -10,6 +10,7 @@ enum MCPToolRegistry {
     static func allDescriptors() -> [MCPToolDescriptor] {
         var tools: [MCPToolDescriptor] = []
         tools.append(contentsOf: MCPProjectHandlers.descriptors)
+        tools.append(contentsOf: MCPPodcastHandlers.descriptors)
         tools.append(contentsOf: MCPGenerateHandlers.descriptors)
         #if os(macOS)
         tools.append(contentsOf: RemotionMCPHandlers.descriptors)
@@ -28,6 +29,9 @@ enum MCPToolRegistry {
 
         if MCPProjectHandlers.canHandle(name) {
             return try await MCPProjectHandlers.handle(name: name, arguments: arguments, context: context)
+        }
+        if MCPPodcastHandlers.canHandle(name) {
+            return try await MCPPodcastHandlers.handle(name: name, arguments: arguments, context: context)
         }
         if MCPGenerateHandlers.canHandle(name) {
             return try await MCPGenerateHandlers.handle(name: name, arguments: arguments, context: context)
