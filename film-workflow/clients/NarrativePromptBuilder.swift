@@ -1,39 +1,92 @@
 import Foundation
 
-struct AzureSSMLBuilder {
-    static func build(from project: NarrativeProject) -> String {
-        let speakersById = Dictionary(uniqueKeysWithValues: project.speakers.map { ($0.id, $0) })
-        let fallbackVoice = project.speakers.first?.voice ?? "en-US-JennyNeural"
-        let rootLang = locale(fromVoiceName: fallbackVoice) ?? "en-US"
+nonisolated struct AzureSSMLBuilder {
+    static func build(speakers: [NarrativeSpeaker], paragraphs: [NarrativeParagraph]) -> String {
+        let rootLang = rootLanguage(speakers: speakers)
+        let voiceLines = paragraphs.compactMap { voiceLine(for: $0, speakers: speakers) }
+        return wrapSpeak(voiceLines.map { $0.ssml }, lang: rootLang)
+    }
 
-        var lines: [String] = []
-        lines.append("<speak version='1.0' xmlns='http://www.w3.org/2001/10/synthesis' xmlns:mstts='https://www.w3.org/2001/mstts' xml:lang='\(rootLang)'>")
+    /// Splits the project into one or more self-contained `<speak>` documents so that no single
+    /// request exceeds Azure's real-time synthesis limit (~10 minutes of audio per request, which
+    /// surfaces as an empty-body HTTP 400 for long text). Each paragraph is kept whole and assigned
+    /// to a batch greedily by estimated spoken-character count; the resulting audio chunks are meant
+    /// to be stitched back together in order.
+    ///
+    /// `maxCharacters` is deliberately small: dense languages like Chinese speak ~4 chars/second, so
+    /// 1,200 chars is ≈5 minutes of audio — well under the cap, and small enough that each request
+    /// transfers quickly. Smaller requests matter a lot on slow/long-haul links (e.g. reaching an
+    /// `eastus` resource from Asia), where a single large synthesis tends to stall and time out.
+    static func buildBatches(
+        speakers: [NarrativeSpeaker],
+        paragraphs: [NarrativeParagraph],
+        maxCharacters: Int = 1200
+    ) -> [String] {
+        let rootLang = rootLanguage(speakers: speakers)
+        let rendered = paragraphs.compactMap { voiceLine(for: $0, speakers: speakers) }
+        guard !rendered.isEmpty else { return [] }
 
-        for paragraph in project.paragraphs {
-            let content = paragraph.content.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !content.isEmpty else { continue }
+        var batches: [[String]] = []
+        var current: [String] = []
+        var currentCount = 0
 
-            let speaker = speakersById[paragraph.speakerId]
-            let voiceName = speaker?.voice ?? fallbackVoice
-
-            let innerBody = renderSegments(ShortcodeExpander.expandForAzure(content))
-            let emotion = paragraph.emotion.trimmingCharacters(in: .whitespacesAndNewlines)
-
-            var inner = innerBody
-
-            if !emotion.isEmpty {
-                inner = wrapExpressAs(inner, style: emotion, speaker: speaker)
+        for line in rendered {
+            // Start a new batch when adding this paragraph would exceed the budget, unless the
+            // current batch is empty (a single oversized paragraph still has to go somewhere).
+            if !current.isEmpty, currentCount + line.spokenCount > maxCharacters {
+                batches.append(current)
+                current = []
+                currentCount = 0
             }
-
-            if let speaker = speaker, speaker.hasAzureProsody {
-                inner = wrapProsody(inner, speaker: speaker)
-            }
-
-            lines.append("  <voice name='\(xmlEscape(voiceName))'>\(inner)</voice>")
+            current.append(line.ssml)
+            currentCount += line.spokenCount
         }
+        if !current.isEmpty { batches.append(current) }
 
+        return batches.map { wrapSpeak($0, lang: rootLang) }
+    }
+
+    private struct VoiceLine {
+        let ssml: String
+        /// Number of plain-text characters that will be spoken — used to size batches.
+        let spokenCount: Int
+    }
+
+    private static func rootLanguage(speakers: [NarrativeSpeaker]) -> String {
+        let fallbackVoice = speakers.first?.voice ?? "en-US-JennyNeural"
+        return locale(fromVoiceName: fallbackVoice) ?? "en-US"
+    }
+
+    private static func wrapSpeak(_ voiceLines: [String], lang: String) -> String {
+        var lines: [String] = []
+        lines.append("<speak version='1.0' xmlns='http://www.w3.org/2001/10/synthesis' xmlns:mstts='https://www.w3.org/2001/mstts' xml:lang='\(lang)'>")
+        lines.append(contentsOf: voiceLines)
         lines.append("</speak>")
         return lines.joined(separator: "\n")
+    }
+
+    private static func voiceLine(for paragraph: NarrativeParagraph, speakers: [NarrativeSpeaker]) -> VoiceLine? {
+        let content = paragraph.content.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !content.isEmpty else { return nil }
+
+        let speakersById = Dictionary(uniqueKeysWithValues: speakers.map { ($0.id, $0) })
+        let fallbackVoice = speakers.first?.voice ?? "en-US-JennyNeural"
+        let speaker = speakersById[paragraph.speakerId]
+        let voiceName = speaker?.voice ?? fallbackVoice
+
+        let innerBody = renderSegments(ShortcodeExpander.expandForAzure(content))
+        let emotion = paragraph.emotion.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        var inner = innerBody
+        if !emotion.isEmpty {
+            inner = wrapExpressAs(inner, style: emotion, speaker: speaker)
+        }
+        if let speaker = speaker, speaker.hasAzureProsody {
+            inner = wrapProsody(inner, speaker: speaker)
+        }
+
+        let ssml = "  <voice name='\(xmlEscape(voiceName))'>\(inner)</voice>"
+        return VoiceLine(ssml: ssml, spokenCount: content.count)
     }
 
     private static func renderSegments(_ segments: [AzureSegment]) -> String {
@@ -94,11 +147,17 @@ struct AzureSSMLBuilder {
     }
 }
 
-struct NarrativePromptBuilder {
-    static func build(from project: NarrativeProject) -> String {
+nonisolated struct NarrativePromptBuilder {
+    static func build(
+        speakers: [NarrativeSpeaker],
+        paragraphs: [NarrativeParagraph],
+        scene rawScene: String,
+        notes rawNotes: String,
+        context rawContext: String
+    ) -> String {
         var lines: [String] = []
 
-        let voicedSpeakers = Array(project.speakers.prefix(2))
+        let voicedSpeakers = Array(speakers.prefix(2))
         if voicedSpeakers.count >= 2 {
             let a = voicedSpeakers[0].displayName
             let b = voicedSpeakers[1].displayName
@@ -107,19 +166,19 @@ struct NarrativePromptBuilder {
             lines.append("Synthesize speech for the following narration.")
         }
 
-        let scene = project.sceneDescription.trimmingCharacters(in: .whitespacesAndNewlines)
+        let scene = rawScene.trimmingCharacters(in: .whitespacesAndNewlines)
         if !scene.isEmpty {
             lines.append("")
             lines.append("Scene: \(scene)")
         }
 
-        let notes = project.notes.trimmingCharacters(in: .whitespacesAndNewlines)
+        let notes = rawNotes.trimmingCharacters(in: .whitespacesAndNewlines)
         if !notes.isEmpty {
             lines.append("")
             lines.append("Notes: \(notes)")
         }
 
-        let context = project.context.trimmingCharacters(in: .whitespacesAndNewlines)
+        let context = rawContext.trimmingCharacters(in: .whitespacesAndNewlines)
         if !context.isEmpty {
             lines.append("")
             lines.append("Context: \(context)")
@@ -127,9 +186,9 @@ struct NarrativePromptBuilder {
 
         lines.append("")
 
-        let speakersById = Dictionary(uniqueKeysWithValues: project.speakers.map { ($0.id, $0) })
+        let speakersById = Dictionary(uniqueKeysWithValues: speakers.map { ($0.id, $0) })
 
-        for paragraph in project.paragraphs {
+        for paragraph in paragraphs {
             let speakerName = speakersById[paragraph.speakerId]?.displayName ?? "Narrator"
             let rawContent = paragraph.content.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !rawContent.isEmpty else { continue }
@@ -144,5 +203,36 @@ struct NarrativePromptBuilder {
         }
 
         return lines.joined(separator: "\n")
+    }
+}
+
+/// Builds the human-readable transcript/SSML preview shown before generation.
+///
+/// `@concurrent` forces this onto the global executor (see `AzureTTSClient.generate` for why this is
+/// required under Swift 6.2 / SE-0461). Building the preview for a long transcript is O(text length)
+/// and was previously done synchronously inside the sheet's view body, which froze the UI the moment
+/// the user tapped "Generate". Callers pass `Sendable` snapshots and `await` the result off-main.
+nonisolated enum NarrativePreviewBuilder {
+    @concurrent
+    static func build(
+        provider: NarrativeProvider,
+        speakers: [NarrativeSpeaker],
+        paragraphs: [NarrativeParagraph],
+        scene: String,
+        notes: String,
+        context: String
+    ) async -> String {
+        switch provider {
+        case .azure:
+            return AzureSSMLBuilder.build(speakers: speakers, paragraphs: paragraphs)
+        case .gemini:
+            return NarrativePromptBuilder.build(
+                speakers: speakers,
+                paragraphs: paragraphs,
+                scene: scene,
+                notes: notes,
+                context: context
+            )
+        }
     }
 }

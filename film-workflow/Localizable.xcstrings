@@ -549,6 +549,9 @@
         }
       }
     },
+    "Building preview…" : {
+
+    },
     "Builds a starting Composition.tsx from these inputs and launches Studio. Use the chat below to refine." : {
       "localizations" : {
         "zh-Hans" : {
@@ -2613,6 +2616,9 @@
           }
         }
       }
+    },
+    "Preview truncated for display. The full transcript will still be generated." : {
+
     },
     "Preview voice" : {
       "localizations" : {

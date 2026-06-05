@@ -1,6 +1,6 @@
 import Foundation
 
-struct FileStorage {
+nonisolated struct FileStorage {
     static var appSupportURL: URL {
         FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("com.rxlab.film-workflow", isDirectory: true)
