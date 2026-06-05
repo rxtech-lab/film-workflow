@@ -1,16 +1,16 @@
 import Foundation
 
-enum ShortcodeSegment: Hashable {
+nonisolated enum ShortcodeSegment: Hashable, Sendable {
     case text(String)
     case shortcode(name: String, args: [String], wrapped: String?)
 }
 
-enum AzureSegment: Hashable {
+nonisolated enum AzureSegment: Hashable, Sendable {
     case text(String)
     case ssml(String)
 }
 
-enum ShortcodeCategory: String, CaseIterable, Hashable {
+nonisolated enum ShortcodeCategory: String, CaseIterable, Hashable {
     case pauses = "Pauses & silence"
     case emotion = "Emotion & delivery"
     case emphasis = "Emphasis"
@@ -28,7 +28,7 @@ enum ShortcodeCategory: String, CaseIterable, Hashable {
     }
 }
 
-struct ShortcodeDefinition: Identifiable, Hashable {
+nonisolated struct ShortcodeDefinition: Identifiable, Hashable {
     let id: String
     let displayName: String
     let insertTemplate: String
@@ -40,7 +40,7 @@ struct ShortcodeDefinition: Identifiable, Hashable {
     let shortcodeName: String
 }
 
-struct ShortcodeSchema: Hashable {
+nonisolated struct ShortcodeSchema: Hashable {
     struct ArgField: Hashable {
         let label: String
         let placeholder: String
@@ -58,7 +58,7 @@ struct ShortcodeSchema: Hashable {
     let wrappedField: WrappedField?
 }
 
-struct TokenMatch: Hashable {
+nonisolated struct TokenMatch: Hashable {
     let range: NSRange
     let raw: String
     let name: String
@@ -66,7 +66,7 @@ struct TokenMatch: Hashable {
     let wrapped: String?
 }
 
-struct ShortcodeExpander {
+nonisolated struct ShortcodeExpander {
     static let catalog: [ShortcodeDefinition] = [
         .init(id: "pause", displayName: "Pause",
               insertTemplate: "{{pause}}",
@@ -534,7 +534,7 @@ struct ShortcodeExpander {
     }
 }
 
-private extension String {
+private nonisolated extension String {
     func truncatedMiddle(max: Int) -> String {
         guard count > max else { return self }
         let head = prefix(max / 2)

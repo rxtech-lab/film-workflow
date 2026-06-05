@@ -1,7 +1,7 @@
 import Foundation
 import SwiftUI
 
-enum NarrativeProvider: String, CaseIterable, Codable, Identifiable {
+nonisolated enum NarrativeProvider: String, CaseIterable, Codable, Identifiable {
     case gemini = "Gemini"
     case azure = "Azure"
 
@@ -23,7 +23,7 @@ enum NarrativeProvider: String, CaseIterable, Codable, Identifiable {
     }
 }
 
-enum AzureAudioFormat: String, CaseIterable, Codable, Identifiable {
+nonisolated enum AzureAudioFormat: String, CaseIterable, Codable, Identifiable {
     case mp3
     case wav
 
@@ -53,7 +53,7 @@ enum AzureAudioFormat: String, CaseIterable, Codable, Identifiable {
     }
 }
 
-enum GeminiVoice: String, CaseIterable, Codable, Identifiable {
+nonisolated enum GeminiVoice: String, CaseIterable, Codable, Identifiable {
     case zephyr = "Zephyr"
     case puck = "Puck"
     case charon = "Charon"
@@ -164,7 +164,7 @@ enum GeminiVoice: String, CaseIterable, Codable, Identifiable {
     }
 }
 
-enum AzureRole: String, CaseIterable, Identifiable, Codable {
+nonisolated enum AzureRole: String, CaseIterable, Identifiable, Codable {
     case none = ""
     case girl = "Girl"
     case boy = "Boy"

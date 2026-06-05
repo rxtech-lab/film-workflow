@@ -1,6 +1,6 @@
 import Foundation
 
-struct NarrativeSpeaker: Codable, Identifiable, Hashable {
+nonisolated struct NarrativeSpeaker: Codable, Identifiable, Hashable, Sendable {
     var id: UUID = UUID()
     var displayName: String
     var voice: String
