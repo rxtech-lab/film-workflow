@@ -11,7 +11,7 @@ jobs:
     name: Build iOS
     runs-on: self-hosted
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Build for iOS Simulator
         run: |
@@ -26,7 +26,7 @@ jobs:
     name: Build macOS
     runs-on: self-hosted
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Build for macOS
         run: |
