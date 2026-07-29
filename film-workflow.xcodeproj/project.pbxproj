@@ -114,6 +114,7 @@
 				DF4F80F62F9120D300DE82DA /* Sources */,
 				DF4F80F72F9120D300DE82DA /* Frameworks */,
 				DF4F80F82F9120D300DE82DA /* Resources */,
+				DFAA0001000000000000A0A4 /* Sign Remotion Runtime */,
 			);
 			buildRules = (
 			);
@@ -269,6 +270,25 @@
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/bash;
 			shellScript = "if [ \"$PLATFORM_NAME\" != \"macosx\" ]; then\n  echo \"Skipping Remotion runtime build on $PLATFORM_NAME\"\n  exit 0\nfi\nbash \"$SRCROOT/scripts/build-remotion-runtime.sh\"\n";
+		};
+		DFAA0001000000000000A0A4 /* Sign Remotion Runtime */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			name = "Sign Remotion Runtime";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/bash;
+			shellScript = "bash \"$SRCROOT/scripts/sign-remotion-runtime.sh\"\n";
 		};
 /* End PBXShellScriptBuildPhase section */
 

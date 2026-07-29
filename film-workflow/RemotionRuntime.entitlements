@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- Entitlements applied to the executables embedded under Resources/RemotionRuntime
+	     (bun, esbuild, ffmpeg, ffprobe, the Remotion compositor). They run as their own
+	     processes, so they need their own hardened-runtime exceptions — the host app's
+	     entitlements do not carry over. -->
+
+	<!-- Bun runs JavaScriptCore. -->
+	<key>com.apple.security.cs.allow-jit</key>
+	<true/>
+	<key>com.apple.security.cs.allow-unsigned-executable-memory</key>
+	<true/>
+	<!-- Bun loads native node addons (.node) and the compositor loads its bundled
+	     ffmpeg dylibs. -->
+	<key>com.apple.security.cs.disable-library-validation</key>
+	<true/>
+	<!-- Remotion points the compositor at its bundled dylibs via DYLD_* variables. -->
+	<key>com.apple.security.cs.allow-dyld-environment-variables</key>
+	<true/>
+</dict>
+</plist>
