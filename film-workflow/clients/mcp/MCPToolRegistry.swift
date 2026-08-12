@@ -12,6 +12,7 @@ enum MCPToolRegistry {
         tools.append(contentsOf: MCPProjectHandlers.descriptors)
         tools.append(contentsOf: MCPPodcastHandlers.descriptors)
         tools.append(contentsOf: MCPGenerateHandlers.descriptors)
+        tools.append(contentsOf: MCPCaptionHandlers.descriptors)
         #if os(macOS)
         tools.append(contentsOf: RemotionMCPHandlers.descriptors)
         #endif
@@ -35,6 +36,9 @@ enum MCPToolRegistry {
         }
         if MCPGenerateHandlers.canHandle(name) {
             return try await MCPGenerateHandlers.handle(name: name, arguments: arguments, context: context)
+        }
+        if MCPCaptionHandlers.canHandle(name) {
+            return try await MCPCaptionHandlers.handle(name: name, arguments: arguments, context: context)
         }
         #if os(macOS)
         if RemotionMCPHandlers.canHandle(name) {

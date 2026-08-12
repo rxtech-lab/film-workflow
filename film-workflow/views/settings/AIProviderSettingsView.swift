@@ -8,6 +8,10 @@ struct AIProviderSettingsView: View {
     @State private var openAIKey: String = ""
     @State private var openAIModel: String = ""
     @State private var defaultImageModel: String = ""
+    // Owned by Settings › Captions, but round-tripped here so saving this form
+    // can't blank them out.
+    @State private var openAITranscriptionModel: String = ""
+    @State private var geminiTranscriptionModel: String = ""
     @State private var showSavedAlert = false
     @State private var errorMessage: String?
     @State private var showError = false
@@ -230,20 +234,29 @@ struct AIProviderSettingsView: View {
             openAIKey = config.openAIKey
             openAIModel = config.openAIModel
             defaultImageModel = config.defaultImageModel
+            openAITranscriptionModel = config.openAITranscriptionModel
+            geminiTranscriptionModel = config.geminiTranscriptionModel
         }
+    }
+
+    /// Single place that assembles the config, so no save path can drop a field.
+    private func currentConfig() -> AppConfig {
+        AppConfig(
+            googleAIKey: googleKey,
+            azureSpeechKey: azureKey,
+            azureSpeechEndpoint: azureEndpoint,
+            openAIEndpoint: openAIEndpoint,
+            openAIKey: openAIKey,
+            openAIModel: openAIModel,
+            defaultImageModel: defaultImageModel,
+            openAITranscriptionModel: openAITranscriptionModel,
+            geminiTranscriptionModel: geminiTranscriptionModel
+        )
     }
 
     private func saveKeys() {
         do {
-            let config = AppConfig(
-                googleAIKey: googleKey,
-                azureSpeechKey: azureKey,
-                azureSpeechEndpoint: azureEndpoint,
-                openAIEndpoint: openAIEndpoint,
-                openAIKey: openAIKey,
-                openAIModel: openAIModel,
-                defaultImageModel: defaultImageModel
-            )
+            let config = currentConfig()
             try config.saveToKeychain()
             showSavedAlert = true
         } catch {
@@ -295,16 +308,7 @@ struct AIProviderSettingsView: View {
         defer { isTestingAzure = false }
 
         do {
-            let config = AppConfig(
-                googleAIKey: googleKey,
-                azureSpeechKey: azureKey,
-                azureSpeechEndpoint: azureEndpoint,
-                openAIEndpoint: openAIEndpoint,
-                openAIKey: openAIKey,
-                openAIModel: openAIModel,
-                defaultImageModel: defaultImageModel
-            )
-            try config.saveToKeychain()
+            try currentConfig().saveToKeychain()
         } catch {
             azureTestResult = "Could not save credentials: \(error.localizedDescription)"
             return

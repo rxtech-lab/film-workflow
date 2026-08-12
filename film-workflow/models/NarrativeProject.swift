@@ -13,6 +13,12 @@ final class NarrativeProject {
     var context: String
     var azureOutputFormat: String = AzureAudioFormat.mp3.rawValue
 
+    /// Generate captions automatically after each synthesis run. The speech
+    /// service supplies only the timings; caption text stays verbatim.
+    var captionsEnabled: Bool = false
+    /// Empty means "use the narrative default from `CaptionSettings`".
+    var captionProviderOverride: String = ""
+
     var speakers: [NarrativeSpeaker]
     var paragraphs: [NarrativeParagraph]
 

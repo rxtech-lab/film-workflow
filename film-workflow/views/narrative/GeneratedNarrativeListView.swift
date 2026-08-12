@@ -10,6 +10,12 @@ struct GeneratedNarrativeListView: View {
     #endif
     @State private var selectedFile: GeneratedNarrative?
 
+    @State private var captionProgress: CaptionProgress?
+    @State private var isCaptioning = false
+    @State private var captionTask: Task<Void, Never>?
+    @State private var captionError: String?
+    @State private var captionNotice: String?
+
     private var sortedFiles: [GeneratedNarrative] {
         files.sorted { $0.createdAt > $1.createdAt }
     }
@@ -31,6 +37,33 @@ struct GeneratedNarrativeListView: View {
             } else {
                 cardListContent
             }
+        }
+        .sheet(isPresented: $isCaptioning) {
+            CaptionTranscriptionProgressView(progress: captionProgress) {
+                captionTask?.cancel()
+            }
+        }
+        .alert(
+            "Caption generation failed",
+            isPresented: Binding(
+                get: { captionError != nil },
+                set: { if !$0 { captionError = nil } }
+            )
+        ) {
+            Button("OK") { captionError = nil }
+        } message: {
+            Text(captionError ?? "")
+        }
+        .alert(
+            "Captions ready",
+            isPresented: Binding(
+                get: { captionNotice != nil },
+                set: { if !$0 { captionNotice = nil } }
+            )
+        ) {
+            Button("OK") { captionNotice = nil }
+        } message: {
+            Text(captionNotice ?? "")
         }
     }
 
@@ -96,7 +129,8 @@ struct GeneratedNarrativeListView: View {
                         file: file,
                         isSelected: selectedFile?.id == file.id,
                         onSelect: { selectedFile = file },
-                        onDelete: { delete(file: file) }
+                        onDelete: { delete(file: file) },
+                        onGenerateCaptions: { generateCaptions(for: file) }
                     )
                 }
             }
@@ -110,6 +144,45 @@ struct GeneratedNarrativeListView: View {
             modelContext.delete(file)
             if selectedFile?.id == file.id {
                 selectedFile = nil
+            }
+        }
+    }
+
+    /// Generates captions for one narration on demand.
+    ///
+    /// Uses the narration's own text as the caption wording and the speech
+    /// service only for timings, exactly as the auto-generate path does.
+    private func generateCaptions(for file: GeneratedNarrative) {
+        guard !isCaptioning, let narrative = file.project else { return }
+        isCaptioning = true
+        captionProgress = nil
+
+        captionTask = Task {
+            defer {
+                isCaptioning = false
+                captionProgress = nil
+                captionTask = nil
+            }
+            do {
+                let config = try AppConfig.loadFromKeychain()
+                let project = try await CaptionTranscriptionService.captionProject(
+                    for: file,
+                    narrative: narrative,
+                    context: modelContext,
+                    config: config,
+                    onProgress: { captionProgress = $0 }
+                )
+                file.captionProjectID = project.projectUUID
+                file.captionWarning = project.warning
+                captionNotice = project.warning.isEmpty
+                    ? "Created \(project.segments.count) captions. Open the Caption tab to edit them."
+                    : project.warning
+            } catch is CancellationError {
+                // User cancelled.
+            } catch let error as URLError where error.code == .cancelled {
+                // Same, from URLSession.
+            } catch {
+                captionError = error.localizedDescription
             }
         }
     }
@@ -346,6 +419,8 @@ struct GeneratedNarrativeCard: View {
     let isSelected: Bool
     var onSelect: () -> Void
     var onDelete: () -> Void
+    /// Optional so the compact-row call site doesn't have to supply it.
+    var onGenerateCaptions: (() -> Void)?
 
     @State private var showTranscript = false
     @State private var showExporter = false
@@ -500,6 +575,21 @@ struct GeneratedNarrativeCard: View {
                 showTranscript.toggle()
             } label: {
                 Label(showTranscript ? "Hide Transcript" : "Show Transcript", systemImage: "text.quote")
+            }
+        }
+
+        if let onGenerateCaptions {
+            Divider()
+            Button(action: onGenerateCaptions) {
+                Label(
+                    file.captionProjectID == nil
+                        ? "Generate Captions\u{2026}"
+                        : "Regenerate Captions\u{2026}",
+                    systemImage: "captions.bubble"
+                )
+            }
+            if file.captionProjectID != nil {
+                Text("Edit and export them in the Caption tab.")
             }
         }
 

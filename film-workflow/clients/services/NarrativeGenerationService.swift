@@ -9,6 +9,8 @@ enum NarrativeGenerationProgress: Sendable {
     /// parallel (up to the concurrency cap). `total` is the chunk count for the whole transcript.
     case synthesizing(completed: Int, total: Int, inFlight: Int)
     case stitching
+    /// Captions are being generated for the audio that was just synthesized.
+    case captioning(CaptionProgress)
 }
 
 /// Shared narrative generation flow used by `NarrativeTabView` and the MCP server.
@@ -56,6 +58,10 @@ enum NarrativeGenerationService {
             )
             context.insert(generated)
             project.updatedAt = Date()
+            await generateCaptionsIfEnabled(
+                for: generated, project: project, context: context,
+                config: config, onProgress: onProgress
+            )
             return generated
 
         case .azure:
@@ -87,7 +93,42 @@ enum NarrativeGenerationService {
             )
             context.insert(generated)
             project.updatedAt = Date()
+            await generateCaptionsIfEnabled(
+                for: generated, project: project, context: context,
+                config: config, onProgress: onProgress
+            )
             return generated
+        }
+    }
+
+    /// Creates a linked caption project when the narrative has captions enabled.
+    ///
+    /// Deliberately non-throwing: a caption failure must never lose the audio the
+    /// user just paid to synthesize. The reason is recorded on the
+    /// `GeneratedNarrative` so the UI can surface it without an alert.
+    private static func generateCaptionsIfEnabled(
+        for generated: GeneratedNarrative,
+        project: NarrativeProject,
+        context: ModelContext,
+        config: AppConfig,
+        onProgress: (@MainActor (NarrativeGenerationProgress) -> Void)?
+    ) async {
+        guard project.captionsEnabled else { return }
+        do {
+            let caption = try await CaptionTranscriptionService.captionProject(
+                for: generated,
+                narrative: project,
+                context: context,
+                config: config,
+                onProgress: { captionProgress in
+                    onProgress?(.captioning(captionProgress))
+                }
+            )
+            generated.captionProjectID = caption.projectUUID
+            generated.captionWarning = caption.warning
+        } catch {
+            generated.captionWarning = error.localizedDescription
+            print("[NarrativeGenerationService] caption generation failed: \(error)")
         }
     }
 

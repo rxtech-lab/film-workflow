@@ -384,6 +384,101 @@ nonisolated struct ShortcodeExpander {
         return schema.displayName + " · " + parts.joined(separator: " ")
     }
 
+    // MARK: - Plain speech extraction
+
+    /// The literal words that will be spoken, with all markup removed.
+    ///
+    /// This is the reference text for narrative captions: the speech service
+    /// supplies only the timings, so the caption body must be exactly what the
+    /// author wrote. Text segments pass through verbatim; a wrapping shortcode
+    /// contributes only its payload (`{{whispers|hello}}` → `hello`); a bare
+    /// prosody or pause shortcode contributes nothing (`{{pause}}` → ``).
+    static func plainSpeechText(_ text: String) -> String {
+        plainSpeechWithPauses(text).text
+    }
+
+    /// Same walk as `plainSpeechText`, but also reports the silence each dropped
+    /// shortcode implies, keyed by the character offset in the returned text
+    /// where it occurred.
+    ///
+    /// The estimated-timing fallback subtracts these from the audio duration
+    /// before distributing the remainder, so authored pauses survive even when
+    /// alignment fails completely.
+    static func plainSpeechWithPauses(_ text: String) -> (text: String, pauses: [(runeIndex: Int, ms: Int)]) {
+        var out = ""
+        var pauses: [(runeIndex: Int, ms: Int)] = []
+
+        for segment in parse(text) {
+            switch segment {
+            case .text(let s):
+                out += s
+            case .shortcode(let name, let args, let wrapped):
+                if let ms = implicitPauseMs(name: name, args: args) {
+                    pauses.append((runeIndex: out.count, ms: ms))
+                }
+                // Wrapping shortcodes still contribute their spoken payload.
+                if let wrapped, !wrapped.isEmpty {
+                    out += wrapped
+                }
+            }
+        }
+
+        // Collapse the whitespace runs that dropped shortcodes leave behind so
+        // tokenization doesn't see phantom gaps.
+        let collapsed = out
+            .replacingOccurrences(
+                of: "[ \\t]{2,}",
+                with: " ",
+                options: .regularExpression
+            )
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+
+        return (collapsed, pauses)
+    }
+
+    /// Silence a non-speaking shortcode inserts, in milliseconds. Mirrors the
+    /// durations `azureSegments` emits, so estimated timings line up with what
+    /// the TTS engine actually did. Returns nil for shortcodes that don't
+    /// introduce silence.
+    static func implicitPauseMs(name: String, args: [String]) -> Int? {
+        switch name {
+        case "break":
+            guard let first = args.first, !first.isEmpty else { return 250 }
+            return parseDurationMs(first) ?? 250
+        case "pause":
+            return 500
+        case "breath", "laughs", "sighs", "gasps":
+            return 300
+        case "silence":
+            let value = args.count > 1 ? args[1] : "300ms"
+            return parseDurationMs(value) ?? 300
+        default:
+            return nil
+        }
+    }
+
+    /// Parses `"250ms"` / `"1.5s"` / `"weak"` into milliseconds. Named break
+    /// strengths map to Azure's documented approximations.
+    static func parseDurationMs(_ raw: String) -> Int? {
+        let value = raw.trimmingCharacters(in: .whitespaces).lowercased()
+        if value.hasSuffix("ms") {
+            return Int(Double(value.dropLast(2)) ?? 0)
+        }
+        if value.hasSuffix("s") {
+            guard let seconds = Double(value.dropLast(1)) else { return nil }
+            return Int(seconds * 1000)
+        }
+        switch value {
+        case "none": return 0
+        case "x-weak": return 100
+        case "weak": return 250
+        case "medium": return 500
+        case "strong": return 750
+        case "x-strong": return 1000
+        default: return nil
+        }
+    }
+
     // MARK: - Azure expansion
 
     static func expandForAzure(_ text: String) -> [AzureSegment] {

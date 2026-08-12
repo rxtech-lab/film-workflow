@@ -36,6 +36,22 @@ struct OpenAIModelInfo: Codable, Equatable, Identifiable, Hashable {
         if let tags, tags.contains(where: { $0.lowercased() == "image-generation" }) { return true }
         return false
     }
+
+    /// Best-effort detection of a speech-to-text model. There is no standard
+    /// field for this, so fall back to the naming conventions every provider
+    /// actually follows.
+    var isTranscriptionModel: Bool {
+        if let type, ["transcription", "audio", "speech"].contains(type.lowercased()) { return true }
+        if let tags, tags.contains(where: {
+            let tag = $0.lowercased()
+            return tag.contains("transcription") || tag.contains("speech-to-text")
+        }) { return true }
+
+        let name = id.lowercased()
+        // "-tts" and "text-to-speech" are the opposite direction — exclude them.
+        if name.contains("tts") || name.contains("text-to-speech") { return false }
+        return name.contains("whisper") || name.contains("transcribe") || name.contains("stt")
+    }
 }
 
 struct OpenAIModelsCacheEntry: Codable {
@@ -97,6 +113,24 @@ actor OpenAIModelsClient {
         let all = try await models(endpoint: endpoint, apiKey: apiKey, forceRefresh: forceRefresh)
         return all
             .filter { $0.isImageModel }
+            .sorted { $0.id.localizedCaseInsensitiveCompare($1.id) == .orderedAscending }
+    }
+
+    /// Transcription models, or **all** models when nothing matches.
+    ///
+    /// Many OpenAI-compatible gateways don't tag audio models at all, so an
+    /// empty filtered list almost always means "we couldn't tell", not "there
+    /// are none". Returning everything lets the user pick the right one instead
+    /// of facing an empty picker.
+    func transcriptionModels(
+        endpoint: String,
+        apiKey: String,
+        forceRefresh: Bool = false
+    ) async throws -> [OpenAIModelInfo] {
+        let all = try await models(endpoint: endpoint, apiKey: apiKey, forceRefresh: forceRefresh)
+        let filtered = all.filter { $0.isTranscriptionModel }
+        let candidates = filtered.isEmpty ? all.filter { !$0.isImageModel } : filtered
+        return candidates
             .sorted { $0.id.localizedCaseInsensitiveCompare($1.id) == .orderedAscending }
     }
 

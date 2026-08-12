@@ -12,6 +12,7 @@ struct NarrativeProjectParametersView: View {
                     sceneSection
                 }
                 speakersSection
+                captionsSection
             }
             .formStyle(.grouped)
             .navigationTitle(project.name)
@@ -35,6 +36,48 @@ struct NarrativeProjectParametersView: View {
                     }
                 }
             }
+        }
+    }
+
+    /// Opt in to captions alongside the audio.
+    ///
+    /// The important promise, stated in the footer because it's the whole point:
+    /// the speech service is used only as a clock. Caption text is the author's
+    /// own paragraph text, and speakers come from the speaker list above rather
+    /// than from diarization.
+    private var captionsSection: some View {
+        Section {
+            Toggle("Generate captions with the audio", isOn: $project.captionsEnabled)
+
+            if project.captionsEnabled {
+                Picker("Caption provider", selection: $project.captionProviderOverride) {
+                    Text("Default (\(CaptionSettings.shared.narrativeProvider.displayName))")
+                        .tag("")
+                    ForEach(CaptionProvider.allCases) { provider in
+                        Text(provider.displayName).tag(provider.rawValue)
+                    }
+                }
+
+                if let selected = CaptionProvider(rawValue: project.captionProviderOverride),
+                   !selected.supportsWordTimings {
+                    Label("""
+                        \(selected.displayName) returns no word timings, so caption times will be \
+                        estimated. Azure or on-device Whisper are much more accurate here.
+                        """, systemImage: "exclamationmark.triangle")
+                    .font(.caption)
+                    .foregroundStyle(.orange)
+                }
+            }
+        } header: {
+            Text("Captions")
+        } footer: {
+            Text("""
+                Captions are timed by the speech service but always use your exact wording, and \
+                speakers come from the list above. They appear in the Caption tab, where you can \
+                edit them and export VTT, SRT or plain text.
+                """)
+            .font(.caption)
+            .foregroundStyle(.secondary)
         }
     }
 
