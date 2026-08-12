@@ -5,12 +5,17 @@ import UniformTypeIdentifiers
 
 struct RemotionTabView: View {
     @Environment(\.modelContext) private var modelContext
-    @Environment(RemotionChatController.self) private var chatController
     @Query(sort: \RemotionProject.updatedAt, order: .reverse) private var projects: [RemotionProject]
+    @Query(sort: \ProjectGroup.name) private var groups: [ProjectGroup]
 
     @State private var selectedProject: RemotionProject?
     @State private var renamingProject: RemotionProject?
+    @State private var pendingProjectDeletion: RemotionProject?
     @State private var renameText: String = ""
+    @State private var groupEditor: ProjectGroupEditorTarget?
+    @State private var groupName: String = ""
+    @State private var pendingGroupDeletion: ProjectGroup?
+    @State private var groupErrorMessage: String?
     @State private var statusMessage: String?
     @State private var isSeeding: Bool = false
     @State private var reloadToken: Int = 0
@@ -28,13 +33,6 @@ struct RemotionTabView: View {
     @State private var renderTask: Task<Void, Never>?
     @State private var renderProgress: RenderProgress = .init(stage: .starting, fraction: nil, detail: nil)
     @State private var showProgressSheet: Bool = false
-
-    @State private var leftTab: LeftTab = .form
-
-    private enum LeftTab: Hashable {
-        case form
-        case chat
-    }
 
     var body: some View {
         splitView
@@ -61,8 +59,30 @@ struct RemotionTabView: View {
                 renderError: renderError,
                 showRenderError: $showRenderError
             ))
+            .publishesAgentTarget(kind: .remotion, projectUUID: selectedProject?.id)
             .onChange(of: selectedProject?.id) { _, newId in
                 handleSelection(projectId: newId)
+            }
+            // The agent edits composition files through MCP; this is how the
+            // Studio preview learns to reload. Replaces the old in-app agent's
+            // `onFileWritten` callback, which only existed while its own chat
+            // pane was on screen.
+            .onReceive(NotificationCenter.default.publisher(for: .agentDidMutateProject)) { note in
+                guard let tool = note.userInfo?["tool"] as? String,
+                      tool.hasPrefix("remotion_")
+                else { return }
+                reloadToken += 1
+                guard let project = selectedProject else { return }
+                // The model may hardcode dimensions that disagree with the
+                // project settings; the form remains the source of truth.
+                let patched = RemotionCodeBuilder.patchProjectConstants(
+                    in: project.compositionSource,
+                    project: project
+                )
+                if patched != project.compositionSource {
+                    project.compositionSource = patched
+                    try? RemotionCodeBuilder.writeComposition(project: project, source: patched)
+                }
             }
             .onAppear {
                 // Returning from another tab: onDisappear stopped Studio, and
@@ -74,6 +94,29 @@ struct RemotionTabView: View {
             .onDisappear {
                 Task { await runtime.stop() }
             }
+            .confirmationDialog(
+                "Delete this Remotion project?",
+                isPresented: Binding(
+                    get: { pendingProjectDeletion != nil },
+                    set: { if !$0 { pendingProjectDeletion = nil } }
+                ),
+                titleVisibility: .visible,
+                presenting: pendingProjectDeletion
+            ) { project in
+                Button("Delete Project", role: .destructive) {
+                    deleteProject(project)
+                    pendingProjectDeletion = nil
+                }
+                Button("Cancel", role: .cancel) { pendingProjectDeletion = nil }
+            } message: { project in
+                Text("\"\(project.name)\" and its Remotion source, assets, and chat history will be permanently deleted.")
+            }
+            .projectGroupDialogs(
+                editor: $groupEditor,
+                name: $groupName,
+                pendingDeletion: $pendingGroupDeletion,
+                errorMessage: $groupErrorMessage
+            )
     }
 
     @ViewBuilder
@@ -130,40 +173,70 @@ struct RemotionTabView: View {
     @ViewBuilder
     private var sidebar: some View {
         List(selection: $selectedProject) {
-            ForEach(projects) { project in
-                NavigationLink(value: project) {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(project.name)
-                            .font(.headline)
-                            .lineLimit(1)
-                        Text(project.updatedAt, style: .date)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                    .padding(.vertical, 2)
-                }
-                .contextMenu {
-                    Button("Rename") {
-                        renameText = project.name
-                        renamingProject = project
-                    }
-                    Button("Duplicate") {
-                        duplicateProject(project)
-                    }
-                    Divider()
-                    Button("Delete", role: .destructive) {
-                        deleteProject(project)
-                    }
-                }
+            GroupedProjectSections(
+                projects: projects,
+                groups: groups,
+                dragIdentifier: { $0.id.uuidString },
+                onMove: moveProject,
+                onCreateProject: { addProject(groupID: $0) },
+                onCreateGroup: beginCreatingGroup,
+                onRenameGroup: beginRenamingGroup,
+                onDeleteGroup: { pendingGroupDeletion = $0 }
+            ) { project in
+                projectRow(project)
             }
+        }
+        .contextMenu {
+            ProjectCreationMenuItems(
+                onCreateProject: { addProject() },
+                onCreateGroup: beginCreatingGroup
+            )
         }
         .navigationSplitViewColumnWidth(min: 180, ideal: 220)
         .navigationTitle("Remotion Projects")
         .toolbar {
-            ToolbarItem {
-                Button(action: addProject) {
+            ToolbarItemGroup {
+                Button(action: { addProject() }) {
                     Label("New Project", systemImage: "plus")
                 }
+                Button(action: beginCreatingGroup) {
+                    Label("New Group", systemImage: "folder.badge.plus")
+                }
+            }
+        }
+    }
+
+    private func projectRow(_ project: RemotionProject) -> some View {
+        NavigationLink(value: project) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(project.name)
+                    .font(.headline)
+                    .lineLimit(1)
+                Text(project.updatedAt, style: .date)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.vertical, 2)
+        }
+        .contextMenu {
+            ProjectCreationMenuItems(
+                onCreateProject: { addProject(groupID: project.groupID) },
+                onCreateGroup: beginCreatingGroup
+            )
+            Divider()
+            Button("Rename") {
+                renameText = project.name
+                renamingProject = project
+            }
+            Button("Duplicate") { duplicateProject(project) }
+            MoveToProjectGroupMenu(
+                groups: groups,
+                currentGroupID: project.groupID,
+                onMove: { moveProject(project, to: $0) }
+            )
+            Divider()
+            Button("Delete…", role: .destructive) {
+                pendingProjectDeletion = project
             }
         }
     }
@@ -179,30 +252,16 @@ struct RemotionTabView: View {
         }
     }
 
+    /// The form is the whole left panel now. Refining a composition by
+    /// conversation moved to the agent window, which can reach every project
+    /// rather than only this one.
     @ViewBuilder
     private func leftPanel(project: RemotionProject) -> some View {
-        VStack(spacing: 0) {
-            Picker("", selection: $leftTab) {
-                Text("Form").tag(LeftTab.form)
-                Text("Chat").tag(LeftTab.chat)
-            }
-            .pickerStyle(.segmented)
-            .labelsHidden()
-            .padding(8)
-
-            Divider()
-
-            switch leftTab {
-            case .form:
-                RemotionParametersView(
-                    project: project,
-                    statusMessage: $statusMessage,
-                    isSeeding: $isSeeding
-                )
-            case .chat:
-                RemotionChatView(project: project, reloadToken: $reloadToken)
-            }
-        }
+        RemotionParametersView(
+            project: project,
+            statusMessage: $statusMessage,
+            isSeeding: $isSeeding
+        )
     }
 
     @ViewBuilder
@@ -244,7 +303,7 @@ struct RemotionTabView: View {
                         .foregroundStyle(.secondary)
                     Text(project.createdViaMCP
                          ? "Loading the Studio preview…"
-                         : "Click \"Generate Initial Composition\" in the Form tab to start the Studio preview.")
+                         : "Click \"Create Composition & Start Studio\" to start the preview.")
                         .multilineTextAlignment(.center)
                         .foregroundStyle(.secondary)
                         .padding(.horizontal)
@@ -255,14 +314,34 @@ struct RemotionTabView: View {
 
     // MARK: - Actions
 
-    private func addProject() {
+    private func addProject(groupID: UUID? = nil) {
         let project = RemotionProject(name: "Untitled Video")
+        project.groupID = groupID
         modelContext.insert(project)
         selectedProject = project
     }
 
+    private func beginCreatingGroup() {
+        groupName = ""
+        groupEditor = .create
+    }
+
+    private func beginRenamingGroup(_ group: ProjectGroup) {
+        groupName = group.name
+        groupEditor = .rename(group)
+    }
+
+    private func moveProject(_ project: RemotionProject, to groupID: UUID?) {
+        do {
+            try ProjectGroupService.move(project, to: groupID, context: modelContext)
+        } catch {
+            groupErrorMessage = error.localizedDescription
+        }
+    }
+
     private func duplicateProject(_ source: RemotionProject) {
         let copy = RemotionProjectService.duplicate(source, context: modelContext)
+        copy.groupID = source.groupID
         selectedProject = copy
     }
 
@@ -271,7 +350,6 @@ struct RemotionTabView: View {
             selectedProject = nil
             Task { await runtime.stop() }
         }
-        chatController.clear(projectId: project.id)
         RemotionProjectService.delete(project, context: modelContext)
     }
 

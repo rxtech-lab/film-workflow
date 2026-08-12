@@ -42,7 +42,7 @@ enum CaptionEditApplier {
         on project: CaptionProject,
         context: ModelContext
     ) -> Bool {
-        guard let segment = project.segments.first(where: { $0.uuid == operation.segmentID }) else {
+        guard let segment = project.segment(operation.segmentID) else {
             return false
         }
 
@@ -57,7 +57,7 @@ enum CaptionEditApplier {
             return true
 
         case .merge(_, let nextID):
-            guard let next = project.segments.first(where: { $0.uuid == nextID }) else { return false }
+            guard let next = project.segment(nextID) else { return false }
             segment.merge(with: next)
             context.delete(next)
             return true
@@ -226,6 +226,7 @@ enum CaptionEditApplier {
                 words: []
             )
             part.isUserEdited = true
+            part.versionID = segment.versionID
             part.project = project
             context.insert(part)
             parts.append(part)

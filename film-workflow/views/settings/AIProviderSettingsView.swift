@@ -141,7 +141,7 @@ struct AIProviderSettingsView: View {
             } header: {
                 Text("OpenAI-compatible LLM")
             } footer: {
-                Text("Used to generate and edit Remotion compositions. Works with OpenAI, Azure OpenAI, OpenRouter, Ollama, LM Studio, etc.")
+                Text("Used by the agent window and by caption AI tasks. Works with OpenAI, Azure OpenAI, OpenRouter, Ollama, LM Studio, etc.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -180,7 +180,7 @@ struct AIProviderSettingsView: View {
             } header: {
                 Text("Default image model")
             } footer: {
-                Text("Used by the Remotion agent's generate_image tool. Reuses the OpenAI endpoint and key above.")
+                Text("Used by the agent's image generation tools. Reuses the OpenAI endpoint and key above.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

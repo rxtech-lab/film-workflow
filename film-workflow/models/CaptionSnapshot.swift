@@ -14,23 +14,46 @@ nonisolated struct CaptionTranscriptSnapshot: Sendable, Hashable {
     var segments: [CaptionSegmentSnapshot]
     var alignmentQuality: CaptionAlignmentQuality
 
+    /// BCP-47 of the caption text itself, from the active transcript version.
+    var sourceLanguage: String
+
+    /// Which transcript version this is a copy of, so an exported JSON document
+    /// can be traced back to a take.
+    var versionNumber: Int
+
+    /// Target languages present on at least one segment, in the version's order.
+    var availableTranslations: [String]
+
     init(
         projectName: String,
         audioDurationMs: Int,
         speakers: [CaptionSpeaker],
         segments: [CaptionSegmentSnapshot],
-        alignmentQuality: CaptionAlignmentQuality = .none
+        alignmentQuality: CaptionAlignmentQuality = .none,
+        sourceLanguage: String = "",
+        versionNumber: Int = 1,
+        availableTranslations: [String] = []
     ) {
         self.projectName = projectName
         self.audioDurationMs = audioDurationMs
         self.speakers = speakers
         self.segments = segments
         self.alignmentQuality = alignmentQuality
+        self.sourceLanguage = sourceLanguage
+        self.versionNumber = versionNumber
+        self.availableTranslations = availableTranslations
     }
 
     func speakerLabel(_ id: UUID?) -> String {
         guard let id else { return "" }
         return speakers.first { $0.id == id }?.label ?? ""
+    }
+
+    /// Whether any segment carries `languageCode`. The exporter checks this
+    /// before committing to a translation-only render.
+    func hasTranslation(_ languageCode: String) -> Bool {
+        guard !languageCode.isEmpty else { return false }
+        return segments.contains { $0.translations[languageCode]?.isEmpty == false }
     }
 }
 
@@ -44,6 +67,12 @@ nonisolated struct CaptionSegmentSnapshot: Sendable, Hashable, Identifiable {
     var words: [CaptionWord]
     var isEstimatedTiming: Bool
 
+    /// Language code → translated text. A dictionary rather than an array of
+    /// `CaptionTranslation` keeps the snapshot `Hashable` and the exporter's
+    /// per-cue lookup O(1); nothing downstream needs the timestamps or the
+    /// staleness fingerprint.
+    var translations: [String: String]
+
     init(
         id: UUID = UUID(),
         startMs: Int,
@@ -52,7 +81,8 @@ nonisolated struct CaptionSegmentSnapshot: Sendable, Hashable, Identifiable {
         speakerId: UUID? = nil,
         speakerLabel: String = "",
         words: [CaptionWord] = [],
-        isEstimatedTiming: Bool = false
+        isEstimatedTiming: Bool = false,
+        translations: [String: String] = [:]
     ) {
         self.id = id
         self.startMs = startMs
@@ -62,9 +92,14 @@ nonisolated struct CaptionSegmentSnapshot: Sendable, Hashable, Identifiable {
         self.speakerLabel = speakerLabel
         self.words = words
         self.isEstimatedTiming = isEstimatedTiming
+        self.translations = translations
     }
 
     var durationMs: Int { max(endMs - startMs, 0) }
+
+    func translation(_ languageCode: String) -> String {
+        translations[languageCode] ?? ""
+    }
 }
 
 // MARK: - Snapshotting
@@ -80,12 +115,16 @@ extension CaptionSegment {
             speakerId: speakerId,
             speakerLabel: speakerLabel,
             words: orderedWords,
-            isEstimatedTiming: isEstimatedTiming
+            isEstimatedTiming: isEstimatedTiming,
+            translations: translationMap
         )
     }
 }
 
 extension CaptionProject {
+    /// A copy of the **active** transcript version. `orderedSegments` is already
+    /// version-filtered, so every consumer downstream — exporter, validator, AI
+    /// passes, the assistant — sees one take and never a mix of them.
     func snapshot() -> CaptionTranscriptSnapshot {
         let ordered = orderedSegments
         return CaptionTranscriptSnapshot(
@@ -93,7 +132,10 @@ extension CaptionProject {
             audioDurationMs: audioDurationMs,
             speakers: speakers,
             segments: ordered.map { $0.snapshot(speakerLabel: speakerLabel($0.speakerId)) },
-            alignmentQuality: alignmentQualityEnum
+            alignmentQuality: alignmentQualityEnum,
+            sourceLanguage: sourceLanguageCode,
+            versionNumber: activeVersion?.number ?? 1,
+            availableTranslations: translatedLanguages
         )
     }
 }

@@ -3,12 +3,7 @@ import FoundationModels
 import Observation
 import SwiftUI
 
-/// Where caption AI work runs.
-///
-/// Kept separate from `CaptionProvider` (which is about speech-to-text) because
-/// the two axes are independent: you might transcribe with Azure and review with
-/// the on-device model.
-/// What an engine is being asked to do, since not every backend can do all three.
+/// What an engine is being asked to do, since not every backend can do all of it.
 nonisolated enum CaptionAITask: Sendable {
     /// One turn of the caption assistant.
     case conversation
@@ -16,9 +11,16 @@ nonisolated enum CaptionAITask: Sendable {
     case transcriptReview
     /// Choosing break points cue by cue, while transcription is still running.
     case cueRefinement
+    /// Translating a run of captions into another language.
+    case translation
 }
 
-nonisolated enum CaptionAIBackend: String, CaseIterable, Identifiable, Sendable {
+/// Where AI work runs — for the agent window and for the caption batch tasks.
+///
+/// Kept separate from `CaptionProvider` (which is about speech-to-text) because
+/// the two axes are independent: you might transcribe with Azure and review with
+/// the on-device model.
+nonisolated enum AgentBackend: String, CaseIterable, Identifiable, Sendable {
     /// Apple Intelligence, entirely on device.
     case appleIntelligence
     /// The endpoint, key and model from Settings › AI Provider.
@@ -70,6 +72,10 @@ nonisolated enum CaptionAIBackend: String, CaseIterable, Identifiable, Sendable 
             // only in memory, so an agent that reads them back over MCP has
             // nothing to read.
             return !isCommandLine
+        case .translation:
+            // The CLI agents answer one process launch at a time; a transcript
+            // is dozens of batches. Same reason `planSplit` throws for them.
+            return !isCommandLine
         }
     }
 
@@ -96,7 +102,7 @@ nonisolated enum CaptionAIBackend: String, CaseIterable, Identifiable, Sendable 
     }
 
     /// Backends offered on this platform, in preference order.
-    static var supported: [CaptionAIBackend] {
+    static var supported: [AgentBackend] {
         #if os(macOS)
             return allCases
         #else
@@ -107,7 +113,7 @@ nonisolated enum CaptionAIBackend: String, CaseIterable, Identifiable, Sendable 
 
 nonisolated enum CaptionAIError: LocalizedError {
     case noBackendAvailable
-    case backendUnavailable(CaptionAIBackend, String)
+    case backendUnavailable(AgentBackend, String)
     case emptyResponse
     case malformedResponse(String)
 
@@ -134,8 +140,8 @@ nonisolated enum CaptionAIError: LocalizedError {
 /// `WhisperModelStore` pattern.
 @MainActor
 @Observable
-final class CaptionAIAvailability {
-    static let shared = CaptionAIAvailability()
+final class AgentBackendAvailability {
+    static let shared = AgentBackendAvailability()
 
     /// Bumped to force the availability computed properties to re-evaluate.
     private var refreshToken = 0
@@ -179,10 +185,10 @@ final class CaptionAIAvailability {
 
     // MARK: - Command-line engines
 
-    private var cliPathCache: [CaptionAIBackend: String?] = [:]
+    private var cliPathCache: [AgentBackend: String?] = [:]
 
     /// Resolved path to a CLI backend's binary, or nil when it isn't installed.
-    func executablePath(for backend: CaptionAIBackend) -> String? {
+    func executablePath(for backend: AgentBackend) -> String? {
         guard backend.isCommandLine else { return nil }
         if let cached = cliPathCache[backend] { return cached }
         let resolved = CaptionCLILocator.find(backend.executableName)
@@ -192,7 +198,7 @@ final class CaptionAIAvailability {
 
     // MARK: - Resolution
 
-    func isConfigured(_ backend: CaptionAIBackend, config: AppConfig?) -> Bool {
+    func isConfigured(_ backend: AgentBackend, config: AppConfig?) -> Bool {
         switch backend {
         case .appleIntelligence:
             return isAppleIntelligenceAvailable
@@ -207,7 +213,7 @@ final class CaptionAIAvailability {
     }
 
     /// Explains why a backend can't be selected, for the settings picker.
-    func unavailableReason(_ backend: CaptionAIBackend, config: AppConfig?) -> LocalizedStringKey? {
+    func unavailableReason(_ backend: AgentBackend, config: AppConfig?) -> LocalizedStringKey? {
         guard !isConfigured(backend, config: config) else { return nil }
         switch backend {
         case .appleIntelligence:
@@ -228,11 +234,11 @@ final class CaptionAIAvailability {
     /// a user who turned off Apple Intelligence shouldn't lose their captions,
     /// they should just get them from the other engine.
     func resolved(
-        preferred: CaptionAIBackend,
+        preferred: AgentBackend,
         config: AppConfig?,
         for task: CaptionAITask = .conversation
-    ) throws -> CaptionAIBackend {
-        let candidates = CaptionAIBackend.supported.filter { $0.supports(task) }
+    ) throws -> AgentBackend {
+        let candidates = AgentBackend.supported.filter { $0.supports(task) }
 
         if candidates.contains(preferred), isConfigured(preferred, config: config) {
             return preferred
@@ -244,7 +250,7 @@ final class CaptionAIAvailability {
     }
 }
 
-extension CaptionAIBackend {
+extension AgentBackend {
     var executableName: String {
         switch self {
         case .claudeCode: return "claude"

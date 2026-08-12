@@ -65,6 +65,32 @@ nonisolated struct CaptionTermReviewResult: Sendable {
     var corrections: [CaptionTermCorrection]
 }
 
+/// A window of captions to translate.
+///
+/// Batched rather than per-caption, unlike splitting: translation quality
+/// depends on surrounding context — a pronoun or an elided subject in one line
+/// is only resolvable from the line before it — so the model sees a run of
+/// captions and answers for all of them.
+nonisolated struct CaptionTranslateRequest: Sendable {
+    var lines: [CaptionAILine]
+    /// BCP-47 of the captions as they stand. Empty means "work it out".
+    var sourceLanguage: String
+    /// BCP-47 to translate into. Never empty.
+    var targetLanguage: String
+    /// Glossary, so a product name survives the crossing.
+    var terms: [CaptionTerm]
+}
+
+nonisolated struct CaptionTranslatedLine: Sendable {
+    /// Matches `CaptionAILine.number`.
+    var number: Int
+    var text: String
+}
+
+nonisolated struct CaptionTranslateResult: Sendable {
+    var lines: [CaptionTranslatedLine]
+}
+
 /// One turn of the caption assistant.
 nonisolated struct CaptionChatRequest: Sendable {
     var instruction: String
@@ -118,7 +144,7 @@ nonisolated struct CaptionChatEdit: Sendable {
 /// through a JSON Schema in the request body. Hiding that behind a generic
 /// signature would mean building `GenerationSchema`s at runtime for no benefit.
 protocol CaptionAIEngine: Sendable {
-    var backend: CaptionAIBackend { get }
+    var backend: AgentBackend { get }
 
     /// What produced a suggestion, for the review sheet.
     ///
@@ -131,10 +157,21 @@ protocol CaptionAIEngine: Sendable {
     func planSplit(_ request: CaptionSplitRequest) async throws -> CaptionSplitPlan
     func reviewTerms(_ request: CaptionTermReviewRequest) async throws -> CaptionTermReviewResult
     func converse(_ request: CaptionChatRequest) async throws -> CaptionChatReply
+    func translate(_ request: CaptionTranslateRequest) async throws -> CaptionTranslateResult
 }
 
 extension CaptionAIEngine {
     var modelLabel: String { backend.engineLabel }
+
+    /// Default for engines that can't do batch work — the CLI agents, which
+    /// already throw from `planSplit` and `reviewTerms` for the same reason: one
+    /// process launch per batch is not a viable shape.
+    func translate(_ request: CaptionTranslateRequest) async throws -> CaptionTranslateResult {
+        throw CaptionAIError.backendUnavailable(
+            backend,
+            "This engine can't translate captions. Choose a different AI backend in Settings."
+        )
+    }
 }
 
 /// An engine that would rather be asked once about the whole transcript than
@@ -160,18 +197,21 @@ protocol CaptionBatchAIEngine: CaptionAIEngine {
     ) async throws -> CaptionEditProposal
 }
 
-/// Builds the engine for a backend.
+/// Builds the engine for a caption task.
 ///
-/// The CLI backends need a running MCP server and a resolved binary path, both
-/// of which are main-actor state — which is why this is `async` and lives here
-/// rather than in each engine's initializer.
+/// Only the in-process backends live here. Conversation moved to the agent
+/// window, where the command-line backends are driven by `AgentCLIRunner` as a
+/// streaming tool-calling agent rather than a one-shot request/response — these
+/// engines answer the batch tasks (splitting, glossary review, translation),
+/// which run per-cue over a whole transcript and would be unusable at one
+/// subprocess launch each.
 @MainActor
 enum CaptionAIEngineFactory {
 
     /// In-process engines. Synchronous, so the batch tasks can build one without
     /// an `await` in the middle of a UI action.
     static func make(
-        backend: CaptionAIBackend,
+        backend: AgentBackend,
         config: AppConfig?
     ) throws -> any CaptionAIEngine {
         switch backend {
@@ -187,53 +227,15 @@ enum CaptionAIEngineFactory {
             )
 
         case .claudeCode, .codex:
+            // `AgentBackend.supports(_:)` already keeps the CLI backends out of
+            // every task that reaches this factory; this is the belt-and-braces
+            // case, phrased as something the user can act on.
             throw CaptionAIError.backendUnavailable(
                 backend,
-                "This engine has to be started with makeConversational."
+                "\(backend.engineLabel) only answers in the agent window. Choose "
+                    + "Apple Intelligence or an OpenAI-compatible model for this."
             )
         }
-    }
-
-    /// Any backend, including the command-line ones.
-    ///
-    /// Returns the endpoint alongside the engine so the caller can release the
-    /// MCP server when the turn finishes.
-    static func makeConversational(
-        backend: CaptionAIBackend,
-        config: AppConfig?,
-        project: CaptionProject
-    ) async throws -> (engine: any CaptionAIEngine, release: @Sendable () async -> Void) {
-        #if os(macOS)
-            if backend.isCommandLine {
-                guard let executable = CaptionAIAvailability.shared.executablePath(for: backend)
-                else {
-                    throw CaptionAIError.backendUnavailable(
-                        backend,
-                        "The \(backend.executableName) command isn't installed."
-                    )
-                }
-
-                let endpoint = try await CaptionMCPBridge.ensureRunning()
-                let context = CaptionCLIContext(
-                    executable: executable,
-                    endpoint: endpoint,
-                    captionID: project.projectUUID,
-                    projectName: project.name,
-                    model: "",
-                    // The agent has no repository to work in; point it at our own
-                    // storage so a stray relative path can't touch a user project.
-                    workingDirectory: FileStorage.captionsDir
-                )
-
-                let engine: any CaptionAIEngine = backend == .claudeCode
-                    ? ClaudeCodeCaptionEngine(context: context)
-                    : CodexCaptionEngine(context: context)
-
-                return (engine, { await CaptionMCPBridge.release(endpoint) })
-            }
-        #endif
-
-        return (try make(backend: backend, config: config), {})
     }
 }
 
@@ -307,6 +309,45 @@ nonisolated enum CaptionAIPrompts {
             CaptionTermMatching.promptBlock(request.terms),
             "Lines:",
             request.lines.map(\.prompt).joined(separator: "\n"),
+        ]
+        .filter { !$0.isEmpty }
+        .joined(separator: "\n\n")
+    }
+
+    static func translateInstructions(source: String, target: String) -> String {
+        let targetName = Locale.current.localizedString(forIdentifier: target) ?? target
+        let sourceName = source.isEmpty
+            ? "the source language"
+            : (Locale.current.localizedString(forIdentifier: source) ?? source)
+
+        return """
+            You translate subtitles from \(sourceName) into \(targetName).
+
+            Each input line starts with its number. Reply with one translation \
+            per line, keeping the same numbers. Translate every line you are \
+            given — never skip one, never merge two, never add one.
+
+            Rules:
+            1. Keep each translation about as long as its original. Subtitles are \
+            read in the time the line is on screen, so a translation twice the \
+            length is a worse translation.
+            2. Translate meaning, not words. Idiom becomes idiom.
+            3. Keep the register of the original — casual stays casual.
+            4. Leave numbers, proper nouns and glossary terms in the form the \
+            glossary gives, unless \(targetName) has a standard rendering of them.
+            5. Keep sentence-ending punctuation appropriate to \(targetName). Do \
+            not add narration, bracketed notes, or speaker names.
+            6. If a line is already in \(targetName), copy it through unchanged.
+            """
+    }
+
+    static func translatePrompt(_ request: CaptionTranslateRequest) -> String {
+        [
+            CaptionTermMatching.promptBlock(request.terms),
+            "Lines:",
+            // Speaker labels are dropped: they are not the caption's words, and
+            // a model shown "[Alice]" will sometimes translate the name.
+            request.lines.map(\.compactPrompt).joined(separator: "\n"),
         ]
         .filter { !$0.isEmpty }
         .joined(separator: "\n\n")

@@ -7,7 +7,7 @@ import Foundation
 /// fallback is not optional in practice: proxies routinely accept the field and
 /// ignore it, or reject the request outright.
 nonisolated struct OpenAICaptionEngine: CaptionAIEngine {
-    var backend: CaptionAIBackend { .openAICompatible }
+    var backend: AgentBackend { .openAICompatible }
 
     let endpoint: String
     let apiKey: String
@@ -94,6 +94,53 @@ nonisolated struct OpenAICaptionEngine: CaptionAIEngine {
                 guard let number = intValue(fix["number"]),
                       let text = fix["correctedText"] as? String else { return nil }
                 return CaptionTermCorrection(number: number, correctedText: text)
+            }
+        )
+    }
+
+    // MARK: - Translate
+
+    func translate(_ request: CaptionTranslateRequest) async throws -> CaptionTranslateResult {
+        guard !request.lines.isEmpty else { return CaptionTranslateResult(lines: []) }
+
+        let schema: [String: Any] = [
+            "type": "object",
+            "properties": [
+                "lines": [
+                    "type": "array",
+                    "items": [
+                        "type": "object",
+                        "properties": [
+                            "number": ["type": "integer"],
+                            "text": ["type": "string"],
+                        ],
+                        "required": ["number", "text"],
+                        "additionalProperties": false,
+                    ],
+                ]
+            ],
+            "required": ["lines"],
+            "additionalProperties": false,
+        ]
+
+        let json = try await complete(
+            instructions: CaptionAIPrompts.translateInstructions(
+                source: request.sourceLanguage,
+                target: request.targetLanguage
+            ),
+            prompt: CaptionAIPrompts.translatePrompt(request),
+            schemaName: "caption_translation",
+            schema: schema
+        )
+
+        let rows = (json["lines"] as? [[String: Any]]) ?? []
+        return CaptionTranslateResult(
+            lines: rows.compactMap { row in
+                guard let number = intValue(row["number"]),
+                      let text = row["text"] as? String,
+                      !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                else { return nil }
+                return CaptionTranslatedLine(number: number, text: text)
             }
         )
     }

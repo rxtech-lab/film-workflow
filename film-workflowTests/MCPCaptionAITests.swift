@@ -4,9 +4,10 @@ import Testing
 
 @testable import film_workflow
 
-/// The two tools a command-line agent is allowed to call. These are the surface
-/// that decides whether an agent can damage a transcript, so they get tested
-/// against a real (in-memory) store rather than a stub.
+/// The tools an agent is allowed to call, and what the propose path does with
+/// them. This is the surface that decides whether an agent can damage a
+/// transcript, so it is tested against a real (in-memory) store rather than a
+/// stub.
 @Suite("MCP caption AI tools")
 @MainActor
 struct MCPCaptionAITests {
@@ -17,7 +18,6 @@ struct MCPCaptionAITests {
         let schema = Schema([
             CaptionProject.self,
             CaptionSegment.self,
-            CaptionAssistantMessage.self,
         ])
         let container = try ModelContainer(
             for: schema,
@@ -142,10 +142,9 @@ struct MCPCaptionAITests {
         #expect(json["accepted"] as? Int == 1)
         // The caption itself is untouched.
         #expect(project.orderedSegments[0].text == before)
-        // And the proposal is waiting in the assistant.
-        #expect(project.assistantMessages.count == 1)
-        #expect(project.assistantMessages[0].kindEnum == .proposal)
-        #expect(project.assistantMessages[0].proposal?.items.count == 1)
+        // And the proposal is parked for the agent window to review.
+        let pending = AgentController.shared.pendingProposal(forProjectUUID: project.projectUUID)
+        #expect(pending?.items.count == 1)
     }
 
     @Test("Out-of-range indices are reported, not silently ignored")
@@ -255,8 +254,8 @@ struct MCPCaptionAITests {
             )
         }
 
-        // Nothing reached the assistant window.
-        #expect(project.assistantMessages.isEmpty)
+        // Nothing reached the agent window.
+        #expect(AgentController.shared.pendingProposal(forProjectUUID: project.projectUUID) == nil)
 
         let collected = CaptionProposalInbox.finish(project.projectUUID)
         #expect(collected.items.count == 2)
@@ -297,20 +296,20 @@ struct MCPCaptionAITests {
             ],
             context: context
         )
-        #expect(project.assistantMessages.count == 1)
+        #expect(AgentController.shared.pendingProposal(forProjectUUID: project.projectUUID) != nil)
         #expect(CaptionProposalInbox.finish(project.projectUUID).items.isEmpty)
     }
 
     @Test("CLI engines can review a saved transcript but not one being transcribed")
     func cliBackendsSupportTranscriptReviewOnly() {
-        for backend in [CaptionAIBackend.claudeCode, .codex] {
+        for backend in [AgentBackend.claudeCode, .codex] {
             #expect(backend.supports(.transcriptReview))
             #expect(backend.supports(.conversation))
             // The captions don't exist yet mid-transcription, so an agent that
             // reads them over MCP has nothing to read.
             #expect(!backend.supports(.cueRefinement))
         }
-        for backend in [CaptionAIBackend.appleIntelligence, .openAICompatible] {
+        for backend in [AgentBackend.appleIntelligence, .openAICompatible] {
             #expect(backend.supports(.cueRefinement))
         }
     }
@@ -346,7 +345,7 @@ struct MCPCaptionAITests {
 
         #expect(json["accepted"] as? Int == 0)
         #expect((json["rejected"] as? [[String: Any]])?.count == 1)
-        #expect(project.assistantMessages.isEmpty)
+        #expect(AgentController.shared.pendingProposal(forProjectUUID: project.projectUUID) == nil)
     }
 
     // MARK: - Registration
@@ -357,15 +356,44 @@ struct MCPCaptionAITests {
         #expect(MCPCaptionHandlers.canHandle("caption_propose_edits"))
     }
 
-    @Test("The CLI allowlist can't write captions directly")
-    func allowlistExcludesDirectWrites() {
-        #expect(!CaptionMCPBridge.allowedTools.contains("caption_update_segment"))
-        #expect(!CaptionMCPBridge.allowedTools.contains("caption_transcribe"))
-        #expect(!CaptionMCPBridge.allowedTools.contains("caption_set_speakers"))
-        #expect(CaptionMCPBridge.allowedTools.contains("caption_propose_edits"))
-        #expect(
-            CaptionMCPBridge.prefixedToolNames
-                .allSatisfy { $0.hasPrefix("mcp__film_workflow__") }
-        )
+    @Test("Under the review policy the agent can't write captions directly")
+    func reviewPolicyExcludesDirectWrites() {
+        let review = AgentToolPolicy.toolNames(policy: .review)
+        // The two tools that rewrite caption text without asking.
+        #expect(!review.contains("caption_update_segment"))
+        #expect(!review.contains("caption_transcribe"))
+        // The only route to changing a caption, which queues a proposal.
+        #expect(review.contains("caption_propose_edits"))
+        // Deliberately still allowed: renaming a speaker is a small, obvious
+        // edit the user can undo, and withholding it would make "label speaker 1
+        // as Alice" impossible.
+        #expect(review.contains("caption_set_speakers"))
+        // Never offered under any policy.
+        #expect(!review.contains("delete_project"))
+        #expect(!AgentToolPolicy.toolNames(policy: .direct).contains("delete_project"))
+    }
+
+    @Test("The direct policy lifts the caption write restriction")
+    func directPolicyAllowsWrites() {
+        #expect(AgentToolPolicy.toolNames(policy: .direct).contains("caption_update_segment"))
+    }
+
+    @Test("Every exposed tool converts to a usable OpenAI function definition")
+    func toolsConvertToOpenAIDefinitions() {
+        let definitions = AgentToolPolicy.openAIToolDefinitions(policy: .review)
+        #expect(!definitions.isEmpty)
+        #expect(definitions.allSatisfy { !$0.name.isEmpty && !$0.description.isEmpty })
+        // A JSON Schema object is what the function-calling API requires.
+        #expect(definitions.allSatisfy { $0.parametersSchema["type"] as? String == "object" })
+    }
+
+    @Test("Command-line agents are given the same tools, MCP-prefixed")
+    func cliToolNamesMatchThePolicy() {
+        #if os(macOS)
+            let prefixed = AgentMCPBridge.prefixedToolNames(policy: .review)
+            #expect(prefixed.count == AgentToolPolicy.toolNames(policy: .review).count)
+            #expect(prefixed.allSatisfy { $0.hasPrefix("mcp__film_workflow__") })
+            #expect(!prefixed.contains("mcp__film_workflow__caption_update_segment"))
+        #endif
     }
 }

@@ -7,9 +7,15 @@ struct CaptionTabView: View {
         @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     #endif
     @Query(sort: \CaptionProject.updatedAt, order: .reverse) private var projects: [CaptionProject]
+    @Query(sort: \ProjectGroup.name) private var groups: [ProjectGroup]
     @State private var selectedProject: CaptionProject?
     @State private var renamingProject: CaptionProject?
+    @State private var pendingProjectDeletion: CaptionProject?
     @State private var renameText: String = ""
+    @State private var groupEditor: ProjectGroupEditorTarget?
+    @State private var groupName: String = ""
+    @State private var pendingGroupDeletion: ProjectGroup?
+    @State private var groupErrorMessage: String?
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
 
     @State private var isTranscribing = false
@@ -18,6 +24,7 @@ struct CaptionTabView: View {
     @State private var errorMessage: String?
     @State private var showError = false
     @State private var successNotice: String?
+    @State private var pendingRetranscribe: CaptionProject?
 
     private var isCompact: Bool {
         #if os(iOS)
@@ -30,49 +37,81 @@ struct CaptionTabView: View {
     @ViewBuilder
     private var sidebar: some View {
         List(selection: $selectedProject) {
-            ForEach(projects) { project in
-                NavigationLink(value: project) {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(project.name)
-                            .font(.headline)
-                            .lineLimit(1)
-                        HStack(spacing: 4) {
-                            Image(systemName: project.isNarrativeSourced
-                                ? "text.book.closed" : "waveform")
-                            if project.segments.isEmpty {
-                                Text("No captions")
-                            } else {
-                                Text("\(project.segments.count) captions")
-                            }
-                            if project.alignmentQualityEnum.needsReview {
-                                Image(systemName: "exclamationmark.triangle.fill")
-                                    .foregroundStyle(.orange)
-                            }
-                        }
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    }
-                    .padding(.vertical, 2)
-                }
-                .contextMenu {
-                    Button("Rename") {
-                        renameText = project.name
-                        renamingProject = project
-                    }
-                    Divider()
-                    Button("Delete", role: .destructive) {
-                        deleteProject(project)
-                    }
-                }
+            GroupedProjectSections(
+                projects: projects,
+                groups: groups,
+                dragIdentifier: { $0.projectUUID.uuidString },
+                onMove: moveProject,
+                onCreateProject: { addProject(groupID: $0) },
+                onCreateGroup: beginCreatingGroup,
+                onRenameGroup: beginRenamingGroup,
+                onDeleteGroup: { pendingGroupDeletion = $0 }
+            ) { project in
+                projectRow(project)
             }
+        }
+        .contextMenu {
+            ProjectCreationMenuItems(
+                onCreateProject: { addProject() },
+                onCreateGroup: beginCreatingGroup
+            )
         }
         .navigationSplitViewColumnWidth(min: 200, ideal: 240)
         .navigationTitle("Captions")
         .toolbar {
-            ToolbarItem {
-                Button(action: addProject) {
+            ToolbarItemGroup {
+                Button(action: { addProject() }) {
                     Label("New Caption Project", systemImage: "plus")
                 }
+                Button(action: beginCreatingGroup) {
+                    Label("New Group", systemImage: "folder.badge.plus")
+                }
+            }
+        }
+    }
+
+    private func projectRow(_ project: CaptionProject) -> some View {
+        NavigationLink(value: project) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(project.name)
+                    .font(.headline)
+                    .lineLimit(1)
+                HStack(spacing: 4) {
+                    Image(systemName: project.isNarrativeSourced
+                        ? "text.book.closed" : "waveform")
+                    if project.activeSegmentCount == 0 {
+                        Text("No captions")
+                    } else {
+                        Text("\(project.activeSegmentCount) captions")
+                    }
+                    if project.alignmentQualityEnum.needsReview {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .foregroundStyle(.orange)
+                    }
+                }
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            }
+            .padding(.vertical, 2)
+        }
+        .contextMenu {
+            ProjectCreationMenuItems(
+                onCreateProject: { addProject(groupID: project.groupID) },
+                onCreateGroup: beginCreatingGroup
+            )
+            Divider()
+            Button("Rename") {
+                renameText = project.name
+                renamingProject = project
+            }
+            MoveToProjectGroupMenu(
+                groups: groups,
+                currentGroupID: project.groupID,
+                onMove: { moveProject(project, to: $0) }
+            )
+            Divider()
+            Button("Delete…", role: .destructive) {
+                pendingProjectDeletion = project
             }
         }
     }
@@ -96,7 +135,7 @@ struct CaptionTabView: View {
                             project: project,
                             isTranscribing: isTranscribing,
                             canTranscribe: project.hasAudio,
-                            onTranscribe: { transcribe(project) }
+                            onTranscribe: { requestTranscribe(project) }
                         )
                         #if os(iOS)
                             .toolbar(.hidden, for: .tabBar)
@@ -131,14 +170,15 @@ struct CaptionTabView: View {
                 }
             }
         }
+        .publishesAgentTarget(kind: .caption, projectUUID: selectedProject?.projectUUID)
         .toolbar {
             if let project = selectedProject, !isCompact {
                 ToolbarItem(placement: .primaryAction) {
                     CaptionTranscribeButton(
-                        hasCaptions: !project.segments.isEmpty,
+                        hasCaptions: project.activeSegmentCount > 0,
                         isTranscribing: isTranscribing,
                         canTranscribe: project.hasAudio,
-                        action: { transcribe(project) }
+                        action: { requestTranscribe(project) }
                     )
                 }
             }
@@ -181,16 +221,85 @@ struct CaptionTabView: View {
                 renamingProject = nil
             }
         }
+        .confirmationDialog(
+            "Delete this caption project?",
+            isPresented: Binding(
+                get: { pendingProjectDeletion != nil },
+                set: { if !$0 { pendingProjectDeletion = nil } }
+            ),
+            titleVisibility: .visible,
+            presenting: pendingProjectDeletion
+        ) { project in
+            Button("Delete Project", role: .destructive) {
+                deleteProject(project)
+                pendingProjectDeletion = nil
+            }
+            Button("Cancel", role: .cancel) { pendingProjectDeletion = nil }
+        } message: { project in
+            Text("\"\(project.name)\", its transcript versions, and any audio it owns will be permanently deleted.")
+        }
+        // On the outer Group so it covers the split-view and compact layouts
+        // from one place — both toolbars call `requestTranscribe`.
+        .confirmationDialog(
+            "Re-transcribe these captions?",
+            isPresented: Binding(
+                get: { pendingRetranscribe != nil },
+                set: { if !$0 { pendingRetranscribe = nil } }
+            ),
+            titleVisibility: .visible,
+            presenting: pendingRetranscribe
+        ) { project in
+            // Not `.destructive`: nothing is thrown away any more, and that is
+            // exactly what the message says.
+            Button("Re-transcribe") {
+                let target = project
+                pendingRetranscribe = nil
+                transcribe(target)
+            }
+            Button("Cancel", role: .cancel) { pendingRetranscribe = nil }
+        } message: { project in
+            Text("""
+                This creates version \(project.nextVersionNumber). The current \
+                version and its translations are kept, and translations carry \
+                over for captions that come out unchanged. You can switch back \
+                in Caption Setup at any time.
+                """)
+        }
+        .projectGroupDialogs(
+            editor: $groupEditor,
+            name: $groupName,
+            pendingDeletion: $pendingGroupDeletion,
+            errorMessage: $groupErrorMessage
+        )
     }
 
     // MARK: - Actions
 
-    private func addProject() {
+    private func addProject(groupID: UUID? = nil) {
         let project = CaptionProject(name: "Untitled Captions")
+        project.groupID = groupID
         project.languageHint = CaptionSettings.shared.defaultLanguageHint
         project.maxSpeakers = CaptionSettings.shared.defaultMaxSpeakers
         modelContext.insert(project)
         selectedProject = project
+    }
+
+    private func beginCreatingGroup() {
+        groupName = ""
+        groupEditor = .create
+    }
+
+    private func beginRenamingGroup(_ group: ProjectGroup) {
+        groupName = group.name
+        groupEditor = .rename(group)
+    }
+
+    private func moveProject(_ project: CaptionProject, to groupID: UUID?) {
+        do {
+            try ProjectGroupService.move(project, to: groupID, context: modelContext)
+        } catch {
+            groupErrorMessage = error.localizedDescription
+        }
     }
 
     private func deleteProject(_ project: CaptionProject) {
@@ -203,6 +312,20 @@ struct CaptionTabView: View {
             FileStorage.deleteFile(at: project.audioFilePath)
         }
         modelContext.delete(project)
+    }
+
+    /// Confirms a re-run, but never a first run.
+    ///
+    /// There is nothing to lose the first time, and a dialog on every single
+    /// transcription would train the user to dismiss it without reading — which
+    /// is precisely when it needs to be read.
+    private func requestTranscribe(_ project: CaptionProject) {
+        guard !isTranscribing else { return }
+        guard project.activeSegmentCount > 0 else {
+            transcribe(project)
+            return
+        }
+        pendingRetranscribe = project
     }
 
     private func transcribe(_ project: CaptionProject) {
@@ -324,7 +447,7 @@ private struct CaptionCompactDetail: View {
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 CaptionTranscribeButton(
-                    hasCaptions: !project.segments.isEmpty,
+                    hasCaptions: project.activeSegmentCount > 0,
                     isTranscribing: isTranscribing,
                     canTranscribe: canTranscribe,
                     action: onTranscribe

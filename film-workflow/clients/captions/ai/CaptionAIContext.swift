@@ -185,7 +185,7 @@ nonisolated enum CaptionAIContext {
     }
 
     /// Whether the assembled prompt would overrun the backend's budget.
-    static func exceedsBudget(_ text: String, backend: CaptionAIBackend) -> Bool {
+    static func exceedsBudget(_ text: String, backend: AgentBackend) -> Bool {
         text.count > backend.contextBudgetCharacters
     }
 }

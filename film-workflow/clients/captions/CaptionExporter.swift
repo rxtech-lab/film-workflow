@@ -21,9 +21,36 @@ nonisolated struct CaptionExportOptions: Sendable, Equatable, Hashable {
         }
     }
 
+    /// How a translation and its original share a cue.
+    enum TranslationMode: String, CaseIterable, Codable, Identifiable, Sendable {
+        /// Ignore translations entirely.
+        case originalOnly
+        /// Original on the first line, translation underneath — the shape
+        /// bilingual subtitles take in the wild.
+        case bilingual
+        /// Translation alone.
+        case translationOnly
+
+        var id: String { rawValue }
+
+        var displayName: String {
+            switch self {
+            case .originalOnly: return "Original only"
+            case .bilingual: return "Original + translation"
+            case .translationOnly: return "Translation only"
+            }
+        }
+    }
+
     var format: CaptionExportFormat = .vtt
     var granularity: CaptionExportGranularity = .sentence
     var speakerStyle: SpeakerStyle = .prefix
+
+    var translationMode: TranslationMode = .originalOnly
+
+    /// BCP-47 code of the translation to render. Empty means original only,
+    /// whatever `translationMode` says.
+    var translationLanguage: String = ""
 
     /// Plain text only: prefix each line with `[mm:ss]`.
     var includeTimestampsInText: Bool = false
@@ -35,13 +62,17 @@ nonisolated struct CaptionExportOptions: Sendable, Equatable, Hashable {
     /// 44 mirrors a typical burn-in width.
     var maxRunesPerCue: Int = 0
 
+    /// New parameters go at the end with defaults so existing call sites — and
+    /// the exporter's golden-string tests — keep compiling untouched.
     init(
         format: CaptionExportFormat = .vtt,
         granularity: CaptionExportGranularity = .sentence,
         speakerStyle: SpeakerStyle = .prefix,
         includeTimestampsInText: Bool = false,
         stripPunctuation: Bool = false,
-        maxRunesPerCue: Int = 0
+        maxRunesPerCue: Int = 0,
+        translationMode: TranslationMode = .originalOnly,
+        translationLanguage: String = ""
     ) {
         self.format = format
         self.granularity = granularity
@@ -49,12 +80,24 @@ nonisolated struct CaptionExportOptions: Sendable, Equatable, Hashable {
         self.includeTimestampsInText = includeTimestampsInText
         self.stripPunctuation = stripPunctuation
         self.maxRunesPerCue = maxRunesPerCue
+        self.translationMode = translationMode
+        self.translationLanguage = translationLanguage
+    }
+
+    /// Mode the options can actually express. Choosing a layout without picking
+    /// a language means nothing, so it degrades to original-only — same
+    /// tolerance as `effectiveGranularity`.
+    var effectiveTranslationMode: TranslationMode {
+        translationLanguage.isEmpty ? .originalOnly : translationMode
     }
 
     /// Granularity the format can actually express. Word-karaoke silently
     /// degrades to sentence for SRT/text/JSON rather than emitting VTT syntax
     /// into a file that can't hold it.
     var effectiveGranularity: CaptionExportGranularity {
+        // Translations have no word timings, so there is nothing to karaoke and
+        // nothing to cut per word. Sentence is the only honest granularity.
+        if effectiveTranslationMode != .originalOnly { return .sentence }
         if granularity == .wordKaraoke, !format.supportsWordKaraoke { return .sentence }
         return granularity
     }
@@ -68,6 +111,7 @@ nonisolated struct CaptionExportOptions: Sendable, Equatable, Hashable {
 nonisolated enum CaptionExportError: LocalizedError {
     case noSegments
     case noWordTimings
+    case noTranslation(String)
 
     var errorDescription: String? {
         switch self {
@@ -75,6 +119,9 @@ nonisolated enum CaptionExportError: LocalizedError {
             return "There are no captions to export."
         case .noWordTimings:
             return "This transcript has no word timings, so word-level export is unavailable."
+        case .noTranslation(let language):
+            let name = Locale.current.localizedString(forIdentifier: language) ?? language
+            return "There is no \(name) translation to export. Run a translation pass first."
         }
     }
 }
@@ -94,6 +141,13 @@ nonisolated struct CaptionExporter {
         options: CaptionExportOptions
     ) async throws -> Data {
         guard !snapshot.segments.isEmpty else { throw CaptionExportError.noSegments }
+
+        // A translation-only export of a transcript that was never translated
+        // would be a file of blank cues. Fail loudly instead.
+        if options.effectiveTranslationMode == .translationOnly,
+           !snapshot.hasTranslation(options.translationLanguage) {
+            throw CaptionExportError.noTranslation(options.translationLanguage)
+        }
 
         if options.format == .json {
             return try renderJSON(snapshot)
@@ -131,12 +185,17 @@ nonisolated struct CaptionExporter {
                     endMs: segment.endMs,
                     text: segment.text,
                     words: segment.words,
-                    isEstimatedTiming: segment.isEstimatedTiming
+                    isEstimatedTiming: segment.isEstimatedTiming,
+                    translation: segment.translation(options.translationLanguage)
                 )
             }
             guard options.maxRunesPerCue > 0, options.effectiveGranularity == .sentence else {
                 return base
             }
+            // Re-wrapping cuts a cue by rune weight. There is no principled way
+            // to cut its translation to match — the two languages don't break at
+            // the same points — so a translated export keeps whole cues.
+            guard options.effectiveTranslationMode == .originalOnly else { return base }
             return base.flatMap { rewrap($0, maxRunes: options.maxRunesPerCue) }
 
         case .word:
@@ -201,6 +260,30 @@ nonisolated struct CaptionExporter {
         }
     }
 
+    // MARK: - Bilingual bodies
+
+    /// The lines one cue contributes, before escaping.
+    ///
+    /// A cue with no translation falls back to its original in
+    /// `.translationOnly` rather than emitting an empty body — players render an
+    /// empty cue as a visible blank flash, which is worse than an untranslated
+    /// line the user can spot and fix. `render` has already rejected the case
+    /// where *nothing* was translated, so this only covers the ragged tail.
+    static func bodyLines(_ cue: CaptionCue, options: CaptionExportOptions) -> [String] {
+        let original = displayText(cue.text, options: options)
+        guard options.effectiveTranslationMode != .originalOnly else { return [original] }
+
+        let translated = displayText(cue.translation, options: options)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !translated.isEmpty else { return [original] }
+
+        switch options.effectiveTranslationMode {
+        case .originalOnly: return [original]
+        case .translationOnly: return [translated]
+        case .bilingual: return [original, translated]
+        }
+    }
+
     // MARK: - Renderers
 
     static func renderVTT(
@@ -241,8 +324,13 @@ nonisolated struct CaptionExporter {
             return decorate(body, label: label, options: options)
         }
 
-        let body = escapeVTT(displayText(cue.text, options: options))
-        return decorate(body, label: label, options: options)
+        // Each line is escaped separately and joined with a raw newline: WebVTT
+        // genuinely supports multi-line cue payloads, and the speaker decoration
+        // belongs on the first line only.
+        let lines = bodyLines(cue, options: options).map { escapeVTT($0) }
+        guard let first = lines.first else { return "" }
+        let head = decorate(first, label: label, options: options)
+        return ([head] + lines.dropFirst()).joined(separator: "\n")
     }
 
     private static func decorate(
@@ -266,14 +354,16 @@ nonisolated struct CaptionExporter {
         var out = ""
         for (index, cue) in cues.enumerated() {
             let label = snapshot.speakerLabel(cue.speakerId)
-            var body = escapeSRT(displayText(cue.text, options: options))
-            if !label.isEmpty, options.effectiveSpeakerStyle != .none {
-                body = "\(label): \(body)"
+            var lines = bodyLines(cue, options: options).map { escapeSRT($0) }
+            if !label.isEmpty, options.effectiveSpeakerStyle != .none, !lines.isEmpty {
+                lines[0] = "\(label): \(lines[0])"
             }
-            // SRT conventionally uses CRLF line endings.
+            // SRT conventionally uses CRLF line endings — including between the
+            // two lines of a bilingual cue, which is exactly the two-line shape
+            // bilingual subtitles use in the wild.
             out += "\(index + 1)\r\n"
             out += "\(srtTimestamp(cue.startMs)) --> \(srtTimestamp(cue.endMs))\r\n"
-            out += "\(body)\r\n\r\n"
+            out += "\(lines.joined(separator: "\r\n"))\r\n\r\n"
         }
         return out
     }
@@ -288,18 +378,21 @@ nonisolated struct CaptionExporter {
 
         for cue in cues {
             let label = snapshot.speakerLabel(cue.speakerId)
-            var line = ""
+            var prefix = ""
 
             if options.includeTimestampsInText {
-                line += "[\(shortTimestamp(cue.startMs))] "
+                prefix += "[\(shortTimestamp(cue.startMs))] "
             }
             // Only repeat the speaker name when it changes, so a monologue
             // reads as prose instead of a wall of "Alice:".
             if !label.isEmpty, options.effectiveSpeakerStyle != .none, label != lastLabel {
-                line += "\(label): "
+                prefix += "\(label): "
             }
-            line += displayText(cue.text, options: options)
-            out += line + "\n"
+            // One output line per body line; the prefix goes on the original
+            // only, so a bilingual transcript still reads as prose.
+            for (index, body) in bodyLines(cue, options: options).enumerated() {
+                out += (index == 0 ? prefix : "") + body + "\n"
+            }
             lastLabel = label.isEmpty ? lastLabel : label
         }
         return out
@@ -319,20 +412,30 @@ nonisolated struct CaptionExporter {
             let text: String
             let speaker: String
             let isEstimatedTiming: Bool
+            let translations: [String: String]
             let words: [WordDTO]
         }
         struct DocumentDTO: Encodable {
             let name: String
             let durationMs: Int
             let alignmentQuality: String
+            let sourceLanguage: String
+            let version: Int
+            let translationLanguages: [String]
             let speakers: [String]
             let segments: [SegmentDTO]
         }
 
+        // JSON deliberately ignores `translationMode` and emits every language,
+        // for the same reason it already ignores granularity and speaker style:
+        // it is a data format, and those are presentation choices.
         let document = DocumentDTO(
             name: snapshot.projectName,
             durationMs: snapshot.audioDurationMs,
             alignmentQuality: snapshot.alignmentQuality.rawValue,
+            sourceLanguage: snapshot.sourceLanguage,
+            version: snapshot.versionNumber,
+            translationLanguages: snapshot.availableTranslations,
             speakers: snapshot.speakers.map(\.label),
             segments: snapshot.segments.map { segment in
                 SegmentDTO(
@@ -341,6 +444,7 @@ nonisolated struct CaptionExporter {
                     text: segment.text,
                     speaker: segment.speakerLabel,
                     isEstimatedTiming: segment.isEstimatedTiming,
+                    translations: segment.translations,
                     words: segment.words.map {
                         WordDTO(
                             text: $0.text,
@@ -398,9 +502,10 @@ nonisolated struct CaptionExporter {
 
     /// Minimal WebVTT escaping.
     ///
-    /// Newlines are collapsed to spaces: the format allows multi-line cues, but
-    /// every caller passes a single sentence and collapsing keeps output compact
-    /// and the cue block unambiguous.
+    /// Newlines are collapsed to spaces: callers pass one line at a time, so a
+    /// newline inside the text is stray data that would split the cue block.
+    /// Bilingual output composes multi-line payloads by escaping each line and
+    /// joining them itself — see `vttPayload`.
     static func escapeVTT(_ s: String) -> String {
         var out = s.replacingOccurrences(of: "\r\n", with: "\n")
         out = out.replacingOccurrences(of: "\r", with: "\n")
@@ -422,15 +527,36 @@ nonisolated struct CaptionExporter {
 
     // MARK: - Filenames
 
-    static func defaultFilename(projectName: String, options: CaptionExportOptions) -> String {
+    /// `{project}_{language}[.words].{ext}`.
+    ///
+    /// The language code is what makes a multi-language export unambiguous once
+    /// several files land in the same folder. It is omitted when empty, so the
+    /// single-file case keeps the name it has always had.
+    static func defaultFilename(
+        projectName: String,
+        options: CaptionExportOptions,
+        languageCode: String = ""
+    ) -> String {
         let base = sanitize(projectName.isEmpty ? "captions" : projectName)
+        let language = languageCode.isEmpty ? "" : "_\(sanitize(languageCode))"
         let suffix: String
         switch options.effectiveGranularity {
         case .sentence: suffix = ""
         case .word: suffix = ".words"
         case .wordKaraoke: suffix = ".karaoke"
         }
-        return "\(base)\(suffix).\(options.format.fileExtension)"
+        return "\(base)\(language)\(suffix).\(options.format.fileExtension)"
+    }
+
+    /// The code that belongs in a single file's name for these options: the
+    /// translation target when one is selected, and nothing otherwise.
+    ///
+    /// Deliberately *not* falling back to `snapshot.sourceLanguage` — that would
+    /// rename every ordinary export from `Talk.srt` to `Talk_en.srt` for no
+    /// reason. The multi-file path passes the source language explicitly, where
+    /// it is needed to keep the original from colliding with its translations.
+    static func filenameLanguageCode(options: CaptionExportOptions) -> String {
+        options.translationLanguage
     }
 
     /// Keeps filenames safe on every platform: alphanumerics, spaces, dashes

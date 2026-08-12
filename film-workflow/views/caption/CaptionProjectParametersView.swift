@@ -19,6 +19,7 @@ struct CaptionProjectParametersView: View {
     @State private var importError: String?
     @State private var renamingSpeaker: CaptionSpeaker?
     @State private var speakerDraft: String = ""
+    @State private var deletingVersion: CaptionTranscriptVersion?
 
     private var resolvedProvider: CaptionProvider {
         project.providerOverride ?? settings.defaultProvider
@@ -31,6 +32,7 @@ struct CaptionProjectParametersView: View {
             if !project.speakers.isEmpty { speakerSection }
             CaptionTermsSection(project: project)
             if project.isNarrativeSourced { narrativeSection }
+            if !project.versions.isEmpty { versionSection }
             if hasStatus { statusSection }
         }
         .formStyle(.grouped)
@@ -291,6 +293,116 @@ struct CaptionProjectParametersView: View {
         }
     }
 
+    /// Every transcription run, newest first, with the active one marked.
+    ///
+    /// The only place a version can be switched or deleted — deliberately out of
+    /// the editor's way, since re-reading an old take is rare and deleting one
+    /// is irreversible.
+    private var versionSection: some View {
+        Section {
+            ForEach(project.orderedVersions) { version in
+                versionRow(version)
+            }
+        } header: {
+            Text("Versions")
+        } footer: {
+            Text("""
+                Each transcription run is kept as its own version, with its own \
+                translations. Switch versions to compare takes; deleting one \
+                removes its captions for good.
+                """)
+            .font(.caption)
+            .foregroundStyle(.secondary)
+        }
+        .confirmationDialog(
+            "Delete this version?",
+            isPresented: Binding(
+                get: { deletingVersion != nil },
+                set: { if !$0 { deletingVersion = nil } }
+            ),
+            titleVisibility: .visible,
+            presenting: deletingVersion
+        ) { version in
+            Button("Delete", role: .destructive) {
+                CaptionTranscriptionService.deleteVersion(
+                    version.id,
+                    from: project,
+                    context: modelContext
+                )
+                deletingVersion = nil
+            }
+            Button("Cancel", role: .cancel) { deletingVersion = nil }
+        } message: { version in
+            Text("Version \(version.number) and its \(version.segmentCount) captions will be removed. This cannot be undone.")
+        }
+    }
+
+    @ViewBuilder
+    private func versionRow(_ version: CaptionTranscriptVersion) -> some View {
+        let isActive = version.id == project.activeVersionID
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            Image(systemName: isActive ? "largecircle.fill.circle" : "circle")
+                .foregroundStyle(isActive ? Color.accentColor : .secondary)
+                .font(.caption)
+
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 6) {
+                    Text("Version \(version.number)")
+                        .fontWeight(isActive ? .semibold : .regular)
+                    if !version.languageDisplayName.isEmpty {
+                        Text(version.languageDisplayName)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                Text(versionDetail(version))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                if !version.translatedLanguages.isEmpty {
+                    Text(translationDetail(version))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            Spacer(minLength: 0)
+
+            Menu {
+                Button("Make Active") {
+                    CaptionTranscriptionService.activateVersion(version.id, in: project)
+                }
+                .disabled(isActive)
+                Divider()
+                Button("Delete…", role: .destructive) { deletingVersion = version }
+                    .disabled(project.versions.count < 2)
+            } label: {
+                Image(systemName: "ellipsis.circle")
+            }
+            .menuStyle(.borderlessButton)
+            .fixedSize()
+        }
+        .contentShape(Rectangle())
+    }
+
+    private func versionDetail(_ version: CaptionTranscriptVersion) -> String {
+        var parts: [String] = ["\(version.segmentCount) captions"]
+        if let provider = version.providerEnum {
+            parts.append(provider.displayName)
+        } else if !version.provider.isEmpty {
+            parts.append(version.provider)
+        }
+        parts.append(version.createdAt.formatted(date: .abbreviated, time: .shortened))
+        if !version.note.isEmpty { parts.append(version.note) }
+        return parts.joined(separator: " · ")
+    }
+
+    private func translationDetail(_ version: CaptionTranscriptVersion) -> String {
+        version.translations
+            .filter { $0.translatedCount > 0 }
+            .map { "\($0.languageDisplayName) \($0.translatedCount)/\($0.totalCount)" }
+            .joined(separator: " · ")
+    }
+
     /// Transcribing itself lives in the toolbar, matching the other tabs; this is
     /// only the record of the last run.
     private var statusSection: some View {
@@ -306,8 +418,8 @@ struct CaptionProjectParametersView: View {
         } header: {
             Text("Last transcription")
         } footer: {
-            if !project.segments.isEmpty {
-                Text("Re-transcribing replaces all captions, including your edits.")
+            if project.activeSegmentCount > 0 {
+                Text("Re-transcribing creates a new version. The current one is kept, along with its translations.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

@@ -11,6 +11,7 @@ struct CaptionTermsSection: View {
     @Bindable var project: CaptionProject
 
     @State private var editingTerm: CaptionTerm?
+    @State private var deletingTerm: CaptionTerm?
     @State private var showPasteSheet = false
     @State private var pasteDraft = ""
 
@@ -25,12 +26,12 @@ struct CaptionTermsSection: View {
                 .buttonStyle(.plain)
                 #if os(iOS)
                 .swipeActions(edge: .trailing) {
-                    Button("Delete", role: .destructive) { delete(term) }
+                    Button("Delete…", role: .destructive) { deletingTerm = term }
                 }
                 #endif
                 .contextMenu {
                     Button("Edit…") { editingTerm = term }
-                    Button("Delete", role: .destructive) { delete(term) }
+                    Button("Delete…", role: .destructive) { deletingTerm = term }
                 }
             }
 
@@ -70,6 +71,23 @@ struct CaptionTermsSection: View {
         }
         .sheet(isPresented: $showPasteSheet) {
             pasteSheet
+        }
+        .confirmationDialog(
+            "Delete this glossary term?",
+            isPresented: Binding(
+                get: { deletingTerm != nil },
+                set: { if !$0 { deletingTerm = nil } }
+            ),
+            titleVisibility: .visible,
+            presenting: deletingTerm
+        ) { term in
+            Button("Delete Term", role: .destructive) {
+                delete(term)
+                deletingTerm = nil
+            }
+            Button("Cancel", role: .cancel) { deletingTerm = nil }
+        } message: { term in
+            Text("\"\(term.text)\" and its known spelling variants will be permanently deleted.")
         }
     }
 
@@ -176,6 +194,7 @@ struct CaptionTermEditorSheet: View {
     @State private var variants: [String] = []
     @State private var newVariant = ""
     @State private var didLoad = false
+    @State private var showDeleteConfirmation = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -229,11 +248,7 @@ struct CaptionTermEditorSheet: View {
             Divider()
 
             HStack {
-                Button("Delete", role: .destructive) {
-                    project.terms.removeAll { $0.id == termID }
-                    project.updatedAt = Date()
-                    dismiss()
-                }
+                Button("Delete…", role: .destructive) { showDeleteConfirmation = true }
                 Spacer()
                 Button("Cancel", role: .cancel) { dismiss() }
                 Button("Save") { save() }
@@ -245,6 +260,20 @@ struct CaptionTermEditorSheet: View {
         }
         .frame(minWidth: 420, minHeight: 460)
         .onAppear(perform: load)
+        .confirmationDialog(
+            "Delete this glossary term?",
+            isPresented: $showDeleteConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button("Delete Term", role: .destructive) {
+                project.terms.removeAll { $0.id == termID }
+                project.updatedAt = Date()
+                dismiss()
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("The term and its known spelling variants will be permanently deleted.")
+        }
     }
 
     private func addVariant() {

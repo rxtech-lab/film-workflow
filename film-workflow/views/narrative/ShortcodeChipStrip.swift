@@ -5,6 +5,7 @@ struct ShortcodeChipStrip: View {
     let provider: NarrativeProvider
 
     @State private var editingToken: EditingToken?
+    @State private var pendingTokenDeletion: Int?
 
     struct EditingToken: Identifiable {
         let id = UUID()
@@ -17,10 +18,11 @@ struct ShortcodeChipStrip: View {
     private var tokens: [TokenMatch] { ShortcodeExpander.tokenMatches(in: text) }
 
     var body: some View {
-        if tokens.isEmpty {
-            EmptyView()
-        } else {
-            ScrollView(.horizontal, showsIndicators: false) {
+        Group {
+            if tokens.isEmpty {
+                EmptyView()
+            } else {
+                ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 6) {
                     ForEach(Array(tokens.enumerated()), id: \.offset) { index, token in
                         ShortcodeChip(token: token) {
@@ -31,14 +33,14 @@ struct ShortcodeChipStrip: View {
                                 wrapped: token.wrapped
                             )
                         } onDelete: {
-                            deleteToken(at: index)
+                            pendingTokenDeletion = index
                         }
                     }
                 }
                 .padding(.horizontal, 2)
                 .padding(.vertical, 2)
             }
-            .popover(item: $editingToken, arrowEdge: .top) { editing in
+                .popover(item: $editingToken, arrowEdge: .top) { editing in
                 #if os(iOS)
                 NavigationStack {
                     ShortcodeEditForm(
@@ -77,7 +79,25 @@ struct ShortcodeChipStrip: View {
                     editingToken = nil
                 }
                 #endif
+                }
             }
+        }
+        .confirmationDialog(
+            "Delete this shortcode?",
+            isPresented: Binding(
+                get: { pendingTokenDeletion != nil },
+                set: { if !$0 { pendingTokenDeletion = nil } }
+            ),
+            titleVisibility: .visible,
+            presenting: pendingTokenDeletion
+        ) { index in
+            Button("Delete Shortcode", role: .destructive) {
+                deleteToken(at: index)
+                pendingTokenDeletion = nil
+            }
+            Button("Cancel", role: .cancel) { pendingTokenDeletion = nil }
+        } message: { _ in
+            Text("The shortcode will be permanently removed from this paragraph.")
         }
     }
 
@@ -157,6 +177,7 @@ struct ShortcodeEditForm: View {
     @State var wrappedValue: String
     @State private var hasWrapped: Bool
     @State private var customArgIndices: Set<Int>
+    @State private var showDeleteConfirmation = false
 
     private let provider: NarrativeProvider
     private let onSave: (String, [String], String?) -> Void
@@ -257,6 +278,7 @@ struct ShortcodeEditForm: View {
     }
 
     var body: some View {
+        Group {
         #if os(iOS)
         Form {
             Section {
@@ -281,7 +303,7 @@ struct ShortcodeEditForm: View {
                 Button("Cancel") { onCancel() }
             }
             ToolbarItem(placement: .destructiveAction) {
-                Button(role: .destructive) { onDelete() } label: {
+                Button(role: .destructive) { showDeleteConfirmation = true } label: {
                     Image(systemName: "trash")
                         .foregroundStyle(.red)
                 }
@@ -330,6 +352,17 @@ struct ShortcodeEditForm: View {
         .frame(minWidth: 360)
         .frame(maxWidth: 420)
         #endif
+        }
+        .confirmationDialog(
+            "Delete this shortcode?",
+            isPresented: $showDeleteConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button("Delete Shortcode", role: .destructive) { onDelete() }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("The shortcode will be permanently removed from this paragraph.")
+        }
     }
 
     private var header: some View {
@@ -459,7 +492,7 @@ struct ShortcodeEditForm: View {
     private var footer: some View {
         HStack {
             Button(role: .destructive) {
-                onDelete()
+                showDeleteConfirmation = true
             } label: {
                 Label("Delete", systemImage: "trash")
             }

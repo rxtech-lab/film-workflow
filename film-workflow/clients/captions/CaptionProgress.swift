@@ -29,6 +29,8 @@ nonisolated enum CaptionProgress: Sendable, Equatable {
     /// in Settings — availability can force a fallback — and a run that takes
     /// minutes shouldn't leave the user guessing which model is spending them.
     case reviewingWithAI(engine: String, done: Int, total: Int)
+    /// Translating the active transcript into one target language.
+    case translating(done: Int, total: Int, language: String)
 
     /// Determinate progress where we have it; nil drives an indeterminate bar.
     var fraction: Double? {
@@ -44,7 +46,8 @@ nonisolated enum CaptionProgress: Sendable, Equatable {
             return min(max(Double(chunk) / Double(total), 0), 1)
         case .aligning(let fraction):
             return min(max(fraction, 0), 1)
-        case .reviewingWithAI(_, let done, let total):
+        case .reviewingWithAI(_, let done, let total),
+             .translating(let done, let total, _):
             guard total > 0 else { return nil }
             return min(max(Double(done) / Double(total), 0), 1)
         case .preparing, .loadingModel, .waitingForProvider, .buildingCues:
@@ -63,6 +66,7 @@ nonisolated enum CaptionProgress: Sendable, Equatable {
         case .aligning: return "Aligning to your script…"
         case .buildingCues: return "Building captions…"
         case .reviewingWithAI: return "Choosing where to break captions…"
+        case .translating: return "Translating captions…"
         }
     }
 
@@ -91,6 +95,10 @@ nonisolated enum CaptionProgress: Sendable, Equatable {
             let count = total > 0 ? "\(done) of \(total)" : ""
             guard !engine.isEmpty else { return count }
             return count.isEmpty ? engine : "\(engine) · \(count)"
+        case .translating(let done, let total, let language):
+            let count = total > 0 ? "\(done) of \(total)" : ""
+            guard !language.isEmpty else { return count }
+            return count.isEmpty ? language : "\(language) · \(count)"
         }
     }
 

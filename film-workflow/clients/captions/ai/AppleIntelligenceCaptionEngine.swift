@@ -43,6 +43,21 @@ nonisolated struct CaptionTermReviewOutput {
 }
 
 @Generable
+nonisolated struct CaptionTranslatedLineOutput {
+    @Guide(description: "The line number, exactly as shown in the list.")
+    var number: Int
+
+    @Guide(description: "That line translated, and nothing else — no number, no notes.")
+    var text: String
+}
+
+@Generable
+nonisolated struct CaptionTranslateOutput {
+    @Guide(description: "One entry per input line, in the same order, with the same numbers.")
+    var lines: [CaptionTranslatedLineOutput]
+}
+
+@Generable
 nonisolated struct CaptionChatEditOutput {
     @Guide(description: "The caption number this edit applies to.")
     var number: Int
@@ -76,7 +91,7 @@ nonisolated struct CaptionChatOutput {
 /// few dozen captions. The assistant's conversational continuity comes from the
 /// compacted history we send, not from session state.
 nonisolated struct AppleIntelligenceCaptionEngine: CaptionAIEngine {
-    var backend: CaptionAIBackend { .appleIntelligence }
+    var backend: AgentBackend { .appleIntelligence }
 
     /// Deterministic: these are proofreading tasks, not creative ones, and a
     /// stable answer is what makes a re-run trustworthy.
@@ -117,6 +132,31 @@ nonisolated struct AppleIntelligenceCaptionEngine: CaptionAIEngine {
         return CaptionTermReviewResult(
             corrections: response.fixes.map {
                 CaptionTermCorrection(number: $0.number, correctedText: $0.correctedText)
+            }
+        )
+    }
+
+    // MARK: - Translate
+
+    func translate(_ request: CaptionTranslateRequest) async throws -> CaptionTranslateResult {
+        guard !request.lines.isEmpty else { return CaptionTranslateResult(lines: []) }
+
+        let session = LanguageModelSession(
+            instructions: CaptionAIPrompts.translateInstructions(
+                source: request.sourceLanguage,
+                target: request.targetLanguage
+            )
+        )
+        let response = try await respond(
+            session: session,
+            prompt: CaptionAIPrompts.translatePrompt(request),
+            as: CaptionTranslateOutput.self
+        )
+        return CaptionTranslateResult(
+            lines: response.lines.compactMap { line in
+                let text = line.text.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !text.isEmpty else { return nil }
+                return CaptionTranslatedLine(number: line.number, text: text)
             }
         )
     }

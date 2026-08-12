@@ -10,12 +10,13 @@ struct film_workflowApp: App {
             NarrativeProject.self,
             GeneratedNarrative.self,
             RemotionProject.self,
-            RemotionMessage.self,
             ImageGenProject.self,
             GeneratedImage.self,
             CaptionProject.self,
             CaptionSegment.self,
-            CaptionAssistantMessage.self,
+            ProjectGroup.self,
+            AgentThread.self,
+            AgentMessage.self,
         ])
         let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
 
@@ -25,6 +26,10 @@ struct film_workflowApp: App {
             fatalError("Could not create ModelContainer: \(error)")
         }
     }()
+
+    #if os(macOS)
+        @Environment(\.openWindow) private var openWindow
+    #endif
 
     init() {
         FileStorage.ensureDirectories()
@@ -41,28 +46,36 @@ struct film_workflowApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView()
-            #if os(macOS)
-                .environment(RemotionChatController.shared)
-            #endif
-                .environment(CaptionAssistantController.shared)
+                .environment(AgentController.shared)
                 .task {
                     MCPServer.shared.bootstrap(container: sharedModelContainer)
                 }
         }
         .modelContainer(sharedModelContainer)
+        #if os(macOS)
+        .commands {
+            CommandGroup(after: .toolbar) {
+                Button("Agent") {
+                    openWindow(id: AgentWindowID.value)
+                }
+                .keyboardShortcut("0", modifiers: [.command, .option])
+            }
+        }
+        #endif
 
         #if os(macOS)
-        // The caption assistant gets its own window rather than a pane: editing
-        // captions means watching the list change as edits land, and a sheet or
-        // inspector would cover the thing you're editing. Keyed by
-        // `CaptionProject.projectUUID` so each project opens its own window and
-        // re-opening focuses the existing one.
-        WindowGroup(id: CaptionAssistantWindowID.value, for: UUID.self) { $projectUUID in
-            CaptionAssistantWindow(projectUUID: projectUUID)
-                .environment(CaptionAssistantController.shared)
+        // One agent window for the whole app — a `Window` rather than a
+        // `WindowGroup` because there is exactly one of it, so reopening raises
+        // the existing window instead of minting another. It carries no scene
+        // payload: what the agent is working on lives on the thread, not on the
+        // window, which is what lets several threads target different projects
+        // at once.
+        Window("Agent", id: AgentWindowID.value) {
+            AgentWindowView()
+                .environment(AgentController.shared)
         }
         .modelContainer(sharedModelContainer)
-        .defaultSize(width: 420, height: 640)
+        .defaultSize(width: 760, height: 720)
 
         Settings {
             SettingsView()

@@ -174,8 +174,8 @@ struct CaptionAIContextTests {
     @Test("The on-device budget is much smaller than the hosted one")
     func budgetsDiffer() {
         #expect(
-            CaptionAIBackend.appleIntelligence.contextBudgetCharacters
-                < CaptionAIBackend.openAICompatible.contextBudgetCharacters
+            AgentBackend.appleIntelligence.contextBudgetCharacters
+                < AgentBackend.openAICompatible.contextBudgetCharacters
         )
     }
 }

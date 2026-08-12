@@ -2,6 +2,7 @@ import SwiftUI
 
 struct LyricsEditorView: View {
     @Binding var entries: [LyricEntry]
+    @State private var pendingDeletion: UUID?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -30,11 +31,7 @@ struct LyricsEditorView: View {
                         let canMoveDown = currentIndex < entries.count - 1
                         LyricEntryRow(
                             entry: $entry,
-                            onDelete: {
-                                withAnimation {
-                                    entries.removeAll { $0.id == targetID }
-                                }
-                            },
+                            onDelete: { pendingDeletion = targetID },
                             onMoveUp: canMoveUp ? {
                                 guard let from = entries.firstIndex(where: { $0.id == targetID }),
                                       from > 0 else { return }
@@ -59,6 +56,23 @@ struct LyricsEditorView: View {
                     }
                 }
             }
+        }
+        .confirmationDialog(
+            "Delete this lyric section?",
+            isPresented: Binding(
+                get: { pendingDeletion != nil },
+                set: { if !$0 { pendingDeletion = nil } }
+            ),
+            titleVisibility: .visible,
+            presenting: pendingDeletion
+        ) { entryID in
+            Button("Delete Section", role: .destructive) {
+                withAnimation { entries.removeAll { $0.id == entryID } }
+                pendingDeletion = nil
+            }
+            Button("Cancel", role: .cancel) { pendingDeletion = nil }
+        } message: { _ in
+            Text("This lyric section will be permanently deleted.")
         }
     }
 

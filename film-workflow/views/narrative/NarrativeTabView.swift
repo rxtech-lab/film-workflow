@@ -8,9 +8,15 @@ struct NarrativeTabView: View {
     #endif
     @Query(sort: \NarrativeProject.updatedAt, order: .reverse) private var projects:
         [NarrativeProject]
+    @Query(sort: \ProjectGroup.name) private var groups: [ProjectGroup]
     @State private var selectedProject: NarrativeProject?
     @State private var renamingProject: NarrativeProject?
+    @State private var pendingProjectDeletion: NarrativeProject?
     @State private var renameText: String = ""
+    @State private var groupEditor: ProjectGroupEditorTarget?
+    @State private var groupName: String = ""
+    @State private var pendingGroupDeletion: ProjectGroup?
+    @State private var groupErrorMessage: String?
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
     @State private var isGenerating = false
     @State private var generationProgress: NarrativeGenerationProgress?
@@ -31,37 +37,69 @@ struct NarrativeTabView: View {
     @ViewBuilder
     private var sidebar: some View {
         List(selection: $selectedProject) {
-            ForEach(projects) { project in
-                NavigationLink(value: project) {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(project.name)
-                            .font(.headline)
-                            .lineLimit(1)
-                        Text(project.updatedAt, style: .date)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                    .padding(.vertical, 2)
-                }
-                .contextMenu {
-                    Button("Rename") {
-                        renameText = project.name
-                        renamingProject = project
-                    }
-                    Divider()
-                    Button("Delete", role: .destructive) {
-                        deleteProject(project)
-                    }
-                }
+            GroupedProjectSections(
+                projects: projects,
+                groups: groups,
+                dragIdentifier: { String(describing: $0.persistentModelID) },
+                onMove: moveProject,
+                onCreateProject: { addProject(groupID: $0) },
+                onCreateGroup: beginCreatingGroup,
+                onRenameGroup: beginRenamingGroup,
+                onDeleteGroup: { pendingGroupDeletion = $0 }
+            ) { project in
+                projectRow(project)
             }
+        }
+        .contextMenu {
+            ProjectCreationMenuItems(
+                onCreateProject: { addProject() },
+                onCreateGroup: beginCreatingGroup
+            )
         }
         .navigationSplitViewColumnWidth(min: 200, ideal: 240)
         .navigationTitle("Narratives")
         .toolbar {
-            ToolbarItem {
-                Button(action: addProject) {
+            ToolbarItemGroup {
+                Button(action: { addProject() }) {
                     Label("New Narrative", systemImage: "plus")
                 }
+                Button(action: beginCreatingGroup) {
+                    Label("New Group", systemImage: "folder.badge.plus")
+                }
+            }
+        }
+    }
+
+    private func projectRow(_ project: NarrativeProject) -> some View {
+        NavigationLink(value: project) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(project.name)
+                    .font(.headline)
+                    .lineLimit(1)
+                Text(project.updatedAt, style: .date)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.vertical, 2)
+        }
+        .contextMenu {
+            ProjectCreationMenuItems(
+                onCreateProject: { addProject(groupID: project.groupID) },
+                onCreateGroup: beginCreatingGroup
+            )
+            Divider()
+            Button("Rename") {
+                renameText = project.name
+                renamingProject = project
+            }
+            MoveToProjectGroupMenu(
+                groups: groups,
+                currentGroupID: project.groupID,
+                onMove: { moveProject(project, to: $0) }
+            )
+            Divider()
+            Button("Delete…", role: .destructive) {
+                pendingProjectDeletion = project
             }
         }
     }
@@ -118,6 +156,7 @@ struct NarrativeTabView: View {
                 }
             }
         }
+        .publishesAgentTarget(kind: .narrative, projectUUID: selectedProject.map(MCPProjectHandlers.stableID))
         .toolbar {
             if let project = selectedProject, !isCompact {
                 ToolbarItem(placement: .primaryAction) {
@@ -228,6 +267,29 @@ struct NarrativeTabView: View {
                 renamingProject = nil
             }
         }
+        .confirmationDialog(
+            "Delete this narrative project?",
+            isPresented: Binding(
+                get: { pendingProjectDeletion != nil },
+                set: { if !$0 { pendingProjectDeletion = nil } }
+            ),
+            titleVisibility: .visible,
+            presenting: pendingProjectDeletion
+        ) { project in
+            Button("Delete Project", role: .destructive) {
+                deleteProject(project)
+                pendingProjectDeletion = nil
+            }
+            Button("Cancel", role: .cancel) { pendingProjectDeletion = nil }
+        } message: { project in
+            Text("\"\(project.name)\" and its generated audio will be permanently deleted.")
+        }
+        .projectGroupDialogs(
+            editor: $groupEditor,
+            name: $groupName,
+            pendingDeletion: $pendingGroupDeletion,
+            errorMessage: $groupErrorMessage
+        )
     }
 
     // MARK: - Helpers
@@ -242,10 +304,29 @@ struct NarrativeTabView: View {
 
     // MARK: - Actions
 
-    private func addProject() {
+    private func addProject(groupID: UUID? = nil) {
         let project = NarrativeProject(name: "Untitled Narrative")
+        project.groupID = groupID
         modelContext.insert(project)
         selectedProject = project
+    }
+
+    private func beginCreatingGroup() {
+        groupName = ""
+        groupEditor = .create
+    }
+
+    private func beginRenamingGroup(_ group: ProjectGroup) {
+        groupName = group.name
+        groupEditor = .rename(group)
+    }
+
+    private func moveProject(_ project: NarrativeProject, to groupID: UUID?) {
+        do {
+            try ProjectGroupService.move(project, to: groupID, context: modelContext)
+        } catch {
+            groupErrorMessage = error.localizedDescription
+        }
     }
 
     private func deleteProject(_ project: NarrativeProject) {

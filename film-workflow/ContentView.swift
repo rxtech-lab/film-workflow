@@ -26,6 +26,11 @@ struct ContentView: View {
             }
             #endif
             #if !os(macOS)
+            // iOS has no second scene, so the agent is a tab here; on macOS it
+            // is a window (see `film_workflowApp`).
+            Tab(Tabs.Agent.displayName, systemImage: Tabs.Agent.systemImage, value: Tabs.Agent) {
+                AgentWindowView()
+            }
             Tab(Tabs.Settings.displayName, systemImage: Tabs.Settings.systemImage, value: Tabs.Settings) {
                 NavigationStack {
                     SettingsView()
@@ -40,5 +45,6 @@ struct ContentView: View {
 
 #Preview {
     ContentView()
-        .modelContainer(for: [MusicProject.self, GeneratedMusic.self, NarrativeProject.self, GeneratedNarrative.self, RemotionProject.self, RemotionMessage.self, ImageGenProject.self, GeneratedImage.self, CaptionProject.self, CaptionSegment.self], inMemory: true)
+        .environment(AgentController.shared)
+        .modelContainer(for: [MusicProject.self, GeneratedMusic.self, NarrativeProject.self, GeneratedNarrative.self, RemotionProject.self, ImageGenProject.self, GeneratedImage.self, CaptionProject.self, CaptionSegment.self, ProjectGroup.self, AgentThread.self, AgentMessage.self], inMemory: true)
 }

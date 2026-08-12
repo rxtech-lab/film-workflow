@@ -20,6 +20,18 @@ struct CaptionSegmentEditorSheet: View {
     @State private var player: CaptionEditorAudioPlayer?
     @State private var editingBoundary: CaptionTimestampBoundary?
     @State private var retimeNotice: String?
+    @State private var draftTranslationLanguage: String = ""
+    @State private var draftTranslation: String = ""
+
+    /// Languages this caption's version has, not just this caption's — so a row
+    /// that was skipped by a translation pass can still be filled in by hand.
+    private var translatedLanguages: [String] {
+        var codes = project.translatedLanguages
+        for code in segment.translatedLanguages where !codes.contains(code) {
+            codes.append(code)
+        }
+        return codes
+    }
 
     private var audioDurationMs: Int {
         project.audioDurationMs > 0 ? project.audioDurationMs : (player?.durationMs ?? 0)
@@ -61,6 +73,39 @@ struct CaptionSegmentEditorSheet: View {
 
     // MARK: - Sections
 
+    private var translationSection: some View {
+        Section {
+            if translatedLanguages.count > 1 {
+                Picker("Language", selection: $draftTranslationLanguage) {
+                    ForEach(translatedLanguages, id: \.self) { code in
+                        Text(CaptionTranslationAvailability.displayName(code)).tag(code)
+                    }
+                }
+                .onChange(of: draftTranslationLanguage) { previous, _ in
+                    // Commit the edit in progress before swapping languages,
+                    // otherwise switching the picker silently discards it.
+                    commitTranslation(for: previous)
+                    loadTranslation()
+                }
+            }
+
+            TextEditor(text: $draftTranslation)
+                .frame(minHeight: 70)
+                .font(.body)
+
+            if segment.isTranslationStale(draftTranslationLanguage) {
+                Label(
+                    "The caption changed after this was translated. Saving both marks it current again.",
+                    systemImage: "exclamationmark.arrow.triangle.2.circlepath"
+                )
+                .font(.caption)
+                .foregroundStyle(.orange)
+            }
+        } header: {
+            Text("Translation")
+        }
+    }
+
     private var header: some View {
         HStack {
             Text("Edit Caption")
@@ -86,6 +131,10 @@ struct CaptionSegmentEditorSheet: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 }
+            }
+
+            if !translatedLanguages.isEmpty {
+                translationSection
             }
 
             Section("Speaker") {
@@ -231,6 +280,33 @@ struct CaptionSegmentEditorSheet: View {
         if FileManager.default.fileExists(atPath: project.audioURL.path) {
             player = CaptionEditorAudioPlayer(url: project.audioURL)
         }
+
+        // Open on whatever the list is showing, so the row the user
+        // double-tapped and the sheet they get are about the same language.
+        let shown = project.displayedTranslationLanguage
+        draftTranslationLanguage = translatedLanguages.contains(shown)
+            ? shown
+            : (translatedLanguages.first ?? "")
+        loadTranslation()
+    }
+
+    private func loadTranslation() {
+        draftTranslation = segment.translatedText(draftTranslationLanguage)
+    }
+
+    /// Writes the draft back if it changed. `setTranslation` re-stamps the
+    /// fingerprint from the segment's *current* text, so editing the caption and
+    /// its translation in one pass correctly clears the stale badge.
+    private func commitTranslation(for language: String) {
+        guard !language.isEmpty else { return }
+        let trimmed = draftTranslation.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed != segment.translatedText(language) else { return }
+        segment.setTranslation(
+            trimmed,
+            language: language,
+            engine: segment.translation(language)?.engine ?? "",
+            isUserEdited: true
+        )
     }
 
     private func save() {
@@ -257,6 +333,9 @@ struct CaptionSegmentEditorSheet: View {
 
         segment.speakerId = draftSpeaker
         segment.isUserEdited = true
+        // After the text is final, so the fingerprint matches what was saved.
+        commitTranslation(for: draftTranslationLanguage)
+        project.refreshTranslationSummary()
         project.updatedAt = Date()
         dismiss()
     }

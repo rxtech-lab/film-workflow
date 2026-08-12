@@ -2,7 +2,17 @@
 import Foundation
 import SwiftData
 
-/// Tools that mirror the in-app `RemotionAgent`'s file/screenshot/image-gen toolset.
+extension Notification.Name {
+    /// Posted when `remotion_generate_image` saves a new image into a project's
+    /// `public/generated/`, so the parameters view can refresh its gallery.
+    ///
+    /// Declared here rather than in the agent because this handler is the only
+    /// thing that posts it — it previously lived on the in-app Remotion agent,
+    /// which no longer exists.
+    static let remotionGeneratedImageWritten = Notification.Name("remotionGeneratedImageWritten")
+}
+
+/// The file/screenshot/image-gen toolset for Remotion projects.
 /// Externally-driven agents call these to iterate on a remotion project.
 @MainActor
 enum RemotionMCPHandlers {
