@@ -5,76 +5,91 @@ import Foundation
 ///
 /// The insight that makes the CLI backends cheap: Claude Code and Codex are
 /// general coding agents that need a permission broker because they can write
-/// files and run shells. Our assistant needs neither — it only reads captions
-/// and *proposes* edits, and the app already exposes exactly those operations
-/// over MCP. So instead of porting an agent runtime, we scope the CLI to a
-/// handful of our own tools and let it call back in.
-///
-/// `caption_update_segment` is deliberately **not** in the allowlist: it writes
-/// immediately. A conversational agent gets `caption_propose_edits`, which
-/// queues changes for the user to approve.
+/// files and run shells. Ours needs neither — it works entirely through tools
+/// this app already exposes over MCP. So instead of porting an agent runtime we
+/// scope the CLI to our own tools and let it call back in, which means the
+/// in-process runtime and the CLI agents reach the identical
+/// `MCPToolRegistry.invoke` and cannot drift apart.
 @MainActor
-enum CaptionMCPBridge {
+enum AgentMCPBridge {
 
     /// Key for our server in the agent's MCP config. Also the tool-name prefix
     /// the agent sees (`mcp__film_workflow__caption_search_segments`), so it has
     /// to be a valid identifier — the server's own name has a hyphen.
     nonisolated static let serverKey = "film_workflow"
 
-    /// Read-only tools plus the propose tool. Nothing here can change a caption.
-    nonisolated static let allowedTools = [
-        "caption_list_segments",
-        "caption_search_segments",
-        "caption_export",
-        "caption_propose_edits",
-    ]
+    nonisolated static func prefix(_ name: String) -> String {
+        "mcp__\(serverKey)__\(name)"
+    }
 
-    nonisolated static var prefixedToolNames: [String] {
-        allowedTools.map { "mcp__\(serverKey)__\($0)" }
+    /// Tool names as the CLI sees them, filtered by the write policy.
+    ///
+    /// This is what replaced the old four-caption-tool allowlist: the CLI
+    /// agents now get the same surface the in-process runtime does, so a thread
+    /// on Codex is no less capable than one on the OpenAI loop.
+    static func prefixedToolNames(policy: AgentWritePolicy) -> [String] {
+        AgentToolPolicy.toolNames(policy: policy).map(prefix)
     }
 
     struct Endpoint: Sendable {
         var url: String
         var token: String?
-        /// True when this bridge started the server and should stop it again.
-        var startedByUs: Bool
     }
+
+    // MARK: - Lifecycle
+
+    /// How many turns are currently relying on the server we started.
+    ///
+    /// Refcounted because threads run concurrently: without this, the first of
+    /// two overlapping CLI turns to finish would stop the server out from under
+    /// the second, which would then fail every remaining tool call. Only the
+    /// last release actually stops it, and only if the user hadn't enabled the
+    /// server themselves.
+    private static var holdCount = 0
+    private static var startedByUs = false
 
     /// Starts the MCP server if it isn't already up, and returns where to reach it.
     ///
-    /// A user who has never enabled the MCP server still expects the assistant
-    /// to work, so this starts one on demand rather than telling them to go turn
-    /// a setting on — and `release` puts it back the way it was.
-    static func ensureRunning() async throws -> Endpoint {
+    /// A user who has never enabled the MCP server still expects the agent to
+    /// work, so this starts one on demand rather than telling them to go turn a
+    /// setting on — and `release` puts it back the way it was.
+    static func acquire() async throws -> Endpoint {
         let settings = MCPSettings.shared
         let server = MCPServer.shared
 
-        var startedByUs = false
         if !server.isRunning {
             await server.start()
-            startedByUs = true
+            // Only claim credit for a start that actually worked, or a failed
+            // start would leave `startedByUs` true and stop someone else's
+            // server on release.
+            if server.isRunning { startedByUs = true }
         }
 
         guard server.isRunning, let port = settings.actualPort else {
             throw CaptionAIError.backendUnavailable(
                 .claudeCode,
                 server.lastError ?? "The app's MCP server couldn't start, so the "
-                    + "command-line assistant has no way to read your captions."
+                    + "command-line agent has no way to reach your projects."
             )
         }
 
+        holdCount += 1
         return Endpoint(
             url: "http://127.0.0.1:\(port)/mcp",
-            token: settings.token,
-            startedByUs: startedByUs
+            token: settings.token
         )
     }
 
-    /// Stops the server again if we were the ones who started it.
-    static func release(_ endpoint: Endpoint) async {
-        guard endpoint.startedByUs, !MCPSettings.shared.enabled else { return }
+    /// Releases one hold, stopping the server again once the last one goes and
+    /// we were the ones who started it.
+    static func release() async {
+        holdCount = max(0, holdCount - 1)
+        guard holdCount == 0, startedByUs, !MCPSettings.shared.enabled else { return }
+        startedByUs = false
         await MCPServer.shared.stop()
     }
+
+    // MARK: - Agent configuration
 
     /// Writes the `--mcp-config` file Claude Code reads.
     ///
@@ -123,37 +138,6 @@ enum CaptionMCPBridge {
         var env = RemotionRuntime.enrichedEnvironment()
         if let token, !token.isEmpty { env[tokenEnvironmentKey] = token }
         return env
-    }
-
-    /// System prompt shared by both CLI backends.
-    ///
-    /// Names the tools explicitly because a coding agent's default instinct is
-    /// to reach for the filesystem, and there is nothing here for it to edit.
-    nonisolated static func systemPrompt(captionID: UUID, projectName: String) -> String {
-        """
-        You are the caption-editing assistant inside a macOS app called Film \
-        Studio. You are not editing a code repository — do not read, write or \
-        search files, and do not run shell commands. Everything you need is in \
-        the MCP tools below.
-
-        The caption project you are working on is "\(projectName)". Its \
-        caption_id is \(captionID.uuidString) — pass it to every tool call.
-
-        Tools:
-        - mcp__\(serverKey)__caption_search_segments — find captions by keyword. \
-        Prefer this over listing everything.
-        - mcp__\(serverKey)__caption_list_segments — page through captions when \
-        you need a range rather than a keyword.
-        - mcp__\(serverKey)__caption_propose_edits — propose changes. This is the \
-        only way to change anything.
-        - mcp__\(serverKey)__caption_export — render captions to a file, if asked.
-
-        Propose edits rather than describing them. The user reviews and approves \
-        every change before it takes effect, so never claim you have already \
-        changed something — say what you have proposed.
-
-        Keep your final reply to a couple of sentences.
-        """
     }
 }
 #endif

@@ -2,10 +2,11 @@ import Foundation
 import SwiftData
 
 @Model
-final class ImageGenProject {
+final class ImageGenProject: GroupableProject {
     var name: String
     var createdAt: Date
     var updatedAt: Date
+    var groupID: UUID?
 
     var provider: String
     var prompt: String
@@ -33,6 +34,7 @@ final class ImageGenProject {
         self.name = name
         self.createdAt = Date()
         self.updatedAt = Date()
+        self.groupID = nil
         self.provider = ImageProvider.openai.rawValue
         self.prompt = ""
         self.googleModel = ""

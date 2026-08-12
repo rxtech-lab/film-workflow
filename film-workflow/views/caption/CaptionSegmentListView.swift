@@ -1,5 +1,6 @@
 import SwiftData
 import SwiftUI
+import Translation
 
 /// The caption editor's main list.
 ///
@@ -10,14 +11,21 @@ struct CaptionSegmentListView: View {
     @Bindable var project: CaptionProject
     @Environment(\.modelContext) private var modelContext
 
+    /// Prepared once while the project loader is visible, then refreshed after
+    /// edits. A row lookup must never snapshot the whole project.
+    @State private var validationIssuesBySegment: [UUID: [CaptionValidationIssue]]
+    @State private var validatedProjectUpdate: Date?
+
     @State private var clipPlayer = CaptionClipPlayer()
     @State private var editingSegment: CaptionSegment?
     @State private var inspectingSegment: CaptionSegment?
+    @State private var deletingSegment: CaptionSegment?
     @State private var showRetimeSheet = false
     @State private var showExportSheet = false
     @State private var selection: Set<UUID> = []
     @State private var bulkSpeaker: UUID?
     @State private var gapNotice: String?
+    @State private var deletingVersion: CaptionTranscriptVersion?
 
     @State private var settings = CaptionSettings.shared
     @State private var aiTask: Task<Void, Never>?
@@ -26,20 +34,29 @@ struct CaptionSegmentListView: View {
     @State private var pendingProposal: CaptionEditProposal?
     @State private var aiError: String?
     @State private var aiNotice: String?
-    @State private var showAssistantSheet = false
 
-    #if os(macOS)
-        @Environment(\.openWindow) private var openWindow
-    #endif
+    @State private var showTranslateSheet = false
+    @State private var translationTask: Task<Void, Never>?
+    @State private var translationProgress: CaptionProgress?
+    @State private var isTranslating = false
+    @State private var translationError: String?
+    @State private var translationNotice: String?
+    @State private var removingTranslation: String?
+    /// Set when a run needs an Apple `TranslationSession`, which only the
+    /// `.translationTask` modifier can produce.
+    @State private var translationConfig: TranslationSession.Configuration?
+    @State private var pendingChoice: CaptionTranslateChoice?
 
     private var segments: [CaptionSegment] { project.orderedSegments }
 
-    private var issues: [CaptionValidationIssue] {
-        CaptionTranscriptValidator.issues(in: project.snapshot())
-    }
-
-    private func issues(forSegmentAt index: Int) -> [CaptionValidationIssue] {
-        issues.filter { $0.segmentIndex == index && $0.wordIndex == nil }
+    init(
+        project: CaptionProject,
+        initialValidationIssues: [UUID: [CaptionValidationIssue]] = [:],
+        validatedProjectUpdate: Date? = nil
+    ) {
+        self.project = project
+        _validationIssuesBySegment = State(initialValue: initialValidationIssues)
+        _validatedProjectUpdate = State(initialValue: validatedProjectUpdate)
     }
 
     var body: some View {
@@ -72,10 +89,20 @@ struct CaptionSegmentListView: View {
                 aiTask?.cancel()
             }
         }
-        .sheet(isPresented: $showAssistantSheet) {
-            NavigationStack {
-                CaptionAssistantView(project: project, selection: selection)
+        .sheet(isPresented: $showTranslateSheet) {
+            CaptionTranslateSheet(project: project, selection: selection) { choice in
+                startTranslation(choice)
             }
+        }
+        .sheet(isPresented: $isTranslating) {
+            CaptionTranscriptionProgressView(progress: translationProgress) {
+                translationTask?.cancel()
+            }
+        }
+        // Apple's engine only exists inside this modifier. `translationConfig`
+        // stays nil for the AI engine, which leaves the task dormant.
+        .translationTask(translationConfig) { session in
+            await runAppleTranslation(session: session)
         }
         .sheet(item: $pendingProposal) { proposal in
             CaptionAIReviewSheet(project: project, proposal: proposal) { applied in
@@ -117,20 +144,77 @@ struct CaptionSegmentListView: View {
         } message: {
             Text(gapNotice ?? "")
         }
+        .alert(
+            "Translation",
+            isPresented: Binding(
+                get: { translationNotice != nil },
+                set: { if !$0 { translationNotice = nil } }
+            )
+        ) {
+            Button("OK") { translationNotice = nil }
+        } message: {
+            Text(translationNotice ?? "")
+        }
+        .alert(
+            "Translation failed",
+            isPresented: Binding(
+                get: { translationError != nil },
+                set: { if !$0 { translationError = nil } }
+            )
+        ) {
+            Button("OK") { translationError = nil }
+        } message: {
+            Text(translationError ?? "")
+        }
+        .confirmationDialog(
+            "Remove this translation?",
+            isPresented: Binding(
+                get: { removingTranslation != nil },
+                set: { if !$0 { removingTranslation = nil } }
+            ),
+            titleVisibility: .visible,
+            presenting: removingTranslation
+        ) { code in
+            Button("Remove", role: .destructive) { removeTranslation(code) }
+            Button("Cancel", role: .cancel) { removingTranslation = nil }
+        } message: { code in
+            Text("Every \(CaptionTranslationAvailability.displayName(code)) translation in this version will be deleted, including any you edited.")
+        }
+        .modifier(CaptionVersionDeleteConfirmation(
+            version: $deletingVersion,
+            onDelete: { version in
+                CaptionTranscriptionService.deleteVersion(
+                    version.id,
+                    from: project,
+                    context: modelContext
+                )
+            }
+        ))
+        .modifier(CaptionSegmentDeleteConfirmation(
+            segment: $deletingSegment,
+            onDelete: delete
+        ))
+        .task(id: project.updatedAt) {
+            await refreshValidationIssuesIfNeeded()
+        }
         .onDisappear { clipPlayer.stop() }
     }
 
     // MARK: - List
 
     private var list: some View {
-        List(selection: $selection) {
-            if project.alignmentQualityEnum.needsReview || !project.warning.isEmpty {
+        // Built once per list pass and handed down, not recomputed inside the
+        // `ForEach`: the glossary is the same for every row.
+        let resolver = CaptionTermResolver(terms: project.usableTerms)
+
+        return List(selection: $selection) {
+            if project.activeAlignmentQuality.needsReview || !project.activeWarning.isEmpty {
                 Section { warningBanner }
             }
 
             Section {
                 ForEach(Array(segments.enumerated()), id: \.element.uuid) { index, segment in
-                    row(index: index, segment: segment)
+                    row(index: index, segment: segment, resolver: resolver)
                         .tag(segment.uuid)
                 }
             } header: {
@@ -139,6 +223,9 @@ struct CaptionSegmentListView: View {
                     Spacer()
                     if !selection.isEmpty {
                         Text("\(selection.count) selected")
+                    }
+                    if !project.translatedLanguages.isEmpty {
+                        translationPicker
                     }
                 }
             }
@@ -149,9 +236,39 @@ struct CaptionSegmentListView: View {
         #endif
     }
 
+    /// Which translation shows beneath each caption.
+    ///
+    /// Bound to the model rather than local `@State`: the choice is per-project,
+    /// survives relaunch, and seeds the export sheet — three things a view-local
+    /// toggle would get wrong.
+    private var translationPicker: some View {
+        Menu {
+            Picker("Translation", selection: $project.displayedTranslationLanguage) {
+                Text("Original only").tag("")
+                ForEach(project.translatedLanguages, id: \.self) { code in
+                    Text(CaptionTranslationAvailability.displayName(code)).tag(code)
+                }
+            }
+        } label: {
+            Label(
+                project.displayedTranslationLanguage.isEmpty
+                    ? "Original"
+                    : CaptionTranslationAvailability.displayName(project.displayedTranslationLanguage),
+                systemImage: "character.bubble"
+            )
+            .font(.caption)
+        }
+        .menuStyle(.borderlessButton)
+        .fixedSize()
+    }
+
     @ViewBuilder
-    private func row(index: Int, segment: CaptionSegment) -> some View {
-        let rowIssues = issues(forSegmentAt: index)
+    private func row(
+        index: Int,
+        segment: CaptionSegment,
+        resolver: CaptionTermResolver
+    ) -> some View {
+        let rowIssues = validationIssuesBySegment[segment.uuid] ?? []
 
         HStack(alignment: .top, spacing: 10) {
             Text("\(index + 1)")
@@ -202,6 +319,8 @@ struct CaptionSegmentListView: View {
                     .font(.body)
                     .textSelection(.enabled)
 
+                translationLine(for: segment, resolver: resolver)
+
                 ForEach(rowIssues) { issue in
                     Label(issue.message, systemImage: "exclamationmark.triangle.fill")
                         .font(.caption)
@@ -224,11 +343,11 @@ struct CaptionSegmentListView: View {
             Button("Merge with Next") { mergeWithNext(segment) }
                 .disabled(nextSegment(after: segment) == nil)
             Divider()
-            Button("Delete", role: .destructive) { delete(segment) }
+            Button("Delete…", role: .destructive) { deletingSegment = segment }
         }
         #if os(iOS)
         .swipeActions(edge: .trailing) {
-            Button("Delete", role: .destructive) { delete(segment) }
+            Button("Delete…", role: .destructive) { deletingSegment = segment }
             Button("Edit") { editingSegment = segment }
                 .tint(.blue)
         }
@@ -239,12 +358,70 @@ struct CaptionSegmentListView: View {
         #endif
     }
 
+    /// Snapshotting stays on the model's actor; the pure validation pass can
+    /// run away from it. `updatedAt` changes after every editor mutation.
+    private func refreshValidationIssuesIfNeeded() async {
+        let expectedUpdate = project.updatedAt
+        guard validatedProjectUpdate != expectedUpdate else { return }
+
+        // Keep direct uses of this view safe even when they do not come through
+        // CaptionTabView's preparation gate.
+        project.ensureVersioned()
+        let snapshot = project.snapshot()
+        let issues = await Task.detached(priority: .userInitiated) {
+            CaptionTranscriptValidator.rowIssuesBySegmentID(in: snapshot)
+        }.value
+
+        guard !Task.isCancelled, project.updatedAt == expectedUpdate else { return }
+        validationIssuesBySegment = issues
+        validatedProjectUpdate = expectedUpdate
+    }
+
+    /// The selected translation, under the original.
+    ///
+    /// Secondary colour at `.callout` is what makes the original read as the
+    /// primary text — a divider or an indent would fight the row metrics the
+    /// timestamps and speaker chip already establish.
+    @ViewBuilder
+    private func translationLine(
+        for segment: CaptionSegment,
+        resolver: CaptionTermResolver
+    ) -> some View {
+        let code = project.displayedTranslationLanguage
+        if !code.isEmpty {
+            if let translation = segment.translation(code), !translation.isEmpty {
+                HStack(alignment: .top, spacing: 4) {
+                    // Rendered, not raw: `{{RxLab}}` is storage, and it resolves
+                    // against the glossary every time the row is drawn — which
+                    // is why editing a term's wording updates the list at once.
+                    Text(resolver.render(translation.text, language: code))
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                        .textSelection(.enabled)
+                    if segment.isTranslationStale(code) {
+                        Image(systemName: "exclamationmark.arrow.triangle.2.circlepath")
+                            .font(.caption2)
+                            .foregroundStyle(.orange)
+                            .help("The caption changed after this was translated")
+                    }
+                }
+            } else {
+                Text("Not translated")
+                    .font(.callout)
+                    .foregroundStyle(.tertiary)
+            }
+        }
+    }
+
+    /// Describes the take on screen, not the last run: everything here reads the
+    /// active version, so switching to a version with real word timings — or
+    /// hand-timing the estimated captions away — drops the banner.
     private var warningBanner: some View {
         VStack(alignment: .leading, spacing: 6) {
-            if project.alignmentQualityEnum.needsReview {
+            if project.activeAlignmentQuality.needsReview {
                 Label {
                     Text(
-                        project.alignmentQualityEnum == .estimated
+                        project.activeAlignmentQuality == .estimated
                         ? "Timings are estimated from text length. Open the retimer to correct them."
                         : "Timings are aligned per sentence, not per word. Spot-check them in the retimer."
                     )
@@ -253,8 +430,8 @@ struct CaptionSegmentListView: View {
                 }
                 .foregroundStyle(.orange)
             }
-            if !project.warning.isEmpty {
-                Text(project.warning)
+            if !project.activeWarning.isEmpty {
+                Text(project.activeWarning)
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -268,38 +445,79 @@ struct CaptionSegmentListView: View {
 
     @ToolbarContentBuilder
     private var toolbarContent: some ToolbarContent {
-        ToolbarItem(placement: .primaryAction) {
-            Button {
-                showExportSheet = true
-            } label: {
-                Label("Export", systemImage: "square.and.arrow.up")
+        if !project.versions.isEmpty {
+            ToolbarItem(placement: .primaryAction) {
+                versionMenu
             }
-            .disabled(segments.isEmpty)
         }
 
         ToolbarItem(placement: .primaryAction) {
             Menu {
-                Button("Review Splits…") { reviewSplits() }
-                    .disabled(segments.isEmpty || isRunningAI)
-                Button("Check Terms…") { checkTerms() }
-                    .disabled(segments.isEmpty || project.usableTerms.isEmpty || isRunningAI)
+                Button {
+                    showExportSheet = true
+                } label: {
+                    Label("Export", systemImage: "square.and.arrow.up")
+                }
+
                 Divider()
-                Button("Open Assistant") { openAssistant() }
-            } label: {
-                Label("AI", systemImage: "sparkles")
-            }
-        }
 
-        ToolbarItem(placement: .primaryAction) {
-            Menu {
-                Button("Retimer…") { showRetimeSheet = true }
+                Menu {
+                    Button("Translate…") { showTranslateSheet = true }
+                        .disabled(isTranslating)
+
+                    if !project.translatedLanguages.isEmpty {
+                        Divider()
+                        ForEach(project.translatedLanguages, id: \.self) { code in
+                            Button(updateLabel(for: code)) { updateTranslation(code) }
+                                .disabled(isTranslating)
+                        }
+                        Divider()
+                        Menu("Remove Translation") {
+                            ForEach(project.translatedLanguages, id: \.self) { code in
+                                Button(
+                                    CaptionTranslationAvailability.displayName(code),
+                                    role: .destructive
+                                ) {
+                                    removingTranslation = code
+                                }
+                            }
+                        }
+                    }
+                } label: {
+                    Label("Translate", systemImage: "globe")
+                }
+
+                Divider()
+
+                Button {
+                    reviewSplits()
+                } label: {
+                    Label("Review Splits…", systemImage: "rectangle.split.3x1")
+                }
+                    .disabled(segments.isEmpty || isRunningAI)
+                Button {
+                    checkTerms()
+                } label: {
+                    Label("Check Terms…", systemImage: "text.magnifyingglass")
+                }
+                    .disabled(segments.isEmpty || project.usableTerms.isEmpty || isRunningAI)
+
+                Divider()
+
+                Button {
+                    showRetimeSheet = true
+                } label: {
+                    Label("Retimer…", systemImage: "timeline.selection")
+                }
                     .disabled(segments.isEmpty)
 
-                Button("Close Gaps Under 300 ms") {
+                Button {
                     let changed = project.removeGaps(shorterThan: 300)
                     gapNotice = changed == 0
                         ? "No gaps needed closing."
                         : "Closed \(changed) gap\(changed == 1 ? "" : "s")."
+                } label: {
+                    Label("Close Gaps Under 300 ms", systemImage: "arrow.left.and.right")
                 }
                 .disabled(segments.count < 2)
 
@@ -312,22 +530,222 @@ struct CaptionSegmentListView: View {
                     }
                 }
             } label: {
-                Label("Tools", systemImage: "slider.horizontal.3")
+                Label("More", systemImage: "ellipsis.circle")
+            }
+            .disabled(segments.isEmpty)
+        }
+    }
+
+    // MARK: - Versions
+
+    /// Switch or delete a transcription run, from the view it actually changes.
+    ///
+    /// A `Picker` rather than a list of buttons so the active version gets the
+    /// platform's own checkmark, and so the menu reads as one choice among
+    /// several rather than several unrelated commands.
+    private var versionMenu: some View {
+        Menu {
+            Picker("Version", selection: activeVersionBinding) {
+                ForEach(project.orderedVersions) { version in
+                    Text(versionMenuLabel(version)).tag(version.id)
+                }
+            }
+            .pickerStyle(.inline)
+
+            if project.versions.count > 1 {
+                Divider()
+                Menu {
+                    ForEach(project.orderedVersions) { version in
+                        Button("Version \(version.number)", role: .destructive) {
+                            deletingVersion = version
+                        }
+                    }
+                } label: {
+                    Label("Delete Version", systemImage: "trash")
+                }
+            }
+        } label: {
+            Label(
+                project.activeVersion.map { "Version \($0.number)" } ?? "Versions",
+                systemImage: "clock.arrow.circlepath"
+            )
+        }
+        .help("Switch between transcription runs")
+    }
+
+    /// Reads the project's active version and writes through the service, which
+    /// is what keeps the editor, exports and translations pointing at the same
+    /// take. `nil` is never written — the picker always has a selection.
+    private var activeVersionBinding: Binding<UUID?> {
+        Binding(
+            get: { project.activeVersionID },
+            set: { id in
+                guard let id, id != project.activeVersionID else { return }
+                _ = CaptionTranscriptionService.activateVersion(id, in: project)
+            }
+        )
+    }
+
+    /// One line, because a menu row is one line: the number carries the
+    /// identity and the rest is what distinguishes two runs from each other.
+    private func versionMenuLabel(_ version: CaptionTranscriptVersion) -> String {
+        var parts = ["Version \(version.number)"]
+        parts.append("\(version.segmentCount) captions")
+        if let provider = version.providerEnum {
+            parts.append(provider.displayName)
+        }
+        parts.append(version.createdAt.formatted(date: .abbreviated, time: .shortened))
+        return parts.joined(separator: " · ")
+    }
+
+    // MARK: - Translation
+
+    /// e.g. "Update Chinese (412 of 900)" — the counts are what tell the user
+    /// whether a run is worth starting.
+    private func updateLabel(for code: String) -> String {
+        let counts = CaptionTranslationService.counts(for: code, in: project)
+        let name = CaptionTranslationAvailability.displayName(code)
+        let outstanding = counts.total - counts.translated + counts.stale
+        guard outstanding > 0 else { return "\(name) — up to date" }
+        return "Update \(name) (\(outstanding) to do)"
+    }
+
+    private func updateTranslation(_ code: String) {
+        startTranslation(
+            CaptionTranslateChoice(
+                languageCode: code,
+                engine: settings.translationEngine,
+                preferredBackend: settings.translationEngine == .aiBackend
+                    ? settings.aiBackend
+                    : nil,
+                scope: .missingOrStale
+            )
+        )
+    }
+
+    /// Routes a run to the right engine.
+    ///
+    /// The AI engine can start immediately. Apple's can't: its session comes
+    /// from `.translationTask`, so all this can do is stash the choice and set
+    /// the configuration that wakes the modifier up.
+    private func startTranslation(_ choice: CaptionTranslateChoice) {
+        guard !isTranslating else { return }
+        pendingChoice = choice
+
+        switch choice.engine {
+        case .aiBackend:
+            runAITranslation(choice)
+
+        case .appleTranslation:
+            let target = Locale.Language(identifier: choice.languageCode)
+            let source = project.sourceLanguageCode.isEmpty
+                ? nil
+                : Locale.Language(identifier: project.sourceLanguageCode)
+
+            isTranslating = true
+            translationProgress = .translating(
+                done: 0,
+                total: 0,
+                language: CaptionTranslationAvailability.displayName(choice.languageCode)
+            )
+            // Re-requesting the same pair produces no new session, so an
+            // unchanged target has to be invalidated to fire the task again.
+            if translationConfig?.target == target, translationConfig?.source == source {
+                translationConfig?.invalidate()
+            } else {
+                translationConfig = TranslationSession.Configuration(source: source, target: target)
             }
         }
     }
 
-    // MARK: - AI actions
+    private func runAppleTranslation(session: TranslationSession) async {
+        guard let choice = pendingChoice, choice.engine == .appleTranslation else { return }
+        pendingChoice = nil
 
-    /// Opens the assistant beside the captions on macOS, and as a sheet on iOS
-    /// where a second window isn't available. Same view either way.
-    private func openAssistant() {
-        #if os(macOS)
-            openWindow(id: CaptionAssistantWindowID.value, value: project.projectUUID)
-        #else
-            showAssistantSheet = true
-        #endif
+        let runner = AppleTranslationRunner(
+            session: session,
+            sourceLanguage: project.sourceLanguageCode,
+            targetLanguage: choice.languageCode
+        )
+        await perform(choice: choice, runner: runner)
     }
+
+    private func runAITranslation(_ choice: CaptionTranslateChoice) {
+        pendingChoice = nil
+        let config = try? AppConfig.loadFromKeychain()
+        let runner: AICaptionTranslationRunner
+        do {
+            runner = try CaptionTranslationService.makeAIRunner(
+                project: project,
+                targetLanguage: choice.languageCode,
+                config: config,
+                preferredBackend: choice.preferredBackend
+            )
+        } catch {
+            translationError = error.localizedDescription
+            return
+        }
+
+        isTranslating = true
+        translationProgress = .translating(
+            done: 0,
+            total: 0,
+            language: CaptionTranslationAvailability.displayName(choice.languageCode)
+        )
+        translationTask = Task { await perform(choice: choice, runner: runner) }
+    }
+
+    /// Shared tail: run, report, and make sure the progress sheet comes down on
+    /// every path, including cancellation.
+    ///
+    /// Partial results are deliberately kept — the service writes each batch as
+    /// it lands, so cancelling half way through a nine-hundred-caption run
+    /// leaves the first half translated rather than throwing the work away.
+    private func perform(choice: CaptionTranslateChoice, runner: any CaptionTranslationRunner) async {
+        defer {
+            isTranslating = false
+            translationProgress = nil
+            translationTask = nil
+        }
+        do {
+            let outcome = try await CaptionTranslationService.translate(
+                project: project,
+                runner: runner,
+                scope: choice.scope,
+                context: modelContext,
+                onProgress: { translationProgress = $0 }
+            )
+            let name = CaptionTranslationAvailability.displayName(choice.languageCode)
+            let written = outcome.written
+            if written == 0, outcome.failed == 0 {
+                translationNotice = "Nothing needed translating into \(name)."
+            } else {
+                var notice = "Translated \(written) caption\(written == 1 ? "" : "s") into \(name)."
+                if outcome.failed > 0 {
+                    // Named rather than swallowed: the captions are still there,
+                    // untranslated, and re-running the sheet retries just them.
+                    notice += " \(outcome.failed) couldn't be translated — run it "
+                        + "again to retry them."
+                }
+                translationNotice = notice
+            }
+        } catch is CancellationError {
+            // User pressed Cancel; whatever was written stays written.
+        } catch {
+            translationError = error.localizedDescription
+        }
+    }
+
+    private func removeTranslation(_ code: String) {
+        removingTranslation = nil
+        do {
+            try CaptionTranslationService.removeTranslation(code, from: project, context: modelContext)
+        } catch {
+            translationError = error.localizedDescription
+        }
+    }
+
+    // MARK: - AI actions
 
     private func reviewSplits() {
         runAI { engine, transcript in
@@ -378,9 +796,9 @@ struct CaptionSegmentListView: View {
         guard !isRunningAI else { return }
 
         let config = try? AppConfig.loadFromKeychain()
-        let backend: CaptionAIBackend
+        let backend: AgentBackend
         do {
-            backend = try CaptionAIAvailability.shared.resolved(
+            backend = try AgentBackendAvailability.shared.resolved(
                 preferred: settings.aiBackend,
                 config: config,
                 for: .transcriptReview
@@ -392,8 +810,6 @@ struct CaptionSegmentListView: View {
 
         let transcript = project.snapshot()
         isRunningAI = true
-        // Named before the engine exists: building a CLI engine starts the MCP
-        // server, which is slow enough to be visible.
         aiProgress = .reviewingWithAI(engine: backend.modelLabel(config: config), done: 0, total: 0)
 
         aiTask = Task {
@@ -403,14 +819,11 @@ struct CaptionSegmentListView: View {
                 aiTask = nil
             }
             do {
-                // The conversational factory, because a CLI backend has to have
-                // the MCP server up before it can read a single caption.
-                let (engine, release) = try await CaptionAIEngineFactory.makeConversational(
-                    backend: backend,
-                    config: config,
-                    project: project
-                )
-                defer { Task { await release() } }
+                // Always an in-process engine: `resolved(for: .transcriptReview)`
+                // above never returns a command-line backend, because this work
+                // is per-cue over a whole transcript and a subprocess launch
+                // each would take minutes.
+                let engine = try CaptionAIEngineFactory.make(backend: backend, config: config)
 
                 let proposal = try await work(engine, transcript)
                 // Presenting a second sheet while the progress sheet is still up
@@ -475,6 +888,59 @@ struct CaptionSegmentListView: View {
     private func speakerTint(_ id: UUID?) -> Color {
         guard let speaker = project.speaker(id) else { return .secondary }
         return CaptionSpeakerPalette.color(at: speaker.colorIndex)
+    }
+}
+
+/// Deleting a version is irreversible and takes its captions with it, so it
+/// asks first. A `ViewModifier` for the same reason its sibling below is one:
+/// the editor's body is already at the type-checker's limit.
+private struct CaptionVersionDeleteConfirmation: ViewModifier {
+    @Binding var version: CaptionTranscriptVersion?
+    let onDelete: (CaptionTranscriptVersion) -> Void
+
+    func body(content: Content) -> some View {
+        content.confirmationDialog(
+            "Delete this version?",
+            isPresented: Binding(
+                get: { version != nil },
+                set: { if !$0 { version = nil } }
+            ),
+            titleVisibility: .visible,
+            presenting: version
+        ) { target in
+            Button("Delete", role: .destructive) {
+                onDelete(target)
+                version = nil
+            }
+            Button("Cancel", role: .cancel) { version = nil }
+        } message: { target in
+            Text("Version \(target.number) and its \(target.segmentCount) captions will be removed. This cannot be undone.")
+        }
+    }
+}
+
+private struct CaptionSegmentDeleteConfirmation: ViewModifier {
+    @Binding var segment: CaptionSegment?
+    let onDelete: (CaptionSegment) -> Void
+
+    func body(content: Content) -> some View {
+        content.confirmationDialog(
+            "Delete this caption?",
+            isPresented: Binding(
+                get: { segment != nil },
+                set: { if !$0 { segment = nil } }
+            ),
+            titleVisibility: .visible,
+            presenting: segment
+        ) { target in
+            Button("Delete Caption", role: .destructive) {
+                onDelete(target)
+                segment = nil
+            }
+            Button("Cancel", role: .cancel) { segment = nil }
+        } message: { _ in
+            Text("This caption and its translations will be permanently deleted from the current version.")
+        }
     }
 }
 

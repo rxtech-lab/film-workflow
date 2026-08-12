@@ -9,6 +9,7 @@ struct GeneratedNarrativeListView: View {
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     #endif
     @State private var selectedFile: GeneratedNarrative?
+    @State private var pendingDeletion: GeneratedNarrative?
 
     @State private var captionProgress: CaptionProgress?
     @State private var isCaptioning = false
@@ -65,6 +66,23 @@ struct GeneratedNarrativeListView: View {
         } message: {
             Text(captionNotice ?? "")
         }
+        .confirmationDialog(
+            "Delete this generated narrative?",
+            isPresented: Binding(
+                get: { pendingDeletion != nil },
+                set: { if !$0 { pendingDeletion = nil } }
+            ),
+            titleVisibility: .visible,
+            presenting: pendingDeletion
+        ) { file in
+            Button("Delete Narrative", role: .destructive) {
+                delete(file: file)
+                pendingDeletion = nil
+            }
+            Button("Cancel", role: .cancel) { pendingDeletion = nil }
+        } message: { _ in
+            Text("The generated audio file will be permanently deleted.")
+        }
     }
 
     private var emptyStateView: some View {
@@ -103,7 +121,7 @@ struct GeneratedNarrativeListView: View {
                 }
                 .swipeActions(edge: .trailing, allowsFullSwipe: true) {
                     Button(role: .destructive) {
-                        delete(file: file)
+                        pendingDeletion = file
                     } label: {
                         Label("Delete", systemImage: "trash")
                     }
@@ -129,7 +147,7 @@ struct GeneratedNarrativeListView: View {
                         file: file,
                         isSelected: selectedFile?.id == file.id,
                         onSelect: { selectedFile = file },
-                        onDelete: { delete(file: file) },
+                        onDelete: { pendingDeletion = file },
                         onGenerateCaptions: { generateCaptions(for: file) }
                     )
                 }
@@ -175,7 +193,7 @@ struct GeneratedNarrativeListView: View {
                 file.captionProjectID = project.projectUUID
                 file.captionWarning = project.warning
                 captionNotice = project.warning.isEmpty
-                    ? "Created \(project.segments.count) captions. Open the Caption tab to edit them."
+                    ? "Created \(project.activeSegmentCount) captions. Open the Caption tab to edit them."
                     : project.warning
             } catch is CancellationError {
                 // User cancelled.

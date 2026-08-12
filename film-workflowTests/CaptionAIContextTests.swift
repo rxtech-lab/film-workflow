@@ -59,6 +59,49 @@ struct CaptionAIContextTests {
         #expect(CaptionAIContext.batches([], budget: 1_000).isEmpty)
     }
 
+    @Test("A line cap splits batches the character budget would have kept together")
+    func lineCapApplies() {
+        // A budget with room to spare, so only the line cap can be doing this.
+        let batches = CaptionAIContext.batches(lines(25), budget: 1_000_000, maxLines: 10)
+
+        #expect(batches.count == 3)
+        #expect(batches.map(\.count) == [10, 10, 5])
+        #expect(batches.flatMap { $0 }.map(\.number) == Array(1...25))
+    }
+
+    @Test("A line cap of zero is treated as one, not as a hang")
+    func lineCapNeverZero() {
+        let batches = CaptionAIContext.batches(lines(3), budget: 1_000_000, maxLines: 0)
+
+        #expect(batches.count == 3)
+        #expect(batches.allSatisfy { $0.count == 1 })
+    }
+
+    @Test("A custom cost function is what gets charged against the budget")
+    func customCostIsUsed() {
+        // Translation charges for `compactPrompt`, which drops the speaker
+        // label — a batch measured against `prompt` would be over-conservative.
+        let withSpeakers = (1...10).map { number in
+            CaptionAILine(
+                number: number,
+                segmentID: UUID(),
+                startMs: 0,
+                speaker: "A speaker with a long label",
+                text: "Short."
+            )
+        }
+
+        let charged = CaptionAIContext.batches(withSpeakers, budget: 400)
+        let compact = CaptionAIContext.batches(
+            withSpeakers,
+            budget: 400,
+            cost: { $0.compactPrompt.count + 1 }
+        )
+
+        #expect(compact.count < charged.count)
+        #expect(compact.flatMap { $0 }.count == withSpeakers.count)
+    }
+
     // MARK: - Retrieval
 
     @Test("A #12 reference pulls in that caption and its neighbours")
@@ -174,8 +217,8 @@ struct CaptionAIContextTests {
     @Test("The on-device budget is much smaller than the hosted one")
     func budgetsDiffer() {
         #expect(
-            CaptionAIBackend.appleIntelligence.contextBudgetCharacters
-                < CaptionAIBackend.openAICompatible.contextBudgetCharacters
+            AgentBackend.appleIntelligence.contextBudgetCharacters
+                < AgentBackend.openAICompatible.contextBudgetCharacters
         )
     }
 }

@@ -4,7 +4,7 @@ struct CaptionSettingsView: View {
     @State private var settings = CaptionSettings.shared
     @State private var modelStore = WhisperModelStore.shared
     @State private var navigation = AppNavigation.shared
-    @State private var availability = CaptionAIAvailability.shared
+    @State private var availability = AgentBackendAvailability.shared
 
     /// Snapshot of the Keychain config, so the engine picker can say whether an
     /// OpenAI-compatible endpoint is actually set up. Refreshed by `loadKeys`.
@@ -48,6 +48,7 @@ struct CaptionSettingsView: View {
                 narrativeSection
                 cueSection
                 aiSection
+                translationSection
 
                 Section {
                     Button("Save") { save() }
@@ -498,11 +499,39 @@ struct CaptionSettingsView: View {
         }
     }
 
+    private var translationSection: some View {
+        Section {
+            Picker("Engine", selection: $settings.translationEngine) {
+                ForEach(CaptionTranslationEngineKind.allCases) { kind in
+                    Text(kind.displayName).tag(kind)
+                }
+            }
+
+            if settings.translationEngine == .aiBackend {
+                Toggle("Follow the project glossary", isOn: $settings.translationRespectsGlossary)
+            }
+        } header: {
+            Text("Translation")
+        } footer: {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(settings.translationEngine.detail)
+                if settings.translationEngine == .appleTranslation {
+                    Text("""
+                        Translations requested by an outside agent over MCP always use the AI \
+                        backend — Apple's engine only runs inside the app.
+                        """)
+                }
+            }
+            .font(.caption)
+            .foregroundStyle(.secondary)
+        }
+    }
+
     @ViewBuilder
     private var aiSection: some View {
         Section {
             Picker("Engine", selection: $settings.aiBackend) {
-                ForEach(CaptionAIBackend.supported) { backend in
+                ForEach(AgentBackend.supported) { backend in
                     Text(backend.displayName).tag(backend)
                 }
             }

@@ -23,20 +23,31 @@ nonisolated struct CaptionTerm: Codable, Identifiable, Hashable, Sendable {
     /// near-misses; these just make the correction unambiguous.
     var variants: [String] = []
 
+    /// BCP-47 language code → the approved wording in that language.
+    ///
+    /// A missing or blank entry means "no approved wording", and a caption that
+    /// references the term renders `text` instead. Stored as a dictionary rather
+    /// than an array of structs because the value is a leaf — no timings, no
+    /// engine, no staleness fingerprint, unlike `CaptionTranslation` — and a
+    /// String-keyed dictionary keeps `Hashable` free and lookup O(1).
+    var translations: [String: String] = [:]
+
     enum CodingKeys: String, CodingKey {
-        case id, text, note, variants
+        case id, text, note, variants, translations
     }
 
     init(
         id: UUID = UUID(),
         text: String,
         note: String = "",
-        variants: [String] = []
+        variants: [String] = [],
+        translations: [String: String] = [:]
     ) {
         self.id = id
         self.text = text
         self.note = note
         self.variants = variants
+        self.translations = translations
     }
 
     init(from decoder: Decoder) throws {
@@ -45,6 +56,7 @@ nonisolated struct CaptionTerm: Codable, Identifiable, Hashable, Sendable {
         self.text = try c.decodeIfPresent(String.self, forKey: .text) ?? ""
         self.note = try c.decodeIfPresent(String.self, forKey: .note) ?? ""
         self.variants = try c.decodeIfPresent([String].self, forKey: .variants) ?? []
+        self.translations = try c.decodeIfPresent([String: String].self, forKey: .translations) ?? [:]
     }
 
     /// The term plus its variants, as normalized matching keys.
@@ -60,6 +72,47 @@ nonisolated struct CaptionTerm: Codable, Identifiable, Hashable, Sendable {
 
     var isEmpty: Bool {
         text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    // MARK: - Per-language wording
+
+    /// The approved wording for a language, or "" when there isn't one.
+    func translation(_ languageCode: String) -> String {
+        guard !languageCode.isEmpty else { return "" }
+        let wording = translations[languageCode]?.trimmingCharacters(in: .whitespacesAndNewlines)
+        return wording ?? ""
+    }
+
+    /// What a `{{term}}` placeholder resolves to in this language: the approved
+    /// wording when there is one, otherwise the canonical spelling. Falling back
+    /// to `text` matches the glossary's own rule — leave a proper noun in the
+    /// source form unless the target language has a standard rendering.
+    func rendered(in languageCode: String) -> String {
+        let wording = translation(languageCode)
+        return wording.isEmpty ? text : wording
+    }
+
+    /// Upserts a wording. Blank removes the entry rather than storing "".
+    mutating func setTranslation(_ text: String, language: String) {
+        guard !language.isEmpty else { return }
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty {
+            translations.removeValue(forKey: language)
+        } else {
+            translations[language] = trimmed
+        }
+    }
+
+    /// Languages with a non-blank wording, sorted by localized name so the
+    /// editor and the term row list them the same way.
+    var translatedLanguages: [String] {
+        translations
+            .filter { !$0.value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+            .keys
+            .sorted {
+                CaptionTranslationAvailability.displayName($0)
+                    < CaptionTranslationAvailability.displayName($1)
+            }
     }
 }
 
@@ -97,6 +150,40 @@ nonisolated enum CaptionTermMatching {
             let variants = term.variants.filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
             if !variants.isEmpty {
                 line += " — sometimes mis-heard as: \(variants.joined(separator: ", "))"
+            }
+            lines.append(line)
+        }
+        return lines.joined(separator: "\n")
+    }
+
+    /// Glossary block for the *translation* prompt, which asks for placeholders
+    /// instead of translated words.
+    ///
+    /// A sibling of `promptBlock` rather than a flag on it: the splitter, the
+    /// proofreader and the chat assistant all work on the original caption text,
+    /// where a `{{...}}` must never appear. Teaching the shared block about
+    /// placeholders would put them one prompt tweak away from the transcript.
+    ///
+    /// Variants are deliberately left out — a mis-hearing is a transcription
+    /// concern, and listing them here invites `{{rex lab}}`.
+    static func translationPromptBlock(_ terms: [CaptionTerm], target: String) -> String {
+        let usable = terms.filter { !$0.isEmpty }
+        guard !usable.isEmpty else { return "" }
+        let targetName = CaptionTranslationAvailability.displayName(target)
+
+        var lines = [
+            "Glossary — write each of these in your translation as the placeholder "
+                + "shown, never as translated words. The app substitutes the approved "
+                + "wording afterwards:"
+        ]
+        for term in usable {
+            var line = "- \(CaptionTermPlaceholder.wrap(term.text))"
+            if !term.note.isEmpty { line += " (\(term.note))" }
+            let wording = term.translation(target)
+            if wording.isEmpty {
+                line += " → no \(targetName) wording set; becomes \"\(term.text)\""
+            } else {
+                line += " → becomes \"\(wording)\""
             }
             lines.append(line)
         }

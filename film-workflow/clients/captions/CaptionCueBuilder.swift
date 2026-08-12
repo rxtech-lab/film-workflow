@@ -15,6 +15,11 @@ nonisolated struct CaptionCue: Sendable, Hashable {
     var locale: String = ""
     var confidence: Double = 0
 
+    /// The selected translation of `text`, populated only on the export path.
+    /// Empty everywhere the cue is being built from audio — a cue coming out of
+    /// a recognizer has nothing to translate yet.
+    var translation: String = ""
+
     var durationMs: Int { max(endMs - startMs, 0) }
 
     init(
@@ -26,8 +31,10 @@ nonisolated struct CaptionCue: Sendable, Hashable {
         words: [CaptionWord] = [],
         isEstimatedTiming: Bool = false,
         locale: String = "",
-        confidence: Double = 0
+        confidence: Double = 0,
+        translation: String = ""
     ) {
+        self.translation = translation
         self.speaker = speaker
         self.speakerId = speakerId
         self.startMs = startMs

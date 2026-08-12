@@ -29,6 +29,13 @@ nonisolated enum CaptionProgress: Sendable, Equatable {
     /// in Settings — availability can force a fallback — and a run that takes
     /// minutes shouldn't leave the user guessing which model is spending them.
     case reviewingWithAI(engine: String, done: Int, total: Int)
+    /// Translating the active transcript into one target language.
+    ///
+    /// `inFlight` is how many captions are currently out with the engine. It
+    /// matters because a batch is atomic: a short transcript is one request, so
+    /// `done` stays at zero for the whole run and a bar driven by it alone reads
+    /// as stuck when the work is in fact underway.
+    case translating(done: Int, total: Int, language: String, inFlight: Int = 0)
 
     /// Determinate progress where we have it; nil drives an indeterminate bar.
     var fraction: Double? {
@@ -47,6 +54,12 @@ nonisolated enum CaptionProgress: Sendable, Equatable {
         case .reviewingWithAI(_, let done, let total):
             guard total > 0 else { return nil }
             return min(max(Double(done) / Double(total), 0), 1)
+        case .translating(let done, let total, _, let inFlight):
+            guard total > 0 else { return nil }
+            // Nothing finished yet but a request is out: indeterminate, because
+            // 0% and "stuck" look identical and only one of them is true.
+            guard done > 0 || inFlight == 0 else { return nil }
+            return min(max(Double(done) / Double(total), 0), 1)
         case .preparing, .loadingModel, .waitingForProvider, .buildingCues:
             return nil
         }
@@ -63,6 +76,7 @@ nonisolated enum CaptionProgress: Sendable, Equatable {
         case .aligning: return "Aligning to your script…"
         case .buildingCues: return "Building captions…"
         case .reviewingWithAI: return "Choosing where to break captions…"
+        case .translating: return "Translating captions…"
         }
     }
 
@@ -91,6 +105,16 @@ nonisolated enum CaptionProgress: Sendable, Equatable {
             let count = total > 0 ? "\(done) of \(total)" : ""
             guard !engine.isEmpty else { return count }
             return count.isEmpty ? engine : "\(engine) · \(count)"
+        case .translating(let done, let total, let language, let inFlight):
+            var count = total > 0 ? "\(done) of \(total)" : ""
+            // Named so a single-request run says what it is waiting on rather
+            // than repeating a number that cannot move until it returns.
+            if inFlight > 0 {
+                let working = "translating \(inFlight)…"
+                count = count.isEmpty ? working : "\(count) · \(working)"
+            }
+            guard !language.isEmpty else { return count }
+            return count.isEmpty ? language : "\(language) · \(count)"
         }
     }
 

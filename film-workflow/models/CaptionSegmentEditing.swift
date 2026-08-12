@@ -14,8 +14,14 @@ extension CaptionSegment {
     /// act as anchors; unpinned runs between anchors are redistributed inside
     /// their sub-interval. Returns how many word timings changed, for the
     /// editor's confirmation text.
+    ///
+    /// `isHandSet` is what clears `isEstimatedTiming`: a boundary the user chose
+    /// against the waveform is a real time, and leaving the caption flagged as
+    /// estimated afterwards meant the editor's "timings are estimated" banner
+    /// could never be satisfied. Bulk nudges like `removeGaps` pass false —
+    /// closing a 200 ms gap doesn't make a guessed span measured.
     @discardableResult
-    func retime(toStartMs newStart: Int, endMs newEnd: Int) -> Int {
+    func retime(toStartMs newStart: Int, endMs newEnd: Int, isHandSet: Bool = true) -> Int {
         guard newEnd > newStart else { return 0 }
 
         let oldStart = startMs
@@ -23,6 +29,7 @@ extension CaptionSegment {
         startMs = newStart
         endMs = newEnd
         isUserEdited = true
+        if isHandSet { isEstimatedTiming = false }
 
         guard !words.isEmpty else { return 0 }
 
@@ -267,6 +274,11 @@ extension CaptionSegment {
     ///
     /// The caller inserts the returned segment into the context — this type
     /// can't reach the `ModelContext`.
+    ///
+    /// Translations stay with the head and are *not* copied to the tail: half a
+    /// source sentence paired with a whole translation would be wrong either
+    /// way, and the head's text just changed, so `isTranslationStale` flags it
+    /// automatically. Visibly stale beats silently discarded.
     func makeSplit(atWordIndex index: Int) -> CaptionSegment? {
         guard words.indices.contains(index), index > 0 else { return nil }
         let boundary = words[index].offsetMs
@@ -288,6 +300,7 @@ extension CaptionSegment {
             words: tail
         )
         trailing.isUserEdited = true
+        trailing.versionID = versionID
 
         endMs = boundary
         words = head
@@ -303,8 +316,32 @@ extension CaptionSegment {
         endMs = max(endMs, other.endMs)
         words = words + other.words
         isEstimatedTiming = isEstimatedTiming || other.isEstimatedTiming
+        mergeTranslations(with: other)
         isUserEdited = true
         normalizeWords()
+    }
+
+    /// Joins same-language translations with the same joiner used for `text`, so
+    /// a merged caption reads as one sentence in every language it has.
+    ///
+    /// A language present on only one side carries through unjoined; the
+    /// fingerprint then flags it stale, which is the honest signal — the merged
+    /// original no longer matches what was translated.
+    private func mergeTranslations(with other: CaptionSegment) {
+        guard !translations.isEmpty || !other.translations.isEmpty else { return }
+
+        var merged = translations
+        for incoming in other.translations {
+            guard let index = merged.firstIndex(where: { $0.languageCode == incoming.languageCode })
+            else {
+                merged.append(incoming)
+                continue
+            }
+            merged[index].text = CaptionText.join(merged[index].text, incoming.text)
+            merged[index].updatedAt = Date()
+            merged[index].isUserEdited = merged[index].isUserEdited || incoming.isUserEdited
+        }
+        translations = merged
     }
 
     // MARK: - Helpers
@@ -352,7 +389,7 @@ extension CaptionProject {
             let current = ordered[index]
             let gap = current.startMs - previous.endMs
             guard gap > 0, gap < thresholdMs else { continue }
-            current.retime(toStartMs: previous.endMs, endMs: current.endMs)
+            current.retime(toStartMs: previous.endMs, endMs: current.endMs, isHandSet: false)
             changed += 1
         }
         if changed > 0 { updatedAt = Date() }
@@ -361,9 +398,14 @@ extension CaptionProject {
 
     /// Renumbers `orderIndex` to match timeline order, so later inserts and
     /// splits keep a stable, meaningful ordering.
+    ///
+    /// Also refreshes the active version's translation counts: every caller is
+    /// here because the segment set changed — a split, a merge, a delete — and
+    /// those counts are denormalized onto the version.
     func reindexSegments() {
         for (index, segment) in orderedSegments.enumerated() {
             segment.orderIndex = index
         }
+        refreshTranslationSummary()
     }
 }

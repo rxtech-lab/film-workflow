@@ -21,6 +21,8 @@
 - `film-workflowTests/` – unit tests
 - `film-workflowUITests/` – UI tests
 - `film-workflow.xcodeproj/` – Xcode project
+- `scripts/ci/` – release scripts (signing, notarization, Sparkle appcast)
+- `Info.plist` – extra keys merged into the generated Info.plist (Sparkle feed + public key)
 
 ## Requirements
 
@@ -52,6 +54,44 @@ Example:
 ```bash
 xcodebuild test -project film-workflow.xcodeproj -scheme film-workflow -destination 'platform=iOS Simulator,name=iPhone 15'
 ```
+
+## Releases & Auto-Update
+
+The macOS app updates itself with [Sparkle](https://sparkle-project.org). The
+feed lives at `https://filmstudio.rxlab.app/appcast.xml`, published to GitHub
+Pages, and every update is verified against the EdDSA public key baked into
+`Info.plist`.
+
+Cutting a release:
+
+1. Run the **Create Release** workflow (`workflow_dispatch`). semantic-release
+   reads the commit history, tags, and publishes a GitHub release.
+2. Creating that release triggers **Build & Release**
+   (`.github/workflows/build.yaml`), which on the self-hosted macOS runner:
+   - sets `MARKETING_VERSION` from the tag and archives the app;
+   - signs the Sparkle framework's helpers and re-seals the app with the
+     Hardened Runtime (`scripts/ci/sign-sparkle.sh`);
+   - builds `RxFilmStudio.dmg`, notarizes and staples it
+     (`scripts/ci/notary.sh`);
+   - generates and signs `appcast.xml` (`scripts/ci/generate-appcast.sh`);
+   - uploads the DMG to the release and deploys the appcast to GitHub Pages.
+
+Users get the update on next launch, or via **RxFilmStudio → Check for
+Updates...**.
+
+Required secrets (org- or repo-level):
+
+| Secret | Purpose |
+| --- | --- |
+| `SPARKLE_KEY` | EdDSA private key signing the appcast; its public half is `SUPublicEDKey` in `Info.plist` |
+| `BUILD_CERTIFICATE_BASE64` / `P12_PASSWORD` | Developer ID certificate imported into the runner keychain |
+| `SIGNING_CERTIFICATE_NAME` | Identity name passed to `codesign` |
+| `APPLE_ID` / `APPLE_ID_PWD` / `APPLE_TEAM_ID` | Notarization credentials (`APPLE_ID_PWD` is an app-specific password) |
+| `RELEASE_TOKEN` | PAT used by semantic-release, so the created release triggers the build workflow |
+
+Rotating the Sparkle key means updating `SPARKLE_KEY` **and** `SUPublicEDKey`
+together — apps already in the wild trust the old public key, so a mismatched
+pair silently stops updates from installing.
 
 ## Notes
 

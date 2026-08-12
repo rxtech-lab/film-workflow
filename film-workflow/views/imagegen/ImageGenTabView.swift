@@ -7,9 +7,15 @@ struct ImageGenTabView: View {
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     #endif
     @Query(sort: \ImageGenProject.updatedAt, order: .reverse) private var projects: [ImageGenProject]
+    @Query(sort: \ProjectGroup.name) private var groups: [ProjectGroup]
     @State private var selectedProject: ImageGenProject?
     @State private var renamingProject: ImageGenProject?
+    @State private var pendingProjectDeletion: ImageGenProject?
     @State private var renameText: String = ""
+    @State private var groupEditor: ProjectGroupEditorTarget?
+    @State private var groupName: String = ""
+    @State private var pendingGroupDeletion: ProjectGroup?
+    @State private var groupErrorMessage: String?
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
     @State private var isGenerating = false
     @State private var errorMessage: String?
@@ -27,37 +33,69 @@ struct ImageGenTabView: View {
     @ViewBuilder
     private var sidebar: some View {
         List(selection: $selectedProject) {
-            ForEach(projects) { project in
-                NavigationLink(value: project) {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(project.name)
-                            .font(.headline)
-                            .lineLimit(1)
-                        Text(project.updatedAt, style: .date)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                    .padding(.vertical, 2)
-                }
-                .contextMenu {
-                    Button("Rename") {
-                        renameText = project.name
-                        renamingProject = project
-                    }
-                    Divider()
-                    Button("Delete", role: .destructive) {
-                        deleteProject(project)
-                    }
-                }
+            GroupedProjectSections(
+                projects: projects,
+                groups: groups,
+                dragIdentifier: { String(describing: $0.persistentModelID) },
+                onMove: moveProject,
+                onCreateProject: { addProject(groupID: $0) },
+                onCreateGroup: beginCreatingGroup,
+                onRenameGroup: beginRenamingGroup,
+                onDeleteGroup: { pendingGroupDeletion = $0 }
+            ) { project in
+                projectRow(project)
             }
+        }
+        .contextMenu {
+            ProjectCreationMenuItems(
+                onCreateProject: { addProject() },
+                onCreateGroup: beginCreatingGroup
+            )
         }
         .navigationSplitViewColumnWidth(min: 200, ideal: 240)
         .navigationTitle("Projects")
         .toolbar {
-            ToolbarItem {
-                Button(action: addProject) {
+            ToolbarItemGroup {
+                Button(action: { addProject() }) {
                     Label("New Project", systemImage: "plus")
                 }
+                Button(action: beginCreatingGroup) {
+                    Label("New Group", systemImage: "folder.badge.plus")
+                }
+            }
+        }
+    }
+
+    private func projectRow(_ project: ImageGenProject) -> some View {
+        NavigationLink(value: project) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(project.name)
+                    .font(.headline)
+                    .lineLimit(1)
+                Text(project.updatedAt, style: .date)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.vertical, 2)
+        }
+        .contextMenu {
+            ProjectCreationMenuItems(
+                onCreateProject: { addProject(groupID: project.groupID) },
+                onCreateGroup: beginCreatingGroup
+            )
+            Divider()
+            Button("Rename") {
+                renameText = project.name
+                renamingProject = project
+            }
+            MoveToProjectGroupMenu(
+                groups: groups,
+                currentGroupID: project.groupID,
+                onMove: { moveProject(project, to: $0) }
+            )
+            Divider()
+            Button("Delete…", role: .destructive) {
+                pendingProjectDeletion = project
             }
         }
     }
@@ -111,6 +149,7 @@ struct ImageGenTabView: View {
                 }
             }
         }
+        .publishesAgentTarget(kind: .imageGen, projectUUID: selectedProject.map(MCPProjectHandlers.stableID))
         .toolbar {
             if let project = selectedProject, !isCompact {
                 ToolbarItem(placement: .primaryAction) {
@@ -158,14 +197,56 @@ struct ImageGenTabView: View {
                 renamingProject = nil
             }
         }
+        .confirmationDialog(
+            "Delete this image project?",
+            isPresented: Binding(
+                get: { pendingProjectDeletion != nil },
+                set: { if !$0 { pendingProjectDeletion = nil } }
+            ),
+            titleVisibility: .visible,
+            presenting: pendingProjectDeletion
+        ) { project in
+            Button("Delete Project", role: .destructive) {
+                deleteProject(project)
+                pendingProjectDeletion = nil
+            }
+            Button("Cancel", role: .cancel) { pendingProjectDeletion = nil }
+        } message: { project in
+            Text("\"\(project.name)\" and its generated images will be permanently deleted.")
+        }
+        .projectGroupDialogs(
+            editor: $groupEditor,
+            name: $groupName,
+            pendingDeletion: $pendingGroupDeletion,
+            errorMessage: $groupErrorMessage
+        )
     }
 
     // MARK: - Actions
 
-    private func addProject() {
+    private func addProject(groupID: UUID? = nil) {
         let project = ImageGenProject(name: "Untitled Project")
+        project.groupID = groupID
         modelContext.insert(project)
         selectedProject = project
+    }
+
+    private func beginCreatingGroup() {
+        groupName = ""
+        groupEditor = .create
+    }
+
+    private func beginRenamingGroup(_ group: ProjectGroup) {
+        groupName = group.name
+        groupEditor = .rename(group)
+    }
+
+    private func moveProject(_ project: ImageGenProject, to groupID: UUID?) {
+        do {
+            try ProjectGroupService.move(project, to: groupID, context: modelContext)
+        } catch {
+            groupErrorMessage = error.localizedDescription
+        }
     }
 
     private func deleteProject(_ project: ImageGenProject) {

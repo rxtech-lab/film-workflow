@@ -33,6 +33,19 @@ struct AppConfig: Codable {
     var openAITranscriptionModel: String = ""
     /// Gemini model used for multimodal transcription.
     var geminiTranscriptionModel: String = ""
+    /// Passed to `claude --model`. Empty means the CLI's own default.
+    ///
+    /// Separate from `openAIModel` because they name models in different
+    /// namespaces — a `gpt-4o` configured for the endpoint used to be handed
+    /// straight to the Claude CLI, which cannot run it.
+    var claudeCodeModel: String = ""
+    /// Passed to `codex --model`. Empty means the CLI's own default.
+    var codexModel: String = ""
+    /// Passed to Codex as `-c model_reasoning_effort=<x>`. Empty means the
+    /// model's own default.
+    ///
+    /// No Claude Code twin: `claude --effort` exists, but nothing here sets it.
+    var codexReasoningEffort: String = ""
 
     private static let service = "com.rxlab.film-workflow"
     private static let googleAccount = "googleAIKey"
@@ -44,6 +57,9 @@ struct AppConfig: Codable {
     private static let defaultImageModelAccount = "defaultImageModel"
     private static let openAITranscriptionModelAccount = "openAITranscriptionModel"
     private static let geminiTranscriptionModelAccount = "geminiTranscriptionModel"
+    private static let claudeCodeModelAccount = "claudeCodeModel"
+    private static let codexModelAccount = "codexModel"
+    private static let codexReasoningEffortAccount = "codexReasoningEffort"
 
     static func loadFromKeychain() throws -> AppConfig {
         AppConfig(
@@ -55,7 +71,10 @@ struct AppConfig: Codable {
             openAIModel: (try? loadString(account: openAIModelAccount)) ?? "",
             defaultImageModel: (try? loadString(account: defaultImageModelAccount)) ?? "",
             openAITranscriptionModel: (try? loadString(account: openAITranscriptionModelAccount)) ?? "",
-            geminiTranscriptionModel: (try? loadString(account: geminiTranscriptionModelAccount)) ?? ""
+            geminiTranscriptionModel: (try? loadString(account: geminiTranscriptionModelAccount)) ?? "",
+            claudeCodeModel: (try? loadString(account: claudeCodeModelAccount)) ?? "",
+            codexModel: (try? loadString(account: codexModelAccount)) ?? "",
+            codexReasoningEffort: (try? loadString(account: codexReasoningEffortAccount)) ?? ""
         )
     }
 
@@ -69,6 +88,9 @@ struct AppConfig: Codable {
         try Self.saveString(defaultImageModel, account: Self.defaultImageModelAccount)
         try Self.saveString(openAITranscriptionModel, account: Self.openAITranscriptionModelAccount)
         try Self.saveString(geminiTranscriptionModel, account: Self.geminiTranscriptionModelAccount)
+        try Self.saveString(claudeCodeModel, account: Self.claudeCodeModelAccount)
+        try Self.saveString(codexModel, account: Self.codexModelAccount)
+        try Self.saveString(codexReasoningEffort, account: Self.codexReasoningEffortAccount)
     }
 
     static func deleteFromKeychain() throws {
@@ -81,6 +103,9 @@ struct AppConfig: Codable {
         try deleteString(account: defaultImageModelAccount)
         try deleteString(account: openAITranscriptionModelAccount)
         try deleteString(account: geminiTranscriptionModelAccount)
+        try deleteString(account: claudeCodeModelAccount)
+        try deleteString(account: codexModelAccount)
+        try deleteString(account: codexReasoningEffortAccount)
     }
 
     // MARK: - Keychain helpers

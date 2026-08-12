@@ -11,6 +11,7 @@ struct CaptionTermsSection: View {
     @Bindable var project: CaptionProject
 
     @State private var editingTerm: CaptionTerm?
+    @State private var deletingTerm: CaptionTerm?
     @State private var showPasteSheet = false
     @State private var pasteDraft = ""
 
@@ -25,12 +26,12 @@ struct CaptionTermsSection: View {
                 .buttonStyle(.plain)
                 #if os(iOS)
                 .swipeActions(edge: .trailing) {
-                    Button("Delete", role: .destructive) { delete(term) }
+                    Button("Delete…", role: .destructive) { deletingTerm = term }
                 }
                 #endif
                 .contextMenu {
                     Button("Edit…") { editingTerm = term }
-                    Button("Delete", role: .destructive) { delete(term) }
+                    Button("Delete…", role: .destructive) { deletingTerm = term }
                 }
             }
 
@@ -60,7 +61,8 @@ struct CaptionTermsSection: View {
             Text("""
                 Names and jargon this recording uses. Speech recognition often gets them wrong; \
                 listing them here lets the AI review find and fix those mistakes, and keeps a term \
-                from being split across two captions.
+                from being split across two captions. Give a term a translation and every \
+                translated caption that uses it follows along.
                 """)
             .font(.caption)
             .foregroundStyle(.secondary)
@@ -70,6 +72,23 @@ struct CaptionTermsSection: View {
         }
         .sheet(isPresented: $showPasteSheet) {
             pasteSheet
+        }
+        .confirmationDialog(
+            "Delete this glossary term?",
+            isPresented: Binding(
+                get: { deletingTerm != nil },
+                set: { if !$0 { deletingTerm = nil } }
+            ),
+            titleVisibility: .visible,
+            presenting: deletingTerm
+        ) { term in
+            Button("Delete Term", role: .destructive) {
+                delete(term)
+                deletingTerm = nil
+            }
+            Button("Cancel", role: .cancel) { deletingTerm = nil }
+        } message: { term in
+            Text("\"\(term.text)\" and its known spelling variants will be permanently deleted.")
         }
     }
 
@@ -92,6 +111,7 @@ struct CaptionTermsSection: View {
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
+                translationSummary(term)
             }
             Spacer()
             if !term.variants.isEmpty {
@@ -101,6 +121,27 @@ struct CaptionTermsSection: View {
             }
         }
         .contentShape(Rectangle())
+    }
+
+    /// The wording for the language the editor is currently showing, since that
+    /// is the one the user is about to compare against the captions. Falls back
+    /// to a count when no language is displayed.
+    @ViewBuilder
+    private func translationSummary(_ term: CaptionTerm) -> some View {
+        let shown = project.displayedTranslationLanguage
+        let wording = term.translation(shown)
+        if !wording.isEmpty {
+            Text("\(CaptionTranslationAvailability.displayName(shown)): \(wording)")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        } else {
+            let count = term.translatedLanguages.count
+            if count > 0 {
+                Text("\(count) translation\(count == 1 ? "" : "s")")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
     }
 
     private var pasteSheet: some View {
@@ -175,7 +216,34 @@ struct CaptionTermEditorSheet: View {
     @State private var note = ""
     @State private var variants: [String] = []
     @State private var newVariant = ""
+    @State private var translations: [String: String] = [:]
+    @State private var addedLanguages: [String] = []
     @State private var didLoad = false
+    @State private var showDeleteConfirmation = false
+
+    /// Languages this sheet shows a field for: whatever the term already has,
+    /// whatever the project has translated, the user's default targets, and the
+    /// language the editor is currently displaying — plus anything added here in
+    /// this session, which must stay visible while its field is still empty.
+    private var offeredLanguages: [String] {
+        var codes = Set(translations.keys)
+        codes.formUnion(addedLanguages)
+        codes.formUnion(project.translatedLanguages)
+        codes.formUnion(CaptionSettings.shared.defaultTranslationLanguages)
+        if !project.displayedTranslationLanguage.isEmpty {
+            codes.insert(project.displayedTranslationLanguage)
+        }
+        return codes.sorted {
+            CaptionTranslationAvailability.displayName($0)
+                < CaptionTranslationAvailability.displayName($1)
+        }
+    }
+
+    private var addableLanguages: [String] {
+        let shown = Set(offeredLanguages)
+        return CaptionTranslationAvailability.shared.supportedTargets
+            .filter { !shown.contains($0) }
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -189,6 +257,50 @@ struct CaptionTermEditorSheet: View {
                     Text("The note tells the model what this is — \"company name\", \"drug name\".")
                         .font(.caption)
                         .foregroundStyle(.secondary)
+                }
+
+                Section {
+                    ForEach(offeredLanguages, id: \.self) { code in
+                        HStack {
+                            TextField(
+                                CaptionTranslationAvailability.displayName(code),
+                                text: binding(for: code),
+                                prompt: Text(text.isEmpty ? "Translation" : text)
+                            )
+                            Button {
+                                translations.removeValue(forKey: code)
+                                addedLanguages.removeAll { $0 == code }
+                            } label: {
+                                Image(systemName: "minus.circle")
+                            }
+                            .buttonStyle(.borderless)
+                            .foregroundStyle(.secondary)
+                            .disabled(translations[code] == nil && !addedLanguages.contains(code))
+                        }
+                    }
+
+                    if !addableLanguages.isEmpty {
+                        Menu("Add Language…") {
+                            ForEach(addableLanguages, id: \.self) { code in
+                                Button(CaptionTranslationAvailability.displayName(code)) {
+                                    guard !addedLanguages.contains(code) else { return }
+                                    addedLanguages.append(code)
+                                }
+                            }
+                        }
+                        .font(.caption)
+                    }
+                } header: {
+                    Text("Translations")
+                } footer: {
+                    Text("""
+                        Write \(CaptionTermPlaceholder.wrap(text.isEmpty ? "Term" : text)) in a \
+                        translated caption and it becomes the wording set here. Change the wording \
+                        and every caption using the placeholder updates — no re-translation. \
+                        A language left blank falls back to the spelling above.
+                        """)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
                 }
 
                 Section {
@@ -229,11 +341,7 @@ struct CaptionTermEditorSheet: View {
             Divider()
 
             HStack {
-                Button("Delete", role: .destructive) {
-                    project.terms.removeAll { $0.id == termID }
-                    project.updatedAt = Date()
-                    dismiss()
-                }
+                Button("Delete…", role: .destructive) { showDeleteConfirmation = true }
                 Spacer()
                 Button("Cancel", role: .cancel) { dismiss() }
                 Button("Save") { save() }
@@ -245,6 +353,23 @@ struct CaptionTermEditorSheet: View {
         }
         .frame(minWidth: 420, minHeight: 460)
         .onAppear(perform: load)
+        // Apple's list, but it is the only enumerable set of language codes in
+        // the app and a practical superset of what the AI backends accept.
+        .task { await CaptionTranslationAvailability.shared.refreshIfNeeded() }
+        .confirmationDialog(
+            "Delete this glossary term?",
+            isPresented: $showDeleteConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button("Delete Term", role: .destructive) {
+                project.terms.removeAll { $0.id == termID }
+                project.updatedAt = Date()
+                dismiss()
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("The term and its known spelling variants will be permanently deleted.")
+        }
     }
 
     private func addVariant() {
@@ -254,14 +379,41 @@ struct CaptionTermEditorSheet: View {
         newVariant = ""
     }
 
+    /// A field binding that keeps empty entries out of the draft — "" and a
+    /// missing key mean the same thing, and keeping both would make the remove
+    /// button and `translatedLanguages` disagree.
+    ///
+    /// Only a literally empty string clears the key; whitespace is left alone
+    /// while typing and trimmed in `save`, so a leading space doesn't vanish
+    /// from under the cursor.
+    private func binding(for code: String) -> Binding<String> {
+        Binding(
+            get: { translations[code] ?? "" },
+            set: { newValue in
+                if newValue.isEmpty {
+                    translations.removeValue(forKey: code)
+                } else {
+                    translations[code] = newValue
+                }
+            }
+        )
+    }
+
     private func load() {
         guard !didLoad, let term = project.terms.first(where: { $0.id == termID }) else { return }
         didLoad = true
         text = term.text
         note = term.note
         variants = term.variants
+        translations = term.translations
     }
 
+    /// Writes the term back and nothing else.
+    ///
+    /// Deliberately does not touch any segment: a translation stores
+    /// `{{Term}}` and resolves it on the way out, so changing the wording here
+    /// must not re-stamp a fingerprint or mark anything stale. That is the whole
+    /// reason the placeholder exists.
     private func save() {
         guard let index = project.terms.firstIndex(where: { $0.id == termID }) else {
             dismiss()
@@ -271,6 +423,10 @@ struct CaptionTermEditorSheet: View {
         updated[index].text = text.trimmingCharacters(in: .whitespacesAndNewlines)
         updated[index].note = note.trimmingCharacters(in: .whitespacesAndNewlines)
         updated[index].variants = variants
+        updated[index].translations = translations.compactMapValues { wording in
+            let trimmed = wording.trimmingCharacters(in: .whitespacesAndNewlines)
+            return trimmed.isEmpty ? nil : trimmed
+        }
         project.terms = updated
         project.updatedAt = Date()
         dismiss()

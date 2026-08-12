@@ -256,4 +256,194 @@ struct CaptionExporterTests {
             _ = try await CaptionExporter.render(snapshot(segments: []), options: .init())
         }
     }
+
+    // MARK: - Translations
+
+    /// Two captions, the second of which was never translated — the ragged tail
+    /// a partial translation pass leaves behind.
+    private var bilingualSegments: [CaptionSegmentSnapshot] {
+        [
+            CaptionSegmentSnapshot(
+                startMs: 960,
+                endMs: 1600,
+                text: "Good afternoon.",
+                speakerId: alice.id,
+                speakerLabel: "Alice",
+                translations: ["zh-Hans": "下午好。"]
+            ),
+            CaptionSegmentSnapshot(
+                startMs: 1600,
+                endMs: 2400,
+                text: "Let's begin.",
+                speakerId: alice.id,
+                speakerLabel: "Alice"
+            ),
+        ]
+    }
+
+    private func bilingualSnapshot() -> CaptionTranscriptSnapshot {
+        CaptionTranscriptSnapshot(
+            projectName: "Episode 12",
+            audioDurationMs: 60_000,
+            speakers: [alice, bob],
+            segments: bilingualSegments,
+            sourceLanguage: "en",
+            versionNumber: 2,
+            availableTranslations: ["zh-Hans"]
+        )
+    }
+
+    @Test("Bilingual VTT puts the translation on its own line, decorated once")
+    func bilingualVTT() async throws {
+        let data = try await CaptionExporter.render(
+            bilingualSnapshot(),
+            options: .init(
+                format: .vtt,
+                speakerStyle: .vttVoiceTag,
+                translationMode: .bilingual,
+                translationLanguage: "zh-Hans"
+            )
+        )
+        let text = String(decoding: data, as: UTF8.self)
+        #expect(text == """
+        WEBVTT
+
+        1
+        00:00:00.960 --> 00:00:01.600
+        <v Alice>Good afternoon.
+        下午好。
+
+        2
+        00:00:01.600 --> 00:00:02.400
+        <v Alice>Let's begin.
+
+
+        """)
+    }
+
+    @Test("Bilingual SRT uses CRLF between the two lines of a cue")
+    func bilingualSRT() async throws {
+        let data = try await CaptionExporter.render(
+            bilingualSnapshot(),
+            options: .init(
+                format: .srt,
+                speakerStyle: .none,
+                translationMode: .bilingual,
+                translationLanguage: "zh-Hans"
+            )
+        )
+        let text = String(decoding: data, as: UTF8.self)
+        #expect(text.contains("Good afternoon.\r\n下午好。\r\n\r\n"))
+        #expect(text.contains("Let's begin.\r\n\r\n"))
+    }
+
+    @Test("Translation-only falls back to the original rather than an empty cue")
+    func translationOnlyFallsBack() async throws {
+        let data = try await CaptionExporter.render(
+            bilingualSnapshot(),
+            options: .init(
+                format: .srt,
+                speakerStyle: .none,
+                translationMode: .translationOnly,
+                translationLanguage: "zh-Hans"
+            )
+        )
+        let text = String(decoding: data, as: UTF8.self)
+        #expect(text.contains("下午好。"))
+        #expect(!text.contains("Good afternoon."))
+        // The untranslated caption keeps its original — a blank cue would flash
+        // visibly in a player.
+        #expect(text.contains("Let's begin."))
+    }
+
+    @Test("Translation-only against an untranslated transcript throws")
+    func translationOnlyWithoutTranslationThrows() async {
+        await #expect(throws: CaptionExportError.self) {
+            _ = try await CaptionExporter.render(
+                snapshot(segments: [goodAfternoon]),
+                options: .init(translationMode: .translationOnly, translationLanguage: "zh-Hans")
+            )
+        }
+    }
+
+    @Test("Bilingual plain text prefixes the original line only")
+    func bilingualText() async throws {
+        let data = try await CaptionExporter.render(
+            bilingualSnapshot(),
+            options: .init(
+                format: .text,
+                speakerStyle: .prefix,
+                includeTimestampsInText: true,
+                translationMode: .bilingual,
+                translationLanguage: "zh-Hans"
+            )
+        )
+        let text = String(decoding: data, as: UTF8.self)
+        // The timestamp and the speaker name sit on the original only; the
+        // speaker is dropped on cue 2 because it hasn't changed.
+        #expect(text == """
+        [00:00] Alice: Good afternoon.
+        下午好。
+        [00:01] Let's begin.
+
+        """)
+    }
+
+    @Test("A translated export degrades to sentence cues and skips re-wrapping")
+    func translationForcesSentenceCues() async throws {
+        var options = CaptionExportOptions(
+            format: .vtt,
+            granularity: .wordKaraoke,
+            speakerStyle: .none,
+            maxRunesPerCue: 4,
+            translationMode: .bilingual,
+            translationLanguage: "zh-Hans"
+        )
+        #expect(options.effectiveGranularity == .sentence)
+
+        let cues = CaptionExporter.cues(from: bilingualSnapshot(), options: options)
+        #expect(cues.count == 2)
+
+        // With no translation selected the same options do re-wrap.
+        options.translationLanguage = ""
+        options.granularity = .sentence
+        #expect(CaptionExporter.cues(from: bilingualSnapshot(), options: options).count > 2)
+    }
+
+    @Test("JSON carries every translation plus the version and source language")
+    func jsonIncludesTranslations() async throws {
+        let data = try await CaptionExporter.render(
+            bilingualSnapshot(),
+            options: .init(format: .json)
+        )
+        let object = try #require(
+            try JSONSerialization.jsonObject(with: data) as? [String: Any]
+        )
+        #expect(object["sourceLanguage"] as? String == "en")
+        #expect(object["version"] as? Int == 2)
+        #expect(object["translationLanguages"] as? [String] == ["zh-Hans"])
+
+        let segments = try #require(object["segments"] as? [[String: Any]])
+        let first = try #require(segments.first?["translations"] as? [String: String])
+        #expect(first["zh-Hans"] == "下午好。")
+    }
+
+    @Test("A language code lands in the filename")
+    func translatedFilename() {
+        #expect(CaptionExporter.defaultFilename(
+            projectName: "My Talk",
+            options: .init(format: .srt),
+            languageCode: "zh-Hans"
+        ) == "My-Talk_zh-Hans.srt")
+
+        // Omitted when empty, so an ordinary export keeps the name it had.
+        #expect(CaptionExporter.defaultFilename(
+            projectName: "My Talk", options: .init(format: .srt), languageCode: ""
+        ) == "My-Talk.srt")
+
+        #expect(CaptionExporter.filenameLanguageCode(
+            options: .init(translationLanguage: "es")
+        ) == "es")
+        #expect(CaptionExporter.filenameLanguageCode(options: .init()).isEmpty)
+    }
 }

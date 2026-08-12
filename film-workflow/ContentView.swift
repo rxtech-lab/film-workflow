@@ -5,6 +5,10 @@ struct ContentView: View {
     // Shared rather than local @State so a deep-linked screen (e.g. "download a
     // Whisper model") can switch tabs.
     @State private var navigation = AppNavigation.shared
+    #if os(macOS)
+        @Environment(\.openWindow) private var openWindow
+        @State private var agentController = AgentController.shared
+    #endif
 
     var body: some View {
         TabView(selection: $navigation.tab) {
@@ -26,6 +30,11 @@ struct ContentView: View {
             }
             #endif
             #if !os(macOS)
+            // iOS has no second scene, so the agent is a tab here; on macOS it
+            // is a window (see `film_workflowApp`).
+            Tab(Tabs.Agent.displayName, systemImage: Tabs.Agent.systemImage, value: Tabs.Agent) {
+                AgentWindowView()
+            }
             Tab(Tabs.Settings.displayName, systemImage: Tabs.Settings.systemImage, value: Tabs.Settings) {
                 NavigationStack {
                     SettingsView()
@@ -35,10 +44,35 @@ struct ContentView: View {
             #endif
         }
         .dismissKeyboardOnTapAndScroll()
+        #if os(macOS)
+            .toolbar {
+                ToolbarItem(placement: .primaryAction) {
+                    Button {
+                        openWindow(id: AgentWindowID.value)
+                    } label: {
+                        Label("Agent", systemImage: "sparkles")
+                            .overlay(alignment: .topTrailing) {
+                                if agentController.runningCount > 0 {
+                                    Circle()
+                                        .fill(Color.accentColor)
+                                        .frame(width: 6, height: 6)
+                                        .offset(x: 3, y: -2)
+                                }
+                            }
+                    }
+                    .help(
+                        agentController.runningCount > 0
+                            ? "Open the agent (running)"
+                            : "Open the agent"
+                    )
+                }
+            }
+        #endif
     }
 }
 
 #Preview {
     ContentView()
-        .modelContainer(for: [MusicProject.self, GeneratedMusic.self, NarrativeProject.self, GeneratedNarrative.self, RemotionProject.self, RemotionMessage.self, ImageGenProject.self, GeneratedImage.self, CaptionProject.self, CaptionSegment.self], inMemory: true)
+        .environment(AgentController.shared)
+        .modelContainer(for: [MusicProject.self, GeneratedMusic.self, NarrativeProject.self, GeneratedNarrative.self, RemotionProject.self, ImageGenProject.self, GeneratedImage.self, CaptionProject.self, CaptionSegment.self, ProjectGroup.self, AgentThread.self, AgentMessage.self], inMemory: true)
 }

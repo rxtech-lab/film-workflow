@@ -140,6 +140,16 @@ struct CaptionAIReviewSheet: View {
                         .padding(.horizontal, 5)
                         .padding(.vertical, 1)
                         .background(.tint.opacity(0.15), in: Capsule())
+                    // Which language, on its own chip: "Translation" alone
+                    // doesn't say what is about to be overwritten, and a
+                    // project can carry several at once.
+                    if let language = translationLanguage(item.operation) {
+                        Text(language)
+                            .font(.caption2)
+                            .padding(.horizontal, 5)
+                            .padding(.vertical, 1)
+                            .background(.quaternary, in: Capsule())
+                    }
                 }
 
                 if !item.before.isEmpty {
@@ -208,8 +218,18 @@ struct CaptionAIReviewSheet: View {
         case .replaceText: return "Text"
         case .merge: return "Merge"
         case .setSpeaker: return "Speaker"
+        case .retime: return "Timing"
+        case .setTranslation: return "Translation"
         case .delete: return "Delete"
         }
+    }
+
+    /// The language code on a translation row, or nil for every other kind.
+    private func translationLanguage(_ operation: CaptionEditOperation) -> String? {
+        guard case .setTranslation(_, let language, _) = operation, !language.isEmpty else {
+            return nil
+        }
+        return language
     }
 
     private func isDestructive(_ operation: CaptionEditOperation) -> Bool {
@@ -228,7 +248,12 @@ struct CaptionAIReviewSheet: View {
     }
 
     private func apply() {
-        let count = CaptionEditApplier.apply(selectedItems, to: project, context: modelContext)
+        let count = CaptionEditApplier.apply(
+            selectedItems,
+            to: project,
+            context: modelContext,
+            engine: proposal.engine
+        )
         onApplied?(count)
         dismiss()
     }

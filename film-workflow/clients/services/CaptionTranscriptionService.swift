@@ -9,7 +9,8 @@ import SwiftData
 @MainActor
 enum CaptionTranscriptionService {
 
-    /// Transcribes a project's audio and replaces its segments.
+    /// Transcribes a project's audio into a **new transcript version**, which
+    /// becomes the active one. Earlier versions and their translations are kept.
     /// Returns the number of segments written.
     @discardableResult
     static func transcribe(
@@ -73,14 +74,21 @@ enum CaptionTranscriptionService {
         guard !cues.isEmpty else { throw CaptionTranscriberError.noSpeechFound }
 
         syncSpeakers(of: project, from: transcript)
-        replaceSegments(of: project, with: cues, context: context)
+        let caveat = warning ?? providerCaveat(usedProvider, transcript: transcript)
+        writeSegments(
+            of: project,
+            with: cues,
+            context: context,
+            provider: usedProvider,
+            warning: caveat
+        )
 
         project.audioDurationMs = max(transcript.durationMs, durationMs)
         project.lastTranscribedAt = Date()
         project.lastProviderName = usedProvider.rawValue
         project.alignmentQualityEnum = .none
         project.alignmentMatchRatio = 0
-        project.warning = warning ?? providerCaveat(usedProvider, transcript: transcript)
+        project.warning = caveat
         project.updatedAt = Date()
 
         try context.save()
@@ -185,20 +193,30 @@ enum CaptionTranscriptionService {
         )
         guard !cues.isEmpty else { throw CaptionTranscriberError.noSpeechFound }
 
-        replaceSegments(of: project, with: cues, context: context)
-
-        project.audioDurationMs = audioDuration
-        project.lastTranscribedAt = Date()
-        project.lastProviderName = usedProvider.rawValue
-        project.alignmentQualityEnum = result.quality
-        project.alignmentMatchRatio = result.matchRatio
-        project.warning = narrativeWarning(
+        let caveat = narrativeWarning(
             quality: result.quality,
             matchRatio: result.matchRatio,
             provider: usedProvider,
             hasWordTimings: transcript.hasWordTimings,
             providerWarning: providerWarning
         )
+        writeSegments(
+            of: project,
+            with: cues,
+            context: context,
+            provider: usedProvider,
+            alignmentQuality: result.quality,
+            alignmentMatchRatio: result.matchRatio,
+            note: "Aligned to script",
+            warning: caveat
+        )
+
+        project.audioDurationMs = audioDuration
+        project.lastTranscribedAt = Date()
+        project.lastProviderName = usedProvider.rawValue
+        project.alignmentQualityEnum = result.quality
+        project.alignmentMatchRatio = result.matchRatio
+        project.warning = caveat
         project.updatedAt = Date()
 
         try context.save()
@@ -336,7 +354,7 @@ enum CaptionTranscriptionService {
         let maxRunes = settings.maxCueRunes
         let engine: any CaptionAIEngine
         do {
-            let backend = try CaptionAIAvailability.shared.resolved(
+            let backend = try AgentBackendAvailability.shared.resolved(
                 preferred: settings.aiBackend,
                 config: config,
                 for: .cueRefinement
@@ -392,8 +410,10 @@ enum CaptionTranscriptionService {
                 termsHint: hint
             )
         case .openAI:
+            // A per-project model wins over the app-wide choice.
+            let override = project?.openAITranscriptionModelOverride ?? ""
             return CaptionProviderOptions(
-                model: config.openAITranscriptionModel,
+                model: override.isEmpty ? config.openAITranscriptionModel : override,
                 termsHint: hint
             )
         case .gemini:
@@ -532,20 +552,48 @@ enum CaptionTranscriptionService {
 
     // MARK: - Writing results
 
-    /// Replaces a project's segments wholesale.
+    /// Writes a transcription run as a **new version**, leaving earlier versions
+    /// and their translations in place.
     ///
-    /// Deletes rather than reuses: re-transcription is a "throw away and redo"
-    /// operation, and matching old rows to new cues would silently keep stale
-    /// hand edits attached to different audio.
-    static func replaceSegments(
+    /// Deliberately additive where this used to delete: re-transcribing is now
+    /// "record another take", so a user who re-runs with a different provider can
+    /// compare the two and switch back to the one they had already hand-edited.
+    /// Old rows stay on `project.segments` but out of `activeSegments`, so
+    /// nothing that reads the transcript sees them.
+    @discardableResult
+    static func writeSegments(
         of project: CaptionProject,
         with cues: [CaptionCue],
-        context: ModelContext
-    ) {
-        for segment in project.segments {
-            context.delete(segment)
-        }
-        project.segments = []
+        context: ModelContext,
+        provider: CaptionProvider,
+        alignmentQuality: CaptionAlignmentQuality = .none,
+        alignmentMatchRatio: Double = 0,
+        note: String = "",
+        warning: String = ""
+    ) -> CaptionTranscriptVersion {
+        project.ensureVersioned()
+
+        // Capture the outgoing take before switching — `activeSegments` follows
+        // `activeVersionID`, so reading it after the switch would return nothing.
+        let previousSegments = project.activeSegments
+
+        // The hint is what we asked for; `cue.locale` is what the provider
+        // actually heard. Prefer the explicit hint, fall back to detection, so a
+        // version always carries a language even on an auto-detect project.
+        let detected = cues.first { !$0.locale.isEmpty }?.locale ?? ""
+        let version = CaptionTranscriptVersion(
+            number: project.nextVersionNumber,
+            languageCode: project.languageHint.isEmpty ? detected : project.languageHint,
+            provider: provider.rawValue,
+            sourceKind: project.sourceKind,
+            alignmentQuality: alignmentQuality.rawValue,
+            alignmentMatchRatio: alignmentMatchRatio,
+            segmentCount: cues.count,
+            note: note,
+            warning: warning
+        )
+        project.versions.append(version)
+        project.activeVersionID = version.id
 
         for (index, cue) in cues.enumerated() {
             let speakerId = cue.speakerId
@@ -563,9 +611,91 @@ enum CaptionTranscriptionService {
                 isEstimatedTiming: cue.isEstimatedTiming,
                 words: cue.words
             )
+            segment.versionID = version.id
             segment.project = project
             context.insert(segment)
         }
+
+        inheritTranslations(into: project, from: previousSegments)
+        project.refreshTranslationSummary()
+        return project.activeVersion ?? version
+    }
+
+    /// Copies translations forward onto captions that came out word-for-word
+    /// identical to the previous take.
+    ///
+    /// Re-transcribing the same audio usually changes a handful of lines, so
+    /// starting from zero would mean re-translating nine hundred captions to fix
+    /// three. Matching is on `CaptionTranslation.fingerprint` — normalized and
+    /// punctuation-blind — and the fingerprint is carried across unchanged, so a
+    /// later edit to the new caption still flags the inherited translation stale.
+    ///
+    /// Ambiguity is resolved by consuming matches in order: a phrase repeated
+    /// five times in the audio hands its five translations to the five new
+    /// captions that match it, rather than giving them all the first one.
+    private static func inheritTranslations(
+        into project: CaptionProject,
+        from previousSegments: [CaptionSegment]
+    ) {
+        guard previousSegments.contains(where: { !$0.translations.isEmpty }) else { return }
+
+        var pool: [String: [[CaptionTranslation]]] = [:]
+        for segment in previousSegments.sorted(by: { $0.startMs < $1.startMs })
+        where !segment.translations.isEmpty {
+            pool[CaptionTranslation.fingerprint(of: segment.text), default: []]
+                .append(segment.translations)
+        }
+
+        for segment in project.orderedSegments {
+            let key = CaptionTranslation.fingerprint(of: segment.text)
+            guard var bucket = pool[key], !bucket.isEmpty else { continue }
+            segment.translations = bucket.removeFirst()
+            pool[key] = bucket
+        }
+    }
+
+    /// Deletes a version and every caption in it.
+    ///
+    /// Segments are only reachable through the project relationship, so dropping
+    /// the version record alone would orphan them inside `project.segments`
+    /// forever. Refuses on the last remaining version — a project with captions
+    /// but no version would read as legacy and show every take at once.
+    @discardableResult
+    static func deleteVersion(
+        _ versionID: UUID,
+        from project: CaptionProject,
+        context: ModelContext
+    ) -> Bool {
+        guard project.versions.count > 1,
+              project.versions.contains(where: { $0.id == versionID })
+        else { return false }
+
+        // Detached from the relationship as well as deleted: SwiftData only
+        // prunes the array on save, and everything here reads `project.segments`
+        // synchronously right afterwards.
+        let doomed = project.segments.filter { $0.versionID == versionID }
+        project.segments = project.segments.filter { $0.versionID != versionID }
+        for segment in doomed {
+            context.delete(segment)
+        }
+        project.versions.removeAll { $0.id == versionID }
+
+        if project.activeVersionID == versionID {
+            project.activeVersionID = project.orderedVersions.first?.id
+            project.refreshTranslationSummary()
+        }
+        project.updatedAt = Date()
+        return true
+    }
+
+    /// Switches which take the editor and every export see.
+    @discardableResult
+    static func activateVersion(_ versionID: UUID, in project: CaptionProject) -> Bool {
+        guard project.versions.contains(where: { $0.id == versionID }) else { return false }
+        project.activeVersionID = versionID
+        project.refreshTranslationSummary()
+        project.updatedAt = Date()
+        return true
     }
 
     /// Adds a `CaptionSpeaker` for every diarization id the provider used,

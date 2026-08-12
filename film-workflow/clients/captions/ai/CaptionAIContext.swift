@@ -52,29 +52,42 @@ nonisolated enum CaptionAIContext {
 
     // MARK: - Batching
 
-    /// Packs lines into windows that fit `budget` characters.
+    /// Packs lines into windows that fit `budget` characters and `maxLines`
+    /// captions.
     ///
     /// Greedy and order-preserving: a caption is never split across windows, and
     /// a single caption longer than the whole budget still gets its own window
     /// rather than being dropped — losing it silently would be worse than one
     /// oversized request that the engine can reject.
-    static func batches(_ lines: [CaptionAILine], budget: Int) -> [[CaptionAILine]] {
+    ///
+    /// `maxLines` exists for tasks whose *reply* scales with the number of lines
+    /// rather than their length — translation restates every caption, so a
+    /// hundred short ones cost as much to answer as a few long ones, and a
+    /// character budget alone cannot see that. `cost` lets a caller charge for
+    /// the rendering it actually sends; the default matches `prompt`.
+    static func batches(
+        _ lines: [CaptionAILine],
+        budget: Int,
+        maxLines: Int = .max,
+        cost: (CaptionAILine) -> Int = { $0.prompt.count + 1 }
+    ) -> [[CaptionAILine]] {
         guard !lines.isEmpty else { return [] }
         let limit = max(budget, 200)
+        let lineLimit = max(maxLines, 1)
 
         var batches: [[CaptionAILine]] = []
         var current: [CaptionAILine] = []
         var used = 0
 
         for line in lines {
-            let cost = line.prompt.count + 1
-            if !current.isEmpty, used + cost > limit {
+            let lineCost = cost(line)
+            if !current.isEmpty, used + lineCost > limit || current.count >= lineLimit {
                 batches.append(current)
                 current = []
                 used = 0
             }
             current.append(line)
-            used += cost
+            used += lineCost
         }
         if !current.isEmpty { batches.append(current) }
         return batches
@@ -185,7 +198,7 @@ nonisolated enum CaptionAIContext {
     }
 
     /// Whether the assembled prompt would overrun the backend's budget.
-    static func exceedsBudget(_ text: String, backend: CaptionAIBackend) -> Bool {
+    static func exceedsBudget(_ text: String, backend: AgentBackend) -> Bool {
         text.count > backend.contextBudgetCharacters
     }
 }

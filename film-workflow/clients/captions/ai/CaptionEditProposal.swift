@@ -14,12 +14,18 @@ nonisolated enum CaptionEditOperation: Codable, Sendable, Hashable {
     /// Absorb the following caption into this one.
     case merge(segment: UUID, withNext: UUID)
     case setSpeaker(segment: UUID, speaker: UUID)
+    /// Move one caption's span. Word timings rescale into it.
+    case retime(segment: UUID, startMs: Int, endMs: Int)
+    /// Rewrite one caption's translation in a single language, leaving the
+    /// original text and every other language alone.
+    case setTranslation(segment: UUID, language: String, text: String)
     case delete(segment: UUID)
 
     var segmentID: UUID {
         switch self {
         case .split(let id, _), .replaceText(let id, _), .merge(let id, _),
-             .setSpeaker(let id, _), .delete(let id):
+             .setSpeaker(let id, _), .retime(let id, _, _),
+             .setTranslation(let id, _, _), .delete(let id):
             return id
         }
     }
@@ -37,6 +43,9 @@ nonisolated enum CaptionEditVerdict: Codable, Sendable, Hashable {
     case overSplit
     /// A text edit touched something that isn't a glossary term.
     case editedNonTerm(String)
+    /// The new span runs into the caption before or after it. Applicable, but
+    /// worth a look — overlapping cues stack on screen.
+    case timingOverlap
     /// The operation refers to a caption that no longer exists, or is otherwise
     /// unapplicable.
     case notApplicable(String)
@@ -57,6 +66,8 @@ nonisolated enum CaptionEditVerdict: Codable, Sendable, Hashable {
             return "This breaks the caption into more lines than its length calls for."
         case .editedNonTerm(let word):
             return "This changes \"\(word)\", which isn't in the glossary."
+        case .timingOverlap:
+            return "This span overlaps the caption next to it."
         case .notApplicable(let reason):
             return reason
         }
