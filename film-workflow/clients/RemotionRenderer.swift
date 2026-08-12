@@ -52,11 +52,25 @@ nonisolated enum SystemBrowserLocator {
 nonisolated enum ProcessTreeKiller {
     /// Recursively kills `pid` and all of its descendants.
     static func killTree(rootPID: pid_t, signal sig: Int32 = SIGTERM) {
-        let descendants = collectDescendants(of: rootPID)
-        for pid in descendants.reversed() {
-            kill(pid, sig)
-        }
-        kill(rootPID, sig)
+        signalAll(snapshot(rootPID: rootPID), sig)
+    }
+
+    /// `rootPID` plus every descendant, deepest-first.
+    ///
+    /// Capture this BEFORE signalling if you intend to escalate later: once the root
+    /// exits, its surviving children reparent to launchd and `pgrep -P <root>` can no
+    /// longer see them. Re-deriving the tree at escalation time silently misses exactly
+    /// the processes that ignored the first signal.
+    static func snapshot(rootPID: pid_t) -> [pid_t] {
+        collectDescendants(of: rootPID).reversed() + [rootPID]
+    }
+
+    static func signalAll(_ pids: [pid_t], _ sig: Int32) {
+        for pid in pids { kill(pid, sig) }
+    }
+
+    static func anyAlive(_ pids: [pid_t]) -> Bool {
+        pids.contains { kill($0, 0) == 0 }
     }
 
     private static func collectDescendants(of root: pid_t) -> [pid_t] {
@@ -114,6 +128,52 @@ nonisolated enum ProcessTreeKiller {
     }
 }
 
+/// Owns the launch/cancel ordering for a child process tree.
+///
+/// `withTaskCancellationHandler` may run `onCancel` before, during, or after the
+/// process launches, so the launch and the kill have to be serialised against each
+/// other. The SIGKILL escalation also has to live here rather than after the `await`:
+/// that await only resumes once the process has already exited, which is precisely
+/// what does not happen when SIGTERM is ignored.
+private final class CancellableProcess: @unchecked Sendable {
+    private let lock = NSLock()
+    private var rootPID: pid_t?
+    private var cancelled = false
+
+    /// Launches under the lock, so a concurrent `cancel()` either wins the race — and
+    /// this returns false having spawned nothing — or blocks briefly and then sees a
+    /// live pid to signal. Returns false only when cancellation got there first.
+    func launch(_ proc: Process) throws -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        if cancelled { return false }
+        try proc.run()
+        rootPID = proc.processIdentifier
+        return true
+    }
+
+    func cancel(graceSeconds: Double = 3) {
+        lock.lock()
+        cancelled = true
+        let root = rootPID
+        lock.unlock()
+
+        // Not launched yet: `launch()` will see `cancelled` and decline to spawn.
+        guard let root else { return }
+
+        let tree = ProcessTreeKiller.snapshot(rootPID: root)
+        ProcessTreeKiller.signalAll(tree, SIGTERM)
+
+        // Escalate on a timer rather than inline, so a bun/node/ffmpeg that sits on
+        // SIGTERM still dies and the awaiting continuation gets its termination.
+        DispatchQueue.global(qos: .userInitiated).asyncAfter(deadline: .now() + graceSeconds) {
+            if ProcessTreeKiller.anyAlive(tree) {
+                ProcessTreeKiller.signalAll(tree, SIGKILL)
+            }
+        }
+    }
+}
+
 enum RemotionRenderer {
     static func render(
         projectId: UUID,
@@ -150,7 +210,14 @@ enum RemotionRenderer {
             outputURL.path,
             "--width", "\(width)",
             "--height", "\(height)",
-            "--fps", "\(fps)"
+            "--fps", "\(fps)",
+            // Encode via VideoToolbox when the Mac offers it, falling back to libx264
+            // silently otherwise. Passed on the CLI rather than set in remotion.config.ts
+            // because projects created before this change keep their own copy of that
+            // config file (see RemotionRuntime.ensureProjectDirectory) and would never
+            // pick it up. Note: setting a CRF/quality option makes Remotion drop back to
+            // the software encoder, so don't add one and expect both.
+            "--hardware-acceleration", "if-possible"
         ]
         // Prefer the user's installed Chromium-family browser to avoid the 143MB
         // chrome-headless-shell auto-download. Falls through to Remotion's default
@@ -197,11 +264,17 @@ enum RemotionRenderer {
             for line in errBuffer.append(data) { parseAndForward(line) }
         }
 
+        let canceller = CancellableProcess()
+
         let exitStatus: Int32 = await withTaskCancellationHandler {
             await withCheckedContinuation { (cont: CheckedContinuation<Int32, Never>) in
                 proc.terminationHandler = { p in cont.resume(returning: p.terminationStatus) }
                 do {
-                    try proc.run()
+                    if try !canceller.launch(proc) {
+                        // Cancelled before we spawned anything.
+                        proc.terminationHandler = nil
+                        cont.resume(returning: -1)
+                    }
                 } catch {
                     proc.terminationHandler = nil
                     let line = "process failed to launch: \(error.localizedDescription)\n"
@@ -210,25 +283,12 @@ enum RemotionRenderer {
                 }
             }
         } onCancel: {
-            if proc.isRunning {
-                ProcessTreeKiller.killTree(rootPID: proc.processIdentifier, signal: SIGTERM)
-            }
+            canceller.cancel()
         }
 
         outPipe.fileHandleForReading.readabilityHandler = nil
         errPipe.fileHandleForReading.readabilityHandler = nil
         try? logHandle?.close()
-
-        // If still running after terminate (rare), give it a brief grace period then SIGKILL the tree.
-        if Task.isCancelled, proc.isRunning {
-            for _ in 0..<30 {
-                if !proc.isRunning { break }
-                try? await Task.sleep(nanoseconds: 100_000_000)
-            }
-            if proc.isRunning {
-                ProcessTreeKiller.killTree(rootPID: proc.processIdentifier, signal: SIGKILL)
-            }
-        }
 
         if Task.isCancelled {
             try? FileManager.default.removeItem(at: outputURL)

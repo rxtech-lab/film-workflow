@@ -3,7 +3,7 @@
 #
 # Builds the Sparkle appcast for the DMG sitting in the working directory and
 # signs it with the EdDSA private key from the SPARKLE_KEY secret. The result is
-# published to GitHub Pages (filmstudio.rxlab.app) by the release workflow; the
+# published to GitHub Pages (update.filmstudio.rxlab.app) by the release workflow; the
 # DMG itself is served from the GitHub release, which is why the download URL
 # prefix is rewritten here.
 #

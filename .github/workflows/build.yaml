@@ -154,7 +154,7 @@ jobs:
           # Pin the custom domain — without this, deploy-pages strips the CNAME
           # GitHub wrote when the domain was set in Settings → Pages, and the
           # SUFeedURL baked into every shipped app stops resolving.
-          echo "filmstudio.rxlab.app" > pages/CNAME
+          echo "update.filmstudio.rxlab.app" > pages/CNAME
 
       - name: Setup Pages
         uses: actions/configure-pages@v6
