@@ -1,0 +1,31 @@
+{
+  "object" : {
+    "artifacts" : [
+      {
+        "kind" : {
+          "xcframework" : {
+
+          }
+        },
+        "packageRef" : {
+          "identity" : "sparkle",
+          "kind" : "root",
+          "location" : "/Users/qiweili/Desktop/rxlab/film-workflow/Vendor/Sparkle",
+          "name" : "Sparkle"
+        },
+        "path" : "/Users/qiweili/Desktop/rxlab/film-workflow/Vendor/Sparkle/Sparkle.xcframework",
+        "source" : {
+          "type" : "local"
+        },
+        "targetName" : "Sparkle"
+      }
+    ],
+    "dependencies" : [
+
+    ],
+    "prebuilts" : [
+
+    ]
+  },
+  "version" : 7
+}
