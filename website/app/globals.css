@@ -1,0 +1,568 @@
+@import "tailwindcss";
+
+@theme {
+  --color-ink: #08090a;
+  --color-surface: #0f1113;
+  --color-elevated: #15181b;
+  --color-line: #23272b;
+  --color-fg: #f3f2ef;
+  --color-muted: #8b8f95;
+  --color-accent: #ffb020;
+
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+}
+
+html {
+  scroll-behavior: smooth;
+  background: var(--color-ink);
+}
+
+/*
+ * The page background lives on <html> only. An opaque background on <body>
+ * would paint over the fixed, negative-z backdrop layers.
+ */
+body {
+  background: transparent;
+  color: var(--color-fg);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+::selection {
+  background: var(--color-accent);
+  color: #000;
+}
+
+/* Film grain — sits above the page, never intercepts pointer events. */
+.grain::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  pointer-events: none;
+  opacity: 0.035;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='140' height='140'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3'/></filter><rect width='140' height='140' filter='url(%23n)'/></svg>");
+}
+
+/* Sprocket rail — the perforated edge of a film strip. */
+.sprockets {
+  background-image: linear-gradient(
+    to bottom,
+    rgba(255, 255, 255, 0.11) 0 15px,
+    transparent 15px 38px
+  );
+  background-size: 100% 38px;
+  background-repeat: repeat-y;
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.rise {
+  animation: rise 0.8s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes lift {
+  from {
+    opacity: 0;
+    transform: translateY(52px) scale(0.94);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes drift {
+  from {
+    transform: translateY(28px);
+    opacity: 0.35;
+  }
+  to {
+    transform: translateY(-14px);
+    opacity: 1;
+  }
+}
+
+@keyframes wipe {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+
+@keyframes progress {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+
+/* Rows that open as the page scrolls, sliding what sits above them upward. */
+@keyframes open-row {
+  from {
+    grid-template-rows: 0fr;
+  }
+  to {
+    grid-template-rows: 1fr;
+  }
+}
+
+/* The second half of the headline drops into the space that just opened. */
+@keyframes reveal-line {
+  0% {
+    opacity: 0;
+    transform: translateY(-0.42em);
+  }
+  100% {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* The top bar drops in once the title sequence is under way. */
+@keyframes nav-in {
+  0% {
+    opacity: 0;
+    transform: translateY(-100%);
+  }
+  100% {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes reveal-cta {
+  0% {
+    opacity: 0;
+    transform: translateY(18px);
+  }
+  100% {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* The trailer dims out as the hero stage is carried off the top of the frame. */
+@keyframes hero-fade {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes hint-out {
+  to {
+    opacity: 0;
+  }
+}
+
+/* ── Feature stages ──────────────────────────────────────── */
+
+/* Beat one hands off to beat two: the screenshot dissolves out... */
+@keyframes shot-out {
+  from {
+    opacity: 1;
+    transform: none;
+    filter: blur(0);
+  }
+  to {
+    opacity: 0;
+    transform: scale(0.965);
+    filter: blur(7px);
+  }
+}
+
+/* ...and the diagram takes the frame. */
+@keyframes diagram-in {
+  from {
+    opacity: 0;
+    transform: scale(1.035);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Beat three: the stage is carried off the top. */
+@keyframes stage-out {
+  from {
+    opacity: 1;
+    transform: none;
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-5vh) scale(0.97);
+  }
+}
+
+/* Diagram parts, in the trailer's own vocabulary. */
+@keyframes d-rise {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes d-grow {
+  from {
+    opacity: 0.25;
+    transform: scaleY(0.06);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes d-resolve {
+  from {
+    opacity: 0;
+    filter: blur(10px);
+    transform: scale(1.06);
+  }
+  to {
+    opacity: 1;
+    filter: blur(0);
+    transform: none;
+  }
+}
+
+/* The playhead rides a full-width carrier, so 100% is the whole timeline. */
+@keyframes d-sweep {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(100%);
+  }
+}
+
+/* ── Backdrop layers ─────────────────────────────────────── */
+
+@keyframes beam-sweep {
+  from {
+    transform: skewX(-12deg) translateX(0) scaleY(1);
+    opacity: 1;
+  }
+  to {
+    transform: skewX(-30deg) translateX(30vw) scaleY(1.2);
+    opacity: 0.35;
+  }
+}
+
+@keyframes beam-sweep-2 {
+  from {
+    transform: skewX(12deg) translateX(0);
+    opacity: 0.7;
+  }
+  to {
+    transform: skewX(30deg) translateX(-24vw);
+    opacity: 1;
+  }
+}
+
+@keyframes reel-spin {
+  to {
+    transform: rotate(1080deg);
+  }
+}
+
+/* Film running through the gate — one perforation is 38px. */
+@keyframes film-run {
+  to {
+    background-position-y: -3800px;
+  }
+}
+
+@keyframes frames-tumble {
+  from {
+    transform: translateY(0) rotate(0deg);
+    opacity: 0.8;
+  }
+  to {
+    transform: translateY(-140px) rotate(8deg);
+    opacity: 1;
+  }
+}
+
+@keyframes glow-a {
+  from {
+    transform: translate3d(-6%, -8%, 0) scale(1);
+  }
+  to {
+    transform: translate3d(14%, 26%, 0) scale(1.4);
+  }
+}
+
+@keyframes glow-b {
+  from {
+    transform: translate3d(12%, 6%, 0) scale(1.25);
+  }
+  to {
+    transform: translate3d(-16%, -22%, 0) scale(0.85);
+  }
+}
+
+@keyframes grid-pan {
+  to {
+    transform: translateY(-180px);
+  }
+}
+
+@keyframes dust-drift {
+  to {
+    transform: translateY(-420px);
+  }
+}
+
+/*
+ * Scroll-driven animation. Everything below is additive: without
+ * `animation-timeline` support (or with reduced motion) the page renders
+ * fully visible and static.
+ */
+@supports (animation-timeline: view()) {
+  @media (prefers-reduced-motion: no-preference) {
+    /* Section blocks rise into place as they enter the viewport. */
+    .reveal {
+      animation: rise linear both;
+      animation-timeline: view();
+      animation-range: entry 5% cover 24%;
+    }
+
+    /* Screenshots lift and scale up — like a frame settling into the gate. */
+    .lift {
+      animation: lift linear both;
+      animation-timeline: view();
+      animation-range: entry 0% cover 34%;
+    }
+
+    /*
+     * Each feature runs its own three-beat stage on its own timeline.
+     * `contain` starts the moment the stage pins and ends as it releases, so
+     * every beat below is expressed as a share of the time it holds the frame.
+     */
+    .stage-track {
+      view-timeline-name: --stage;
+      view-timeline-axis: block;
+    }
+
+    .stage-shot,
+    .stage-diagram,
+    .stage-out,
+    .d-rise,
+    .d-grow,
+    .d-resolve,
+    .d-sweep {
+      animation-timing-function: linear;
+      animation-fill-mode: both;
+      animation-timeline: --stage;
+    }
+
+    /* Beat 1 → 2 */
+    .stage-shot {
+      animation-name: shot-out;
+      animation-range: contain 22% contain 44%;
+    }
+
+    .stage-diagram {
+      animation-name: diagram-in;
+      animation-range: contain 26% contain 46%;
+    }
+
+    /* Beat 3 */
+    .stage-out {
+      animation-name: stage-out;
+      animation-range: contain 88% contain 100%;
+    }
+
+    /* The diagram assembles itself between the two. */
+    .d-rise {
+      animation-name: d-rise;
+    }
+    .d-grow {
+      animation-name: d-grow;
+      transform-origin: bottom;
+    }
+    .d-resolve {
+      animation-name: d-resolve;
+    }
+    .d-sweep {
+      animation-name: d-sweep;
+      animation-range: contain 50% contain 84%;
+    }
+
+    .step-0 {
+      animation-range: contain 46% contain 58%;
+    }
+    .step-1 {
+      animation-range: contain 50% contain 62%;
+    }
+    .step-2 {
+      animation-range: contain 54% contain 66%;
+    }
+    .step-3 {
+      animation-range: contain 58% contain 70%;
+    }
+    .step-4 {
+      animation-range: contain 62% contain 74%;
+    }
+    .step-5 {
+      animation-range: contain 66% contain 78%;
+    }
+
+    /* Copy drifts at its own rate against the image. */
+    .drift {
+      animation: drift linear both;
+      animation-timeline: view();
+      animation-range: entry 10% cover 45%;
+    }
+
+    /* Slate rules draw themselves left to right. */
+    .wipe {
+      transform-origin: left;
+      animation: wipe linear both;
+      animation-timeline: view();
+      animation-range: entry 15% cover 30%;
+    }
+
+    /* Film-gauge progress bar, driven by document scroll. */
+    .progress-bar {
+      transform-origin: left;
+      animation: progress linear both;
+      animation-timeline: scroll(root block);
+    }
+
+    /*
+     * Hero title sequence. The stage is pinned for the first ~130vh of
+     * scroll, and these ranges play out inside that window.
+     */
+    .hero-open {
+      animation: open-row linear both;
+      animation-timeline: scroll(root block);
+      animation-range: 2vh 46vh;
+    }
+
+    .hero-line-2 {
+      animation: reveal-line linear both;
+      animation-timeline: scroll(root block);
+      animation-range: 8vh 54vh;
+    }
+
+    .hero-open-late {
+      animation: open-row linear both;
+      animation-timeline: scroll(root block);
+      animation-range: 56vh 96vh;
+    }
+
+    .hero-cta {
+      animation: reveal-cta linear both;
+      animation-timeline: scroll(root block);
+      animation-range: 66vh 104vh;
+    }
+
+    /*
+     * The hero track carries its own timeline, so the trailer's fade is tied
+     * to the stage leaving the frame rather than to a hard-coded offset.
+     */
+    .hero-track {
+      view-timeline-name: --hero;
+      view-timeline-axis: block;
+    }
+
+    .hero-reel {
+      animation: hero-fade linear both;
+      animation-timeline: --hero;
+      animation-range: exit 0% exit 60%;
+    }
+
+    .scroll-hint {
+      animation: hint-out linear both;
+      animation-timeline: scroll(root block);
+      animation-range: 0 18vh;
+    }
+
+    .nav-reveal {
+      animation: nav-in linear both;
+      animation-timeline: scroll(root block);
+      animation-range: 62vh 92vh;
+    }
+
+    /* The edge strips travel for the whole length of the page. */
+    .sprockets-run {
+      animation: film-run linear both;
+      animation-timeline: scroll(root block);
+    }
+
+    /* The reel turns with them. */
+    .reel-spin {
+      transform-origin: center;
+      animation: reel-spin linear both;
+      animation-timeline: scroll(root block);
+    }
+
+    /* Backdrop layers, all on the document scroll timeline. */
+    .bg-beam,
+    .bg-beam-2,
+    .bg-glow-a,
+    .bg-glow-b,
+    .bg-grid,
+    .bg-dust,
+    .bg-frames {
+      animation-timing-function: linear;
+      animation-fill-mode: both;
+      animation-timeline: scroll(root block);
+    }
+
+    .bg-beam {
+      animation-name: beam-sweep;
+    }
+    .bg-beam-2 {
+      animation-name: beam-sweep-2;
+    }
+    .bg-glow-a {
+      animation-name: glow-a;
+    }
+    .bg-glow-b {
+      animation-name: glow-b;
+    }
+    .bg-grid {
+      animation-name: grid-pan;
+    }
+    .bg-dust {
+      animation-name: dust-drift;
+    }
+    .bg-frames {
+      animation-name: frames-tumble;
+    }
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  .rise {
+    animation: none;
+  }
+}

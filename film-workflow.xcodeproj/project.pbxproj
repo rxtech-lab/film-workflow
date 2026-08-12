@@ -218,7 +218,7 @@
 			packageReferences = (
 				DFC60EA32FAF81D200B99679 /* XCRemoteSwiftPackageReference "textual" */,
 				DFCA0003000000000000B003 /* XCRemoteSwiftPackageReference "WhisperKit" */,
-				DFSP0003000000000000C003 /* XCRemoteSwiftPackageReference "Sparkle" */,
+				DFSP0003000000000000C003 /* XCLocalSwiftPackageReference "Vendor/Sparkle" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = DF4F80FB2F9120D300DE82DA /* Products */;
@@ -482,9 +482,9 @@
 				"ENABLE_RESOURCE_ACCESS_USB[sdk=macosx*]" = NO;
 				"ENABLE_USER_SELECTED_FILES[sdk=macosx*]" = readwrite;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = RxFilmStudio;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.video";
-				INFOPLIST_FILE = Info.plist;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -544,9 +544,9 @@
 				"ENABLE_RESOURCE_ACCESS_USB[sdk=macosx*]" = NO;
 				"ENABLE_USER_SELECTED_FILES[sdk=macosx*]" = readwrite;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = RxFilmStudio;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.video";
-				INFOPLIST_FILE = Info.plist;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -719,15 +719,14 @@
 				minimumVersion = 1.1.0;
 			};
 		};
-		DFSP0003000000000000C003 /* XCRemoteSwiftPackageReference "Sparkle" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/sparkle-project/Sparkle.git";
-			requirement = {
-				kind = upToNextMajorVersion;
-				minimumVersion = 2.0.0;
-			};
-		};
 /* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCLocalSwiftPackageReference section */
+		DFSP0003000000000000C003 /* XCLocalSwiftPackageReference "Vendor/Sparkle" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = Vendor/Sparkle;
+		};
+/* End XCLocalSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
 		DFC60EA42FAF81D200B99679 /* Textual */ = {
@@ -742,7 +741,7 @@
 		};
 		DFSP0002000000000000C002 /* Sparkle */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = DFSP0003000000000000C003 /* XCRemoteSwiftPackageReference "Sparkle" */;
+			package = DFSP0003000000000000C003 /* XCLocalSwiftPackageReference "Vendor/Sparkle" */;
 			productName = Sparkle;
 		};
 /* End XCSwiftPackageProductDependency section */
