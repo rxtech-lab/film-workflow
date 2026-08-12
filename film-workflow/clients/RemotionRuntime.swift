@@ -236,7 +236,10 @@ final class RemotionRuntime {
     /// macOS GUI-launched apps inherit a thin launchd environment with a minimal PATH
     /// and no shell-style vars. node/Bun/Puppeteer call out to standard tools and need
     /// HOME/TMPDIR/USER, so we backfill missing essentials.
-    static func enrichedEnvironment() -> [String: String] {
+    /// `nonisolated` because it is pure — it reads `ProcessInfo` and nothing
+    /// else — so off-main code that spawns a tool can build its environment
+    /// without hopping to the main actor.
+    nonisolated static func enrichedEnvironment() -> [String: String] {
         var env = ProcessInfo.processInfo.environment
         env["FORCE_COLOR"] = "0"
         env["CI"] = "1"

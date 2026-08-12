@@ -13,6 +13,9 @@ struct film_workflowApp: App {
             RemotionMessage.self,
             ImageGenProject.self,
             GeneratedImage.self,
+            CaptionProject.self,
+            CaptionSegment.self,
+            CaptionAssistantMessage.self,
         ])
         let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
 
@@ -25,6 +28,9 @@ struct film_workflowApp: App {
 
     init() {
         FileStorage.ensureDirectories()
+        // Audio chunks and multipart bodies staged during transcription can be
+        // hundreds of megabytes; a crash mid-run would otherwise leak them.
+        FileStorage.clearTemp()
         #if os(macOS)
         // Clean up any bun/node/remotion processes left behind by an unclean exit
         // of a previous app launch (Bun's Chromium grandchildren survive Process.terminate).
@@ -38,6 +44,7 @@ struct film_workflowApp: App {
             #if os(macOS)
                 .environment(RemotionChatController.shared)
             #endif
+                .environment(CaptionAssistantController.shared)
                 .task {
                     MCPServer.shared.bootstrap(container: sharedModelContainer)
                 }
@@ -45,6 +52,18 @@ struct film_workflowApp: App {
         .modelContainer(sharedModelContainer)
 
         #if os(macOS)
+        // The caption assistant gets its own window rather than a pane: editing
+        // captions means watching the list change as edits land, and a sheet or
+        // inspector would cover the thing you're editing. Keyed by
+        // `CaptionProject.projectUUID` so each project opens its own window and
+        // re-opening focuses the existing one.
+        WindowGroup(id: CaptionAssistantWindowID.value, for: UUID.self) { $projectUUID in
+            CaptionAssistantWindow(projectUUID: projectUUID)
+                .environment(CaptionAssistantController.shared)
+        }
+        .modelContainer(sharedModelContainer)
+        .defaultSize(width: 420, height: 640)
+
         Settings {
             SettingsView()
         }
