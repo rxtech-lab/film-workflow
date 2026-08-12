@@ -3845,6 +3845,16 @@
         }
       }
     },
+    "More" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "更多"
+          }
+        }
+      }
+    },
     "Models download from Hugging Face and run entirely on this device. Larger models are more accurate and slower. On-device Whisper doesn't detect speakers, so you assign them in the editor." : {
       "localizations" : {
         "zh-Hans" : {

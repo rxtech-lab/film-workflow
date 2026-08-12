@@ -41,10 +41,6 @@ struct CaptionSegmentListView: View {
     @State private var translationConfig: TranslationSession.Configuration?
     @State private var pendingChoice: CaptionTranslateChoice?
 
-    #if os(macOS)
-        @Environment(\.openWindow) private var openWindow
-    #endif
-
     private var segments: [CaptionSegment] { project.orderedSegments }
 
     private var issues: [CaptionValidationIssue] {
@@ -400,63 +396,72 @@ struct CaptionSegmentListView: View {
     @ToolbarContentBuilder
     private var toolbarContent: some ToolbarContent {
         ToolbarItem(placement: .primaryAction) {
-            Button {
-                showExportSheet = true
-            } label: {
-                Label("Export", systemImage: "square.and.arrow.up")
-            }
-            .disabled(segments.isEmpty)
-        }
-
-        ToolbarItem(placement: .primaryAction) {
             Menu {
-                Button("Translate…") { showTranslateSheet = true }
-                    .disabled(segments.isEmpty || isTranslating)
+                Button {
+                    showExportSheet = true
+                } label: {
+                    Label("Export", systemImage: "square.and.arrow.up")
+                }
 
-                if !project.translatedLanguages.isEmpty {
-                    Divider()
-                    ForEach(project.translatedLanguages, id: \.self) { code in
-                        Button(updateLabel(for: code)) { updateTranslation(code) }
-                            .disabled(isTranslating)
-                    }
-                    Divider()
-                    Menu("Remove Translation") {
+                Divider()
+
+                Menu {
+                    Button("Translate…") { showTranslateSheet = true }
+                        .disabled(isTranslating)
+
+                    if !project.translatedLanguages.isEmpty {
+                        Divider()
                         ForEach(project.translatedLanguages, id: \.self) { code in
-                            Button(CaptionTranslationAvailability.displayName(code), role: .destructive) {
-                                removingTranslation = code
+                            Button(updateLabel(for: code)) { updateTranslation(code) }
+                                .disabled(isTranslating)
+                        }
+                        Divider()
+                        Menu("Remove Translation") {
+                            ForEach(project.translatedLanguages, id: \.self) { code in
+                                Button(
+                                    CaptionTranslationAvailability.displayName(code),
+                                    role: .destructive
+                                ) {
+                                    removingTranslation = code
+                                }
                             }
                         }
                     }
+                } label: {
+                    Label("Translate", systemImage: "globe")
                 }
-            } label: {
-                Label("Translate", systemImage: "globe")
-            }
-            .disabled(segments.isEmpty)
-        }
 
-        ToolbarItem(placement: .primaryAction) {
-            Menu {
-                Button("Review Splits…") { reviewSplits() }
-                    .disabled(segments.isEmpty || isRunningAI)
-                Button("Check Terms…") { checkTerms() }
-                    .disabled(segments.isEmpty || project.usableTerms.isEmpty || isRunningAI)
                 Divider()
-                Button("Open Assistant") { openAssistant() }
-            } label: {
-                Label("AI", systemImage: "sparkles")
-            }
-        }
 
-        ToolbarItem(placement: .primaryAction) {
-            Menu {
-                Button("Retimer…") { showRetimeSheet = true }
+                Button {
+                    reviewSplits()
+                } label: {
+                    Label("Review Splits…", systemImage: "rectangle.split.3x1")
+                }
+                    .disabled(segments.isEmpty || isRunningAI)
+                Button {
+                    checkTerms()
+                } label: {
+                    Label("Check Terms…", systemImage: "text.magnifyingglass")
+                }
+                    .disabled(segments.isEmpty || project.usableTerms.isEmpty || isRunningAI)
+
+                Divider()
+
+                Button {
+                    showRetimeSheet = true
+                } label: {
+                    Label("Retimer…", systemImage: "timeline.selection")
+                }
                     .disabled(segments.isEmpty)
 
-                Button("Close Gaps Under 300 ms") {
+                Button {
                     let changed = project.removeGaps(shorterThan: 300)
                     gapNotice = changed == 0
                         ? "No gaps needed closing."
                         : "Closed \(changed) gap\(changed == 1 ? "" : "s")."
+                } label: {
+                    Label("Close Gaps Under 300 ms", systemImage: "arrow.left.and.right")
                 }
                 .disabled(segments.count < 2)
 
@@ -469,8 +474,9 @@ struct CaptionSegmentListView: View {
                     }
                 }
             } label: {
-                Label("Tools", systemImage: "slider.horizontal.3")
+                Label("More", systemImage: "ellipsis.circle")
             }
+            .disabled(segments.isEmpty)
         }
     }
 
@@ -608,23 +614,6 @@ struct CaptionSegmentListView: View {
     }
 
     // MARK: - AI actions
-
-    /// Opens the agent beside the captions on macOS, and as a tab on iOS where a
-    /// second window isn't available.
-    ///
-    /// Sets the navigation target first either way, so a thread started from
-    /// here already knows which caption project is meant.
-    private func openAssistant() {
-        AppNavigation.shared.currentTarget = AgentTarget(
-            kind: .caption,
-            projectUUID: project.projectUUID
-        )
-        #if os(macOS)
-            openWindow(id: AgentWindowID.value)
-        #else
-            AppNavigation.shared.tab = .Agent
-        #endif
-    }
 
     private func reviewSplits() {
         runAI { engine, transcript in
