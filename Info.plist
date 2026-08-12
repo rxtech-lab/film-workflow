@@ -17,7 +17,7 @@
 <plist version="1.0">
 <dict>
 	<key>SUFeedURL</key>
-	<string>https://filmstudio.rxlab.app/appcast.xml</string>
+	<string>https://update.filmstudio.rxlab.app/appcast.xml</string>
 	<key>SUPublicEDKey</key>
 	<string>OOJs50Q9V9lpqBgeRi0ow0YBdiAlmc9uJ3B9hABDsqQ=</string>
 </dict>

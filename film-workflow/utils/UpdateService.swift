@@ -8,7 +8,7 @@ import Sparkle
 /// release; `checkForUpdates()` backs the explicit menu command.
 ///
 /// The feed lives at the `SUFeedURL` baked into Info.plist
-/// (https://filmstudio.rxlab.app/appcast.xml) and is verified against the
+/// (https://update.filmstudio.rxlab.app/appcast.xml) and is verified against the
 /// `SUPublicEDKey` there — CI signs each build with the matching private key.
 @MainActor
 final class UpdateService {

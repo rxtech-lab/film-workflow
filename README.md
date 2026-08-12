@@ -58,7 +58,7 @@ xcodebuild test -project film-workflow.xcodeproj -scheme film-workflow -destinat
 ## Releases & Auto-Update
 
 The macOS app updates itself with [Sparkle](https://sparkle-project.org). The
-feed lives at `https://filmstudio.rxlab.app/appcast.xml`, published to GitHub
+feed lives at `https://update.filmstudio.rxlab.app/appcast.xml`, published to GitHub
 Pages, and every update is verified against the EdDSA public key baked into
 `Info.plist`.
 
