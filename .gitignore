@@ -6,7 +6,7 @@
 ._*
 
 # Custom folder icons
-Icon
+Icon
 
 # Volume root files
 .DocumentRevisions-V100
@@ -63,3 +63,13 @@ playground.xcworkspace
 
 # Swift Package Manager
 # Package.resolved
+
+### Release artifacts
+# Produced by .github/workflows/build.yaml on the runner; never committed.
+output/
+bin/
+*.dmg
+appcast.xml
+release_notes.md
+release_notes.html
+xcodebuild-archive.log

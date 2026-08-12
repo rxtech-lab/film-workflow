@@ -29,6 +29,9 @@ struct film_workflowApp: App {
 
     #if os(macOS)
     @Environment(\.openWindow) private var openWindow
+    // Held for the lifetime of the app: creating it starts Sparkle's scheduled
+    // update check, so the app also updates itself without the menu command.
+    private let updateService = UpdateService.shared
     #endif
 
     init() {
@@ -54,6 +57,11 @@ struct film_workflowApp: App {
         .modelContainer(sharedModelContainer)
         #if os(macOS)
             .commands {
+                CommandGroup(after: .appInfo) {
+                    Button("Check for Updates...") {
+                        updateService.checkForUpdates()
+                    }
+                }
                 CommandGroup(after: .toolbar) {
                     Button("Agent") {
                         openWindow(id: AgentWindowID.value)

@@ -189,6 +189,30 @@ struct CaptionTabView: View {
         }
     }
 
+    /// The project whose primary action belongs in the split-view toolbar, or
+    /// `nil` when the compact layout owns it instead. Kept separate from the
+    /// toolbar builder so the type-checker never has to solve a multi-clause
+    /// condition inside a result builder.
+    private var toolbarProject: CaptionProject? {
+        guard !isCompact, let project = selectedProject else { return nil }
+        guard preparedDetail?.projectID == project.projectUUID else { return nil }
+        return project
+    }
+
+    @ToolbarContentBuilder
+    private var transcribeToolbar: some ToolbarContent {
+        if let project = toolbarProject {
+            ToolbarItem(placement: .primaryAction) {
+                CaptionTranscribeButton(
+                    hasCaptions: project.activeSegmentCount > 0,
+                    isTranscribing: isTranscribing,
+                    canTranscribe: project.hasAudio,
+                    action: { requestTranscribe(project) }
+                )
+            }
+        }
+    }
+
     var body: some View {
         Group {
             if isCompact {
@@ -227,20 +251,7 @@ struct CaptionTabView: View {
             await prepareSelectedProject()
         }
         .publishesAgentTarget(kind: .caption, projectUUID: selectedProject?.projectUUID)
-        .toolbar {
-            if let project = selectedProject,
-               preparedDetail?.projectID == project.projectUUID,
-               !isCompact {
-                ToolbarItem(placement: .primaryAction) {
-                    CaptionTranscribeButton(
-                        hasCaptions: project.activeSegmentCount > 0,
-                        isTranscribing: isTranscribing,
-                        canTranscribe: project.hasAudio,
-                        action: { requestTranscribe(project) }
-                    )
-                }
-            }
-        }
+        .toolbar { transcribeToolbar }
         .sheet(isPresented: $isTranscribing) {
             CaptionTranscriptionProgressView(progress: progress) {
                 transcriptionTask?.cancel()
