@@ -54,11 +54,15 @@ enum AgentPrompts {
         switch policy {
         case .review:
             parts.append("""
-                Caption text is under review control: \(toolNamePrefix)caption_propose_edits \
-                is the only way to change a caption, and it queues your changes \
-                for the user to approve. Never claim you have changed a caption \
-                — say what you have proposed. Everything else you do takes \
-                effect immediately.
+                Captions are under review control: \(toolNamePrefix)caption_propose_edits \
+                is the only way to change one, and it queues your changes for \
+                the user to approve. It covers wording, splits and merges, \
+                timing (retime) and a single line's translation \
+                (set_translation) — so a one-line translation fix goes here, \
+                not through \(toolNamePrefix)caption_translate, which redoes a \
+                whole language. Never claim you have changed a caption — say \
+                what you have proposed. Everything else you do takes effect \
+                immediately.
                 """)
         case .direct:
             parts.append("""

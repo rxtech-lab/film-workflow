@@ -163,9 +163,9 @@ protocol CaptionAIEngine: Sendable {
 extension CaptionAIEngine {
     var modelLabel: String { backend.engineLabel }
 
-    /// Default for engines that can't do batch work — the CLI agents, which
-    /// already throw from `planSplit` and `reviewTerms` for the same reason: one
-    /// process launch per batch is not a viable shape.
+    /// Safety net for an engine that hasn't implemented translation. Every
+    /// engine that ships does — including the CLI ones, via `CLICaptionEngine`,
+    /// which batches a hundred captions per process launch.
     func translate(_ request: CaptionTranslateRequest) async throws -> CaptionTranslateResult {
         throw CaptionAIError.backendUnavailable(
             backend,
@@ -199,20 +199,27 @@ protocol CaptionBatchAIEngine: CaptionAIEngine {
 
 /// Builds the engine for a caption task.
 ///
-/// Only the in-process backends live here. Conversation moved to the agent
-/// window, where the command-line backends are driven by `AgentCLIRunner` as a
-/// streaming tool-calling agent rather than a one-shot request/response — these
-/// engines answer the batch tasks (splitting, glossary review, translation),
-/// which run per-cue over a whole transcript and would be unusable at one
-/// subprocess launch each.
+/// Conversation moved to the agent window, where the command-line backends are
+/// driven by `AgentCLIRunner` as a streaming tool-calling agent rather than a
+/// one-shot request/response. What is left here answers the batch tasks —
+/// splitting, glossary review, translation. The first two run per cue, which is
+/// why the CLI engine still refuses them; translation batches, so it doesn't.
 @MainActor
 enum CaptionAIEngineFactory {
 
-    /// In-process engines. Synchronous, so the batch tasks can build one without
-    /// an `await` in the middle of a UI action.
+    /// Synchronous, so the batch tasks can build one without an `await` in the
+    /// middle of a UI action.
+    ///
+    /// `task` only matters for the command-line backends, which can answer a
+    /// batched translation but not a per-cue split. Defaulting it to
+    /// `.transcriptReview` keeps every existing caller on the stricter path:
+    /// handing a CLI engine to `CaptionAISplitter` would not fail loudly, it
+    /// would quietly character-split the whole transcript, because `refined`
+    /// swallows a per-cue error by design.
     static func make(
         backend: AgentBackend,
-        config: AppConfig?
+        config: AppConfig?,
+        for task: CaptionAITask = .transcriptReview
     ) throws -> any CaptionAIEngine {
         switch backend {
         case .appleIntelligence:
@@ -227,14 +234,37 @@ enum CaptionAIEngineFactory {
             )
 
         case .claudeCode, .codex:
-            // `AgentBackend.supports(_:)` already keeps the CLI backends out of
-            // every task that reaches this factory; this is the belt-and-braces
-            // case, phrased as something the user can act on.
-            throw CaptionAIError.backendUnavailable(
-                backend,
-                "\(backend.engineLabel) only answers in the agent window. Choose "
-                    + "Apple Intelligence or an OpenAI-compatible model for this."
-            )
+            #if os(macOS)
+                guard task == .translation else {
+                    // Splitting and glossary review ask once per caption, and a
+                    // process launch each would take minutes. Unchanged.
+                    throw CaptionAIError.backendUnavailable(
+                        backend,
+                        "\(backend.engineLabel) only answers in the agent window. Choose "
+                            + "Apple Intelligence or an OpenAI-compatible model for this."
+                    )
+                }
+                guard let executable = AgentBackendAvailability.shared
+                    .executablePath(for: backend)
+                else {
+                    throw CaptionAIError.backendUnavailable(
+                        backend,
+                        "The \(backend.executableName) command isn't installed."
+                    )
+                }
+                return CLICaptionEngine(
+                    backend: backend,
+                    executable: executable,
+                    model: backend.model(config: config)
+                )
+            #else
+                throw CaptionAIError.backendUnavailable(
+                    backend,
+                    "\(backend.engineLabel) needs a command line, which this platform "
+                        + "doesn't have. Choose Apple Intelligence or an "
+                        + "OpenAI-compatible model."
+                )
+            #endif
         }
     }
 }
@@ -333,17 +363,28 @@ nonisolated enum CaptionAIPrompts {
             length is a worse translation.
             2. Translate meaning, not words. Idiom becomes idiom.
             3. Keep the register of the original — casual stays casual.
-            4. Leave numbers, proper nouns and glossary terms in the form the \
-            glossary gives, unless \(targetName) has a standard rendering of them.
+            4. When a line contains a glossary term, do not translate it — write \
+            it as the placeholder the glossary shows, e.g. {{RxLab}}, double \
+            braces included, spelled exactly as the glossary lists it. Never \
+            translate or respell the text inside the braces, never put spaces \
+            inside them, and never invent a placeholder for a word the glossary \
+            does not list. Everything else in the line is translated normally. \
+            Leave numbers and other proper nouns in the form the original uses, \
+            unless \(targetName) has a standard rendering of them.
             5. Keep sentence-ending punctuation appropriate to \(targetName). Do \
             not add narration, bracketed notes, or speaker names.
             6. If a line is already in \(targetName), copy it through unchanged.
+            7. Braces are only ever for glossary terms. A line with no glossary \
+            term comes back with no braces at all.
             """
     }
 
     static func translatePrompt(_ request: CaptionTranslateRequest) -> String {
         [
-            CaptionTermMatching.promptBlock(request.terms),
+            CaptionTermMatching.translationPromptBlock(
+                request.terms,
+                target: request.targetLanguage
+            ),
             "Lines:",
             // Speaker labels are dropped: they are not the caption's words, and
             // a model shown "[Alice]" will sometimes translate the name.

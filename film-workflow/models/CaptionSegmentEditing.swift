@@ -14,8 +14,14 @@ extension CaptionSegment {
     /// act as anchors; unpinned runs between anchors are redistributed inside
     /// their sub-interval. Returns how many word timings changed, for the
     /// editor's confirmation text.
+    ///
+    /// `isHandSet` is what clears `isEstimatedTiming`: a boundary the user chose
+    /// against the waveform is a real time, and leaving the caption flagged as
+    /// estimated afterwards meant the editor's "timings are estimated" banner
+    /// could never be satisfied. Bulk nudges like `removeGaps` pass false —
+    /// closing a 200 ms gap doesn't make a guessed span measured.
     @discardableResult
-    func retime(toStartMs newStart: Int, endMs newEnd: Int) -> Int {
+    func retime(toStartMs newStart: Int, endMs newEnd: Int, isHandSet: Bool = true) -> Int {
         guard newEnd > newStart else { return 0 }
 
         let oldStart = startMs
@@ -23,6 +29,7 @@ extension CaptionSegment {
         startMs = newStart
         endMs = newEnd
         isUserEdited = true
+        if isHandSet { isEstimatedTiming = false }
 
         guard !words.isEmpty else { return 0 }
 
@@ -382,7 +389,7 @@ extension CaptionProject {
             let current = ordered[index]
             let gap = current.startMs - previous.endMs
             guard gap > 0, gap < thresholdMs else { continue }
-            current.retime(toStartMs: previous.endMs, endMs: current.endMs)
+            current.retime(toStartMs: previous.endMs, endMs: current.endMs, isHandSet: false)
             changed += 1
         }
         if changed > 0 { updatedAt = Date() }

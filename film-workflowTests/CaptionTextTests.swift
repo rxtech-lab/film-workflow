@@ -227,4 +227,30 @@ struct CaptionValidatorTests {
         let issues = CaptionTranscriptValidator.issues(in: snapshot)
         #expect(issues.contains { $0.kind == .wordOutsideSegment && $0.wordIndex == 0 })
     }
+
+    @Test("Editor row issues are grouped once by stable segment id")
+    func rowIssuesAreGroupedBySegmentID() {
+        let emptyID = UUID()
+        let wordOnlyID = UUID()
+        let snapshot = CaptionTranscriptSnapshot(
+            projectName: "P",
+            audioDurationMs: 5000,
+            speakers: [],
+            segments: [
+                CaptionSegmentSnapshot(id: emptyID, startMs: 0, endMs: 1000, text: ""),
+                CaptionSegmentSnapshot(
+                    id: wordOnlyID,
+                    startMs: 1000,
+                    endMs: 2000,
+                    text: "Hi",
+                    words: [CaptionWord(text: "Hi", offsetMs: 3000, durationMs: 100)]
+                ),
+            ]
+        )
+
+        let grouped = CaptionTranscriptValidator.rowIssuesBySegmentID(in: snapshot)
+
+        #expect(grouped[emptyID]?.map(\.kind) == [.emptyText])
+        #expect(grouped[wordOnlyID] == nil)
+    }
 }

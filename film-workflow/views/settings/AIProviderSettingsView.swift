@@ -12,6 +12,9 @@ struct AIProviderSettingsView: View {
     // can't blank them out.
     @State private var openAITranscriptionModel: String = ""
     @State private var geminiTranscriptionModel: String = ""
+    @State private var claudeCodeModel: String = ""
+    @State private var codexModel: String = ""
+    @State private var codexReasoningEffort: String = ""
     @State private var showSavedAlert = false
     @State private var errorMessage: String?
     @State private var showError = false
@@ -25,6 +28,8 @@ struct AIProviderSettingsView: View {
     @State private var imageModels: [OpenAIModelInfo] = []
     @State private var isLoadingImageModels = false
     @State private var imageModelsError: String?
+
+    @State private var modelCatalog = AgentModelCatalog.shared
 
     var body: some View {
         Form {
@@ -185,6 +190,70 @@ struct AIProviderSettingsView: View {
                     .foregroundStyle(.secondary)
             }
 
+            #if os(macOS)
+                Section {
+                    // Hardcoded list: `claude` has no model-listing command, and
+                    // an alias it doesn't know comes back only as "it may not
+                    // exist". The aliases themselves are short and stable.
+                    CLIAgentModelPicker(
+                        title: "Claude Code model",
+                        options: AgentModelCatalog.claudeModels,
+                        selection: $claudeCodeModel
+                    )
+
+                    // Codex does publish its catalogue, so this one is fetched.
+                    CLIAgentModelPicker(
+                        title: "Codex model",
+                        options: modelCatalog.codexModels,
+                        selection: $codexModel,
+                        isLoading: modelCatalog.isLoadingCodexModels,
+                        errorMessage: modelCatalog.codexModelsError,
+                        onRefresh: { Task { await modelCatalog.loadCodexModels(forceRefresh: true) } }
+                    )
+
+                    Picker("Codex reasoning effort", selection: $codexReasoningEffort) {
+                        Text("Model default").tag("")
+                        // A level saved against a model we can't see the details
+                        // of keeps its own row, so the picker never shows blank.
+                        if !codexReasoningEffort.isEmpty,
+                           !codexEfforts.contains(codexReasoningEffort) {
+                            Text(codexReasoningEffort.capitalized).tag(codexReasoningEffort)
+                        }
+                        ForEach(codexEfforts, id: \.self) { effort in
+                            Text(effort.capitalized).tag(effort)
+                        }
+                    }
+                    .onChange(of: codexModel) {
+                        // Levels aren't uniform across models — GPT-5.6-Sol
+                        // takes "ultra", GPT-5.5 doesn't — so a level the new
+                        // model can't run has to go rather than sit there
+                        // looking selected.
+                        //
+                        // Asked through the same rule the runner uses, which
+                        // leaves a model it doesn't recognize alone. That matters
+                        // on first appear: the saved model loads before Codex
+                        // discovery finishes, and a stricter check here would
+                        // clear a perfectly good setting just for opening the pane.
+                        if !codexReasoningEffort.isEmpty,
+                           modelCatalog.effort(for: codexModel, configured: codexReasoningEffort) == nil {
+                            codexReasoningEffort = ""
+                        }
+                    }
+                } header: {
+                    Text("Command-line agents")
+                } footer: {
+                    Text("""
+                        Passed to `claude --model` and `codex --model`. Leave a model \
+                        on its default to use whatever the tool itself is set to. \
+                        Each thread in the agent window can pick its own model from \
+                        the engine menu. These agents authenticate through their own \
+                        CLI, so no key is needed here.
+                        """)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                }
+            #endif
+
             Section {
                 Button("Save") {
                     saveKeys()
@@ -197,6 +266,9 @@ struct AIProviderSettingsView: View {
             loadKeys()
             Task { await loadChatModels(forceRefresh: false) }
             Task { await loadImageModels(forceRefresh: false) }
+            #if os(macOS)
+                Task { await modelCatalog.loadCodexModels(forceRefresh: false) }
+            #endif
         }
         .alert("Saved", isPresented: $showSavedAlert) {
             Button("OK") {}
@@ -209,6 +281,14 @@ struct AIProviderSettingsView: View {
             Text(errorMessage ?? "An unknown error occurred.")
         }
     }
+
+    #if os(macOS)
+        /// Reasoning levels the selected Codex model accepts. Generic ones for a
+        /// custom id — the user knows more about it than the catalogue does.
+        private var codexEfforts: [String] {
+            modelCatalog.efforts(forCodexModel: codexModel)
+        }
+    #endif
 
     private var canFetchChatModels: Bool {
         !openAIEndpoint.trimmingCharacters(in: .whitespaces).isEmpty
@@ -223,6 +303,9 @@ struct AIProviderSettingsView: View {
             || !openAIKey.trimmingCharacters(in: .whitespaces).isEmpty
             || !openAIModel.trimmingCharacters(in: .whitespaces).isEmpty
             || !defaultImageModel.trimmingCharacters(in: .whitespaces).isEmpty
+            || !claudeCodeModel.trimmingCharacters(in: .whitespaces).isEmpty
+            || !codexModel.trimmingCharacters(in: .whitespaces).isEmpty
+            || !codexReasoningEffort.trimmingCharacters(in: .whitespaces).isEmpty
     }
 
     private func loadKeys() {
@@ -236,6 +319,9 @@ struct AIProviderSettingsView: View {
             defaultImageModel = config.defaultImageModel
             openAITranscriptionModel = config.openAITranscriptionModel
             geminiTranscriptionModel = config.geminiTranscriptionModel
+            claudeCodeModel = config.claudeCodeModel
+            codexModel = config.codexModel
+            codexReasoningEffort = config.codexReasoningEffort
         }
     }
 
@@ -250,7 +336,10 @@ struct AIProviderSettingsView: View {
             openAIModel: openAIModel,
             defaultImageModel: defaultImageModel,
             openAITranscriptionModel: openAITranscriptionModel,
-            geminiTranscriptionModel: geminiTranscriptionModel
+            geminiTranscriptionModel: geminiTranscriptionModel,
+            claudeCodeModel: claudeCodeModel,
+            codexModel: codexModel,
+            codexReasoningEffort: codexReasoningEffort
         )
     }
 

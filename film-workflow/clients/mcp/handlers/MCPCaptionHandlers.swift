@@ -56,7 +56,7 @@ enum MCPCaptionHandlers {
         ),
         MCPToolDescriptor(
             name: "caption_translate",
-            description: "Translate the active transcript version into another language, using the app's configured AI backend. Existing translations in other languages are untouched. By default only captions with no translation — or whose text changed since they were translated — are processed, so re-running after a few edits is cheap; pass `scope: \"all\"` to redo everything, including translations the user edited by hand. Apple's on-device translation engine cannot be used here because it only exists inside the app's UI. Returns how many captions were written and the language's completion counts.",
+            description: "Translate the active transcript version into another language, using the app's configured AI backend. Existing translations in other languages are untouched. By default only captions with no translation — or whose text changed since they were translated — are processed, so re-running after a few edits is cheap; pass `scope: \"all\"` to redo everything, including translations the user edited by hand. Apple's on-device translation engine cannot be used here because it only exists inside the app's UI. Captions the model can't manage are skipped rather than failing the run and reported as `failed`; they keep no translation, so calling again with the default scope retries exactly those. Where a caption uses a project glossary term, the stored translation keeps a `{{Term}}` placeholder that resolves to the term's wording for that language, so editing the wording later updates every caption without re-translating. Returns how many captions were written and the language's completion counts.",
             inputSchema: [
                 "type": "object",
                 "properties": [
@@ -77,14 +77,14 @@ enum MCPCaptionHandlers {
                     "offset": ["type": "integer", "description": "0-based start index. Defaults to 0."] as [String: Any],
                     "limit": ["type": "integer", "description": "Maximum entries to return. Defaults to 50, capped at 200."] as [String: Any],
                     "include_words": ["type": "boolean", "description": "Include per-word timings. Defaults to false."] as [String: Any],
-                    "include_translations": ["type": "boolean", "description": "Include each caption's translations, keyed by language code. Defaults to true."] as [String: Any]
+                    "include_translations": ["type": "boolean", "description": "Include each caption's translations, keyed by language code. Glossary terms are already substituted; `translationsRaw` carries the stored form with its `{{Term}}` placeholders whenever the two differ. Defaults to true."] as [String: Any]
                 ],
                 "required": ["caption_id"]
             ]
         ),
         MCPToolDescriptor(
             name: "caption_update_segment",
-            description: "Update one caption by 0-based index. Only the fields you pass change. Editing `text` re-matches word timings to the new wording; editing `start_ms`/`end_ms` rescales them. `speaker` may be a speaker id or an existing speaker label. Returns the updated caption.",
+            description: "Update one caption by 0-based index. Only the fields you pass change. Editing `text` re-matches word timings to the new wording; editing `start_ms`/`end_ms` rescales them. `speaker` may be a speaker id or an existing speaker label. To rewrite this caption's translation in one language, pass `translation` with `translation_language` — an empty `translation` clears it, and what you write counts as hand-edited, so a later caption_translate pass leaves it alone. Use a `{{Term}}` placeholder where a glossary term appears. Returns the updated caption.",
             inputSchema: [
                 "type": "object",
                 "properties": [
@@ -93,7 +93,9 @@ enum MCPCaptionHandlers {
                     "text": ["type": "string", "description": "New caption text."] as [String: Any],
                     "start_ms": ["type": "integer", "description": "New start time in milliseconds."] as [String: Any],
                     "end_ms": ["type": "integer", "description": "New end time in milliseconds."] as [String: Any],
-                    "speaker": ["type": "string", "description": "Speaker id or label to assign."] as [String: Any]
+                    "speaker": ["type": "string", "description": "Speaker id or label to assign."] as [String: Any],
+                    "translation": ["type": "string", "description": "New translated text for `translation_language`. Empty string removes the translation."] as [String: Any],
+                    "translation_language": ["type": "string", "description": "BCP-47 language the `translation` is written in, e.g. 'zh-Hans'."] as [String: Any]
                 ],
                 "required": ["caption_id", "index"]
             ]
@@ -147,14 +149,14 @@ enum MCPCaptionHandlers {
                     "query": ["type": "string", "description": "Words to look for. A caption matches when it contains any of them."] as [String: Any],
                     "limit": ["type": "integer", "description": "Maximum matches to return. Defaults to 20, capped at 100."] as [String: Any],
                     "context": ["type": "integer", "description": "Also return this many captions either side of each match. Defaults to 0, capped at 3."] as [String: Any],
-                    "include_translations": ["type": "boolean", "description": "Include each caption's translations, keyed by language code. Defaults to true."] as [String: Any]
+                    "include_translations": ["type": "boolean", "description": "Include each caption's translations, keyed by language code. Glossary terms are already substituted; `translationsRaw` carries the stored form with its `{{Term}}` placeholders whenever the two differ. Defaults to true."] as [String: Any]
                 ],
                 "required": ["caption_id", "query"]
             ]
         ),
         MCPToolDescriptor(
             name: "caption_propose_edits",
-            description: "Propose changes to captions for the user to review. Nothing is written: the proposal appears in the app's caption assistant, where the user approves or rejects each change individually. Use this rather than caption_update_segment whenever you are acting on a user's conversational request. Each edit names a 0-based caption `index` and a `kind`: replace_text (pass `text`), split (pass `pieces`, which must contain the same words as the original — punctuation may differ), merge_with_next, or delete. Returns how many edits were accepted and which were rejected, with reasons.",
+            description: "Propose changes to captions for the user to review. Nothing is written: the proposal appears in the app's caption assistant, where the user approves or rejects each change individually. Use this rather than caption_update_segment or caption_translate whenever you are acting on a user's conversational request. Each edit names a 0-based caption `index` and a `kind`: replace_text (pass `text`), split (pass `pieces`, which must contain the same words as the original — punctuation may differ), merge_with_next, delete, retime (pass `start_ms` and/or `end_ms`; word timings rescale into the new span), or set_translation (pass `language` and `text` to rewrite one caption's translation in one language — an empty `text` clears it). set_translation is how you fix a single translated line: caption_translate only works version-wide. An approved translation counts as hand-written, so a later caption_translate pass leaves it alone. Returns how many edits were accepted and which were rejected, with reasons.",
             inputSchema: [
                 "type": "object",
                 "properties": [
@@ -167,9 +169,12 @@ enum MCPCaptionHandlers {
                             "type": "object",
                             "properties": [
                                 "index": ["type": "integer", "description": "0-based caption index."] as [String: Any],
-                                "kind": ["type": "string", "enum": ["replace_text", "split", "merge_with_next", "delete"], "description": "What to do."] as [String: Any],
-                                "text": ["type": "string", "description": "New text, for replace_text."] as [String: Any],
+                                "kind": ["type": "string", "enum": ["replace_text", "split", "merge_with_next", "delete", "retime", "set_translation"], "description": "What to do."] as [String: Any],
+                                "text": ["type": "string", "description": "New text, for replace_text — or the new translation, for set_translation."] as [String: Any],
                                 "pieces": ["type": "array", "items": ["type": "string"], "description": "The caption broken into lines, for split."] as [String: Any],
+                                "start_ms": ["type": "integer", "description": "New start time in milliseconds, for retime. Omit to keep the current start."] as [String: Any],
+                                "end_ms": ["type": "integer", "description": "New end time in milliseconds, for retime. Omit to keep the current end."] as [String: Any],
+                                "language": ["type": "string", "description": "BCP-47 language of the translation to rewrite, for set_translation."] as [String: Any],
                                 "reason": ["type": "string", "description": "Short explanation shown next to the change."] as [String: Any]
                             ],
                             "required": ["index", "kind"]
@@ -390,14 +395,17 @@ enum MCPCaptionHandlers {
             "isActive": version.id == project.activeVersionID,
         ]
         if !version.note.isEmpty { payload["note"] = version.note }
+        if !version.warning.isEmpty { payload["warning"] = version.warning }
         if !version.translations.isEmpty {
             payload["translations"] = version.translations.map {
-                [
+                var entry: [String: Any] = [
                     "language": $0.languageCode,
                     "translated": $0.translatedCount,
                     "total": $0.totalCount,
                     "engine": $0.engine,
-                ] as [String: Any]
+                ]
+                if !$0.model.isEmpty { entry["model"] = $0.model }
+                return entry
             }
         }
         return payload
@@ -443,9 +451,9 @@ enum MCPCaptionHandlers {
             throw MCPToolError.underlying(error)
         }
 
-        let written: Int
+        let outcome: CaptionTranslationService.Outcome
         do {
-            written = try await CaptionTranslationService.translate(
+            outcome = try await CaptionTranslationService.translate(
                 project: project, runner: runner, scope: scope, context: context
             )
         } catch {
@@ -456,7 +464,10 @@ enum MCPCaptionHandlers {
         return MCPToolRegistry.jsonResult([
             "captionId": project.projectUUID.uuidString,
             "language": target,
-            "written": written,
+            "written": outcome.written,
+            // Captions the engine couldn't manage. They keep no translation, so
+            // calling again with the default scope retries exactly these.
+            "failed": outcome.failed,
             "translated": counts.translated,
             "stale": counts.stale,
             "total": counts.total,
@@ -479,6 +490,7 @@ enum MCPCaptionHandlers {
         // On by default: a translated project's captions are half the content,
         // and an agent asked to proofread them shouldn't need a second call.
         let includeTranslations = (arguments["include_translations"] as? Bool) ?? true
+        let resolver = CaptionTermResolver(terms: project.usableTerms)
 
         let slice = offset < all.count
             ? Array(all[offset..<min(offset + limit, all.count)])
@@ -494,8 +506,8 @@ enum MCPCaptionHandlers {
                 "wordCount": segment.words.count,
                 "isEstimatedTiming": segment.isEstimatedTiming,
             ]
-            if includeTranslations, !segment.translations.isEmpty {
-                entry["translations"] = segment.translationMap
+            if includeTranslations {
+                attachTranslations(to: &entry, of: segment, resolver: resolver)
             }
             if includeWords {
                 entry["words"] = segment.words.map {
@@ -574,18 +586,53 @@ enum MCPCaptionHandlers {
             segment.speakerId = resolved
         }
 
+        // After the text edit above, deliberately: `setTranslation` fingerprints
+        // the *current* text, so writing both in one call leaves the translation
+        // current rather than instantly stale.
+        var didWriteTranslation = false
+        if let translation = arguments["translation"] as? String {
+            guard let language = (arguments["translation_language"] as? String)?
+                .trimmingCharacters(in: .whitespacesAndNewlines), !language.isEmpty else {
+                throw MCPToolError.invalidArguments(
+                    "translation needs translation_language, e.g. 'zh-Hans'"
+                )
+            }
+            // Hand-written as far as the app is concerned: a caller that names a
+            // single caption's wording means it, and a later bulk pass must not
+            // overwrite it.
+            segment.setTranslation(
+                translation,
+                language: language,
+                engine: CaptionTranslationEngineKind.aiBackend.rawValue,
+                isUserEdited: true
+            )
+            didWriteTranslation = true
+        }
+
         segment.isUserEdited = true
+        // An explicit start/end is a real time, so the run may no longer be
+        // "estimated" — same rule the retimer follows.
+        project.refreshEstimatedTimingState()
+        // The per-language counts on the version are denormalized, so a caption
+        // gaining or losing a translation has to re-derive them.
+        if didWriteTranslation { project.refreshTranslationSummary() }
         project.updatedAt = Date()
         try context.save()
 
-        return MCPToolRegistry.jsonResult([
+        var payload: [String: Any] = [
             "index": index,
             "startMs": segment.startMs,
             "endMs": segment.endMs,
             "text": segment.text,
             "speaker": project.speakerLabel(segment.speakerId),
             "wordCount": segment.words.count,
-        ])
+        ]
+        attachTranslations(
+            to: &payload,
+            of: segment,
+            resolver: CaptionTermResolver(terms: project.usableTerms)
+        )
+        return MCPToolRegistry.jsonResult(payload)
     }
 
     private static func setSpeakers(
@@ -868,6 +915,7 @@ enum MCPCaptionHandlers {
         }
 
         let includeTranslations = (arguments["include_translations"] as? Bool) ?? true
+        let resolver = CaptionTermResolver(terms: project.usableTerms)
         let entries = wanted.sorted().map { index -> [String: Any] in
             let segment = ordered[index]
             var entry: [String: Any] = [
@@ -878,8 +926,8 @@ enum MCPCaptionHandlers {
                 "speaker": project.speakerLabel(segment.speakerId),
                 "isMatch": capped.contains(index),
             ]
-            if includeTranslations, !segment.translations.isEmpty {
-                entry["translations"] = segment.translationMap
+            if includeTranslations {
+                attachTranslations(to: &entry, of: segment, resolver: resolver)
             }
             return entry
         }
@@ -967,8 +1015,42 @@ enum MCPCaptionHandlers {
             case "delete":
                 operations.append(.delete(segment: segment.id))
 
+            case "retime":
+                // Either bound alone is a valid nudge — "start it 200 ms
+                // earlier" shouldn't require restating the end.
+                let start = intArg(edit["start_ms"]) ?? segment.startMs
+                let end = intArg(edit["end_ms"]) ?? segment.endMs
+                guard intArg(edit["start_ms"]) != nil || intArg(edit["end_ms"]) != nil else {
+                    reject(index, "retime needs start_ms, end_ms, or both")
+                    continue
+                }
+                guard end > start, start >= 0 else {
+                    reject(index, "end_ms must be greater than start_ms, and start_ms can't be negative")
+                    continue
+                }
+                operations.append(.retime(segment: segment.id, startMs: start, endMs: end))
+
+            case "set_translation":
+                guard let language = (edit["language"] as? String)?
+                    .trimmingCharacters(in: .whitespacesAndNewlines), !language.isEmpty else {
+                    reject(index, "set_translation needs a language")
+                    continue
+                }
+                // Unlike replace_text, an empty string is meaningful here: it
+                // clears the translation so the next pass regenerates it.
+                guard let text = edit["text"] as? String else {
+                    reject(index, "set_translation needs a text (use \"\" to clear the translation)")
+                    continue
+                }
+                operations.append(
+                    .setTranslation(segment: segment.id, language: language, text: text)
+                )
+
             default:
-                reject(index, "kind must be one of: replace_text, split, merge_with_next, delete")
+                reject(
+                    index,
+                    "kind must be one of: replace_text, split, merge_with_next, delete, retime, set_translation"
+                )
                 continue
             }
 
@@ -1080,23 +1162,51 @@ enum MCPCaptionHandlers {
         if project.isNarrativeSourced {
             out["narrativeName"] = project.sourceNarrativeName
             out["referenceParagraphs"] = project.referenceUnits.count
-            out["alignmentQuality"] = project.alignmentQualityEnum.rawValue
-            out["alignmentMatchRatio"] = project.alignmentMatchRatio
+            out["alignmentQuality"] = project.activeAlignmentQuality.rawValue
+            out["alignmentMatchRatio"] = project.activeAlignmentMatchRatio
         }
         // The glossary is small and changes what a correction should look like,
         // so it rides along rather than needing a second call.
         if !project.usableTerms.isEmpty {
             out["terms"] = project.usableTerms.map { term -> [String: Any] in
-                var entry: [String: Any] = ["text": term.text]
+                var entry: [String: Any] = [
+                    "text": term.text,
+                    // Spelled out rather than left implicit: this is the string
+                    // a translation is expected to contain, and an agent writing
+                    // one should not have to infer the syntax.
+                    "placeholder": CaptionTermPlaceholder.wrap(term.text),
+                ]
                 if !term.note.isEmpty { entry["note"] = term.note }
                 if !term.variants.isEmpty { entry["variants"] = term.variants }
+                if !term.translations.isEmpty { entry["translations"] = term.translations }
                 return entry
             }
         }
-        if !project.warning.isEmpty { out["warning"] = project.warning }
+        // The active take's caveat, not the last run's — the two differ the
+        // moment the user switches versions.
+        if !project.activeWarning.isEmpty { out["warning"] = project.activeWarning }
         if !project.lastProviderName.isEmpty { out["lastProvider"] = project.lastProviderName }
         if let date = project.lastTranscribedAt { out["lastTranscribedAt"] = isoDate(date) }
         return out
+    }
+
+    /// Attaches a caption's translations to a payload entry.
+    ///
+    /// `translations` is rendered — an agent proofreading a language has to see
+    /// what the viewer sees, and must not "correct" a `{{term}}` it can't
+    /// interpret. `translationsRaw` appears only when the two differ, so an
+    /// agent that deliberately works with placeholders still has the stored
+    /// form, and a project with no glossary pays nothing for the feature.
+    private static func attachTranslations(
+        to entry: inout [String: Any],
+        of segment: CaptionSegment,
+        resolver: CaptionTermResolver
+    ) {
+        guard !segment.translations.isEmpty else { return }
+        let rendered = segment.translationMap(resolvedBy: resolver)
+        entry["translations"] = rendered
+        let raw = segment.translationMap
+        if raw != rendered { entry["translationsRaw"] = raw }
     }
 
     static func fetchCaption(id: String, context: ModelContext) throws -> CaptionProject {

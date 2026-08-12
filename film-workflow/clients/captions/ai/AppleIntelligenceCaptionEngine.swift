@@ -185,8 +185,10 @@ nonisolated struct AppleIntelligenceCaptionEngine: CaptionAIEngine {
     /// something a caller can act on.
     ///
     /// `exceededContextWindowSize` is the error this design exists to avoid, so
-    /// when it still fires the message says which knob to turn rather than
-    /// leaking the framework's wording.
+    /// when it still fires it is reported as `contextOverflow` — a batched
+    /// caller can act on that by sending fewer lines, where the old
+    /// `malformedResponse` only offered the user advice they couldn't take in
+    /// the middle of a whole-transcript run.
     private func respond<Output: Generable>(
         session: LanguageModelSession,
         prompt: String,
@@ -201,8 +203,8 @@ nonisolated struct AppleIntelligenceCaptionEngine: CaptionAIEngine {
         } catch let error as LanguageModelSession.GenerationError {
             switch error {
             case .exceededContextWindowSize:
-                throw CaptionAIError.malformedResponse(
-                    "the request was too long for the on-device model — try a shorter selection"
+                throw CaptionAIError.contextOverflow(
+                    "the request was too long for the on-device model"
                 )
             case .guardrailViolation, .refusal:
                 throw CaptionAIError.malformedResponse(

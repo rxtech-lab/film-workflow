@@ -45,12 +45,20 @@ nonisolated struct CaptionTranscriptVersion: Codable, Identifiable, Hashable, Se
     /// Short human note, e.g. "Aligned to script".
     var note: String = ""
 
+    /// Non-fatal caveat about **this run** — missing word timings, a provider
+    /// fallback that fired, a degraded alignment.
+    ///
+    /// Lives here rather than only on the project because the project's copy
+    /// describes whichever run happened last, so it kept warning about a take
+    /// the user had already switched away from.
+    var warning: String = ""
+
     /// Per-language translation status for this run.
     var translations: [CaptionVersionTranslation] = []
 
     enum CodingKeys: String, CodingKey {
         case id, number, createdAt, languageCode, provider, sourceKind
-        case alignmentQuality, alignmentMatchRatio, segmentCount, note, translations
+        case alignmentQuality, alignmentMatchRatio, segmentCount, note, warning, translations
     }
 
     init(
@@ -64,6 +72,7 @@ nonisolated struct CaptionTranscriptVersion: Codable, Identifiable, Hashable, Se
         alignmentMatchRatio: Double = 0,
         segmentCount: Int = 0,
         note: String = "",
+        warning: String = "",
         translations: [CaptionVersionTranslation] = []
     ) {
         self.id = id
@@ -76,6 +85,7 @@ nonisolated struct CaptionTranscriptVersion: Codable, Identifiable, Hashable, Se
         self.alignmentMatchRatio = alignmentMatchRatio
         self.segmentCount = segmentCount
         self.note = note
+        self.warning = warning
         self.translations = translations
     }
 
@@ -93,6 +103,7 @@ nonisolated struct CaptionTranscriptVersion: Codable, Identifiable, Hashable, Se
         self.alignmentMatchRatio = try c.decodeIfPresent(Double.self, forKey: .alignmentMatchRatio) ?? 0
         self.segmentCount = try c.decodeIfPresent(Int.self, forKey: .segmentCount) ?? 0
         self.note = try c.decodeIfPresent(String.self, forKey: .note) ?? ""
+        self.warning = try c.decodeIfPresent(String.self, forKey: .warning) ?? ""
         self.translations = try c.decodeIfPresent([CaptionVersionTranslation].self, forKey: .translations) ?? []
     }
 
@@ -142,6 +153,10 @@ nonisolated struct CaptionVersionTranslation: Codable, Identifiable, Hashable, S
     /// `CaptionTranslationEngineKind.rawValue` of the last engine to write here.
     var engine: String = ""
 
+    /// The model behind that engine, e.g. "gpt-4o-mini". Empty for Apple's
+    /// on-device translator, and for a run recorded before this was stored.
+    var model: String = ""
+
     var updatedAt: Date = Date()
 
     /// Captions carrying a translation in this language.
@@ -152,13 +167,14 @@ nonisolated struct CaptionVersionTranslation: Codable, Identifiable, Hashable, S
     var totalCount: Int = 0
 
     enum CodingKeys: String, CodingKey {
-        case id, languageCode, engine, updatedAt, translatedCount, totalCount
+        case id, languageCode, engine, model, updatedAt, translatedCount, totalCount
     }
 
     init(
         id: UUID = UUID(),
         languageCode: String = "",
         engine: String = "",
+        model: String = "",
         updatedAt: Date = Date(),
         translatedCount: Int = 0,
         totalCount: Int = 0
@@ -166,6 +182,7 @@ nonisolated struct CaptionVersionTranslation: Codable, Identifiable, Hashable, S
         self.id = id
         self.languageCode = languageCode
         self.engine = engine
+        self.model = model
         self.updatedAt = updatedAt
         self.translatedCount = translatedCount
         self.totalCount = totalCount
@@ -176,12 +193,18 @@ nonisolated struct CaptionVersionTranslation: Codable, Identifiable, Hashable, S
         self.id = try c.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
         self.languageCode = try c.decodeIfPresent(String.self, forKey: .languageCode) ?? ""
         self.engine = try c.decodeIfPresent(String.self, forKey: .engine) ?? ""
+        self.model = try c.decodeIfPresent(String.self, forKey: .model) ?? ""
         self.updatedAt = try c.decodeIfPresent(Date.self, forKey: .updatedAt) ?? Date()
         self.translatedCount = try c.decodeIfPresent(Int.self, forKey: .translatedCount) ?? 0
         self.totalCount = try c.decodeIfPresent(Int.self, forKey: .totalCount) ?? 0
     }
 
     var isComplete: Bool { totalCount > 0 && translatedCount >= totalCount }
+
+    /// "AI model · gpt-4o-mini". Empty when nothing was recorded.
+    var producerDescription: String {
+        CaptionTranslationEngineKind.producerDescription(engine: engine, model: model)
+    }
 
     var languageDisplayName: String {
         guard !languageCode.isEmpty else { return "" }

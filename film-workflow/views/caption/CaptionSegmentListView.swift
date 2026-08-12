@@ -11,6 +11,11 @@ struct CaptionSegmentListView: View {
     @Bindable var project: CaptionProject
     @Environment(\.modelContext) private var modelContext
 
+    /// Prepared once while the project loader is visible, then refreshed after
+    /// edits. A row lookup must never snapshot the whole project.
+    @State private var validationIssuesBySegment: [UUID: [CaptionValidationIssue]]
+    @State private var validatedProjectUpdate: Date?
+
     @State private var clipPlayer = CaptionClipPlayer()
     @State private var editingSegment: CaptionSegment?
     @State private var inspectingSegment: CaptionSegment?
@@ -20,6 +25,7 @@ struct CaptionSegmentListView: View {
     @State private var selection: Set<UUID> = []
     @State private var bulkSpeaker: UUID?
     @State private var gapNotice: String?
+    @State private var deletingVersion: CaptionTranscriptVersion?
 
     @State private var settings = CaptionSettings.shared
     @State private var aiTask: Task<Void, Never>?
@@ -43,12 +49,14 @@ struct CaptionSegmentListView: View {
 
     private var segments: [CaptionSegment] { project.orderedSegments }
 
-    private var issues: [CaptionValidationIssue] {
-        CaptionTranscriptValidator.issues(in: project.snapshot())
-    }
-
-    private func issues(forSegmentAt index: Int) -> [CaptionValidationIssue] {
-        issues.filter { $0.segmentIndex == index && $0.wordIndex == nil }
+    init(
+        project: CaptionProject,
+        initialValidationIssues: [UUID: [CaptionValidationIssue]] = [:],
+        validatedProjectUpdate: Date? = nil
+    ) {
+        self.project = project
+        _validationIssuesBySegment = State(initialValue: initialValidationIssues)
+        _validatedProjectUpdate = State(initialValue: validatedProjectUpdate)
     }
 
     var body: some View {
@@ -172,16 +180,22 @@ struct CaptionSegmentListView: View {
         } message: { code in
             Text("Every \(CaptionTranslationAvailability.displayName(code)) translation in this version will be deleted, including any you edited.")
         }
+        .modifier(CaptionVersionDeleteConfirmation(
+            version: $deletingVersion,
+            onDelete: { version in
+                CaptionTranscriptionService.deleteVersion(
+                    version.id,
+                    from: project,
+                    context: modelContext
+                )
+            }
+        ))
         .modifier(CaptionSegmentDeleteConfirmation(
             segment: $deletingSegment,
             onDelete: delete
         ))
-        .task(id: project.projectUUID) {
-            // Lazy schema backfill: a project last written before versioning gets
-            // its version 1 record the first time it's opened. `activeSegments`
-            // already returns the right rows without it, so this is bookkeeping,
-            // not a correctness requirement.
-            project.ensureVersioned()
+        .task(id: project.updatedAt) {
+            await refreshValidationIssuesIfNeeded()
         }
         .onDisappear { clipPlayer.stop() }
     }
@@ -189,14 +203,18 @@ struct CaptionSegmentListView: View {
     // MARK: - List
 
     private var list: some View {
-        List(selection: $selection) {
-            if project.alignmentQualityEnum.needsReview || !project.warning.isEmpty {
+        // Built once per list pass and handed down, not recomputed inside the
+        // `ForEach`: the glossary is the same for every row.
+        let resolver = CaptionTermResolver(terms: project.usableTerms)
+
+        return List(selection: $selection) {
+            if project.activeAlignmentQuality.needsReview || !project.activeWarning.isEmpty {
                 Section { warningBanner }
             }
 
             Section {
                 ForEach(Array(segments.enumerated()), id: \.element.uuid) { index, segment in
-                    row(index: index, segment: segment)
+                    row(index: index, segment: segment, resolver: resolver)
                         .tag(segment.uuid)
                 }
             } header: {
@@ -245,8 +263,12 @@ struct CaptionSegmentListView: View {
     }
 
     @ViewBuilder
-    private func row(index: Int, segment: CaptionSegment) -> some View {
-        let rowIssues = issues(forSegmentAt: index)
+    private func row(
+        index: Int,
+        segment: CaptionSegment,
+        resolver: CaptionTermResolver
+    ) -> some View {
+        let rowIssues = validationIssuesBySegment[segment.uuid] ?? []
 
         HStack(alignment: .top, spacing: 10) {
             Text("\(index + 1)")
@@ -297,7 +319,7 @@ struct CaptionSegmentListView: View {
                     .font(.body)
                     .textSelection(.enabled)
 
-                translationLine(for: segment)
+                translationLine(for: segment, resolver: resolver)
 
                 ForEach(rowIssues) { issue in
                     Label(issue.message, systemImage: "exclamationmark.triangle.fill")
@@ -336,18 +358,43 @@ struct CaptionSegmentListView: View {
         #endif
     }
 
+    /// Snapshotting stays on the model's actor; the pure validation pass can
+    /// run away from it. `updatedAt` changes after every editor mutation.
+    private func refreshValidationIssuesIfNeeded() async {
+        let expectedUpdate = project.updatedAt
+        guard validatedProjectUpdate != expectedUpdate else { return }
+
+        // Keep direct uses of this view safe even when they do not come through
+        // CaptionTabView's preparation gate.
+        project.ensureVersioned()
+        let snapshot = project.snapshot()
+        let issues = await Task.detached(priority: .userInitiated) {
+            CaptionTranscriptValidator.rowIssuesBySegmentID(in: snapshot)
+        }.value
+
+        guard !Task.isCancelled, project.updatedAt == expectedUpdate else { return }
+        validationIssuesBySegment = issues
+        validatedProjectUpdate = expectedUpdate
+    }
+
     /// The selected translation, under the original.
     ///
     /// Secondary colour at `.callout` is what makes the original read as the
     /// primary text — a divider or an indent would fight the row metrics the
     /// timestamps and speaker chip already establish.
     @ViewBuilder
-    private func translationLine(for segment: CaptionSegment) -> some View {
+    private func translationLine(
+        for segment: CaptionSegment,
+        resolver: CaptionTermResolver
+    ) -> some View {
         let code = project.displayedTranslationLanguage
         if !code.isEmpty {
             if let translation = segment.translation(code), !translation.isEmpty {
                 HStack(alignment: .top, spacing: 4) {
-                    Text(translation.text)
+                    // Rendered, not raw: `{{RxLab}}` is storage, and it resolves
+                    // against the glossary every time the row is drawn — which
+                    // is why editing a term's wording updates the list at once.
+                    Text(resolver.render(translation.text, language: code))
                         .font(.callout)
                         .foregroundStyle(.secondary)
                         .textSelection(.enabled)
@@ -366,12 +413,15 @@ struct CaptionSegmentListView: View {
         }
     }
 
+    /// Describes the take on screen, not the last run: everything here reads the
+    /// active version, so switching to a version with real word timings — or
+    /// hand-timing the estimated captions away — drops the banner.
     private var warningBanner: some View {
         VStack(alignment: .leading, spacing: 6) {
-            if project.alignmentQualityEnum.needsReview {
+            if project.activeAlignmentQuality.needsReview {
                 Label {
                     Text(
-                        project.alignmentQualityEnum == .estimated
+                        project.activeAlignmentQuality == .estimated
                         ? "Timings are estimated from text length. Open the retimer to correct them."
                         : "Timings are aligned per sentence, not per word. Spot-check them in the retimer."
                     )
@@ -380,8 +430,8 @@ struct CaptionSegmentListView: View {
                 }
                 .foregroundStyle(.orange)
             }
-            if !project.warning.isEmpty {
-                Text(project.warning)
+            if !project.activeWarning.isEmpty {
+                Text(project.activeWarning)
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -395,6 +445,12 @@ struct CaptionSegmentListView: View {
 
     @ToolbarContentBuilder
     private var toolbarContent: some ToolbarContent {
+        if !project.versions.isEmpty {
+            ToolbarItem(placement: .primaryAction) {
+                versionMenu
+            }
+        }
+
         ToolbarItem(placement: .primaryAction) {
             Menu {
                 Button {
@@ -478,6 +534,68 @@ struct CaptionSegmentListView: View {
             }
             .disabled(segments.isEmpty)
         }
+    }
+
+    // MARK: - Versions
+
+    /// Switch or delete a transcription run, from the view it actually changes.
+    ///
+    /// A `Picker` rather than a list of buttons so the active version gets the
+    /// platform's own checkmark, and so the menu reads as one choice among
+    /// several rather than several unrelated commands.
+    private var versionMenu: some View {
+        Menu {
+            Picker("Version", selection: activeVersionBinding) {
+                ForEach(project.orderedVersions) { version in
+                    Text(versionMenuLabel(version)).tag(version.id)
+                }
+            }
+            .pickerStyle(.inline)
+
+            if project.versions.count > 1 {
+                Divider()
+                Menu {
+                    ForEach(project.orderedVersions) { version in
+                        Button("Version \(version.number)", role: .destructive) {
+                            deletingVersion = version
+                        }
+                    }
+                } label: {
+                    Label("Delete Version", systemImage: "trash")
+                }
+            }
+        } label: {
+            Label(
+                project.activeVersion.map { "Version \($0.number)" } ?? "Versions",
+                systemImage: "clock.arrow.circlepath"
+            )
+        }
+        .help("Switch between transcription runs")
+    }
+
+    /// Reads the project's active version and writes through the service, which
+    /// is what keeps the editor, exports and translations pointing at the same
+    /// take. `nil` is never written — the picker always has a selection.
+    private var activeVersionBinding: Binding<UUID?> {
+        Binding(
+            get: { project.activeVersionID },
+            set: { id in
+                guard let id, id != project.activeVersionID else { return }
+                _ = CaptionTranscriptionService.activateVersion(id, in: project)
+            }
+        )
+    }
+
+    /// One line, because a menu row is one line: the number carries the
+    /// identity and the rest is what distinguishes two runs from each other.
+    private func versionMenuLabel(_ version: CaptionTranscriptVersion) -> String {
+        var parts = ["Version \(version.number)"]
+        parts.append("\(version.segmentCount) captions")
+        if let provider = version.providerEnum {
+            parts.append(provider.displayName)
+        }
+        parts.append(version.createdAt.formatted(date: .abbreviated, time: .shortened))
+        return parts.joined(separator: " · ")
     }
 
     // MARK: - Translation
@@ -590,7 +708,7 @@ struct CaptionSegmentListView: View {
             translationTask = nil
         }
         do {
-            let written = try await CaptionTranslationService.translate(
+            let outcome = try await CaptionTranslationService.translate(
                 project: project,
                 runner: runner,
                 scope: choice.scope,
@@ -598,9 +716,19 @@ struct CaptionSegmentListView: View {
                 onProgress: { translationProgress = $0 }
             )
             let name = CaptionTranslationAvailability.displayName(choice.languageCode)
-            translationNotice = written == 0
-                ? "Nothing needed translating into \(name)."
-                : "Translated \(written) caption\(written == 1 ? "" : "s") into \(name)."
+            let written = outcome.written
+            if written == 0, outcome.failed == 0 {
+                translationNotice = "Nothing needed translating into \(name)."
+            } else {
+                var notice = "Translated \(written) caption\(written == 1 ? "" : "s") into \(name)."
+                if outcome.failed > 0 {
+                    // Named rather than swallowed: the captions are still there,
+                    // untranslated, and re-running the sheet retries just them.
+                    notice += " \(outcome.failed) couldn't be translated — run it "
+                        + "again to retry them."
+                }
+                translationNotice = notice
+            }
         } catch is CancellationError {
             // User pressed Cancel; whatever was written stays written.
         } catch {
@@ -760,6 +888,34 @@ struct CaptionSegmentListView: View {
     private func speakerTint(_ id: UUID?) -> Color {
         guard let speaker = project.speaker(id) else { return .secondary }
         return CaptionSpeakerPalette.color(at: speaker.colorIndex)
+    }
+}
+
+/// Deleting a version is irreversible and takes its captions with it, so it
+/// asks first. A `ViewModifier` for the same reason its sibling below is one:
+/// the editor's body is already at the type-checker's limit.
+private struct CaptionVersionDeleteConfirmation: ViewModifier {
+    @Binding var version: CaptionTranscriptVersion?
+    let onDelete: (CaptionTranscriptVersion) -> Void
+
+    func body(content: Content) -> some View {
+        content.confirmationDialog(
+            "Delete this version?",
+            isPresented: Binding(
+                get: { version != nil },
+                set: { if !$0 { version = nil } }
+            ),
+            titleVisibility: .visible,
+            presenting: version
+        ) { target in
+            Button("Delete", role: .destructive) {
+                onDelete(target)
+                version = nil
+            }
+            Button("Cancel", role: .cancel) { version = nil }
+        } message: { target in
+            Text("Version \(target.number) and its \(target.segmentCount) captions will be removed. This cannot be undone.")
+        }
     }
 }
 

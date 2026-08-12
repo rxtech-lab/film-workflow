@@ -21,6 +21,9 @@ enum AgentCLIRunner {
         var executable: String
         var endpoint: AgentMCPBridge.Endpoint
         var model: String
+        /// Codex only, and already checked against the model — see
+        /// `AgentModelCatalog.effort(for:configured:)`. Empty sends none.
+        var reasoningEffort: String = ""
         /// Native session id to resume, when we have one for this backend.
         var resumeSessionID: String?
         var systemPrompt: String
@@ -144,6 +147,12 @@ enum AgentCLIRunner {
         }
         if !context.model.isEmpty {
             arguments.append(contentsOf: ["--model", context.model])
+        }
+        // `codex exec` has no `--effort` flag — unlike `claude`, which does —
+        // so the reasoning level goes through the same config-override channel
+        // as the MCP wiring above.
+        if !context.reasoningEffort.isEmpty {
+            arguments.append(contentsOf: ["-c", "model_reasoning_effort=\(context.reasoningEffort)"])
         }
         arguments.append(contentsOf: ["--output-last-message", lastMessageURL.path])
         arguments.append(contentsOf: ["--cd", FileStorage.appSupportURL.path])

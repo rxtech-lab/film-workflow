@@ -24,6 +24,15 @@ nonisolated struct CaptionTranslation: Codable, Identifiable, Hashable, Sendable
     /// `CaptionTranslationEngineKind.rawValue` of whatever produced it.
     var engine: String = ""
 
+    /// Which model actually answered, e.g. "gpt-4o-mini" or "Claude Code".
+    ///
+    /// Separate from `engine` because that only says *how* the translation was
+    /// made — "AI model" covers every backend the app can reach. Re-running one
+    /// language on a stronger model is a normal thing to do, and without this
+    /// there is no way to tell afterwards which lines came from which. Empty for
+    /// Apple's on-device engine, which has no model to name.
+    var model: String = ""
+
     /// Fingerprint of the source text at the moment this was produced.
     ///
     /// This is what makes staleness *computed* rather than stored: every path
@@ -35,7 +44,7 @@ nonisolated struct CaptionTranslation: Codable, Identifiable, Hashable, Sendable
     var sourceFingerprint: String = ""
 
     enum CodingKeys: String, CodingKey {
-        case id, languageCode, text, updatedAt, isUserEdited, engine, sourceFingerprint
+        case id, languageCode, text, updatedAt, isUserEdited, engine, model, sourceFingerprint
     }
 
     init(
@@ -45,6 +54,7 @@ nonisolated struct CaptionTranslation: Codable, Identifiable, Hashable, Sendable
         updatedAt: Date = Date(),
         isUserEdited: Bool = false,
         engine: String = "",
+        model: String = "",
         sourceFingerprint: String = ""
     ) {
         self.id = id
@@ -53,6 +63,7 @@ nonisolated struct CaptionTranslation: Codable, Identifiable, Hashable, Sendable
         self.updatedAt = updatedAt
         self.isUserEdited = isUserEdited
         self.engine = engine
+        self.model = model
         self.sourceFingerprint = sourceFingerprint
     }
 
@@ -64,6 +75,7 @@ nonisolated struct CaptionTranslation: Codable, Identifiable, Hashable, Sendable
         self.updatedAt = try c.decodeIfPresent(Date.self, forKey: .updatedAt) ?? Date()
         self.isUserEdited = try c.decodeIfPresent(Bool.self, forKey: .isUserEdited) ?? false
         self.engine = try c.decodeIfPresent(String.self, forKey: .engine) ?? ""
+        self.model = try c.decodeIfPresent(String.self, forKey: .model) ?? ""
         self.sourceFingerprint = try c.decodeIfPresent(String.self, forKey: .sourceFingerprint) ?? ""
     }
 
@@ -74,6 +86,11 @@ nonisolated struct CaptionTranslation: Codable, Identifiable, Hashable, Sendable
     var languageDisplayName: String {
         guard !languageCode.isEmpty else { return "" }
         return Locale.current.localizedString(forIdentifier: languageCode) ?? languageCode
+    }
+
+    /// "AI model · gpt-4o-mini". Empty when nothing was recorded.
+    var producerDescription: String {
+        CaptionTranslationEngineKind.producerDescription(engine: engine, model: model)
     }
 
     /// FNV-1a over the caption's normalized tokens.
@@ -121,12 +138,29 @@ extension CaptionSegment {
         return map
     }
 
+    /// Same map with every `{{term}}` placeholder resolved for its own language.
+    ///
+    /// The stored text is the source of truth and keeps its placeholders; this
+    /// is what anything showing text to a human — the exporter, an export
+    /// document, an MCP reader — should use.
+    func translationMap(resolvedBy resolver: CaptionTermResolver) -> [String: String] {
+        var map: [String: String] = [:]
+        for translation in translations where !translation.isEmpty {
+            map[translation.languageCode] = resolver.render(
+                translation.text,
+                language: translation.languageCode
+            )
+        }
+        return map
+    }
+
     /// Upserts a translation, re-stamping the fingerprint from the *current*
     /// text. Blank text removes the entry rather than storing an empty one.
     func setTranslation(
         _ text: String,
         language: String,
         engine: String = "",
+        model: String = "",
         isUserEdited: Bool = false
     ) {
         guard !language.isEmpty else { return }
@@ -143,6 +177,7 @@ extension CaptionSegment {
             existing.updatedAt = Date()
             existing.sourceFingerprint = fingerprint
             if !engine.isEmpty { existing.engine = engine }
+            if !model.isEmpty { existing.model = model }
             if isUserEdited { existing.isUserEdited = true }
             translations[index] = existing
         } else {
@@ -152,6 +187,7 @@ extension CaptionSegment {
                     text: trimmed,
                     isUserEdited: isUserEdited,
                     engine: engine,
+                    model: model,
                     sourceFingerprint: fingerprint
                 )
             )

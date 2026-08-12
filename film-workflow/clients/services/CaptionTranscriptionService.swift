@@ -74,14 +74,21 @@ enum CaptionTranscriptionService {
         guard !cues.isEmpty else { throw CaptionTranscriberError.noSpeechFound }
 
         syncSpeakers(of: project, from: transcript)
-        writeSegments(of: project, with: cues, context: context, provider: usedProvider)
+        let caveat = warning ?? providerCaveat(usedProvider, transcript: transcript)
+        writeSegments(
+            of: project,
+            with: cues,
+            context: context,
+            provider: usedProvider,
+            warning: caveat
+        )
 
         project.audioDurationMs = max(transcript.durationMs, durationMs)
         project.lastTranscribedAt = Date()
         project.lastProviderName = usedProvider.rawValue
         project.alignmentQualityEnum = .none
         project.alignmentMatchRatio = 0
-        project.warning = warning ?? providerCaveat(usedProvider, transcript: transcript)
+        project.warning = caveat
         project.updatedAt = Date()
 
         try context.save()
@@ -186,6 +193,13 @@ enum CaptionTranscriptionService {
         )
         guard !cues.isEmpty else { throw CaptionTranscriberError.noSpeechFound }
 
+        let caveat = narrativeWarning(
+            quality: result.quality,
+            matchRatio: result.matchRatio,
+            provider: usedProvider,
+            hasWordTimings: transcript.hasWordTimings,
+            providerWarning: providerWarning
+        )
         writeSegments(
             of: project,
             with: cues,
@@ -193,7 +207,8 @@ enum CaptionTranscriptionService {
             provider: usedProvider,
             alignmentQuality: result.quality,
             alignmentMatchRatio: result.matchRatio,
-            note: "Aligned to script"
+            note: "Aligned to script",
+            warning: caveat
         )
 
         project.audioDurationMs = audioDuration
@@ -201,13 +216,7 @@ enum CaptionTranscriptionService {
         project.lastProviderName = usedProvider.rawValue
         project.alignmentQualityEnum = result.quality
         project.alignmentMatchRatio = result.matchRatio
-        project.warning = narrativeWarning(
-            quality: result.quality,
-            matchRatio: result.matchRatio,
-            provider: usedProvider,
-            hasWordTimings: transcript.hasWordTimings,
-            providerWarning: providerWarning
-        )
+        project.warning = caveat
         project.updatedAt = Date()
 
         try context.save()
@@ -401,8 +410,10 @@ enum CaptionTranscriptionService {
                 termsHint: hint
             )
         case .openAI:
+            // A per-project model wins over the app-wide choice.
+            let override = project?.openAITranscriptionModelOverride ?? ""
             return CaptionProviderOptions(
-                model: config.openAITranscriptionModel,
+                model: override.isEmpty ? config.openAITranscriptionModel : override,
                 termsHint: hint
             )
         case .gemini:
@@ -557,7 +568,8 @@ enum CaptionTranscriptionService {
         provider: CaptionProvider,
         alignmentQuality: CaptionAlignmentQuality = .none,
         alignmentMatchRatio: Double = 0,
-        note: String = ""
+        note: String = "",
+        warning: String = ""
     ) -> CaptionTranscriptVersion {
         project.ensureVersioned()
 
@@ -577,7 +589,8 @@ enum CaptionTranscriptionService {
             alignmentQuality: alignmentQuality.rawValue,
             alignmentMatchRatio: alignmentMatchRatio,
             segmentCount: cues.count,
-            note: note
+            note: note,
+            warning: warning
         )
         project.versions.append(version)
         project.activeVersionID = version.id

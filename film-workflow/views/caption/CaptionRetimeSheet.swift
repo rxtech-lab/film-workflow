@@ -559,6 +559,9 @@ struct CaptionRetimeSheet: View {
             project.removeGaps(shorterThan: 300)
         }
         project.reindexSegments()
+        // Hand-timing was the fix the banner asked for; drop it once no caption
+        // is estimated any more.
+        project.refreshEstimatedTimingState()
         project.updatedAt = Date()
         dismiss()
     }

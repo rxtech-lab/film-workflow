@@ -20,12 +20,24 @@ enum CaptionTranslationService {
         case selection(Set<UUID>)
     }
 
+    /// What a run wrote, and what it couldn't.
+    nonisolated struct Outcome: Sendable {
+        var written = 0
+        /// Captions the engine failed on. They keep no translation, so the
+        /// default `.missingOrStale` scope picks up exactly these on a re-run.
+        var failed = 0
+    }
+
     /// Translates the active version into the runner's target language.
-    /// Returns how many captions were written.
     ///
     /// `.missingOrStale` is the default because a re-run after fixing three
     /// lines should cost three requests, not nine hundred. It also never
     /// overwrites a translation the user typed — only `.all` does that.
+    ///
+    /// Each batch is written and saved as it arrives rather than all at the end.
+    /// A nine-hundred-caption run is minutes long, and the user may cancel it or
+    /// the engine may give out partway; either way the captions already
+    /// translated are on disk and paid for.
     @discardableResult
     static func translate(
         project: CaptionProject,
@@ -33,24 +45,20 @@ enum CaptionTranslationService {
         scope: Scope = .missingOrStale,
         context: ModelContext,
         onProgress: (@MainActor @Sendable (CaptionProgress) -> Void)? = nil
-    ) async throws -> Int {
+    ) async throws -> Outcome {
         project.ensureVersioned()
 
         let language = runner.targetLanguage
-        guard !language.isEmpty else { return 0 }
+        guard !language.isEmpty else { return Outcome() }
 
         let candidates = segments(of: project, in: scope, language: language)
-        guard !candidates.isEmpty else { return 0 }
+        guard !candidates.isEmpty else { return Outcome() }
 
         let languageName = CaptionTranslationAvailability.displayName(language)
         onProgress?(.translating(done: 0, total: candidates.count, language: languageName))
 
         let requests = candidates.map {
             CaptionTranslationRequest(segmentID: $0.uuid, text: $0.text)
-        }
-
-        let results = try await runner.translate(requests) { done, total in
-            onProgress?(.translating(done: done, total: total, language: languageName))
         }
 
         // Index by uuid rather than walking `activeSegments` per result: a
@@ -60,18 +68,47 @@ enum CaptionTranslationService {
             uniquingKeysWith: { first, _ in first }
         )
 
-        var written = 0
-        for result in results {
-            guard let segment = byID[result.segmentID] else { continue }
-            segment.setTranslation(
-                result.text,
-                language: language,
-                engine: runner.kind.rawValue
-            )
-            written += 1
-        }
+        // Snapshotted once: the model is a property of the run, and reading it
+        // per result inside the batch callback would be the same string every
+        // time anyway.
+        let model = runner.modelLabel
 
-        project.recordTranslationRun(language: language, engine: runner.kind.rawValue)
+        var written = 0
+        let run = try await runner.translate(
+            requests,
+            onBatch: { results in
+                for result in results {
+                    guard let segment = byID[result.segmentID] else { continue }
+                    segment.setTranslation(
+                        result.text,
+                        language: language,
+                        engine: runner.kind.rawValue,
+                        model: model
+                    )
+                    written += 1
+                }
+                // A failed save must not take down a run that is otherwise
+                // working; the next batch tries again, and the throw at the end
+                // still reports a store that is genuinely broken.
+                try? context.save()
+            },
+            onProgress: { progress in
+                onProgress?(
+                    .translating(
+                        done: progress.done,
+                        total: progress.total,
+                        language: languageName,
+                        inFlight: progress.inFlight
+                    )
+                )
+            }
+        )
+
+        project.recordTranslationRun(
+            language: language,
+            engine: runner.kind.rawValue,
+            model: model
+        )
         if project.displayedTranslationLanguage.isEmpty, written > 0 {
             // First translation on this project: show it, otherwise the run
             // finishes with nothing visibly different.
@@ -79,7 +116,7 @@ enum CaptionTranslationService {
         }
         project.updatedAt = Date()
         try context.save()
-        return written
+        return Outcome(written: written, failed: run.failed)
     }
 
     /// Drops a language from every caption in the active version.
@@ -153,7 +190,11 @@ enum CaptionTranslationService {
             )
         }
         return AICaptionTranslationRunner(
-            engine: try CaptionAIEngineFactory.make(backend: backend, config: config),
+            engine: try CaptionAIEngineFactory.make(
+                backend: backend,
+                config: config,
+                for: .translation
+            ),
             sourceLanguage: project.sourceLanguageCode,
             targetLanguage: targetLanguage,
             terms: CaptionSettings.shared.translationRespectsGlossary ? project.usableTerms : []

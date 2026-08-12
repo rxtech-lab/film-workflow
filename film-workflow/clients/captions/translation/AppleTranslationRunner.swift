@@ -24,17 +24,18 @@ struct AppleTranslationRunner: CaptionTranslationRunner {
 
     func translate(
         _ requests: [CaptionTranslationRequest],
-        onProgress: @MainActor (Int, Int) -> Void
-    ) async throws -> [CaptionTranslationResult] {
-        guard !requests.isEmpty else { return [] }
+        onBatch: @MainActor ([CaptionTranslationResult]) -> Void,
+        onProgress: @MainActor (CaptionTranslationProgress) -> Void
+    ) async throws -> CaptionTranslationRun {
+        guard !requests.isEmpty else { return CaptionTranslationRun() }
 
         // Downloads the language pack if needed. Called before any writing so
         // the system's download prompt appears while the transcript is still
         // untouched, rather than halfway through a run.
         try await session.prepareTranslation()
 
-        var results: [CaptionTranslationResult] = []
-        results.reserveCapacity(requests.count)
+        var run = CaptionTranslationRun()
+        run.results.reserveCapacity(requests.count)
         var done = 0
 
         for chunk in requests.chunked(into: chunkSize) {
@@ -49,21 +50,52 @@ struct AppleTranslationRunner: CaptionTranslationRunner {
                     clientIdentifier: $0.segmentID.uuidString
                 )
             }
+            onProgress(
+                CaptionTranslationProgress(
+                    done: done,
+                    total: requests.count,
+                    inFlight: chunk.count
+                )
+            )
 
+            var chunkResults: [CaptionTranslationResult] = []
+            var answered = 0
             for try await response in session.translate(batch: batch) {
+                // The framework answers one caption at a time, so progress can
+                // move per caption rather than per chunk — a 28-caption
+                // transcript is one chunk, and per-chunk reporting would sit at
+                // zero for the whole run.
+                answered += 1
+                onProgress(
+                    CaptionTranslationProgress(
+                        done: min(done + answered, requests.count),
+                        total: requests.count,
+                        inFlight: max(chunk.count - answered, 0)
+                    )
+                )
+
                 guard let raw = response.clientIdentifier,
                       let segmentID = UUID(uuidString: raw)
                 else { continue }
                 let text = response.targetText.trimmingCharacters(in: .whitespacesAndNewlines)
                 guard !text.isEmpty else { continue }
-                results.append(CaptionTranslationResult(segmentID: segmentID, text: text))
+                chunkResults.append(CaptionTranslationResult(segmentID: segmentID, text: text))
             }
 
+            run.results.append(contentsOf: chunkResults)
+            run.failed += chunk.count - chunkResults.count
+            onBatch(chunkResults)
+
             done += chunk.count
-            onProgress(min(done, requests.count), requests.count)
+            onProgress(
+                CaptionTranslationProgress(
+                    done: min(done, requests.count),
+                    total: requests.count
+                )
+            )
         }
 
-        return results
+        return run
     }
 }
 

@@ -11,6 +11,9 @@
         }
       }
     },
+    " " : {
+
+    },
     "–" : {
       "localizations" : {
         "zh-Hans" : {
@@ -44,6 +47,9 @@
 
     },
     "\"%@\" and its Remotion source, assets, and chat history will be permanently deleted." : {
+
+    },
+    "\"%@\" isn't a glossary term — it will show as written." : {
 
     },
     "\"%@\" will be deleted. Its projects will be kept and moved to Ungrouped." : {
@@ -227,6 +233,16 @@
         }
       }
     },
+    "%@: %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@: %2$@"
+          }
+        }
+      }
+    },
     "%lld" : {
       "localizations" : {
         "zh-Hans" : {
@@ -284,12 +300,25 @@
         }
       }
     },
+    "%lld placeholders aren't glossary terms — they will show as written." : {
+
+    },
     "%lld selected" : {
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "已选 %lld 条"
+          }
+        }
+      }
+    },
+    "%lld translation%@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$lld translation%2$@"
           }
         }
       }
@@ -490,6 +519,9 @@
           }
         }
       }
+    },
+    "Add Language…" : {
+
     },
     "Add Lyric Section" : {
       "localizations" : {
@@ -744,6 +776,19 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Apple 翻译"
+          }
+        }
+      }
+    },
+    "Apple's engine can't be given the glossary, so these captions won't pick up later changes to a term's translation. Use an AI model if you want them to." : {
+
+    },
+    "Applied %lld of %lld." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Applied %1$lld of %2$lld."
           }
         }
       }
@@ -1520,6 +1565,9 @@
         }
       }
     },
+    "Claude Code model" : {
+
+    },
     "Clear" : {
       "localizations" : {
         "zh-Hans" : {
@@ -1576,6 +1624,9 @@
     "Click \"Create Composition & Start Studio\" to start the preview." : {
 
     },
+    "Close" : {
+
+    },
     "Close gaps shorter than 300 ms on save" : {
       "localizations" : {
         "zh-Hans" : {
@@ -1606,6 +1657,12 @@
         }
       }
     },
+    "Codex model" : {
+
+    },
+    "Codex reasoning effort" : {
+
+    },
     "Combining the chunks into one file…" : {
       "localizations" : {
         "zh-Hans" : {
@@ -1615,6 +1672,9 @@
           }
         }
       }
+    },
+    "Command-line agents" : {
+
     },
     "Composition is %lld × %lld @ %lldfps. Output will be %lld × %lld @ %lldfps." : {
       "localizations" : {
@@ -1658,6 +1718,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "置信度 %lld%%"
+          }
+        }
+      }
+    },
+    "Configure the OpenAI endpoint and API key in Settings." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "请在设置中配置 OpenAI 端点和 API 密钥。"
           }
         }
       }
@@ -2003,6 +2073,9 @@
     "Delete Track" : {
 
     },
+    "Delete Version" : {
+
+    },
     "Delete…" : {
       "localizations" : {
         "zh-Hans" : {
@@ -2202,6 +2275,7 @@
 
     },
     "Each transcription run is kept as its own version, with its own translations. Switch versions to compare takes; deleting one removes its captions for good." : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -3563,6 +3637,16 @@
         }
       }
     },
+    "Last translated with %@." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "上次使用%@翻译。"
+          }
+        }
+      }
+    },
     "Latin" : {
       "localizations" : {
         "zh-Hans" : {
@@ -3645,6 +3729,12 @@
           }
         }
       }
+    },
+    "Loading caption project" : {
+
+    },
+    "Loading Captions…" : {
+
     },
     "Loading model list…" : {
       "localizations" : {
@@ -3737,6 +3827,7 @@
       }
     },
     "Make Active" : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -3845,6 +3936,12 @@
           }
         }
       }
+    },
+    "Model default" : {
+
+    },
+    "Model id" : {
+
     },
     "Models download from Hugging Face and run entirely on this device. Larger models are more accurate and slower. On-device Whisper doesn't detect speakers, so you assign them in the editor." : {
       "localizations" : {
@@ -3991,6 +4088,7 @@
       }
     },
     "Names and jargon this recording uses. Speech recognition often gets them wrong; listing them here lets the AI review find and fix those mistakes, and keeps a term from being split across two captions." : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -3999,6 +4097,9 @@
           }
         }
       }
+    },
+    "Names and jargon this recording uses. Speech recognition often gets them wrong; listing them here lets the AI review find and fix those mistakes, and keeps a term from being split across two captions. Give a term a translation and every translated caption that uses it follows along." : {
+
     },
     "Narrative" : {
       "localizations" : {
@@ -4156,6 +4257,9 @@
         }
       }
     },
+    "No changes applied." : {
+
+    },
     "No Generated Music" : {
       "localizations" : {
         "zh-Hans" : {
@@ -4233,6 +4337,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "尚无旁白"
+          }
+        }
+      }
+    },
+    "No OpenAI-compatible endpoint configured yet." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "尚未配置 OpenAI 兼容端点。"
           }
         }
       }
@@ -4515,6 +4629,16 @@
         }
       }
     },
+    "Open Settings…" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "打开设置…"
+          }
+        }
+      }
+    },
     "Open the agent" : {
 
     },
@@ -4691,6 +4815,9 @@
           }
         }
       }
+    },
+    "Passed to `claude --model` and `codex --model`. Leave a model on its default to use whatever the tool itself is set to. Each thread in the agent window can pick its own model from the engine menu. These agents authenticate through their own CLI, so no key is needed here." : {
+
     },
     "Paste List" : {
       "localizations" : {
@@ -5520,6 +5647,9 @@
           }
         }
       }
+    },
+    "Review again…" : {
+
     },
     "Review AI Changes" : {
       "localizations" : {
@@ -6552,6 +6682,9 @@
         }
       }
     },
+    "Switch between transcription runs" : {
+
+    },
     "Switch generation type to \"With Lyrics\" to enable the lyrics editor." : {
       "localizations" : {
         "zh-Hans" : {
@@ -7106,6 +7239,16 @@
         }
       }
     },
+    "Translated by" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "翻译引擎"
+          }
+        }
+      }
+    },
     "Translating captions…" : {
       "localizations" : {
         "zh-Hans" : {
@@ -7135,6 +7278,9 @@
           }
         }
       }
+    },
+    "Translations" : {
+
     },
     "Translations have no word timings, so whole sentence cues are exported and long captions aren't re-wrapped." : {
       "localizations" : {
@@ -7355,6 +7501,9 @@
         }
       }
     },
+    "Use the CLI's own default" : {
+
+    },
     "Use the current audio time" : {
       "localizations" : {
         "zh-Hans" : {
@@ -7443,6 +7592,9 @@
           }
         }
       }
+    },
+    "Version" : {
+
     },
     "Version %1$lld and its %2$lld captions will be removed. This cannot be undone." : {
       "localizations" : {
@@ -7805,6 +7957,9 @@
       }
     },
     "Working…" : {
+
+    },
+    "Write %@ in a translated caption and it becomes the wording set here. Change the wording and every caption using the placeholder updates — no re-translation. A language left blank falls back to the spelling above." : {
 
     },
     "Young Adult Female" : {

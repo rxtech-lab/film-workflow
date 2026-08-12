@@ -222,41 +222,88 @@ nonisolated struct OpenAICaptionEngine: CaptionAIEngine {
             ]
         ]
 
-        var content: String?
+        let reply: OpenAIAssistantResponse
         do {
-            content = try await OpenAIClient.chatWithTools(
+            reply = try await OpenAIClient.chatWithTools(
                 messages: messages,
                 tools: [],
                 endpoint: endpoint,
                 apiKey: apiKey,
                 model: model,
                 extraBody: structured
-            ).content
+            )
         } catch {
-            // Gateways that don't implement json_schema reject the whole
-            // request. Ask again in plain JSON mode rather than failing the
-            // user's action over a proxy's feature gap.
-            content = try await OpenAIClient.chatWithTools(
-                messages: [
-                    OpenAIRichMessage(
-                        role: "system",
-                        content: instructions + "\n\nReply with JSON only, matching this shape:\n"
-                            + describe(schema)
-                    ),
-                    OpenAIRichMessage(role: "user", content: prompt),
-                ],
-                tools: [],
-                endpoint: endpoint,
-                apiKey: apiKey,
-                model: model
-            ).content
+            // Only a gateway feature gap is worth asking twice. Re-sending an
+            // over-long prompt verbatim just spends another request to fail the
+            // same way, and reporting the second failure hides the first — which
+            // is how a context-length error used to reach the user disguised as
+            // a malformed reply.
+            guard !isContextLimit(error) else {
+                throw CaptionAIError.contextOverflow(error.localizedDescription)
+            }
+            guard CaptionAIRetryPolicy.isWorthSplitting(error) else { throw error }
+
+            do {
+                reply = try await OpenAIClient.chatWithTools(
+                    messages: [
+                        OpenAIRichMessage(
+                            role: "system",
+                            content: instructions
+                                + "\n\nReply with JSON only, matching this shape:\n"
+                                + describe(schema)
+                        ),
+                        OpenAIRichMessage(role: "user", content: prompt),
+                    ],
+                    tools: [],
+                    endpoint: endpoint,
+                    apiKey: apiKey,
+                    model: model
+                )
+            } catch {
+                // The fallback's own failure says nothing the first one didn't.
+                throw error
+            }
         }
 
-        guard let content, !content.isEmpty else { throw CaptionAIError.emptyResponse }
+        // A completion cut off at the token cap is not a bad answer, it is half
+        // an answer — and the only fix is to ask about fewer lines.
+        if reply.finishReason == "length" {
+            throw CaptionAIError.contextOverflow("the reply was cut off before it finished")
+        }
+
+        guard let content = reply.content, !content.isEmpty else {
+            throw CaptionAIError.emptyResponse
+        }
         guard let object = Self.parseJSONObject(content) else {
+            // JSON that opens and never closes is a truncated reply wearing a
+            // parse error's clothes; say so, so the caller retries smaller.
+            if Self.looksTruncated(content) {
+                throw CaptionAIError.contextOverflow("the reply was cut off mid-JSON")
+            }
             throw CaptionAIError.malformedResponse(String(content.prefix(200)))
         }
         return object
+    }
+
+    /// Whether a transport error is the provider saying "you sent too much".
+    private func isContextLimit(_ error: any Error) -> Bool {
+        switch error {
+        case OpenAIError.httpError(413, _):
+            return true
+        case let OpenAIError.httpError(_, body):
+            return CaptionAIRetryPolicy.mentionsContextLimit(body ?? "")
+        case let OpenAIError.apiError(message):
+            return CaptionAIRetryPolicy.mentionsContextLimit(message)
+        default:
+            return false
+        }
+    }
+
+    /// An unparseable reply that opened a brace it never closed.
+    static func looksTruncated(_ raw: String) -> Bool {
+        let opens = raw.count(where: { $0 == "{" })
+        let closes = raw.count(where: { $0 == "}" })
+        return opens > closes
     }
 
     /// Pulls a JSON object out of a reply that may be fenced or prefixed.

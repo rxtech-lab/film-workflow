@@ -143,8 +143,6 @@ struct AgentWindowView: View {
             }
             .font(.callout)
         }
-        .menuStyle(.borderlessButton)
-        .fixedSize()
     }
 
     private func threadMenuLabel(_ thread: AgentThread) -> String {
@@ -199,8 +197,6 @@ struct AgentWindowView: View {
             }
             .font(.callout)
         }
-        .menuStyle(.borderlessButton)
-        .fixedSize()
     }
 
     // MARK: - Targets

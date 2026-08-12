@@ -33,6 +33,13 @@ struct CaptionSegmentEditorSheet: View {
         return codes
     }
 
+    /// The glossary, for resolving `{{term}}` in the translation preview. Cheap
+    /// to rebuild — one sheet, one caption — so it stays computed rather than
+    /// cached in `@State` that would go stale behind a glossary edit.
+    private var termResolver: CaptionTermResolver {
+        CaptionTermResolver(terms: project.usableTerms)
+    }
+
     private var audioDurationMs: Int {
         project.audioDurationMs > 0 ? project.audioDurationMs : (player?.durationMs ?? 0)
     }
@@ -89,9 +96,34 @@ struct CaptionSegmentEditorSheet: View {
                 }
             }
 
+            // Raw, placeholders and all. Showing the rendered text here would
+            // bake the glossary wording in the moment anyone saved, which is
+            // exactly the link `{{term}}` exists to keep.
             TextEditor(text: $draftTranslation)
                 .frame(minHeight: 70)
                 .font(.body)
+
+            if CaptionTermPlaceholder.contains(draftTranslation) {
+                VStack(alignment: .leading, spacing: 4) {
+                    LabeledContent("Preview") {
+                        Text(termResolver.render(draftTranslation, language: draftTranslationLanguage))
+                            .textSelection(.enabled)
+                    }
+
+                    let unresolved = termResolver.unresolvedKeys(in: draftTranslation)
+                    if !unresolved.isEmpty {
+                        Label(
+                            unresolved.count == 1
+                                ? "\"\(unresolved[0])\" isn't a glossary term — it will show as written."
+                                : "\(unresolved.count) placeholders aren't glossary terms — they will show as written.",
+                            systemImage: "exclamationmark.triangle"
+                        )
+                        .foregroundStyle(.orange)
+                    }
+                }
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            }
 
             if segment.isTranslationStale(draftTranslationLanguage) {
                 Label(
@@ -100,6 +132,16 @@ struct CaptionSegmentEditorSheet: View {
                 )
                 .font(.caption)
                 .foregroundStyle(.orange)
+            }
+
+            // Which model wrote this is the first thing you want to know when a
+            // line reads badly — it says whether re-running on a better model is
+            // worth it, or whether the caption itself is the problem.
+            if let producer = segment.translation(draftTranslationLanguage)?.producerDescription,
+               !producer.isEmpty {
+                LabeledContent("Translated by", value: producer)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
         } header: {
             Text("Translation")
@@ -299,12 +341,18 @@ struct CaptionSegmentEditorSheet: View {
     /// its translation in one pass correctly clears the stale badge.
     private func commitTranslation(for language: String) {
         guard !language.isEmpty else { return }
-        let trimmed = draftTranslation.trimmingCharacters(in: .whitespacesAndNewlines)
+        // Tidies malformed braces and canonicalizes the spelling inside them,
+        // but keeps an unknown `{{Foo}}` wrapped — someone may be writing the
+        // placeholder before adding the term, and the warning already says so.
+        let trimmed = termResolver
+            .sanitize(draftTranslation, unwrapUnknown: false)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
         guard trimmed != segment.translatedText(language) else { return }
         segment.setTranslation(
             trimmed,
             language: language,
             engine: segment.translation(language)?.engine ?? "",
+            model: segment.translation(language)?.model ?? "",
             isUserEdited: true
         )
     }
@@ -336,6 +384,7 @@ struct CaptionSegmentEditorSheet: View {
         // After the text is final, so the fingerprint matches what was saved.
         commitTranslation(for: draftTranslationLanguage)
         project.refreshTranslationSummary()
+        project.refreshEstimatedTimingState()
         project.updatedAt = Date()
         dismiss()
     }

@@ -39,6 +39,15 @@ final class AgentMessage {
     /// reading the thread's current target.
     var proposalProjectUUID: UUID?
 
+    /// How many of this proposal's changes the user actually applied, or nil
+    /// while it is still waiting to be reviewed.
+    ///
+    /// Stored on the row rather than kept in view state because the answer has
+    /// to survive scrolling, relaunching and re-opening the sheet: a card that
+    /// still says "Review 1 change…" after the change has been applied is the
+    /// only feedback the window gives, and it is wrong.
+    var proposalAppliedCount: Int?
+
     /// True once this row's content has been folded into the thread's rolling
     /// summary. Compacted rows stay visible in the UI but are no longer sent.
     var isCompacted: Bool = false
@@ -67,6 +76,7 @@ final class AgentMessage {
         self.toolCallId = toolCallId
         self.proposalJSON = proposalJSON
         self.proposalProjectUUID = proposalProjectUUID
+        self.proposalAppliedCount = nil
         self.isCompacted = false
     }
 

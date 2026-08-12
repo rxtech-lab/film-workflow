@@ -15,21 +15,31 @@ enum CaptionEditApplier {
     /// Items whose target has already been deleted or merged away by an earlier
     /// item are skipped rather than treated as failures — a proposal is a batch,
     /// and batches overlap.
+    ///
+    /// `engine` is recorded on any translation this writes, so a caption
+    /// translated by the assistant says which model produced it in the same
+    /// place a bulk pass would.
     @discardableResult
     static func apply(
         _ items: [CaptionEditProposalItem],
         to project: CaptionProject,
-        context: ModelContext
+        context: ModelContext,
+        engine: String = ""
     ) -> Int {
         guard !items.isEmpty else { return 0 }
 
         var applied = 0
         for item in items {
-            if perform(item.operation, on: project, context: context) { applied += 1 }
+            if perform(item.operation, on: project, context: context, engine: engine) {
+                applied += 1
+            }
         }
 
         if applied > 0 {
             project.reindexSegments()
+            // A retime sets real times, so the "timings are estimated" banner may
+            // no longer be true. Cheap and self-guarding, so it runs for any batch.
+            project.refreshEstimatedTimingState()
             project.updatedAt = Date()
         }
         return applied
@@ -40,7 +50,8 @@ enum CaptionEditApplier {
     private static func perform(
         _ operation: CaptionEditOperation,
         on project: CaptionProject,
-        context: ModelContext
+        context: ModelContext,
+        engine: String
     ) -> Bool {
         guard let segment = project.segment(operation.segmentID) else {
             return false
@@ -66,6 +77,33 @@ enum CaptionEditApplier {
             guard project.speakers.contains(where: { $0.id == speakerID }) else { return false }
             segment.speakerId = speakerID
             segment.isUserEdited = true
+            return true
+
+        case .retime(_, let startMs, let endMs):
+            guard startMs >= 0, endMs > startMs else { return false }
+            guard startMs != segment.startMs || endMs != segment.endMs else { return false }
+            // Hand-set: the user approved these exact numbers in the review
+            // sheet, which is the same standard the retimer applies.
+            segment.retime(toStartMs: startMs, endMs: endMs)
+            return true
+
+        case .setTranslation(_, let language, let text):
+            guard !language.isEmpty else { return false }
+            let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard trimmed != segment.translatedText(language) else { return false }
+            guard !trimmed.isEmpty else {
+                segment.removeTranslation(language)
+                return true
+            }
+            // `isUserEdited` because the user approved this wording line by
+            // line: a later `caption_translate` pass must not overwrite it.
+            segment.setTranslation(
+                trimmed,
+                language: language,
+                engine: CaptionTranslationEngineKind.aiBackend.rawValue,
+                model: engine,
+                isUserEdited: true
+            )
             return true
 
         case .delete:

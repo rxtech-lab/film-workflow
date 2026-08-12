@@ -76,7 +76,6 @@ struct film_workflowApp: App {
         }
         .modelContainer(sharedModelContainer)
         .defaultSize(width: 760, height: 720)
-        .windowStyle(.hiddenTitleBar)
 
         Settings {
             SettingsView()

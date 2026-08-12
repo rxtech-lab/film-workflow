@@ -1,5 +1,17 @@
+import OSLog
 import SwiftData
 import SwiftUI
+
+private let captionDetailLogger = Logger(
+    subsystem: Bundle.main.bundleIdentifier ?? "film-workflow",
+    category: "CaptionDetailLoading"
+)
+
+private struct CaptionPreparedDetail {
+    let projectID: UUID
+    let projectUpdatedAt: Date
+    let validationIssuesBySegment: [UUID: [CaptionValidationIssue]]
+}
 
 struct CaptionTabView: View {
     @Environment(\.modelContext) private var modelContext
@@ -25,6 +37,7 @@ struct CaptionTabView: View {
     @State private var showError = false
     @State private var successNotice: String?
     @State private var pendingRetranscribe: CaptionProject?
+    @State private var preparedDetail: CaptionPreparedDetail?
 
     private var isCompact: Bool {
         #if os(iOS)
@@ -34,9 +47,16 @@ struct CaptionTabView: View {
         #endif
     }
 
+    private var projectSelection: Binding<CaptionProject?> {
+        Binding(
+            get: { selectedProject },
+            set: { selectProject($0) }
+        )
+    }
+
     @ViewBuilder
     private var sidebar: some View {
-        List(selection: $selectedProject) {
+        List(selection: projectSelection) {
             GroupedProjectSections(
                 projects: projects,
                 groups: groups,
@@ -84,7 +104,7 @@ struct CaptionTabView: View {
                     } else {
                         Text("\(project.activeSegmentCount) captions")
                     }
-                    if project.alignmentQualityEnum.needsReview {
+                    if project.activeAlignmentQuality.needsReview {
                         Image(systemName: "exclamationmark.triangle.fill")
                             .foregroundStyle(.orange)
                     }
@@ -124,6 +144,51 @@ struct CaptionTabView: View {
         )
     }
 
+    @ViewBuilder
+    private func compactDetail(for project: CaptionProject) -> some View {
+        if let detail = preparedDetail, detail.projectID == project.projectUUID {
+            CaptionCompactDetail(
+                project: project,
+                preparedDetail: detail,
+                isTranscribing: isTranscribing,
+                canTranscribe: project.hasAudio,
+                onTranscribe: { requestTranscribe(project) }
+            )
+            #if os(iOS)
+                .toolbar(.hidden, for: .tabBar)
+            #endif
+        } else {
+            CaptionProjectLoadingView(projectName: project.name)
+        }
+    }
+
+    @ViewBuilder
+    private func parametersColumn(for project: CaptionProject) -> some View {
+        if preparedDetail?.projectID == project.projectUUID {
+            CaptionProjectParametersView(
+                project: project,
+                isTranscribing: isTranscribing
+            )
+        } else {
+            CaptionProjectLoadingView(projectName: project.name)
+        }
+    }
+
+    @ViewBuilder
+    private func captionsColumn(for project: CaptionProject) -> some View {
+        if let detail = preparedDetail, detail.projectID == project.projectUUID {
+            CaptionSegmentListView(
+                project: project,
+                initialValidationIssues: detail.validationIssuesBySegment,
+                validatedProjectUpdate: detail.projectUpdatedAt
+            )
+            .id(project.projectUUID)
+            .navigationTitle(project.name)
+        } else {
+            CaptionProjectLoadingView(projectName: project.name)
+        }
+    }
+
     var body: some View {
         Group {
             if isCompact {
@@ -131,15 +196,7 @@ struct CaptionTabView: View {
                     sidebar
                 } detail: {
                     if let project = selectedProject {
-                        CaptionCompactDetail(
-                            project: project,
-                            isTranscribing: isTranscribing,
-                            canTranscribe: project.hasAudio,
-                            onTranscribe: { requestTranscribe(project) }
-                        )
-                        #if os(iOS)
-                            .toolbar(.hidden, for: .tabBar)
-                        #endif
+                        compactDetail(for: project)
                     } else {
                         placeholder
                     }
@@ -149,10 +206,7 @@ struct CaptionTabView: View {
                     sidebar
                 } content: {
                     if let project = selectedProject {
-                        CaptionProjectParametersView(
-                            project: project,
-                            isTranscribing: isTranscribing
-                        )
+                        parametersColumn(for: project)
                     } else {
                         ContentUnavailableView(
                             "Select a Caption Project",
@@ -162,17 +216,21 @@ struct CaptionTabView: View {
                     }
                 } detail: {
                     if let project = selectedProject {
-                        CaptionSegmentListView(project: project)
-                            .navigationTitle(project.name)
+                        captionsColumn(for: project)
                     } else {
                         placeholder
                     }
                 }
             }
         }
+        .task(id: selectedProject?.projectUUID) {
+            await prepareSelectedProject()
+        }
         .publishesAgentTarget(kind: .caption, projectUUID: selectedProject?.projectUUID)
         .toolbar {
-            if let project = selectedProject, !isCompact {
+            if let project = selectedProject,
+               preparedDetail?.projectID == project.projectUUID,
+               !isCompact {
                 ToolbarItem(placement: .primaryAction) {
                     CaptionTranscribeButton(
                         hasCaptions: project.activeSegmentCount > 0,
@@ -275,13 +333,67 @@ struct CaptionTabView: View {
 
     // MARK: - Actions
 
+    private func selectProject(_ project: CaptionProject?) {
+        guard selectedProject?.projectUUID != project?.projectUUID else { return }
+        preparedDetail = nil
+        selectedProject = project
+    }
+
+    /// Materializes and validates a project only after SwiftUI has rendered the
+    /// loading state. Validation is pure value work and can leave the main
+    /// actor; SwiftData snapshotting and the legacy version backfill cannot.
+    private func prepareSelectedProject() async {
+        guard let project = selectedProject else {
+            preparedDetail = nil
+            return
+        }
+
+        let projectID = project.projectUUID
+        let startedAt = Date()
+        captionDetailLogger.info("Opening caption project \(projectID.uuidString, privacy: .public)")
+
+        // Give the selection transaction a frame to present ProgressView before
+        // SwiftData materializes a large relationship or performs a backfill.
+        await Task.yield()
+        guard !Task.isCancelled, selectedProject?.projectUUID == projectID else { return }
+
+        let snapshotStartedAt = Date()
+        project.ensureVersioned()
+        let snapshot = project.snapshot()
+        let snapshotSeconds = Date().timeIntervalSince(snapshotStartedAt)
+        captionDetailLogger.info(
+            "Caption snapshot ready: \(snapshot.segments.count) rows in \(snapshotSeconds) seconds"
+        )
+
+        let validationStartedAt = Date()
+        let issues = await Task.detached(priority: .userInitiated) {
+            CaptionTranscriptValidator.rowIssuesBySegmentID(in: snapshot)
+        }.value
+        guard !Task.isCancelled, selectedProject?.projectUUID == projectID else { return }
+
+        let validationSeconds = Date().timeIntervalSince(validationStartedAt)
+        let totalSeconds = Date().timeIntervalSince(startedAt)
+        let issueCount = issues.values.reduce(0) { $0 + $1.count }
+        preparedDetail = CaptionPreparedDetail(
+            projectID: projectID,
+            projectUpdatedAt: project.updatedAt,
+            validationIssuesBySegment: issues
+        )
+        captionDetailLogger.info(
+            """
+            Caption detail ready: \(issueCount) row issues, validation \(validationSeconds) seconds, \
+            total \(totalSeconds) seconds
+            """
+        )
+    }
+
     private func addProject(groupID: UUID? = nil) {
         let project = CaptionProject(name: "Untitled Captions")
         project.groupID = groupID
         project.languageHint = CaptionSettings.shared.defaultLanguageHint
         project.maxSpeakers = CaptionSettings.shared.defaultMaxSpeakers
         modelContext.insert(project)
-        selectedProject = project
+        selectProject(project)
     }
 
     private func beginCreatingGroup() {
@@ -304,7 +416,7 @@ struct CaptionTabView: View {
 
     private func deleteProject(_ project: CaptionProject) {
         if selectedProject == project {
-            selectedProject = nil
+            selectProject(nil)
         }
         // Only delete audio this project owns — a narrative-sourced project
         // points at a GeneratedNarrative's file, which must survive.
@@ -402,6 +514,7 @@ private struct CaptionTranscribeButton: View {
 /// columns, matching `NarrativeProjectDetailPanes`.
 private struct CaptionCompactDetail: View {
     @Bindable var project: CaptionProject
+    let preparedDetail: CaptionPreparedDetail
     let isTranscribing: Bool
     let canTranscribe: Bool
     let onTranscribe: () -> Void
@@ -440,7 +553,12 @@ private struct CaptionCompactDetail: View {
                     isTranscribing: isTranscribing
                 )
             case .captions:
-                CaptionSegmentListView(project: project)
+                CaptionSegmentListView(
+                    project: project,
+                    initialValidationIssues: preparedDetail.validationIssuesBySegment,
+                    validatedProjectUpdate: preparedDetail.projectUpdatedAt
+                )
+                .id(project.projectUUID)
             }
         }
         .navigationTitle(project.name)
@@ -454,5 +572,25 @@ private struct CaptionCompactDetail: View {
                 )
             }
         }
+    }
+}
+
+private struct CaptionProjectLoadingView: View {
+    let projectName: String
+
+    var body: some View {
+        VStack(spacing: 12) {
+            ProgressView()
+                .controlSize(.large)
+                .accessibilityLabel("Loading caption project")
+            Text("Loading Captions…")
+                .font(.headline)
+            Text(projectName)
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .navigationTitle(projectName)
     }
 }

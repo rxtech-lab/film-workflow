@@ -106,7 +106,16 @@ nonisolated struct CaptionSegmentSnapshot: Sendable, Hashable, Identifiable {
 
 extension CaptionSegment {
     /// Must be called on the main actor; `@Model` properties are isolated.
-    func snapshot(speakerLabel: String = "") -> CaptionSegmentSnapshot {
+    ///
+    /// Translations are rendered here, at the one place raw storage turns into
+    /// a value type, so every downstream consumer — the exporter and all four of
+    /// its formats, the agent, MCP's export tool — gets resolved text without
+    /// knowing placeholders exist. Resolving any later would mean racing the
+    /// exporter's `stripPunctuation`, which eats braces.
+    func snapshot(
+        speakerLabel: String = "",
+        resolver: CaptionTermResolver = .empty
+    ) -> CaptionSegmentSnapshot {
         CaptionSegmentSnapshot(
             id: uuid,
             startMs: startMs,
@@ -116,7 +125,7 @@ extension CaptionSegment {
             speakerLabel: speakerLabel,
             words: orderedWords,
             isEstimatedTiming: isEstimatedTiming,
-            translations: translationMap
+            translations: translationMap(resolvedBy: resolver)
         )
     }
 }
@@ -127,12 +136,18 @@ extension CaptionProject {
     /// passes, the assistant — sees one take and never a mix of them.
     func snapshot() -> CaptionTranscriptSnapshot {
         let ordered = orderedSegments
+        // Built once for the whole transcript, not once per segment: the table
+        // is the same for every caption and a thousand-segment project would
+        // otherwise rebuild it a thousand times.
+        let resolver = CaptionTermResolver(terms: usableTerms)
         return CaptionTranscriptSnapshot(
             projectName: name,
             audioDurationMs: audioDurationMs,
             speakers: speakers,
-            segments: ordered.map { $0.snapshot(speakerLabel: speakerLabel($0.speakerId)) },
-            alignmentQuality: alignmentQualityEnum,
+            segments: ordered.map {
+                $0.snapshot(speakerLabel: speakerLabel($0.speakerId), resolver: resolver)
+            },
+            alignmentQuality: activeAlignmentQuality,
             sourceLanguage: sourceLanguageCode,
             versionNumber: activeVersion?.number ?? 1,
             availableTranslations: translatedLanguages

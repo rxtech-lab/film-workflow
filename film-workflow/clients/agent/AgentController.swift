@@ -125,6 +125,35 @@ final class AgentController {
         return proposalsByProject[projectUUID]
     }
 
+    /// Records what the user did with a proposal, on the row and in the thread.
+    ///
+    /// Both halves matter. The row keeps the card honest — it said "Review 1
+    /// change…" whether or not the change had been applied. The transcript line
+    /// is what the *model* sees on the next turn: without it the agent has no
+    /// way to know its proposal was approved, and goes on describing settled
+    /// work as pending.
+    func recordProposalOutcome(
+        applied: Int,
+        for message: AgentMessage,
+        context: ModelContext
+    ) {
+        message.proposalAppliedCount = applied
+        if let projectUUID = message.proposalProjectUUID ?? message.thread?.target.projectUUID {
+            setPendingProposal(nil, forProjectUUID: projectUUID)
+        }
+
+        guard let thread = message.thread else { return }
+        let total = message.proposal?.items.count ?? applied
+        let note = applied == 0
+            ? "The user reviewed your proposed changes and applied none of them."
+            : "The user applied \(applied) of \(total) proposed change\(total == 1 ? "" : "s")."
+        let row = AgentMessage(role: .system, content: note)
+        row.thread = thread
+        context.insert(row)
+        thread.messages.append(row)
+        thread.updatedAt = Date()
+    }
+
     // MARK: - Backend resolution
 
     func backend(for thread: AgentThread) -> AgentBackend {
@@ -314,11 +343,24 @@ final class AgentController {
               )
             : request.instruction
 
+        // The thread's own pick wins over Settings, then the CLI's own default.
+        // Always the CLI's model field, never `openAIModel` — those name models
+        // in different namespaces, and passing a `gpt-4o` meant for the endpoint
+        // to `claude --model` cannot work.
+        let model = thread.modelOverride(for: backend) ?? backend.model(config: config)
+
         let cliContext = AgentCLIRunner.Context(
             backend: backend,
             executable: executable,
             endpoint: endpoint,
-            model: config?.openAIModel ?? "",
+            model: model,
+            // Dropped when the thread's model doesn't accept it: effort is
+            // configured once in Settings but the model can be overridden per
+            // thread, and the levels differ between Codex models.
+            reasoningEffort: AgentModelCatalog.shared.effort(
+                for: model,
+                configured: backend.reasoningEffort(config: config)
+            ) ?? "",
             resumeSessionID: resume,
             systemPrompt: AgentPrompts.system(
                 target: request.target,

@@ -41,6 +41,15 @@ final class AgentThread {
     /// rxcode's `ChatThread` keeps `providerSessionIdsJSON`.
     var providerSessionIDsJSON: String?
 
+    /// Per-backend model overrides keyed by `AgentBackend.rawValue`, as JSON.
+    /// Empty or missing means "follow the model set in Settings › AI Provider".
+    ///
+    /// Keyed per backend for the same reason the session ids above are: the
+    /// namespaces don't meet. `sonnet` means nothing to Codex, and `gpt-5.5`
+    /// means nothing to Claude Code, so a thread that switches engines has to
+    /// remember a model for each rather than carry one across.
+    var modelOverridesJSON: String?
+
     // MARK: - Content
 
     @Relationship(deleteRule: .cascade, inverse: \AgentMessage.thread)
@@ -67,6 +76,7 @@ final class AgentThread {
         self.targetUUID = target.projectUUID
         self.backendRaw = backend?.rawValue ?? ""
         self.providerSessionIDsJSON = nil
+        self.modelOverridesJSON = nil
         self.messages = []
         self.summary = ""
     }
@@ -117,32 +127,54 @@ final class AgentThread {
     // MARK: - Provider sessions
 
     func providerSessionID(for backend: AgentBackend) -> String? {
-        guard let providerSessionIDsJSON,
-              let data = providerSessionIDsJSON.data(using: .utf8),
-              let map = try? JSONDecoder().decode([String: String].self, from: data)
-        else { return nil }
-        return map[backend.rawValue]
+        Self.decodeMap(providerSessionIDsJSON)[backend.rawValue]
     }
 
     func setProviderSessionID(_ id: String?, for backend: AgentBackend) {
-        var map: [String: String] = [:]
-        if let providerSessionIDsJSON,
-           let data = providerSessionIDsJSON.data(using: .utf8),
-           let existing = try? JSONDecoder().decode([String: String].self, from: data) {
-            map = existing
-        }
-        if let id, !id.isEmpty {
-            map[backend.rawValue] = id
-        } else {
-            map.removeValue(forKey: backend.rawValue)
-        }
-        providerSessionIDsJSON = (try? JSONEncoder().encode(map))
-            .flatMap { String(data: $0, encoding: .utf8) }
+        providerSessionIDsJSON = Self.setting(id, for: backend, in: providerSessionIDsJSON)
     }
 
     /// Drops every stored resume id. Called when the transcript is cleared or
     /// compacted hard enough that the CLI's own history would disagree with ours.
     func clearProviderSessionIDs() {
         providerSessionIDsJSON = nil
+    }
+
+    // MARK: - Model overrides
+
+    /// The model this thread pins for `backend`, or nil to follow Settings.
+    func modelOverride(for backend: AgentBackend) -> String? {
+        Self.decodeMap(modelOverridesJSON)[backend.rawValue]
+    }
+
+    func setModelOverride(_ id: String?, for backend: AgentBackend) {
+        modelOverridesJSON = Self.setting(id, for: backend, in: modelOverridesJSON)
+    }
+
+    // MARK: - Per-backend JSON maps
+
+    private static func decodeMap(_ json: String?) -> [String: String] {
+        guard let json,
+              let data = json.data(using: .utf8),
+              let map = try? JSONDecoder().decode([String: String].self, from: data)
+        else { return [:] }
+        return map
+    }
+
+    /// Returns `json` with `backend`'s entry set to `value`, or removed when it
+    /// is nil or empty.
+    private static func setting(
+        _ value: String?,
+        for backend: AgentBackend,
+        in json: String?
+    ) -> String? {
+        var map = decodeMap(json)
+        if let value, !value.isEmpty {
+            map[backend.rawValue] = value
+        } else {
+            map.removeValue(forKey: backend.rawValue)
+        }
+        return (try? JSONEncoder().encode(map))
+            .flatMap { String(data: $0, encoding: .utf8) }
     }
 }

@@ -43,6 +43,10 @@ final class CaptionProject: GroupableProject {
     /// Lets one project run a fast small model while another uses large-v3.
     var whisperVariantOverride: String = ""
 
+    /// Per-project model for the OpenAI-compatible provider. Empty means "use
+    /// the one chosen in Settings", which itself falls back to `whisper-1`.
+    var openAITranscriptionModelOverride: String = ""
+
     /// BCP-47 hint, e.g. "zh-CN". Empty means auto-detect.
     var languageHint: String = ""
 
@@ -235,7 +239,8 @@ final class CaptionProject: GroupableProject {
             sourceKind: sourceKind,
             alignmentQuality: alignmentQuality,
             alignmentMatchRatio: alignmentMatchRatio,
-            segmentCount: segments.count
+            segmentCount: segments.count,
+            warning: warning
         )
 
         for segment in segments where segment.versionID == nil {
@@ -292,21 +297,70 @@ final class CaptionProject: GroupableProject {
         }
     }
 
-    /// Marks `languageCode` as touched by `engine` and refreshes the counts.
-    func recordTranslationRun(language: String, engine: String) {
+    /// Marks `languageCode` as touched by `engine`/`model` and refreshes the
+    /// counts.
+    ///
+    /// The model is recorded alongside the engine because "AI model" on its own
+    /// says nothing about *which* one answered, and re-running a language on a
+    /// stronger model is a normal thing to do. Last writer wins: the summary
+    /// describes the most recent pass, while each caption keeps its own record.
+    func recordTranslationRun(language: String, engine: String, model: String = "") {
         guard !language.isEmpty,
               let index = versions.firstIndex(where: { $0.id == activeVersionID })
         else { return }
 
         if let existing = versions[index].translations.firstIndex(where: { $0.languageCode == language }) {
             versions[index].translations[existing].engine = engine
+            versions[index].translations[existing].model = model
             versions[index].translations[existing].updatedAt = Date()
         } else {
             versions[index].translations.append(
-                CaptionVersionTranslation(languageCode: language, engine: engine)
+                CaptionVersionTranslation(languageCode: language, engine: engine, model: model)
             )
         }
         refreshTranslationSummary()
+    }
+
+    // MARK: - Quality of the take on screen
+
+    /// Alignment quality of the **active** version, not of whichever run
+    /// happened last.
+    ///
+    /// The project-level field is the fallback for a project that predates
+    /// versioning; everything user-facing should read this, so switching to a
+    /// version with real word timings stops warning about estimated ones.
+    var activeAlignmentQuality: CaptionAlignmentQuality {
+        activeVersion?.alignmentQualityEnum ?? alignmentQualityEnum
+    }
+
+    var activeAlignmentMatchRatio: Double {
+        activeVersion?.alignmentMatchRatio ?? alignmentMatchRatio
+    }
+
+    /// The caveat attached to the active version, same reasoning as above.
+    var activeWarning: String {
+        activeVersion?.warning ?? warning
+    }
+
+    /// Drops the estimated-timing caveat once no caption is estimated any more.
+    ///
+    /// `retime` clears `isEstimatedTiming` on the captions it touches, so a user
+    /// who has been through the retimer has *already* fixed the thing the banner
+    /// is asking them to fix — leaving it up made it look permanent. Only the
+    /// `.estimated` case is cleared: a sentence-anchored alignment is a property
+    /// of the run, and hand-timing one caption doesn't change it.
+    func refreshEstimatedTimingState() {
+        guard activeAlignmentQuality == .estimated else { return }
+        guard !activeSegments.contains(where: { $0.isEstimatedTiming }) else { return }
+
+        if let index = versions.firstIndex(where: { $0.id == activeVersionID }) {
+            versions[index].alignmentQuality = CaptionAlignmentQuality.none.rawValue
+            versions[index].warning = ""
+        } else {
+            // Pre-versioning project: the project fields are the only record.
+            alignmentQualityEnum = .none
+            warning = ""
+        }
     }
 
     var orderedReferenceUnits: [CaptionReferenceUnit] {

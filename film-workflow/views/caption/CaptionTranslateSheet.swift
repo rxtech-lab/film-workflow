@@ -48,9 +48,9 @@ struct CaptionTranslateSheet: View {
         return codes.filter { $0 != project.sourceLanguageCode }
     }
 
-    /// CLI agents work a transcript through MCP, one turn at a time, so they
-    /// are not suitable for the batched translation runner. Keep this picker
-    /// aligned with the capability check used when the runner is built.
+    /// Every backend that can translate — which, since translation batches, is
+    /// all of them on macOS. Keep this picker aligned with the capability check
+    /// used when the runner is built.
     private var translationBackends: [AgentBackend] {
         AgentBackend.supported.filter { $0.supports(.translation) }
     }
@@ -59,6 +59,14 @@ struct CaptionTranslateSheet: View {
         guard !resolvedLanguage.isEmpty else { return false }
         guard engine == .aiBackend else { return true }
         return backendAvailability.isConfigured(aiBackend, config: aiConfig)
+    }
+
+    /// Engine and model of the last pass over the chosen language, e.g.
+    /// "AI model · gpt-4o-mini". Empty when it has never been translated, or was
+    /// translated before the model was recorded.
+    private var previousProducer: String {
+        guard !language.isEmpty, language != Self.customTag else { return "" }
+        return project.activeVersion?.translation(language)?.producerDescription ?? ""
     }
 
     var body: some View {
@@ -84,15 +92,20 @@ struct CaptionTranslateSheet: View {
                 } header: {
                     Text("Translate into")
                 } footer: {
-                    if language == Self.customTag {
-                        Text("A BCP-47 code, such as zh-Hans, es or ja.")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    } else if !project.sourceLanguageCode.isEmpty {
-                        Text("These captions are in \(CaptionTranslationAvailability.displayName(project.sourceLanguageCode)).")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
+                    VStack(alignment: .leading, spacing: 2) {
+                        if language == Self.customTag {
+                            Text("A BCP-47 code, such as zh-Hans, es or ja.")
+                        } else if !project.sourceLanguageCode.isEmpty {
+                            Text("These captions are in \(CaptionTranslationAvailability.displayName(project.sourceLanguageCode)).")
+                        }
+                        // What ran last time, so re-running on a different model
+                        // is a deliberate choice rather than a guess.
+                        if !previousProducer.isEmpty {
+                            Text("Last translated with \(previousProducer).")
+                        }
                     }
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
                 }
 
                 Section {
@@ -134,9 +147,21 @@ struct CaptionTranslateSheet: View {
                 } header: {
                     Text("Engine")
                 } footer: {
-                    Text(engine.detail)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(engine.detail)
+                        // Worth saying out loud: Apple's engine cannot be given
+                        // a glossary, so its lines carry no {{term}} placeholder
+                        // and won't follow a later change to a term's wording.
+                        if engine == .appleTranslation, !project.usableTerms.isEmpty {
+                            Text("""
+                                Apple's engine can't be given the glossary, so these captions won't \
+                                pick up later changes to a term's translation. Use an AI model if \
+                                you want them to.
+                                """)
+                        }
+                    }
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
                 }
 
                 Section {

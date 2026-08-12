@@ -39,13 +39,14 @@ extension MessageListItem {
 /// ordinary follow-the-bottom behaviour. Because the pin and the auto-scroll aim
 /// at one target, they can never disagree — a separate `scrollTo(_, .top)` is
 /// what used to cause a visible jump whenever the spacer hadn't settled.
-struct MessageList<Message: MessageListItem, RowContent: View>: View {
+struct MessageList<Message: MessageListItem, RowContent: View, TrailingContent: View>: View {
     private let messages: [Message]
     private let isStreaming: Bool
     private let shouldScrollToBottom: Bool
     private let scrollToBottomAnimated: Bool
     @Binding private var isAtBottom: Bool
     private let rowContent: (Message) -> RowContent
+    private let trailingContent: () -> TrailingContent
 
     @State private var anchor = MessageListScrollAnchor()
     @State private var pinning = MessageListPinningController<Message.MessageID>()
@@ -65,7 +66,8 @@ struct MessageList<Message: MessageListItem, RowContent: View>: View {
         shouldScrollToBottom: Bool = false,
         scrollToBottomAnimated: Bool = true,
         isAtBottom: Binding<Bool> = .constant(true),
-        @ViewBuilder rowContent: @escaping (Message) -> RowContent
+        @ViewBuilder rowContent: @escaping (Message) -> RowContent,
+        @ViewBuilder trailingContent: @escaping () -> TrailingContent
     ) {
         self.messages = messages
         self.isStreaming = isStreaming
@@ -73,6 +75,7 @@ struct MessageList<Message: MessageListItem, RowContent: View>: View {
         self.scrollToBottomAnimated = scrollToBottomAnimated
         self._isAtBottom = isAtBottom
         self.rowContent = rowContent
+        self.trailingContent = trailingContent
     }
 
     var body: some View {
@@ -90,6 +93,8 @@ struct MessageList<Message: MessageListItem, RowContent: View>: View {
                             }
                             .id(messageID)
                     }
+
+                    trailingContent()
 
                     tailMarker
                     // The tail spacer is sized so that `turnHeight + spacer == viewport`
@@ -536,6 +541,27 @@ struct MessageList<Message: MessageListItem, RowContent: View>: View {
         withTransaction(transaction) {
             activeTurnMaxMeasuredHeight = measured
         }
+    }
+}
+
+extension MessageList where TrailingContent == EmptyView {
+    init(
+        messages: [Message],
+        isStreaming: Bool = false,
+        shouldScrollToBottom: Bool = false,
+        scrollToBottomAnimated: Bool = true,
+        isAtBottom: Binding<Bool> = .constant(true),
+        @ViewBuilder rowContent: @escaping (Message) -> RowContent
+    ) {
+        self.init(
+            messages: messages,
+            isStreaming: isStreaming,
+            shouldScrollToBottom: shouldScrollToBottom,
+            scrollToBottomAnimated: scrollToBottomAnimated,
+            isAtBottom: isAtBottom,
+            rowContent: rowContent,
+            trailingContent: { EmptyView() }
+        )
     }
 }
 

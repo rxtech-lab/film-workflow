@@ -56,9 +56,38 @@ nonisolated enum AgentBackend: String, CaseIterable, Identifiable, Sendable {
     /// The label an engine for this backend will report, known before one is
     /// built — the progress sheet names the engine before the work starts.
     func modelLabel(config: AppConfig?) -> String {
-        guard self == .openAICompatible else { return engineLabel }
-        let model = config?.openAIModel.trimmingCharacters(in: .whitespaces) ?? ""
-        return model.isEmpty ? engineLabel : model
+        let model = self.model(config: config)
+        guard !model.isEmpty else { return engineLabel }
+        // For an OpenAI-compatible endpoint the backend name says nothing —
+        // the model id *is* the answer. For a CLI the product name is what the
+        // user recognizes, so the model qualifies it rather than replacing it.
+        return self == .openAICompatible ? model : "\(engineLabel) (\(model))"
+    }
+
+    /// The model id configured for this backend, or empty for "whatever it
+    /// defaults to". Each backend reads its own field: handing `openAIModel` to
+    /// `claude --model` is how a `gpt-4o` setting used to break the CLI agents.
+    func model(config: AppConfig?) -> String {
+        guard let config else { return "" }
+        let raw: String
+        switch self {
+        case .openAICompatible: raw = config.openAIModel
+        case .claudeCode: raw = config.claudeCodeModel
+        case .codex: raw = config.codexModel
+        case .appleIntelligence: return ""
+        }
+        return raw.trimmingCharacters(in: .whitespaces)
+    }
+
+    /// The reasoning level configured for this backend, or empty for "whatever
+    /// the model defaults to".
+    ///
+    /// Only Codex has one. Read through its own accessor for the same reason
+    /// `model(config:)` exists: a setting that belongs to one backend must not
+    /// leak into another's arguments.
+    func reasoningEffort(config: AppConfig?) -> String {
+        guard case .codex = self, let config else { return "" }
+        return config.codexReasoningEffort.trimmingCharacters(in: .whitespaces)
     }
 
     var requiresNetwork: Bool { self != .appleIntelligence }
@@ -73,9 +102,11 @@ nonisolated enum AgentBackend: String, CaseIterable, Identifiable, Sendable {
             // nothing to read.
             return !isCommandLine
         case .translation:
-            // The CLI agents answer one process launch at a time; a transcript
-            // is dozens of batches. Same reason `planSplit` throws for them.
-            return !isCommandLine
+            // Every backend, including the CLI agents: translation batches are
+            // capped by line count, and a CLI's window is large enough that a
+            // whole transcript is a handful of process launches rather than the
+            // one-per-caption that still rules them out of `planSplit`.
+            return true
         }
     }
 
@@ -101,6 +132,36 @@ nonisolated enum AgentBackend: String, CaseIterable, Identifiable, Sendable {
         }
     }
 
+    /// Characters of caption text one *translation* batch may carry.
+    ///
+    /// Much smaller than `contextBudgetCharacters`, and deliberately so: every
+    /// other task asks the model to answer about the lines it is shown, while
+    /// translation asks it to rewrite all of them. The reply is therefore the
+    /// larger half of the cost — the same text again, plus JSON scaffolding
+    /// around every line — and it is the reply, not the prompt, that runs into
+    /// a provider's default completion cap. Sizing this off the prompt window
+    /// is what made long transcripts fail.
+    var translationBatchCharacters: Int {
+        switch self {
+        case .appleIntelligence: return 900
+        case .openAICompatible: return 6_000
+        case .claudeCode, .codex: return 12_000
+        }
+    }
+
+    /// Captions in one translation batch, whatever their length.
+    ///
+    /// Characters bound the prompt; line count bounds the reply, which carries
+    /// a fixed per-line overhead (`{"number":n,"text":"…"}`) that a character
+    /// budget cannot see. Both bounds apply.
+    var translationBatchLines: Int {
+        switch self {
+        case .appleIntelligence: return 12
+        case .openAICompatible: return 60
+        case .claudeCode, .codex: return 120
+        }
+    }
+
     /// Backends offered on this platform, in preference order.
     static var supported: [AgentBackend] {
         #if os(macOS)
@@ -116,6 +177,13 @@ nonisolated enum CaptionAIError: LocalizedError {
     case backendUnavailable(AgentBackend, String)
     case emptyResponse
     case malformedResponse(String)
+    /// The request, or the reply it asked for, ran past the model's window.
+    ///
+    /// Distinct from `malformedResponse` because the two call for opposite
+    /// responses: a malformed reply might be bad luck, this one is arithmetic.
+    /// Sending fewer lines is the only thing that helps, and the translation
+    /// runner acts on exactly that.
+    case contextOverflow(String)
 
     var errorDescription: String? {
         switch self {
@@ -128,7 +196,69 @@ nonisolated enum CaptionAIError: LocalizedError {
             return "The model returned nothing."
         case .malformedResponse(let detail):
             return "The model's reply couldn't be read: \(detail)"
+        case .contextOverflow(let detail):
+            return "The request was too large for the model: \(detail)"
         }
+    }
+}
+
+/// Whether asking the same engine again with fewer lines could plausibly work.
+///
+/// The distinction that matters to a long run: a batch that overran the window
+/// is worth splitting, an endpoint with the wrong API key is not — retrying it
+/// nine hundred times only makes the user wait longer for the same failure.
+nonisolated enum CaptionAIRetryPolicy {
+    static func isWorthSplitting(_ error: any Error) -> Bool {
+        if error is CancellationError { return false }
+
+        switch error {
+        case let captionError as CaptionAIError:
+            switch captionError {
+            case .contextOverflow, .malformedResponse, .emptyResponse:
+                return true
+            case .noBackendAvailable, .backendUnavailable:
+                return false
+            }
+        case let openAIError as OpenAIError:
+            switch openAIError {
+            case .missingConfig, .invalidEndpoint:
+                return false
+            case .httpError(let status, _):
+                // 401/403 is a credential problem and 404 a wrong endpoint;
+                // neither improves with a shorter prompt. 413 and the 5xx range
+                // are worth another, smaller attempt.
+                return status == 413 || status == 429 || (500...599).contains(status)
+            case .apiError(let message):
+                return mentionsContextLimit(message)
+            case .invalidResponse:
+                return true
+            }
+        default:
+            // A transport error (timeout, connection reset) on a big batch is
+            // often the batch's fault, so a smaller one is worth trying.
+            return true
+        }
+    }
+
+    /// Whether a provider's error text is the "you sent too much" message.
+    ///
+    /// Matched on wording because there is no interoperable code for it: OpenAI
+    /// says `context_length_exceeded`, Anthropic "prompt is too long", and the
+    /// gateways in between paraphrase both.
+    static func mentionsContextLimit(_ message: String) -> Bool {
+        let text = message.lowercased()
+        return [
+            "context length",
+            "context_length",
+            "context window",
+            "maximum context",
+            "too many tokens",
+            "prompt is too long",
+            "request too large",
+            "input is too long",
+            "reduce the length",
+        ]
+        .contains { text.contains($0) }
     }
 }
 

@@ -150,6 +150,11 @@ struct OpenAIToolDefinition {
 struct OpenAIAssistantResponse {
     let content: String?
     let toolCalls: [OpenAIToolCall]
+    /// Why the model stopped. `"length"` means the completion was cut off at
+    /// the token cap, which is the difference between "the model answered badly"
+    /// and "the model never finished answering" — and only the second one is
+    /// fixed by asking for less.
+    var finishReason: String? = nil
 }
 
 struct OpenAIClient {
@@ -277,7 +282,11 @@ struct OpenAIClient {
             }
         }
 
-        return OpenAIAssistantResponse(content: content, toolCalls: toolCalls)
+        return OpenAIAssistantResponse(
+            content: content,
+            toolCalls: toolCalls,
+            finishReason: first["finish_reason"] as? String
+        )
     }
 
     private static func resolveChatCompletionsURL(from endpoint: String) throws -> URL {

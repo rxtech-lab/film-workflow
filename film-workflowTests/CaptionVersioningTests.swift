@@ -274,4 +274,99 @@ struct CaptionVersioningTests {
         #expect(snapshot.sourceLanguage == "en")
         #expect(snapshot.versionNumber == 2)
     }
+
+    // MARK: - Warnings
+
+    @Test("The warning describes the active version, not the last run")
+    func warningFollowsTheActiveVersion() throws {
+        let (project, context) = try makeProject(texts: ["One."])
+        project.warning = "OpenAI-compatible returned no word timings."
+        let v1 = try #require(project.ensureVersioned())
+        #expect(v1.warning == "OpenAI-compatible returned no word timings.")
+
+        // A clean re-run on a provider that does give timings.
+        let v2 = CaptionTranscriptionService.writeSegments(
+            of: project, with: cues(["Uno."]), context: context, provider: .azure
+        )
+        project.warning = ""
+        #expect(project.activeWarning.isEmpty)
+
+        // Switching back must bring the old take's caveat back with it.
+        CaptionTranscriptionService.activateVersion(v1.id, in: project)
+        #expect(project.activeWarning == "OpenAI-compatible returned no word timings.")
+
+        CaptionTranscriptionService.activateVersion(v2.id, in: project)
+        #expect(project.activeWarning.isEmpty)
+    }
+
+    @Test("Alignment quality is read off the active version")
+    func alignmentQualityFollowsTheActiveVersion() throws {
+        let (project, context) = try makeProject(texts: ["One."])
+        project.alignmentQualityEnum = .estimated
+        let v1 = try #require(project.ensureVersioned())
+
+        let v2 = CaptionTranscriptionService.writeSegments(
+            of: project,
+            with: cues(["Uno."]),
+            context: context,
+            provider: .azure,
+            alignmentQuality: .wordAligned
+        )
+        #expect(project.activeAlignmentQuality == .wordAligned)
+
+        CaptionTranscriptionService.activateVersion(v1.id, in: project)
+        #expect(project.activeAlignmentQuality == .estimated)
+
+        CaptionTranscriptionService.activateVersion(v2.id, in: project)
+        #expect(project.activeAlignmentQuality == .wordAligned)
+    }
+
+    @Test("Hand-timing every estimated caption retires the estimated warning")
+    func retimingClearsTheEstimatedWarning() throws {
+        let (project, context) = try makeProject(texts: ["One.", "Two."])
+        var estimated = cues(["One.", "Two."])
+        for index in estimated.indices { estimated[index].isEstimatedTiming = true }
+        CaptionTranscriptionService.writeSegments(
+            of: project,
+            with: estimated,
+            context: context,
+            provider: .openAI,
+            alignmentQuality: .estimated,
+            warning: "OpenAI-compatible returned no word timings."
+        )
+
+        let rows = project.orderedSegments
+        rows[0].retime(toStartMs: 100, endMs: 900)
+        // One caption still estimated, so the banner has to stay.
+        project.refreshEstimatedTimingState()
+        #expect(project.activeAlignmentQuality == .estimated)
+        #expect(!project.activeWarning.isEmpty)
+
+        rows[1].retime(toStartMs: 900, endMs: 1_800)
+        project.refreshEstimatedTimingState()
+        #expect(project.activeAlignmentQuality == .none)
+        #expect(project.activeWarning.isEmpty)
+    }
+
+    @Test("Closing gaps is not a hand-set timing")
+    func closingGapsLeavesCaptionsEstimated() throws {
+        let (project, context) = try makeProject(texts: ["One.", "Two."])
+        var estimated = cues(["One.", "Two."])
+        for index in estimated.indices { estimated[index].isEstimatedTiming = true }
+        // A 200 ms gap the bulk pass will close.
+        estimated[1].startMs = 1_200
+        CaptionTranscriptionService.writeSegments(
+            of: project,
+            with: estimated,
+            context: context,
+            provider: .openAI,
+            alignmentQuality: .estimated,
+            warning: "Estimated."
+        )
+
+        #expect(project.removeGaps(shorterThan: 300) == 1)
+        project.refreshEstimatedTimingState()
+        #expect(project.orderedSegments.allSatisfy { $0.isEstimatedTiming })
+        #expect(project.activeAlignmentQuality == .estimated)
+    }
 }

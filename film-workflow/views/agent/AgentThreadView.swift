@@ -12,9 +12,10 @@ struct AgentThreadView: View {
     @State private var isAtBottom = true
     @State private var shouldScrollToBottom = false
     @State private var scrollRequestTask: Task<Void, Never>?
-    @State private var reviewingProposal: CaptionEditProposal?
+    /// The proposal row being reviewed. The row, not its decoded proposal, so
+    /// applying can write the outcome back onto it.
+    @State private var reviewingRow: AgentMessage?
     @State private var showClearConfirm = false
-    @State private var composerHeight: CGFloat = 80
 
     private var threadID: UUID { thread.id }
     private var run: AgentController.Run { controller.run(for: threadID) }
@@ -22,50 +23,37 @@ struct AgentThreadView: View {
     private var isStreaming: Bool { run.isSending }
 
     var body: some View {
-        ZStack(alignment: .bottom) {
-            transcript
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .contentMargins(.top, 16, for: .scrollContent)
-                .safeAreaInset(edge: .bottom, spacing: 0) {
-                    composerArea
-                        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: {
-                            composerHeight = $0
-                        }
-                }
-
-            if isStreaming {
-                TypingIndicator()
-                    .padding(.horizontal, 18)
-                    .padding(.bottom, composerHeight + 6)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .allowsHitTesting(false)
+        transcript
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .contentMargins(.top, 16, for: .scrollContent)
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                composerArea
             }
-        }
-        .confirmationDialog(
-            "Clear this conversation?",
-            isPresented: $showClearConfirm,
-            titleVisibility: .visible
-        ) {
-            Button("Clear", role: .destructive) { clearAll() }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("Your projects are not affected.")
-        }
-        .sheet(item: $reviewingProposal) { proposal in
-            reviewSheet(proposal)
-        }
-        .onChange(of: messages.count) { _, _ in
-            requestScrollToBottom()
-        }
-        .onChange(of: isStreaming) { _, streaming in
-            guard !streaming else { return }
-            controller.markSeen(threadID)
-        }
-        .onAppear {
-            controller.markSeen(threadID)
-            requestScrollToBottom(animated: false)
-        }
-        .onDisappear { scrollRequestTask?.cancel() }
+            .confirmationDialog(
+                "Clear this conversation?",
+                isPresented: $showClearConfirm,
+                titleVisibility: .visible
+            ) {
+                Button("Clear", role: .destructive) { clearAll() }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("Your projects are not affected.")
+            }
+            .sheet(item: $reviewingRow) { row in
+                reviewSheet(row)
+            }
+            .onChange(of: messages.count) { _, _ in
+                requestScrollToBottom()
+            }
+            .onChange(of: isStreaming) { _, streaming in
+                guard !streaming else { return }
+                controller.markSeen(threadID)
+            }
+            .onAppear {
+                controller.markSeen(threadID)
+                requestScrollToBottom(animated: false)
+            }
+            .onDisappear { scrollRequestTask?.cancel() }
     }
 
     private var composerArea: some View {
@@ -82,7 +70,6 @@ struct AgentThreadView: View {
                 onCommand: handle
             )
         }
-        .background(.regularMaterial)
         .shadow(color: .black.opacity(0.08), radius: 8, y: -2)
     }
 
@@ -99,10 +86,17 @@ struct AgentThreadView: View {
                 shouldScrollToBottom: shouldScrollToBottom,
                 isAtBottom: $isAtBottom
             ) { message in
-                AgentMessageRow(message: message) { proposal in
-                    reviewingProposal = proposal
+                AgentMessageRow(message: message) { row in
+                    reviewingRow = row
                 }
                 .padding(.horizontal, 14)
+            } trailingContent: {
+                if isStreaming {
+                    TypingIndicator()
+                        .padding(.horizontal, 14)
+                        .padding(.top, 4)
+                        .padding(.bottom, 8)
+                }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
@@ -147,22 +141,38 @@ struct AgentThreadView: View {
     }
 
     @ViewBuilder
-    private func reviewSheet(_ proposal: CaptionEditProposal) -> some View {
-        if let uuid = thread.target.projectUUID,
+    private func reviewSheet(_ row: AgentMessage) -> some View {
+        // The row's own project, falling back to the thread's target for rows
+        // written before that was recorded. A thread can retarget mid-life, and
+        // the changes still belong to the project they were proposed against.
+        if let proposal = row.proposal,
+           let uuid = row.proposalProjectUUID ?? thread.target.projectUUID,
            let project = try? MCPCaptionHandlers.fetchCaption(
                id: uuid.uuidString,
                context: modelContext
            )
         {
-            CaptionAIReviewSheet(project: project, proposal: proposal) { _ in
-                controller.setPendingProposal(nil, forProjectUUID: uuid)
+            CaptionAIReviewSheet(project: project, proposal: proposal) { applied in
+                controller.recordProposalOutcome(
+                    applied: applied,
+                    for: row,
+                    context: modelContext
+                )
             }
         } else {
-            ContentUnavailableView(
-                "Caption Project Unavailable",
-                systemImage: "captions.bubble",
-                description: Text("The project these changes apply to is no longer available.")
-            )
+            // Sized and dismissable: a bare `ContentUnavailableView` in a sheet
+            // collapses to an almost empty panel with no way out of it.
+            VStack(spacing: 16) {
+                ContentUnavailableView(
+                    "Caption Project Unavailable",
+                    systemImage: "captions.bubble",
+                    description: Text("The project these changes apply to is no longer available.")
+                )
+                Button("Close") { reviewingRow = nil }
+                    .keyboardShortcut(.defaultAction)
+            }
+            .padding(20)
+            .frame(minWidth: 360, minHeight: 260)
         }
     }
 

@@ -348,6 +348,167 @@ struct MCPCaptionAITests {
         #expect(AgentController.shared.pendingProposal(forProjectUUID: project.projectUUID) == nil)
     }
 
+    // MARK: - Timing and translation proposals
+
+    @Test("A retime is proposed rather than applied, and keeps the old times until approved")
+    func proposeRetimeQueuesTheChange() async throws {
+        let (project, context) = try makeProject(texts: ["One.", "Two."])
+
+        let result = try await MCPCaptionHandlers.handle(
+            name: "caption_propose_edits",
+            arguments: [
+                "caption_id": project.projectUUID.uuidString,
+                "edits": [["index": 1, "kind": "retime", "end_ms": 1_800]],
+            ],
+            context: context
+        )
+        let json = try payload(result)
+
+        #expect(json["accepted"] as? Int == 1)
+        // Untouched until the user approves.
+        #expect(project.orderedSegments[1].endMs == 2_000)
+
+        let pending = try #require(
+            AgentController.shared.pendingProposal(forProjectUUID: project.projectUUID)
+        )
+        // Only `end_ms` was given, so the start has to come from the caption.
+        guard case .retime(_, let startMs, let endMs) = pending.items[0].operation else {
+            Issue.record("expected a retime operation")
+            return
+        }
+        #expect(startMs == 1_000)
+        #expect(endMs == 1_800)
+
+        let applied = CaptionEditApplier.apply(pending.items, to: project, context: context)
+        #expect(applied == 1)
+        #expect(project.orderedSegments[1].endMs == 1_800)
+        #expect(project.orderedSegments[1].startMs == 1_000)
+    }
+
+    @Test("A retime naming neither bound is rejected")
+    func proposeRetimeNeedsABound() async throws {
+        let (project, context) = try makeProject(texts: ["One."])
+
+        let result = try await MCPCaptionHandlers.handle(
+            name: "caption_propose_edits",
+            arguments: [
+                "caption_id": project.projectUUID.uuidString,
+                "edits": [
+                    ["index": 0, "kind": "retime"],
+                    ["index": 0, "kind": "retime", "start_ms": 900, "end_ms": 400],
+                ],
+            ],
+            context: context
+        )
+        let json = try payload(result)
+
+        #expect(json["accepted"] as? Int == 0)
+        #expect((json["rejected"] as? [[String: Any]])?.count == 2)
+    }
+
+    @Test("One line's translation can be proposed without touching the rest")
+    func proposeTranslationForASingleCaption() async throws {
+        let (project, context) = try makeProject(texts: ["Carry your identity.", "Pick your community."])
+        project.orderedSegments[0].setTranslation("带上你的身份。", language: "zh-Hans")
+        project.orderedSegments[1].setTranslation("选择你的社区。", language: "zh-Hans")
+        try context.save()
+
+        let result = try await MCPCaptionHandlers.handle(
+            name: "caption_propose_edits",
+            arguments: [
+                "caption_id": project.projectUUID.uuidString,
+                "edits": [
+                    [
+                        "index": 0,
+                        "kind": "set_translation",
+                        "language": "zh-Hans",
+                        "text": "身份随行。",
+                        "reason": "Parallel cadence with the next line.",
+                    ]
+                ],
+            ],
+            context: context
+        )
+        let json = try payload(result)
+        #expect(json["accepted"] as? Int == 1)
+        // Nothing is written before approval.
+        #expect(project.orderedSegments[0].translatedText("zh-Hans") == "带上你的身份。")
+
+        let pending = try #require(
+            AgentController.shared.pendingProposal(forProjectUUID: project.projectUUID)
+        )
+        let applied = CaptionEditApplier.apply(
+            pending.items, to: project, context: context, engine: "gpt-4o"
+        )
+        #expect(applied == 1)
+        #expect(project.orderedSegments[0].translatedText("zh-Hans") == "身份随行。")
+        // The other caption's translation is left exactly as it was.
+        #expect(project.orderedSegments[1].translatedText("zh-Hans") == "选择你的社区。")
+        // The source text didn't change, so the approved wording isn't stale…
+        #expect(!project.orderedSegments[0].isTranslationStale("zh-Hans"))
+        // …and it is marked hand-written, so a later bulk pass leaves it alone.
+        let translation = try #require(project.orderedSegments[0].translation("zh-Hans"))
+        #expect(translation.isUserEdited)
+        #expect(translation.model == "gpt-4o")
+    }
+
+    @Test("A translation edit without a language is rejected")
+    func proposeTranslationNeedsALanguage() async throws {
+        let (project, context) = try makeProject(texts: ["One."])
+
+        let result = try await MCPCaptionHandlers.handle(
+            name: "caption_propose_edits",
+            arguments: [
+                "caption_id": project.projectUUID.uuidString,
+                "edits": [["index": 0, "kind": "set_translation", "text": "一。"]],
+            ],
+            context: context
+        )
+        let json = try payload(result)
+
+        #expect(json["accepted"] as? Int == 0)
+        #expect((json["rejected"] as? [[String: Any]])?.count == 1)
+    }
+
+    @Test("Under the direct policy a translation can be written in place")
+    func updateSegmentWritesATranslation() async throws {
+        let (project, context) = try makeProject(texts: ["Carry your identity."])
+
+        let result = try await MCPCaptionHandlers.handle(
+            name: "caption_update_segment",
+            arguments: [
+                "caption_id": project.projectUUID.uuidString,
+                "index": 0,
+                "translation": "身份随行。",
+                "translation_language": "zh-Hans",
+            ],
+            context: context
+        )
+        let json = try payload(result)
+
+        #expect(project.orderedSegments[0].translatedText("zh-Hans") == "身份随行。")
+        #expect((json["translations"] as? [String: Any])?["zh-Hans"] as? String == "身份随行。")
+        // The original is untouched by a translation-only write.
+        #expect(project.orderedSegments[0].text == "Carry your identity.")
+    }
+
+    @Test("Writing a translation without naming its language is an error, not a guess")
+    func updateSegmentTranslationNeedsALanguage() async throws {
+        let (project, context) = try makeProject(texts: ["One."])
+
+        await #expect(throws: MCPToolError.self) {
+            _ = try await MCPCaptionHandlers.handle(
+                name: "caption_update_segment",
+                arguments: [
+                    "caption_id": project.projectUUID.uuidString,
+                    "index": 0,
+                    "translation": "一。",
+                ],
+                context: context
+            )
+        }
+    }
+
     // MARK: - Registration
 
     @Test("Both tools are registered and reachable")

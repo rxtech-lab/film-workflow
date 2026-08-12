@@ -58,4 +58,16 @@ final class AppNavigation {
             tab = .Settings
         #endif
     }
+
+    /// Opens the AI provider settings, where the endpoint and key live.
+    ///
+    /// Same macOS caveat as `showCaptionSettings`: the caller must also invoke
+    /// `openSettings()` from the environment.
+    func showAIProviderSettings() {
+        settingsSection = .aiProvider
+        pendingSettingsFocus = nil
+        #if !os(macOS)
+            tab = .Settings
+        #endif
+    }
 }

@@ -58,6 +58,7 @@ struct AgentComposer: View {
     @State private var showAtPopup = false
     @State private var atSelectedIndex = 0
     @State private var isDropTargeted = false
+    @State private var modelCatalog = AgentModelCatalog.shared
 
     private var threadID: UUID { thread.id }
     private var run: AgentController.Run { controller.run(for: threadID) }
@@ -95,7 +96,7 @@ struct AgentComposer: View {
             inputField
             actionRow
         }
-        .padding(10)
+        .padding(12)
         .background(
             RoundedRectangle(cornerRadius: 12)
                 .fill(Color.secondary.opacity(0.08))
@@ -144,7 +145,7 @@ struct AgentComposer: View {
             }
         #else
             TextField("Ask for a change…", text: text, axis: .vertical)
-                .lineLimit(1...10)
+                .lineLimit(3 ... 10)
                 .textFieldStyle(.plain)
                 .onSubmit(handleReturn)
         #endif
@@ -152,7 +153,7 @@ struct AgentComposer: View {
 
     private var clampedInputHeight: CGFloat {
         let oneLine: CGFloat = 20
-        let minHeight: CGFloat = 22
+        let minHeight: CGFloat = oneLine * 3
         let maxLines: CGFloat = 10
         return min(max(measuredInputHeight, minHeight), oneLine * maxLines)
     }
@@ -204,6 +205,11 @@ struct AgentComposer: View {
         !text.wrappedValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || hasMarkedText
     }
 
+    /// Engine picker, with a nested model list for the backends that have one.
+    ///
+    /// The CLI backends get a submenu rather than a second control: model and
+    /// engine are one decision here — a Claude alias means nothing to Codex —
+    /// and picking a model necessarily picks its engine too.
     private var backendMenu: some View {
         Menu {
             Button {
@@ -217,19 +223,29 @@ struct AgentComposer: View {
             }
             Divider()
             ForEach(AgentBackend.supported) { backend in
-                Button {
-                    thread.backendOverride = backend
-                } label: {
-                    if thread.backendOverride == backend {
-                        Label(backend.displayName, systemImage: "checkmark")
-                    } else {
-                        Text(backend.displayName)
+                if backend.isCommandLine {
+                    Menu(backend.engineLabel) {
+                        modelButton(backend: backend, model: nil)
+                        Divider()
+                        ForEach(modelCatalog.options(for: backend)) { option in
+                            modelButton(backend: backend, model: option.id, name: option.displayName)
+                        }
+                    }
+                } else {
+                    Button {
+                        thread.backendOverride = backend
+                    } label: {
+                        if thread.backendOverride == backend {
+                            Label(backend.displayName, systemImage: "checkmark")
+                        } else {
+                            Text(backend.displayName)
+                        }
                     }
                 }
             }
         } label: {
             Label {
-                Text(controller.backend(for: thread).displayName)
+                Text(backendMenuLabel)
             } icon: {
                 Image(systemName: "sparkles")
             }
@@ -237,6 +253,39 @@ struct AgentComposer: View {
         }
         .menuStyle(.borderlessButton)
         .fixedSize()
+    }
+
+    /// One row in a CLI backend's model submenu. `model: nil` is the row that
+    /// clears the thread's override and falls back to Settings.
+    @ViewBuilder
+    private func modelButton(
+        backend: AgentBackend,
+        model: String?,
+        name: String? = nil
+    ) -> some View {
+        let isSelected = controller.backend(for: thread) == backend
+            && thread.modelOverride(for: backend) == model
+        Button {
+            thread.backendOverride = backend
+            thread.setModelOverride(model, for: backend)
+        } label: {
+            if isSelected {
+                Label(name ?? "Default model", systemImage: "checkmark")
+            } else {
+                Text(name ?? "Default model")
+            }
+        }
+    }
+
+    /// "Codex · GPT-5.6-Sol" when the thread pins a model, the engine name alone
+    /// otherwise — the Settings-level model belongs in Settings, not on a button
+    /// the user didn't set.
+    private var backendMenuLabel: String {
+        let backend = controller.backend(for: thread)
+        guard let model = thread.modelOverride(for: backend), !model.isEmpty else {
+            return backend.engineLabel
+        }
+        return "\(backend.engineLabel) · \(modelCatalog.displayName(for: model, backend: backend))"
     }
 
     // MARK: - Queued messages
@@ -540,31 +589,31 @@ struct AgentComposer: View {
 }
 
 #if os(macOS)
-/// Reports the height a wrapped `Text` would take at the composer's width, so
-/// the hosted `NSScrollView` can be sized to fit its content.
-private struct InputHeightMeasurer: View {
-    let text: String
-    @Binding var measuredHeight: CGFloat
+    /// Reports the height a wrapped `Text` would take at the composer's width, so
+    /// the hosted `NSScrollView` can be sized to fit its content.
+    private struct InputHeightMeasurer: View {
+        let text: String
+        @Binding var measuredHeight: CGFloat
 
-    var body: some View {
-        Text(measuringText)
-            .font(.system(size: NSFont.systemFontSize))
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .fixedSize(horizontal: false, vertical: true)
-            .hidden()
-            .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height in
-                guard abs(height - measuredHeight) > 0.5 else { return }
-                measuredHeight = height
-            }
-    }
+        var body: some View {
+            Text(measuringText)
+                .font(.system(size: NSFont.systemFontSize))
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .fixedSize(horizontal: false, vertical: true)
+                .hidden()
+                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height in
+                    guard abs(height - measuredHeight) > 0.5 else { return }
+                    measuredHeight = height
+                }
+        }
 
-    /// A trailing newline has zero intrinsic height through `Text`, so append a
-    /// space to force the empty final line to be measured. The length cap is
-    /// harmless because the height saturates at ten lines anyway.
-    private var measuringText: String {
-        if text.isEmpty { return " " }
-        let capped = text.count > 2000 ? String(text.prefix(2000)) : text
-        return capped.hasSuffix("\n") ? capped + " " : capped
+        /// A trailing newline has zero intrinsic height through `Text`, so append a
+        /// space to force the empty final line to be measured. The length cap is
+        /// harmless because the height saturates at ten lines anyway.
+        private var measuringText: String {
+            if text.isEmpty { return " " }
+            let capped = text.count > 2000 ? String(text.prefix(2000)) : text
+            return capped.hasSuffix("\n") ? capped + " " : capped
+        }
     }
-}
 #endif

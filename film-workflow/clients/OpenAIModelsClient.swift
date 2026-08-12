@@ -37,11 +37,24 @@ struct OpenAIModelInfo: Codable, Equatable, Identifiable, Hashable {
         return false
     }
 
+    /// Model kinds an endpoint may declare that are definitively *not*
+    /// speech-to-text. Note `speech` belongs here: in every catalog that
+    /// publishes this field it means text-to-**speech**.
+    private static let nonTranscriptionTypes: Set<String> = [
+        "speech", "image", "video", "embedding", "language", "reranking", "realtime",
+    ]
+
     /// Best-effort detection of a speech-to-text model. There is no standard
     /// field for this, so fall back to the naming conventions every provider
     /// actually follows.
     var isTranscriptionModel: Bool {
-        if let type, ["transcription", "audio", "speech"].contains(type.lowercased()) { return true }
+        // An endpoint that bothers to declare a type is more trustworthy than a
+        // substring match, so let it settle the question either way.
+        if let type {
+            let kind = type.lowercased()
+            if kind == "transcription" || kind == "audio" { return true }
+            if Self.nonTranscriptionTypes.contains(kind) { return false }
+        }
         if let tags, tags.contains(where: {
             let tag = $0.lowercased()
             return tag.contains("transcription") || tag.contains("speech-to-text")
