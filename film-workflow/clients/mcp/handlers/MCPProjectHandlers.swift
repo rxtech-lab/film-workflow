@@ -155,6 +155,11 @@ enum MCPProjectHandlers {
             #else
             throw MCPToolError.macOSOnly
             #endif
+        case .caption:
+            let items = try context.fetch(FetchDescriptor<CaptionProject>(
+                sortBy: [SortDescriptor(\.updatedAt, order: .reverse)]
+            ))
+            return MCPToolRegistry.jsonResult(items.map(MCPCaptionHandlers.summary))
         }
     }
 
@@ -178,6 +183,11 @@ enum MCPProjectHandlers {
             #else
             throw MCPToolError.macOSOnly
             #endif
+        case .caption:
+            // Summary only — a full transcript would blow the result size. Use
+            // caption_list_segments to page through the captions themselves.
+            let p = try MCPCaptionHandlers.fetchCaption(id: id, context: context)
+            return MCPToolRegistry.jsonResult(MCPCaptionHandlers.summary(p))
         }
     }
 
@@ -233,6 +243,11 @@ enum MCPProjectHandlers {
             #else
             throw MCPToolError.macOSOnly
             #endif
+        case .caption:
+            let p = CaptionProject(name: name)
+            context.insert(p)
+            try context.save()
+            return MCPToolRegistry.jsonResult(MCPCaptionHandlers.summary(p))
         }
     }
 
@@ -273,6 +288,12 @@ enum MCPProjectHandlers {
             #else
             throw MCPToolError.macOSOnly
             #endif
+        case .caption:
+            let p = try MCPCaptionHandlers.fetchCaption(id: id, context: context)
+            applyCaptionFields(p, fields: fields)
+            p.updatedAt = Date()
+            try context.save()
+            return MCPToolRegistry.jsonResult(MCPCaptionHandlers.summary(p))
         }
     }
 
@@ -300,6 +321,14 @@ enum MCPProjectHandlers {
             #else
             throw MCPToolError.macOSOnly
             #endif
+        case .caption:
+            let p = try MCPCaptionHandlers.fetchCaption(id: id, context: context)
+            // Only delete audio the project owns; narrative-sourced projects
+            // point at a GeneratedNarrative's file, which must survive.
+            if p.ownsAudioFile, !p.audioFilePath.isEmpty {
+                FileStorage.deleteFile(at: p.audioFilePath)
+            }
+            context.delete(p)
         }
         try context.save()
         return MCPToolRegistry.jsonResult(["ok": true, "id": id])
@@ -381,6 +410,44 @@ enum MCPProjectHandlers {
             #else
             throw MCPToolError.macOSOnly
             #endif
+        case .caption:
+            let src = try MCPCaptionHandlers.fetchCaption(id: id, context: context)
+            let copy = CaptionProject(name: newName ?? (src.name + " Copy"))
+            copy.audioFilePath = src.audioFilePath
+            // The copy references the same audio, so it must not own it —
+            // otherwise deleting either project would break the other.
+            copy.ownsAudioFile = false
+            copy.sourceKind = src.sourceKind
+            copy.sourceNarrativeID = src.sourceNarrativeID
+            copy.sourceNarrativeName = src.sourceNarrativeName
+            copy.audioDurationMs = src.audioDurationMs
+            copy.provider = src.provider
+            copy.languageHint = src.languageHint
+            copy.maxSpeakers = src.maxSpeakers
+            copy.diarizationEnabled = src.diarizationEnabled
+            copy.wordTimestampsEnabled = src.wordTimestampsEnabled
+            copy.referenceUnits = src.referenceUnits
+            copy.speakers = src.speakers
+            context.insert(copy)
+            // Captions are child models, so they have to be cloned explicitly.
+            for segment in src.orderedSegments {
+                let clone = CaptionSegment(
+                    orderIndex: segment.orderIndex,
+                    startMs: segment.startMs,
+                    endMs: segment.endMs,
+                    text: segment.text,
+                    speakerId: segment.speakerId,
+                    providerSpeakerNumber: segment.providerSpeakerNumber,
+                    locale: segment.locale,
+                    confidence: segment.confidence,
+                    isEstimatedTiming: segment.isEstimatedTiming,
+                    words: segment.words
+                )
+                clone.project = copy
+                context.insert(clone)
+            }
+            try context.save()
+            return MCPToolRegistry.jsonResult(MCPCaptionHandlers.summary(copy))
         }
     }
 
@@ -609,6 +676,20 @@ enum MCPProjectHandlers {
 
     // MARK: - Field appliers
 
+    /// Patch a caption project's settings. Captions themselves are edited via
+    /// `caption_update_segment`, not here.
+    private static func applyCaptionFields(_ p: CaptionProject, fields: [String: Any]) {
+        if let s = fields["name"] as? String { p.name = s }
+        if let s = fields["provider"] as? String {
+            // "" clears the override and falls back to the app default.
+            if s.isEmpty || CaptionProvider(rawValue: s) != nil { p.provider = s }
+        }
+        if let s = fields["language"] as? String { p.languageHint = s }
+        if let n = fields["maxSpeakers"] as? Int { p.maxSpeakers = clampCaptionMaxSpeakers(n) }
+        if let b = fields["diarizationEnabled"] as? Bool { p.diarizationEnabled = b }
+        if let b = fields["wordTimestampsEnabled"] as? Bool { p.wordTimestampsEnabled = b }
+    }
+
     private static func applyNarrativeFields(_ p: NarrativeProject, fields: [String: Any]) {
         if let s = fields["name"] as? String { p.name = s }
         if let s = fields["provider"] as? String, NarrativeProvider(rawValue: s) != nil { p.provider = s }
@@ -743,8 +824,8 @@ enum MCPProjectHandlers {
 
     private static let typeProperty: [String: Any] = [
         "type": "string",
-        "enum": ["narrative", "music", "image", "remotion"],
-        "description": "Which domain the project belongs to."
+        "enum": ["narrative", "music", "image", "remotion", "caption"],
+        "description": "Which domain the project belongs to. For 'caption', project_get returns a summary only — use caption_list_segments to read the captions."
     ]
 }
 
@@ -753,6 +834,7 @@ enum ProjectType: String {
     case music
     case image
     case remotion
+    case caption
 }
 
 private func isoDate(_ d: Date) -> String {

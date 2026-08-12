@@ -1,20 +1,32 @@
 import SwiftUI
 
 struct SettingsView: View {
+    // Bound to the shared navigation so callers can deep-link a section.
+    @State private var navigation = AppNavigation.shared
+
     var body: some View {
-        TabView {
+        TabView(selection: $navigation.settingsSection) {
             AIProviderSettingsView()
                 .tabItem {
                     Label("AI Provider", systemImage: "sparkles")
                 }
+                .tag(AppNavigation.SettingsSection.aiProvider)
+
+            CaptionSettingsView()
+                .tabItem {
+                    Label("Captions", systemImage: "captions.bubble")
+                }
+                .tag(AppNavigation.SettingsSection.captions)
 
             MCPSettingsView()
                 .tabItem {
                     Label("MCP Server", systemImage: "network")
                 }
+                .tag(AppNavigation.SettingsSection.mcp)
         }
         #if os(macOS)
-        .frame(width: 560, height: 600)
+        // Taller than the other tabs need: the Whisper model list is long.
+        .frame(width: 560, height: 660)
         #endif
     }
 }

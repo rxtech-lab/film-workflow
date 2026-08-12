@@ -29,6 +29,10 @@ struct AppConfig: Codable {
     var openAIKey: String
     var openAIModel: String
     var defaultImageModel: String
+    /// Model id for the OpenAI-compatible `/v1/audio/transcriptions` endpoint.
+    var openAITranscriptionModel: String = ""
+    /// Gemini model used for multimodal transcription.
+    var geminiTranscriptionModel: String = ""
 
     private static let service = "com.rxlab.film-workflow"
     private static let googleAccount = "googleAIKey"
@@ -38,6 +42,8 @@ struct AppConfig: Codable {
     private static let openAIKeyAccount = "openAIKey"
     private static let openAIModelAccount = "openAIModel"
     private static let defaultImageModelAccount = "defaultImageModel"
+    private static let openAITranscriptionModelAccount = "openAITranscriptionModel"
+    private static let geminiTranscriptionModelAccount = "geminiTranscriptionModel"
 
     static func loadFromKeychain() throws -> AppConfig {
         AppConfig(
@@ -47,7 +53,9 @@ struct AppConfig: Codable {
             openAIEndpoint: (try? loadString(account: openAIEndpointAccount)) ?? "",
             openAIKey: (try? loadString(account: openAIKeyAccount)) ?? "",
             openAIModel: (try? loadString(account: openAIModelAccount)) ?? "",
-            defaultImageModel: (try? loadString(account: defaultImageModelAccount)) ?? ""
+            defaultImageModel: (try? loadString(account: defaultImageModelAccount)) ?? "",
+            openAITranscriptionModel: (try? loadString(account: openAITranscriptionModelAccount)) ?? "",
+            geminiTranscriptionModel: (try? loadString(account: geminiTranscriptionModelAccount)) ?? ""
         )
     }
 
@@ -59,6 +67,8 @@ struct AppConfig: Codable {
         try Self.saveString(openAIKey, account: Self.openAIKeyAccount)
         try Self.saveString(openAIModel, account: Self.openAIModelAccount)
         try Self.saveString(defaultImageModel, account: Self.defaultImageModelAccount)
+        try Self.saveString(openAITranscriptionModel, account: Self.openAITranscriptionModelAccount)
+        try Self.saveString(geminiTranscriptionModel, account: Self.geminiTranscriptionModelAccount)
     }
 
     static func deleteFromKeychain() throws {
@@ -69,6 +79,8 @@ struct AppConfig: Codable {
         try deleteString(account: openAIKeyAccount)
         try deleteString(account: openAIModelAccount)
         try deleteString(account: defaultImageModelAccount)
+        try deleteString(account: openAITranscriptionModelAccount)
+        try deleteString(account: geminiTranscriptionModelAccount)
     }
 
     // MARK: - Keychain helpers

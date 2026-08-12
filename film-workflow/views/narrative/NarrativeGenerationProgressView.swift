@@ -51,6 +51,14 @@ struct NarrativeGenerationProgressView: View {
         case let .synthesizing(completed, total, _) where total > 0:
             ProgressView(value: Double(completed), total: Double(total))
                 .progressViewStyle(.linear)
+        case let .captioning(captionProgress):
+            if let fraction = captionProgress.fraction {
+                ProgressView(value: fraction)
+                    .progressViewStyle(.linear)
+            } else {
+                ProgressView()
+                    .progressViewStyle(.linear)
+            }
         case .synthesizing, .stitching:
             ProgressView()
                 .progressViewStyle(.linear)
@@ -61,6 +69,7 @@ struct NarrativeGenerationProgressView: View {
         switch progress {
         case .synthesizing: return "Generating Audio"
         case .stitching: return "Stitching Audio"
+        case .captioning: return "Generating Captions"
         }
     }
 
@@ -73,6 +82,11 @@ struct NarrativeGenerationProgressView: View {
             return "Chunk \(working) of \(total)"
         case .stitching:
             return "Combining the chunks into one file…"
+        case let .captioning(captionProgress):
+            // Reuse the caption progress's own wording so the two flows can't drift.
+            return captionProgress.detail.isEmpty
+                ? "Timing your script against the audio…"
+                : captionProgress.detail
         }
     }
 
@@ -80,6 +94,8 @@ struct NarrativeGenerationProgressView: View {
         switch progress {
         case let .synthesizing(completed, _, inFlight) where inFlight > 0:
             return "\(completed) done · \(inFlight) generating in parallel"
+        case .captioning:
+            return "Caption text stays exactly as you wrote it."
         case .synthesizing, .stitching:
             return nil
         }
