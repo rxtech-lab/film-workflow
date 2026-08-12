@@ -11,6 +11,7 @@
 		DFAA0001000000000000A0A1 /* RemotionRuntime in Resources */ = {isa = PBXBuildFile; fileRef = DFAA0001000000000000A0A2 /* RemotionRuntime */; };
 		DFC60EA52FAF81D200B99679 /* Textual in Frameworks */ = {isa = PBXBuildFile; productRef = DFC60EA42FAF81D200B99679 /* Textual */; };
 		DFCA0001000000000000B001 /* WhisperKit in Frameworks */ = {isa = PBXBuildFile; productRef = DFCA0002000000000000B002 /* WhisperKit */; };
+		DFSP0001000000000000C001 /* Sparkle in Frameworks */ = {isa = PBXBuildFile; platformFilters = (macos, ); productRef = DFSP0002000000000000C002 /* Sparkle */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -63,6 +64,7 @@
 			files = (
 				DFC60EA52FAF81D200B99679 /* Textual in Frameworks */,
 				DFCA0001000000000000B001 /* WhisperKit in Frameworks */,
+				DFSP0001000000000000C001 /* Sparkle in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -216,6 +218,7 @@
 			packageReferences = (
 				DFC60EA32FAF81D200B99679 /* XCRemoteSwiftPackageReference "textual" */,
 				DFCA0003000000000000B003 /* XCRemoteSwiftPackageReference "WhisperKit" */,
+				DFSP0003000000000000C003 /* XCRemoteSwiftPackageReference "Sparkle" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = DF4F80FB2F9120D300DE82DA /* Products */;
@@ -481,6 +484,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = RxFilmStudio;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.video";
+				INFOPLIST_FILE = Info.plist;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -542,6 +546,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = RxFilmStudio;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.video";
+				INFOPLIST_FILE = Info.plist;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -714,6 +719,14 @@
 				minimumVersion = 1.1.0;
 			};
 		};
+		DFSP0003000000000000C003 /* XCRemoteSwiftPackageReference "Sparkle" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/sparkle-project/Sparkle.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 2.0.0;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -726,6 +739,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = DFCA0003000000000000B003 /* XCRemoteSwiftPackageReference "WhisperKit" */;
 			productName = WhisperKit;
+		};
+		DFSP0002000000000000C002 /* Sparkle */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = DFSP0003000000000000C003 /* XCRemoteSwiftPackageReference "Sparkle" */;
+			productName = Sparkle;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

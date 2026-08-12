@@ -4,10 +4,14 @@ import SwiftUI
 /// Karaoke-style bulk retimer.
 ///
 /// Ported from debate-bot's `TranscriptSegmentRetimeSheet`. The workflow is: play
-/// the audio, and tap one button as each caption starts and ends. Setting a start
+/// the audio and hit Space as each caption starts and ends. Setting a start
 /// auto-advances to that caption's end; setting an end auto-advances to the next
 /// caption. That reduces retiming a whole transcript to a single repeated
 /// keystroke instead of hundreds of individual time entries.
+///
+/// The one thing the UI has to answer at a glance is "what does Space write right
+/// now?", so the pending boundary — and only that boundary — is highlighted in
+/// yellow, in the list and again next to the playhead.
 ///
 /// Edits accumulate in a draft and are written in one pass on save, so a long
 /// session doesn't produce hundreds of SwiftData writes — and can be abandoned.
@@ -23,6 +27,11 @@ struct CaptionRetimeSheet: View {
     @State private var player: CaptionEditorAudioPlayer?
     @State private var closeGapsOnSave = false
     @State private var editingBoundary: CaptionTimestampBoundary?
+    @FocusState private var keyboardFocused: Bool
+
+    /// The colour of "this is what Space writes". Used nowhere else in the sheet
+    /// so it can't be confused with the accent colour, which means "focused row".
+    private static let pending = Color.yellow
 
     /// A caption's pending time range. Start/end here, offset/duration in storage.
     struct Range: Equatable {
@@ -52,22 +61,28 @@ struct CaptionRetimeSheet: View {
         draft.values.contains { !$0.isValid }
     }
 
+    private var focusedIndex: Int? {
+        guard let focusedID else { return nil }
+        return order.firstIndex(of: focusedID)
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             header
             Divider()
             captionList
             Divider()
-            controls
+            transport
             Divider()
             footer
         }
-        .frame(minWidth: 560, minHeight: 620)
+        .frame(minWidth: 620, minHeight: 660)
         // A long session accumulates an unsaved draft; don't let a stray Escape
         // or drag throw it away. Cancel is the deliberate way out.
         .interactiveDismissDisabled()
         .onAppear(perform: load)
         .onDisappear { player?.pause() }
+        .defaultFocus($keyboardFocused, true)
         .sheet(item: $editingBoundary) { which in
             CaptionTimestampPickerSheet(
                 title: which == .start ? "Start Time" : "End Time",
@@ -78,29 +93,91 @@ struct CaptionRetimeSheet: View {
                 editingBoundary = nil
             }
         }
+        #if os(macOS)
+        // Attached to the root so the shortcuts work wherever focus sits inside
+        // the sheet — key presses bubble up the focus chain.
+        .onKeyPress(.space) {
+            setBoundaryToPlayhead()
+            return .handled
+        }
+        .onKeyPress(KeyEquivalent("p")) {
+            player?.togglePlayPause()
+            return .handled
+        }
+        .onKeyPress(KeyEquivalent("[")) {
+            boundary = .start
+            setBoundaryToPlayhead()
+            return .handled
+        }
+        .onKeyPress(KeyEquivalent("]")) {
+            boundary = .end
+            setBoundaryToPlayhead()
+            return .handled
+        }
+        .onKeyPress(.downArrow) {
+            focusNext()
+            return .handled
+        }
+        .onKeyPress(.upArrow) {
+            focusPrevious()
+            return .handled
+        }
+        #endif
     }
 
-    // MARK: - Sections
+    // MARK: - Header
 
     private var header: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            HStack {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .firstTextBaseline) {
                 Text("Retime Captions")
                     .font(.headline)
                 Spacer()
+                if let index = focusedIndex {
+                    let position: String = "\(index + 1) / \(order.count)"
+                    Text(position)
+                        .font(.caption.monospacedDigit())
+                        .foregroundStyle(.secondary)
+                }
                 if !pendingIDs.isEmpty {
-                    Text("\(pendingIDs.count) changed")
+                    let changed: Int = pendingIDs.count
+                    Text("\(changed) changed")
                         .font(.caption)
                         .foregroundStyle(.tint)
                 }
             }
-            Text("Play the audio, then set each caption's start and end as you hear it.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
+
+            HStack(spacing: 14) {
+                keyHint("Space", "Set the highlighted time")
+                keyHint("P", "Play / Pause")
+                keyHint("↑ ↓", "Change caption")
+            }
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
     }
+
+    private func keyHint(_ key: String, _ label: LocalizedStringKey) -> some View {
+        HStack(spacing: 5) {
+            Text(key)
+                .font(.caption2.monospaced())
+                .padding(.horizontal, 5)
+                .padding(.vertical, 1)
+                .background {
+                    RoundedRectangle(cornerRadius: 4)
+                        .fill(Color.primary.opacity(0.08))
+                }
+                .overlay {
+                    RoundedRectangle(cornerRadius: 4)
+                        .stroke(Color.primary.opacity(0.12))
+                }
+            Text(label)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    // MARK: - Caption list
 
     private var captionList: some View {
         ScrollView {
@@ -117,6 +194,9 @@ struct CaptionRetimeSheet: View {
         }
         .scrollTargetBehavior(.viewAligned)
         .scrollPosition(id: $focusedID, anchor: .center)
+        .focusable()
+        .focusEffectDisabled()
+        .focused($keyboardFocused)
     }
 
     @ViewBuilder
@@ -131,26 +211,35 @@ struct CaptionRetimeSheet: View {
         let endChanged = range.endMs != segment.endMs
         let isChanged = startChanged || endChanged
 
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 6) {
                 Text("\(index + 1)")
                     .font(.caption.monospacedDigit())
                     .foregroundStyle(.secondary)
+                    .frame(minWidth: 18, alignment: .trailing)
 
                 // Precomputed into explicitly-typed locals: interpolating these calls
                 // inside a Text initializer sends the type-checker exponential here.
-                // Start and end are separate Texts so only the edited side lights up.
+                // Start and end are separate chips so only the edited side lights up.
                 let startLabel: String = CaptionExporter.vttTimestamp(range.startMs)
                 let endLabel: String = CaptionExporter.vttTimestamp(range.endMs)
-                HStack(spacing: 4) {
-                    Text(startLabel)
-                        .foregroundStyle(timestampColor(changed: startChanged, valid: range.isValid))
+                HStack(spacing: 3) {
+                    timestampChip(
+                        startLabel,
+                        pending: isFocused && boundary == .start,
+                        changed: startChanged,
+                        valid: range.isValid
+                    )
                     Text(verbatim: "→")
+                        .font(.caption.monospacedDigit())
                         .foregroundStyle(Color.secondary)
-                    Text(endLabel)
-                        .foregroundStyle(timestampColor(changed: endChanged, valid: range.isValid))
+                    timestampChip(
+                        endLabel,
+                        pending: isFocused && boundary == .end,
+                        changed: endChanged,
+                        valid: range.isValid
+                    )
                 }
-                .font(.caption.monospacedDigit())
 
                 if isChanged {
                     Image(systemName: "pencil.circle.fill")
@@ -188,63 +277,46 @@ struct CaptionRetimeSheet: View {
         }
     }
 
-    private var controls: some View {
-        VStack(spacing: 10) {
+    /// The pending boundary is the only thing in the sheet painted yellow.
+    private func timestampChip(
+        _ label: String,
+        pending: Bool,
+        changed: Bool,
+        valid: Bool
+    ) -> some View {
+        Text(label)
+            .font(.caption.monospacedDigit())
+            .fontWeight(pending ? .semibold : .regular)
+            .foregroundStyle(pending ? Color.black : timestampColor(changed: changed, valid: valid))
+            .padding(.horizontal, 4)
+            .padding(.vertical, 1)
+            .background {
+                RoundedRectangle(cornerRadius: 4)
+                    .fill(pending ? Self.pending : Color.clear)
+            }
+            .animation(.snappy(duration: 0.15), value: pending)
+    }
+
+    // MARK: - Transport
+
+    private var transport: some View {
+        VStack(spacing: 12) {
             if let player {
-                HStack(spacing: 12) {
-                    Button {
-                        player.togglePlayPause()
-                    } label: {
-                        Image(systemName: player.isPlaying ? "pause.fill" : "play.fill")
-                            .font(.title3)
+                playbackControls(player)
+            }
+
+            pendingBanner
+
+            HStack(spacing: 10) {
+                Picker("Boundary", selection: $boundary) {
+                    ForEach(CaptionTimestampBoundary.allCases) { value in
+                        Text(value.title).tag(value)
                     }
-                    .buttonStyle(.borderless)
-
-                    Button { player.step(byMs: -1000) } label: { Image(systemName: "gobackward.1") }
-                        .buttonStyle(.borderless)
-                    Button { player.step(byMs: 1000) } label: { Image(systemName: "goforward.1") }
-                        .buttonStyle(.borderless)
-
-                    Spacer()
-
-                    Text(CaptionExporter.vttTimestamp(player.currentMs))
-                        .font(.body.monospacedDigit())
                 }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .frame(width: 160)
 
-                if audioDurationMs > 0 {
-                    Slider(
-                        value: Binding(
-                            get: { Double(player.currentMs) },
-                            set: { player.seek(toMs: Int($0)) }
-                        ),
-                        in: 0...Double(audioDurationMs)
-                    )
-                }
-            }
-
-            Picker("Boundary", selection: $boundary) {
-                ForEach(CaptionTimestampBoundary.allCases) { value in
-                    Text(value.title).tag(value)
-                }
-            }
-            .pickerStyle(.segmented)
-
-            // The one button that does the work.
-            Button {
-                setBoundaryToPlayhead()
-            } label: {
-                Label(
-                    boundary == .start ? "Set Start to Current Time" : "Set End to Current Time",
-                    systemImage: "playhead.and.waveform"
-                )
-                .frame(maxWidth: .infinity)
-            }
-            .buttonStyle(.borderedProminent)
-            .controlSize(.large)
-            .keyboardShortcut("s", modifiers: [.command])
-            .disabled(player == nil || focusedID == nil)
-
-            HStack {
                 Button {
                     editingBoundary = boundary
                 } label: {
@@ -258,6 +330,7 @@ struct CaptionRetimeSheet: View {
 
                 Button {
                     guard let id = focusedID, let range = draft[id] else { return }
+                    player?.clearPlaybackLimit()
                     player?.playRange(startMs: range.startMs, endMs: range.endMs)
                 } label: {
                     Label("Preview", systemImage: "play.rectangle")
@@ -270,51 +343,131 @@ struct CaptionRetimeSheet: View {
         .padding(.vertical, 12)
     }
 
+    @ViewBuilder
+    private func playbackControls(_ player: CaptionEditorAudioPlayer) -> some View {
+        VStack(spacing: 6) {
+            HStack(spacing: 12) {
+                Button {
+                    player.clearPlaybackLimit()
+                    player.togglePlayPause()
+                } label: {
+                    Image(systemName: player.isPlaying ? "pause.fill" : "play.fill")
+                        .font(.title3)
+                }
+                .buttonStyle(.borderless)
+                .help("Play / Pause")
+
+                Button { player.step(byMs: -1000) } label: { Image(systemName: "gobackward.1") }
+                    .buttonStyle(.borderless)
+                Button { player.step(byMs: 1000) } label: { Image(systemName: "goforward.1") }
+                    .buttonStyle(.borderless)
+
+                Spacer()
+
+                let elapsed: String = CaptionExporter.vttTimestamp(player.currentMs)
+                Text(elapsed)
+                    .font(.body.monospacedDigit())
+            }
+
+            if audioDurationMs > 0 {
+                Slider(
+                    value: Binding(
+                        get: { Double(player.currentMs) },
+                        set: {
+                            player.clearPlaybackLimit()
+                            player.seek(toMs: Int($0))
+                        }
+                    ),
+                    in: 0...Double(audioDurationMs)
+                )
+            }
+        }
+    }
+
+    /// Restates the pending boundary next to the playhead, so the answer to "what
+    /// will Space write?" is visible without looking back up at the list.
+    private var pendingBanner: some View {
+        let isStart = boundary == .start
+        let playhead: String = CaptionExporter.vttTimestamp(player?.currentMs ?? 0)
+
+        return HStack(spacing: 10) {
+            Image(systemName: isStart ? "arrow.right.to.line" : "arrow.left.to.line")
+                .foregroundStyle(Self.pending)
+
+            VStack(alignment: .leading, spacing: 1) {
+                Text("Space sets")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                if let index = focusedIndex {
+                    let number: Int = index + 1
+                    Text(isStart ? "Start of caption \(number)" : "End of caption \(number)")
+                        .font(.callout.weight(.medium))
+                } else {
+                    Text("No caption selected")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            Spacer()
+
+            Text(playhead)
+                .font(.title3.monospacedDigit().weight(.semibold))
+                .foregroundStyle(Self.pending)
+
+            Button {
+                setBoundaryToPlayhead()
+            } label: {
+                Text(isStart ? "Set Start" : "Set End")
+                    .fontWeight(.semibold)
+                    .foregroundStyle(Color.black)
+                    .frame(minWidth: 76)
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(Self.pending)
+            .controlSize(.large)
+            .keyboardShortcut("s", modifiers: [.command])
+            .disabled(player == nil || focusedID == nil)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background {
+            RoundedRectangle(cornerRadius: 10)
+                .fill(Self.pending.opacity(0.12))
+        }
+        .overlay {
+            RoundedRectangle(cornerRadius: 10)
+                .stroke(Self.pending.opacity(0.45))
+        }
+        .animation(.snappy(duration: 0.15), value: boundary)
+    }
+
+    // MARK: - Footer
+
     private var footer: some View {
-        VStack(spacing: 8) {
+        HStack(spacing: 12) {
             Toggle("Close gaps shorter than 300 ms on save", isOn: $closeGapsOnSave)
                 .font(.callout)
 
-            HStack {
-                if hasInvalidRange {
-                    Label("Some captions end before they start.", systemImage: "exclamationmark.triangle.fill")
-                        .font(.caption)
-                        .foregroundStyle(.red)
-                }
-                Spacer()
-                Button("Cancel", role: .cancel) { dismiss() }
-                Button("Save \(pendingIDs.isEmpty ? "" : "(\(pendingIDs.count))")") { save() }
-                    .keyboardShortcut(.defaultAction)
-                    .buttonStyle(.borderedProminent)
-                    .disabled(pendingIDs.isEmpty || hasInvalidRange)
+            if hasInvalidRange {
+                Label(
+                    "Some captions end before they start.",
+                    systemImage: "exclamationmark.triangle.fill"
+                )
+                .font(.caption)
+                .foregroundStyle(.red)
             }
+
+            Spacer()
+
+            Button("Cancel", role: .cancel) { dismiss() }
+            Button("Save \(pendingIDs.isEmpty ? "" : "(\(pendingIDs.count))")") { save() }
+                .keyboardShortcut(.defaultAction)
+                .buttonStyle(.borderedProminent)
+                .disabled(pendingIDs.isEmpty || hasInvalidRange)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
-        #if os(macOS)
-        .onKeyPress(.space) {
-            player?.togglePlayPause()
-            return .handled
-        }
-        .onKeyPress(KeyEquivalent("[")) {
-            boundary = .start
-            setBoundaryToPlayhead()
-            return .handled
-        }
-        .onKeyPress(KeyEquivalent("]")) {
-            boundary = .end
-            setBoundaryToPlayhead()
-            return .handled
-        }
-        .onKeyPress(.downArrow) {
-            focusNext()
-            return .handled
-        }
-        .onKeyPress(.upArrow) {
-            focusPrevious()
-            return .handled
-        }
-        #endif
     }
 
     // MARK: - Actions
@@ -350,7 +503,7 @@ struct CaptionRetimeSheet: View {
     }
 
     private func setBoundaryToPlayhead() {
-        guard let player else { return }
+        guard let player, focusedID != nil else { return }
         apply(player.currentMs, to: boundary)
         advance()
     }
@@ -406,6 +559,9 @@ struct CaptionRetimeSheet: View {
             project.removeGaps(shorterThan: 300)
         }
         project.reindexSegments()
+        // Hand-timing was the fix the banner asked for; drop it once no caption
+        // is estimated any more.
+        project.refreshEstimatedTimingState()
         project.updatedAt = Date()
         dismiss()
     }

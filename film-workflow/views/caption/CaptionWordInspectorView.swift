@@ -96,13 +96,62 @@ struct CaptionWordInspectorView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
-            Text(segment.text)
+            sentence
                 .font(.caption)
-                .foregroundStyle(.secondary)
                 .lineLimit(2)
+                .animation(.easeOut(duration: 0.12), value: playingWordIndex)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
+    }
+
+    /// The caption text with the word under the playhead lit up, karaoke style.
+    ///
+    /// Rebuilt from `words` rather than highlighting a range of `segment.text`:
+    /// a word can be renamed without the sentence being rewritten yet, and
+    /// mapping indices back into the joined string would drift the moment the
+    /// two disagree. Spacing uses the same rule as the joiner so CJK does not
+    /// gain spaces it should not have.
+    private var sentence: Text {
+        guard !words.isEmpty else {
+            return Text(segment.text).foregroundStyle(.secondary)
+        }
+
+        let playing = playingWordIndex
+        var result = Text("")
+        var emitted = ""
+
+        for (index, word) in words.enumerated() {
+            let trimmed = word.text.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty else { continue }
+
+            if !emitted.isEmpty, CaptionText.needsSpace(emitted.last, trimmed.first) {
+                result = result + Text(" ")
+                emitted.append(" ")
+            }
+            result = result + (index == playing
+                ? Text(trimmed).foregroundStyle(Color.accentColor).bold()
+                : Text(trimmed).foregroundStyle(.secondary))
+            emitted.append(trimmed)
+        }
+        return result
+    }
+
+    /// The word the playhead is inside, or the one being auditioned on its own.
+    ///
+    /// `nil` whenever nothing is playing, so the highlight disappears on pause
+    /// instead of freezing on whichever word happened to be last.
+    private var playingWordIndex: Int? {
+        if let clipID = clipPlayer.playingClipID {
+            return words.firstIndex { wordClipID($0) == clipID }
+        }
+        guard let player, player.isPlaying else { return nil }
+        let ms = player.currentMs
+        return words.firstIndex { ms >= $0.offsetMs && ms < $0.endMs }
+    }
+
+    private func wordClipID(_ word: CaptionWord) -> String {
+        "word-\(word.id)"
     }
 
     private var emptyState: some View {
@@ -144,15 +193,20 @@ struct CaptionWordInspectorView: View {
             }
             .scrollTargetBehavior(.viewAligned)
             .scrollPosition(id: Binding(
-                get: { Optional(selectedIndex) },
-                set: { if let value = $0 { selectedIndex = value } }
+                get: { playingWordIndex ?? selectedIndex },
+                // While playing, the ruler follows the playhead and scrolling
+                // must not drag the selection along with it — the word being
+                // edited stays put until it is clicked.
+                set: { if let value = $0, playingWordIndex == nil { selectedIndex = value } }
             ))
+            .animation(.easeOut(duration: 0.15), value: playingWordIndex)
         }
     }
 
     @ViewBuilder
     private func wordCapsule(index: Int, word: CaptionWord) -> some View {
         let isSelected = index == selectedIndex
+        let isSounding = index == playingWordIndex
         // Scale width by duration so 40 ms and 900 ms don't look alike, but floor
         // it so a very short word stays tappable.
         let width = max(CGFloat(word.durationMs) / 8, 34)
@@ -165,6 +219,7 @@ struct CaptionWordInspectorView: View {
             VStack(spacing: 2) {
                 Text(word.text)
                     .font(.caption)
+                    .fontWeight(isSounding ? .bold : .regular)
                     .lineLimit(1)
                 Text("\(word.durationMs)")
                     .font(.caption2.monospacedDigit())
@@ -173,8 +228,11 @@ struct CaptionWordInspectorView: View {
             .frame(width: width)
             .padding(.vertical, 6)
             .background {
+                // Playing reads as a brighter fill plus the lift below, leaving
+                // the accent ring to mean "selected" — the two states are
+                // independent and both need to stay legible at once.
                 RoundedRectangle(cornerRadius: 8)
-                    .fill(capsuleTint(word).opacity(isSelected ? 0.45 : 0.18))
+                    .fill(capsuleTint(word).opacity(isSounding ? 0.7 : (isSelected ? 0.45 : 0.18)))
                 if word.isEstimated {
                     RoundedRectangle(cornerRadius: 8)
                         .stroke(style: StrokeStyle(lineWidth: 1, dash: [3, 2]))
@@ -193,8 +251,11 @@ struct CaptionWordInspectorView: View {
                 RoundedRectangle(cornerRadius: 8)
                     .stroke(isSelected ? Color.accentColor : .clear, lineWidth: 2)
             }
+            .scaleEffect(isSounding ? 1.06 : 1)
+            .shadow(color: .accentColor.opacity(isSounding ? 0.5 : 0), radius: 5)
         }
         .buttonStyle(.plain)
+        .animation(.easeOut(duration: 0.12), value: isSounding)
     }
 
     /// Low-confidence words are the ones worth checking first.

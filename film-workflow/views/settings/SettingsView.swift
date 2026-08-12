@@ -12,6 +12,12 @@ struct SettingsView: View {
                 }
                 .tag(AppNavigation.SettingsSection.aiProvider)
 
+            AgentSettingsView()
+                .tabItem {
+                    Label("Agent", systemImage: "bubble.left.and.bubble.right")
+                }
+                .tag(AppNavigation.SettingsSection.agent)
+
             CaptionSettingsView()
                 .tabItem {
                     Label("Captions", systemImage: "captions.bubble")

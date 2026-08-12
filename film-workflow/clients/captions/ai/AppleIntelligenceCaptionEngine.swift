@@ -43,6 +43,21 @@ nonisolated struct CaptionTermReviewOutput {
 }
 
 @Generable
+nonisolated struct CaptionTranslatedLineOutput {
+    @Guide(description: "The line number, exactly as shown in the list.")
+    var number: Int
+
+    @Guide(description: "That line translated, and nothing else — no number, no notes.")
+    var text: String
+}
+
+@Generable
+nonisolated struct CaptionTranslateOutput {
+    @Guide(description: "One entry per input line, in the same order, with the same numbers.")
+    var lines: [CaptionTranslatedLineOutput]
+}
+
+@Generable
 nonisolated struct CaptionChatEditOutput {
     @Guide(description: "The caption number this edit applies to.")
     var number: Int
@@ -76,7 +91,7 @@ nonisolated struct CaptionChatOutput {
 /// few dozen captions. The assistant's conversational continuity comes from the
 /// compacted history we send, not from session state.
 nonisolated struct AppleIntelligenceCaptionEngine: CaptionAIEngine {
-    var backend: CaptionAIBackend { .appleIntelligence }
+    var backend: AgentBackend { .appleIntelligence }
 
     /// Deterministic: these are proofreading tasks, not creative ones, and a
     /// stable answer is what makes a re-run trustworthy.
@@ -121,6 +136,31 @@ nonisolated struct AppleIntelligenceCaptionEngine: CaptionAIEngine {
         )
     }
 
+    // MARK: - Translate
+
+    func translate(_ request: CaptionTranslateRequest) async throws -> CaptionTranslateResult {
+        guard !request.lines.isEmpty else { return CaptionTranslateResult(lines: []) }
+
+        let session = LanguageModelSession(
+            instructions: CaptionAIPrompts.translateInstructions(
+                source: request.sourceLanguage,
+                target: request.targetLanguage
+            )
+        )
+        let response = try await respond(
+            session: session,
+            prompt: CaptionAIPrompts.translatePrompt(request),
+            as: CaptionTranslateOutput.self
+        )
+        return CaptionTranslateResult(
+            lines: response.lines.compactMap { line in
+                let text = line.text.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !text.isEmpty else { return nil }
+                return CaptionTranslatedLine(number: line.number, text: text)
+            }
+        )
+    }
+
     // MARK: - Chat
 
     func converse(_ request: CaptionChatRequest) async throws -> CaptionChatReply {
@@ -145,8 +185,10 @@ nonisolated struct AppleIntelligenceCaptionEngine: CaptionAIEngine {
     /// something a caller can act on.
     ///
     /// `exceededContextWindowSize` is the error this design exists to avoid, so
-    /// when it still fires the message says which knob to turn rather than
-    /// leaking the framework's wording.
+    /// when it still fires it is reported as `contextOverflow` — a batched
+    /// caller can act on that by sending fewer lines, where the old
+    /// `malformedResponse` only offered the user advice they couldn't take in
+    /// the middle of a whole-transcript run.
     private func respond<Output: Generable>(
         session: LanguageModelSession,
         prompt: String,
@@ -161,8 +203,8 @@ nonisolated struct AppleIntelligenceCaptionEngine: CaptionAIEngine {
         } catch let error as LanguageModelSession.GenerationError {
             switch error {
             case .exceededContextWindowSize:
-                throw CaptionAIError.malformedResponse(
-                    "the request was too long for the on-device model — try a shorter selection"
+                throw CaptionAIError.contextOverflow(
+                    "the request was too long for the on-device model"
                 )
             case .guardrailViolation, .refusal:
                 throw CaptionAIError.malformedResponse(

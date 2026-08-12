@@ -3,6 +3,7 @@ import SwiftUI
 struct NarrativeProjectParametersView: View {
     @Bindable var project: NarrativeProject
     @State private var azureStore = AzureVoiceStore.shared
+    @State private var pendingSpeakerDeletion: UUID?
 
     var body: some View {
         ScrollViewReader { proxy in
@@ -36,6 +37,24 @@ struct NarrativeProjectParametersView: View {
                     }
                 }
             }
+        }
+        .confirmationDialog(
+            "Delete this speaker?",
+            isPresented: Binding(
+                get: { pendingSpeakerDeletion != nil },
+                set: { if !$0 { pendingSpeakerDeletion = nil } }
+            ),
+            titleVisibility: .visible,
+            presenting: pendingSpeakerDeletion
+        ) { speakerID in
+            Button("Delete Speaker", role: .destructive) {
+                removeSpeaker(id: speakerID)
+                pendingSpeakerDeletion = nil
+            }
+            Button("Cancel", role: .cancel) { pendingSpeakerDeletion = nil }
+        } message: { speakerID in
+            let name = project.speakers.first(where: { $0.id == speakerID })?.displayName ?? "This speaker"
+            Text("\"\(name)\" will be deleted. Their paragraphs will be reassigned to the first remaining speaker.")
         }
     }
 
@@ -159,7 +178,7 @@ struct NarrativeProjectParametersView: View {
                             .textFieldStyle(.roundedBorder)
 
                         Button(role: .destructive) {
-                            removeSpeaker(id: speaker.id)
+                            pendingSpeakerDeletion = speaker.id
                         } label: {
                             Image(systemName: "trash")
                                 .foregroundStyle(.red)

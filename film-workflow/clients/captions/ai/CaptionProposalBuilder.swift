@@ -107,12 +107,16 @@ nonisolated struct CaptionProposalBuilder {
         maxRunes: Int,
         reason: String
     ) -> CaptionEditProposalItem? {
-        func makeItem(after: String, verdict: CaptionEditVerdict) -> CaptionEditProposalItem {
+        func makeItem(
+            before: String = segment.text,
+            after: String,
+            verdict: CaptionEditVerdict
+        ) -> CaptionEditProposalItem {
             CaptionEditProposalItem(
                 operation: operation,
                 displayIndex: position + 1,
                 startMs: segment.startMs,
-                before: segment.text,
+                before: before,
                 after: after,
                 verdict: verdict,
                 reason: reason
@@ -165,6 +169,41 @@ nonisolated struct CaptionProposalBuilder {
             guard speakerID != segment.speakerId else { return nil }
             return makeItem(after: speaker.label, verdict: .ok)
 
+        case .retime(_, let newStart, let newEnd):
+            guard newStart != segment.startMs || newEnd != segment.endMs else { return nil }
+            // Both spans in full, because the row header only shows the old
+            // start and a retime is unreadable without its other three numbers.
+            return makeItem(
+                before: "\(span(segment.startMs, segment.endMs))  \(segment.text)",
+                after: span(newStart, newEnd),
+                verdict: retimeVerdict(
+                    startMs: newStart,
+                    endMs: newEnd,
+                    position: position,
+                    transcript: transcript
+                )
+            )
+
+        case .setTranslation(_, let language, let rawText):
+            let newText = rawText.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !language.isEmpty else {
+                return makeItem(
+                    after: newText,
+                    verdict: .notApplicable("This change doesn't say which language it is for.")
+                )
+            }
+            // Blank means "clear this language", which is a real edit — but only
+            // when something is there to clear.
+            let existing = segment.translation(language)
+            guard newText != existing, !(newText.isEmpty && existing.isEmpty) else { return nil }
+            // The original above the translation, so the user is reviewing a
+            // pair rather than a bare foreign-language line.
+            return makeItem(
+                before: existing.isEmpty ? segment.text : "\(segment.text)\n\(existing)",
+                after: newText,
+                verdict: .ok
+            )
+
         case .delete:
             return makeItem(after: "", verdict: .ok)
         }
@@ -206,6 +245,48 @@ nonisolated struct CaptionProposalBuilder {
             return .stubPiece
         }
         return .ok
+    }
+
+    /// A retime has to describe a real span, and shouldn't quietly collide with
+    /// the captions on either side.
+    ///
+    /// The impossible cases are `.notApplicable` — the applier would refuse them
+    /// anyway, so the row arrives unchecked with the reason shown. An overlap is
+    /// only flagged: cues that share time are legal and occasionally wanted, but
+    /// they stack on screen, so the user gets to decide.
+    static func retimeVerdict(
+        startMs: Int,
+        endMs: Int,
+        position: Int,
+        transcript: CaptionTranscriptSnapshot
+    ) -> CaptionEditVerdict {
+        guard startMs >= 0 else {
+            return .notApplicable("A caption can't start before the audio does.")
+        }
+        guard endMs > startMs else {
+            return .notApplicable("A caption has to end after it starts.")
+        }
+        if transcript.audioDurationMs > 0, endMs > transcript.audioDurationMs {
+            return .notApplicable("This runs past the end of the audio.")
+        }
+
+        let previousEnd = position > 0 ? transcript.segments[position - 1].endMs : nil
+        let nextStart = position + 1 < transcript.segments.count
+            ? transcript.segments[position + 1].startMs
+            : nil
+        if let previousEnd, startMs < previousEnd { return .timingOverlap }
+        if let nextStart, endMs > nextStart { return .timingOverlap }
+        return .ok
+    }
+
+    /// `mm:ss.mmm – mm:ss.mmm`. Milliseconds matter here in a way they don't in
+    /// the row header: a retime is often a 200 ms nudge.
+    static func span(_ startMs: Int, _ endMs: Int) -> String {
+        "\(timecode(startMs)) – \(timecode(endMs))"
+    }
+
+    private static func timecode(_ ms: Int) -> String {
+        String(format: "%@.%03d", CaptionExporter.shortTimestamp(ms), max(ms, 0) % 1000)
     }
 
     /// A glossary correction may only touch glossary words.

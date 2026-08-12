@@ -20,6 +20,25 @@ struct CaptionSegmentEditorSheet: View {
     @State private var player: CaptionEditorAudioPlayer?
     @State private var editingBoundary: CaptionTimestampBoundary?
     @State private var retimeNotice: String?
+    @State private var draftTranslationLanguage: String = ""
+    @State private var draftTranslation: String = ""
+
+    /// Languages this caption's version has, not just this caption's — so a row
+    /// that was skipped by a translation pass can still be filled in by hand.
+    private var translatedLanguages: [String] {
+        var codes = project.translatedLanguages
+        for code in segment.translatedLanguages where !codes.contains(code) {
+            codes.append(code)
+        }
+        return codes
+    }
+
+    /// The glossary, for resolving `{{term}}` in the translation preview. Cheap
+    /// to rebuild — one sheet, one caption — so it stays computed rather than
+    /// cached in `@State` that would go stale behind a glossary edit.
+    private var termResolver: CaptionTermResolver {
+        CaptionTermResolver(terms: project.usableTerms)
+    }
 
     private var audioDurationMs: Int {
         project.audioDurationMs > 0 ? project.audioDurationMs : (player?.durationMs ?? 0)
@@ -61,6 +80,74 @@ struct CaptionSegmentEditorSheet: View {
 
     // MARK: - Sections
 
+    private var translationSection: some View {
+        Section {
+            if translatedLanguages.count > 1 {
+                Picker("Language", selection: $draftTranslationLanguage) {
+                    ForEach(translatedLanguages, id: \.self) { code in
+                        Text(CaptionTranslationAvailability.displayName(code)).tag(code)
+                    }
+                }
+                .onChange(of: draftTranslationLanguage) { previous, _ in
+                    // Commit the edit in progress before swapping languages,
+                    // otherwise switching the picker silently discards it.
+                    commitTranslation(for: previous)
+                    loadTranslation()
+                }
+            }
+
+            // Raw, placeholders and all. Showing the rendered text here would
+            // bake the glossary wording in the moment anyone saved, which is
+            // exactly the link `{{term}}` exists to keep.
+            TextEditor(text: $draftTranslation)
+                .frame(minHeight: 70)
+                .font(.body)
+
+            if CaptionTermPlaceholder.contains(draftTranslation) {
+                VStack(alignment: .leading, spacing: 4) {
+                    LabeledContent("Preview") {
+                        Text(termResolver.render(draftTranslation, language: draftTranslationLanguage))
+                            .textSelection(.enabled)
+                    }
+
+                    let unresolved = termResolver.unresolvedKeys(in: draftTranslation)
+                    if !unresolved.isEmpty {
+                        Label(
+                            unresolved.count == 1
+                                ? "\"\(unresolved[0])\" isn't a glossary term — it will show as written."
+                                : "\(unresolved.count) placeholders aren't glossary terms — they will show as written.",
+                            systemImage: "exclamationmark.triangle"
+                        )
+                        .foregroundStyle(.orange)
+                    }
+                }
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            }
+
+            if segment.isTranslationStale(draftTranslationLanguage) {
+                Label(
+                    "The caption changed after this was translated. Saving both marks it current again.",
+                    systemImage: "exclamationmark.arrow.triangle.2.circlepath"
+                )
+                .font(.caption)
+                .foregroundStyle(.orange)
+            }
+
+            // Which model wrote this is the first thing you want to know when a
+            // line reads badly — it says whether re-running on a better model is
+            // worth it, or whether the caption itself is the problem.
+            if let producer = segment.translation(draftTranslationLanguage)?.producerDescription,
+               !producer.isEmpty {
+                LabeledContent("Translated by", value: producer)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        } header: {
+            Text("Translation")
+        }
+    }
+
     private var header: some View {
         HStack {
             Text("Edit Caption")
@@ -86,6 +173,10 @@ struct CaptionSegmentEditorSheet: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 }
+            }
+
+            if !translatedLanguages.isEmpty {
+                translationSection
             }
 
             Section("Speaker") {
@@ -231,6 +322,39 @@ struct CaptionSegmentEditorSheet: View {
         if FileManager.default.fileExists(atPath: project.audioURL.path) {
             player = CaptionEditorAudioPlayer(url: project.audioURL)
         }
+
+        // Open on whatever the list is showing, so the row the user
+        // double-tapped and the sheet they get are about the same language.
+        let shown = project.displayedTranslationLanguage
+        draftTranslationLanguage = translatedLanguages.contains(shown)
+            ? shown
+            : (translatedLanguages.first ?? "")
+        loadTranslation()
+    }
+
+    private func loadTranslation() {
+        draftTranslation = segment.translatedText(draftTranslationLanguage)
+    }
+
+    /// Writes the draft back if it changed. `setTranslation` re-stamps the
+    /// fingerprint from the segment's *current* text, so editing the caption and
+    /// its translation in one pass correctly clears the stale badge.
+    private func commitTranslation(for language: String) {
+        guard !language.isEmpty else { return }
+        // Tidies malformed braces and canonicalizes the spelling inside them,
+        // but keeps an unknown `{{Foo}}` wrapped — someone may be writing the
+        // placeholder before adding the term, and the warning already says so.
+        let trimmed = termResolver
+            .sanitize(draftTranslation, unwrapUnknown: false)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed != segment.translatedText(language) else { return }
+        segment.setTranslation(
+            trimmed,
+            language: language,
+            engine: segment.translation(language)?.engine ?? "",
+            model: segment.translation(language)?.model ?? "",
+            isUserEdited: true
+        )
     }
 
     private func save() {
@@ -257,6 +381,10 @@ struct CaptionSegmentEditorSheet: View {
 
         segment.speakerId = draftSpeaker
         segment.isUserEdited = true
+        // After the text is final, so the fingerprint matches what was saved.
+        commitTranslation(for: draftTranslationLanguage)
+        project.refreshTranslationSummary()
+        project.refreshEstimatedTimingState()
         project.updatedAt = Date()
         dismiss()
     }

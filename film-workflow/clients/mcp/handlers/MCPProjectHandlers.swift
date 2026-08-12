@@ -1,7 +1,7 @@
 import Foundation
 import SwiftData
 
-/// Unified CRUD + duplicate, discriminated by `type`: "narrative" | "music" | "image" | "remotion".
+/// Unified project and cross-type project-group CRUD.
 @MainActor
 enum MCPProjectHandlers {
     static let descriptors: [MCPToolDescriptor] = [
@@ -11,7 +11,8 @@ enum MCPProjectHandlers {
             inputSchema: [
                 "type": "object",
                 "properties": [
-                    "type": typeProperty
+                    "type": typeProperty,
+                    "group_id": nullableGroupIDProperty
                 ],
                 "required": ["type"]
             ]
@@ -35,7 +36,8 @@ enum MCPProjectHandlers {
                 "type": "object",
                 "properties": [
                     "type": typeProperty,
-                    "name": ["type": "string", "description": "Display name. Defaults to 'Untitled Project'."] as [String: Any]
+                    "name": ["type": "string", "description": "Display name. Defaults to 'Untitled Project'."] as [String: Any],
+                    "group_id": ["type": "string", "description": "Optional project-group UUID."] as [String: Any]
                 ],
                 "required": ["type"]
             ]
@@ -55,14 +57,15 @@ enum MCPProjectHandlers {
         ),
         MCPToolDescriptor(
             name: "delete_project",
-            description: "Delete a project of the given type, including any owned files on disk.",
+            description: "Delete a project of the given type, including any owned files on disk. Requires confirm=true.",
             inputSchema: [
                 "type": "object",
                 "properties": [
                     "type": typeProperty,
-                    "id": ["type": "string"] as [String: Any]
+                    "id": ["type": "string"] as [String: Any],
+                    "confirm": ["type": "boolean", "description": "Must be true to confirm permanent deletion."] as [String: Any]
                 ],
-                "required": ["type", "id"]
+                "required": ["type", "id", "confirm"]
             ]
         ),
         MCPToolDescriptor(
@@ -74,6 +77,59 @@ enum MCPProjectHandlers {
                     "type": typeProperty,
                     "id": ["type": "string"] as [String: Any],
                     "new_name": ["type": "string", "description": "Optional. Defaults to '<original name> Copy'."] as [String: Any]
+                ],
+                "required": ["type", "id"]
+            ]
+        ),
+        MCPToolDescriptor(
+            name: "list_project_groups",
+            description: "List cross-type project groups with per-project-type counts.",
+            inputSchema: ["type": "object", "properties": [:] as [String: Any]]
+        ),
+        MCPToolDescriptor(
+            name: "create_project_group",
+            description: "Create a project group shared by every project type.",
+            inputSchema: [
+                "type": "object",
+                "properties": [
+                    "name": ["type": "string", "description": "Unique display name."] as [String: Any]
+                ],
+                "required": ["name"]
+            ]
+        ),
+        MCPToolDescriptor(
+            name: "update_project_group",
+            description: "Rename an existing project group.",
+            inputSchema: [
+                "type": "object",
+                "properties": [
+                    "id": ["type": "string", "description": "Project-group UUID."] as [String: Any],
+                    "name": ["type": "string", "description": "New unique display name."] as [String: Any]
+                ],
+                "required": ["id", "name"]
+            ]
+        ),
+        MCPToolDescriptor(
+            name: "delete_project_group",
+            description: "Delete a group while preserving its projects in Ungrouped. Requires confirm=true.",
+            inputSchema: [
+                "type": "object",
+                "properties": [
+                    "id": ["type": "string", "description": "Project-group UUID."] as [String: Any],
+                    "confirm": ["type": "boolean", "description": "Must be true to confirm deletion."] as [String: Any]
+                ],
+                "required": ["id", "confirm"]
+            ]
+        ),
+        MCPToolDescriptor(
+            name: "move_project_to_group",
+            description: "Move any project to a cross-type group, or omit/null group_id to move it to Ungrouped.",
+            inputSchema: [
+                "type": "object",
+                "properties": [
+                    "type": typeProperty,
+                    "id": ["type": "string", "description": "Project UUID."] as [String: Any],
+                    "group_id": nullableGroupIDProperty
                 ],
                 "required": ["type", "id"]
             ]
@@ -89,6 +145,34 @@ enum MCPProjectHandlers {
         arguments: [String: Any],
         context: ModelContext
     ) async throws -> [String: Any] {
+        switch name {
+        case "list_project_groups":
+            return try listProjectGroups(context: context)
+        case "create_project_group":
+            guard let groupName = arguments["name"] as? String else {
+                throw MCPToolError.invalidArguments("missing name")
+            }
+            let group = try ProjectGroupService.create(name: groupName, context: context)
+            return try projectGroupResult(group, context: context)
+        case "update_project_group":
+            let group = try groupFromArguments(arguments, context: context)
+            guard let groupName = arguments["name"] as? String else {
+                throw MCPToolError.invalidArguments("missing name")
+            }
+            try ProjectGroupService.rename(group, to: groupName, context: context)
+            return try projectGroupResult(group, context: context)
+        case "delete_project_group":
+            guard arguments["confirm"] as? Bool == true else {
+                throw MCPToolError.invalidArguments("confirm must be true")
+            }
+            let group = try groupFromArguments(arguments, context: context)
+            let id = group.id.uuidString
+            try ProjectGroupService.delete(group, context: context)
+            return MCPToolRegistry.jsonResult(["ok": true, "id": id, "projectsPreserved": true])
+        default:
+            break
+        }
+
         guard let typeRaw = arguments["type"] as? String,
               let type = ProjectType(rawValue: typeRaw) else {
             throw MCPToolError.unknownProjectType((arguments["type"] as? String) ?? "<missing>")
@@ -96,7 +180,11 @@ enum MCPProjectHandlers {
 
         switch name {
         case "list_projects":
-            return try listProjects(type: type, context: context)
+            return try listProjects(
+                type: type,
+                groupFilter: try projectGroupFilter(arguments, context: context),
+                context: context
+            )
         case "get_project":
             guard let id = arguments["id"] as? String else {
                 throw MCPToolError.invalidArguments("missing id")
@@ -104,7 +192,8 @@ enum MCPProjectHandlers {
             return try getProject(type: type, id: id, context: context)
         case "create_project":
             let displayName = (arguments["name"] as? String) ?? "Untitled Project"
-            return try await createProject(type: type, name: displayName, context: context)
+            let groupID = try optionalGroupID(arguments["group_id"], context: context)
+            return try await createProject(type: type, name: displayName, groupID: groupID, context: context)
         case "update_project":
             guard let id = arguments["id"] as? String,
                   let fields = arguments["fields"] as? [String: Any] else {
@@ -112,6 +201,9 @@ enum MCPProjectHandlers {
             }
             return try updateProject(type: type, id: id, fields: fields, context: context)
         case "delete_project":
+            guard arguments["confirm"] as? Bool == true else {
+                throw MCPToolError.invalidArguments("confirm must be true")
+            }
             guard let id = arguments["id"] as? String else {
                 throw MCPToolError.invalidArguments("missing id")
             }
@@ -122,36 +214,113 @@ enum MCPProjectHandlers {
             }
             let newName = arguments["new_name"] as? String
             return try duplicateProject(type: type, id: id, newName: newName, context: context)
+        case "move_project_to_group":
+            guard let id = arguments["id"] as? String else {
+                throw MCPToolError.invalidArguments("missing id")
+            }
+            let groupID = try optionalGroupID(arguments["group_id"], context: context)
+            return try moveProject(type: type, id: id, to: groupID, context: context)
         default:
             throw MCPToolError.invalidArguments("unrecognized: \(name)")
         }
     }
 
+    // MARK: - Project groups
+
+    private static func listProjectGroups(context: ModelContext) throws -> [String: Any] {
+        let groups = try context.fetch(FetchDescriptor<ProjectGroup>(
+            sortBy: [SortDescriptor(\.name)]
+        ))
+        return MCPToolRegistry.jsonResult(try groups.map {
+            try projectGroupPayload($0, context: context)
+        })
+    }
+
+    private static func projectGroupResult(
+        _ group: ProjectGroup,
+        context: ModelContext
+    ) throws -> [String: Any] {
+        MCPToolRegistry.jsonResult(try projectGroupPayload(group, context: context))
+    }
+
+    private static func projectGroupPayload(
+        _ group: ProjectGroup,
+        context: ModelContext
+    ) throws -> [String: Any] {
+        let counts = try ProjectGroupService.projectCounts(groupID: group.id, context: context)
+        return [
+            "id": group.id.uuidString,
+            "name": group.name,
+            "createdAt": isoDate(group.createdAt),
+            "updatedAt": isoDate(group.updatedAt),
+            "projectCount": counts.values.reduce(0, +),
+            "projectCounts": counts
+        ]
+    }
+
+    private static func groupFromArguments(
+        _ arguments: [String: Any],
+        context: ModelContext
+    ) throws -> ProjectGroup {
+        guard let idString = arguments["id"] as? String,
+              let id = UUID(uuidString: idString) else {
+            throw MCPToolError.invalidArguments("id must be a project-group UUID")
+        }
+        return try ProjectGroupService.fetch(id: id, context: context)
+    }
+
+    private static func optionalGroupID(_ raw: Any?, context: ModelContext) throws -> UUID? {
+        guard let raw, !(raw is NSNull) else { return nil }
+        guard let value = raw as? String, let id = UUID(uuidString: value) else {
+            throw MCPToolError.invalidArguments("group_id must be a project-group UUID or null")
+        }
+        _ = try ProjectGroupService.fetch(id: id, context: context)
+        return id
+    }
+
+    private static func projectGroupFilter(
+        _ arguments: [String: Any],
+        context: ModelContext
+    ) throws -> ProjectGroupFilter {
+        guard arguments.keys.contains("group_id") else { return .all }
+        let raw = arguments["group_id"]
+        guard !(raw is NSNull) else { return .ungrouped }
+        guard let value = raw as? String, let id = UUID(uuidString: value) else {
+            throw MCPToolError.invalidArguments("group_id must be a project-group UUID or null")
+        }
+        _ = try ProjectGroupService.fetch(id: id, context: context)
+        return .group(id)
+    }
+
     // MARK: - Listing
 
-    private static func listProjects(type: ProjectType, context: ModelContext) throws -> [String: Any] {
+    private static func listProjects(
+        type: ProjectType,
+        groupFilter: ProjectGroupFilter,
+        context: ModelContext
+    ) throws -> [String: Any] {
         switch type {
         case .narrative:
             let items = try context.fetch(FetchDescriptor<NarrativeProject>(
                 sortBy: [SortDescriptor(\.updatedAt, order: .reverse)]
             ))
-            return MCPToolRegistry.jsonResult(items.map(narrativeSummary))
+            return MCPToolRegistry.jsonResult(items.filter { groupFilter.matches($0.groupID) }.map(narrativeSummary))
         case .music:
             let items = try context.fetch(FetchDescriptor<MusicProject>(
                 sortBy: [SortDescriptor(\.updatedAt, order: .reverse)]
             ))
-            return MCPToolRegistry.jsonResult(items.map(musicSummary))
+            return MCPToolRegistry.jsonResult(items.filter { groupFilter.matches($0.groupID) }.map(musicSummary))
         case .image:
             let items = try context.fetch(FetchDescriptor<ImageGenProject>(
                 sortBy: [SortDescriptor(\.updatedAt, order: .reverse)]
             ))
-            return MCPToolRegistry.jsonResult(items.map(imageSummary))
+            return MCPToolRegistry.jsonResult(items.filter { groupFilter.matches($0.groupID) }.map(imageSummary))
         case .remotion:
             #if os(macOS)
             let items = try context.fetch(FetchDescriptor<RemotionProject>(
                 sortBy: [SortDescriptor(\.updatedAt, order: .reverse)]
             ))
-            return MCPToolRegistry.jsonResult(items.map(remotionSummary))
+            return MCPToolRegistry.jsonResult(items.filter { groupFilter.matches($0.groupID) }.map(remotionSummary))
             #else
             throw MCPToolError.macOSOnly
             #endif
@@ -159,7 +328,7 @@ enum MCPProjectHandlers {
             let items = try context.fetch(FetchDescriptor<CaptionProject>(
                 sortBy: [SortDescriptor(\.updatedAt, order: .reverse)]
             ))
-            return MCPToolRegistry.jsonResult(items.map(MCPCaptionHandlers.summary))
+            return MCPToolRegistry.jsonResult(items.filter { groupFilter.matches($0.groupID) }.map(MCPCaptionHandlers.summary))
         }
     }
 
@@ -193,26 +362,35 @@ enum MCPProjectHandlers {
 
     // MARK: - Create
 
-    private static func createProject(type: ProjectType, name: String, context: ModelContext) async throws -> [String: Any] {
+    private static func createProject(
+        type: ProjectType,
+        name: String,
+        groupID: UUID?,
+        context: ModelContext
+    ) async throws -> [String: Any] {
         switch type {
         case .narrative:
             let p = NarrativeProject(name: name)
+            p.groupID = groupID
             context.insert(p)
             try context.save()
             return MCPToolRegistry.jsonResult(narrativeSummary(p))
         case .music:
             let p = MusicProject(name: name)
+            p.groupID = groupID
             context.insert(p)
             try context.save()
             return MCPToolRegistry.jsonResult(musicSummary(p))
         case .image:
             let p = ImageGenProject(name: name)
+            p.groupID = groupID
             context.insert(p)
             try context.save()
             return MCPToolRegistry.jsonResult(imageSummary(p))
         case .remotion:
             #if os(macOS)
             let p = RemotionProject(name: name)
+            p.groupID = groupID
             p.createdViaMCP = true
             context.insert(p)
             try context.save()
@@ -245,9 +423,46 @@ enum MCPProjectHandlers {
             #endif
         case .caption:
             let p = CaptionProject(name: name)
+            p.groupID = groupID
             context.insert(p)
             try context.save()
             return MCPToolRegistry.jsonResult(MCPCaptionHandlers.summary(p))
+        }
+    }
+
+    // MARK: - Move
+
+    private static func moveProject(
+        type: ProjectType,
+        id: String,
+        to groupID: UUID?,
+        context: ModelContext
+    ) throws -> [String: Any] {
+        switch type {
+        case .narrative:
+            let project = try fetchNarrative(id: id, context: context)
+            try ProjectGroupService.move(project, to: groupID, context: context)
+            return MCPToolRegistry.jsonResult(narrativeSummary(project))
+        case .music:
+            let project = try fetchMusic(id: id, context: context)
+            try ProjectGroupService.move(project, to: groupID, context: context)
+            return MCPToolRegistry.jsonResult(musicSummary(project))
+        case .image:
+            let project = try fetchImage(id: id, context: context)
+            try ProjectGroupService.move(project, to: groupID, context: context)
+            return MCPToolRegistry.jsonResult(imageSummary(project))
+        case .remotion:
+            #if os(macOS)
+            let project = try fetchRemotion(id: id, context: context)
+            try ProjectGroupService.move(project, to: groupID, context: context)
+            return MCPToolRegistry.jsonResult(remotionSummary(project))
+            #else
+            throw MCPToolError.macOSOnly
+            #endif
+        case .caption:
+            let project = try MCPCaptionHandlers.fetchCaption(id: id, context: context)
+            try ProjectGroupService.move(project, to: groupID, context: context)
+            return MCPToolRegistry.jsonResult(MCPCaptionHandlers.summary(project))
         }
     }
 
@@ -346,6 +561,7 @@ enum MCPProjectHandlers {
         case .narrative:
             let src = try fetchNarrative(id: id, context: context)
             let copy = NarrativeProject(name: newName ?? (src.name + " Copy"))
+            copy.groupID = src.groupID
             copy.provider = src.provider
             copy.sceneDescription = src.sceneDescription
             copy.notes = src.notes
@@ -359,6 +575,7 @@ enum MCPProjectHandlers {
         case .music:
             let src = try fetchMusic(id: id, context: context)
             let copy = MusicProject(name: newName ?? (src.name + " Copy"))
+            copy.groupID = src.groupID
             copy.inputMode = src.inputMode
             copy.promptText = src.promptText
             copy.generalPrompt = src.generalPrompt
@@ -384,6 +601,7 @@ enum MCPProjectHandlers {
         case .image:
             let src = try fetchImage(id: id, context: context)
             let copy = ImageGenProject(name: newName ?? (src.name + " Copy"))
+            copy.groupID = src.groupID
             copy.provider = src.provider
             copy.prompt = src.prompt
             copy.googleModel = src.googleModel
@@ -405,6 +623,7 @@ enum MCPProjectHandlers {
             #if os(macOS)
             let src = try fetchRemotion(id: id, context: context)
             let copy = RemotionProjectService.duplicate(src, newName: newName, context: context)
+            copy.groupID = src.groupID
             try context.save()
             return MCPToolRegistry.jsonResult(remotionSummary(copy))
             #else
@@ -413,6 +632,7 @@ enum MCPProjectHandlers {
         case .caption:
             let src = try MCPCaptionHandlers.fetchCaption(id: id, context: context)
             let copy = CaptionProject(name: newName ?? (src.name + " Copy"))
+            copy.groupID = src.groupID
             copy.audioFilePath = src.audioFilePath
             // The copy references the same audio, so it must not own it —
             // otherwise deleting either project would break the other.
@@ -428,9 +648,21 @@ enum MCPProjectHandlers {
             copy.wordTimestampsEnabled = src.wordTimestampsEnabled
             copy.referenceUnits = src.referenceUnits
             copy.speakers = src.speakers
+            copy.terms = src.terms
+            copy.alignmentQuality = src.alignmentQuality
+            copy.alignmentMatchRatio = src.alignmentMatchRatio
+            // Version records are value types carrying their own UUIDs, so
+            // copying them verbatim keeps `activeVersionID` and every segment's
+            // `versionID` pointing at the right run.
+            copy.versions = src.versions
+            copy.activeVersionID = src.activeVersionID
+            copy.displayedTranslationLanguage = src.displayedTranslationLanguage
             context.insert(copy)
             // Captions are child models, so they have to be cloned explicitly.
-            for segment in src.orderedSegments {
+            // Iterating `segments` rather than `orderedSegments` on purpose: the
+            // latter is the active version only, and a duplicate that silently
+            // dropped every other take would be a data loss the user can't see.
+            for segment in src.segments {
                 let clone = CaptionSegment(
                     orderIndex: segment.orderIndex,
                     startMs: segment.startMs,
@@ -443,6 +675,8 @@ enum MCPProjectHandlers {
                     isEstimatedTiming: segment.isEstimatedTiming,
                     words: segment.words
                 )
+                clone.versionID = segment.versionID
+                clone.translations = segment.translations
                 clone.project = copy
                 context.insert(clone)
             }
@@ -511,6 +745,7 @@ enum MCPProjectHandlers {
             "id": stableID(of: p).uuidString,
             "type": "narrative",
             "name": p.name,
+            "groupId": groupIDJSON(p.groupID),
             "createdAt": isoDate(p.createdAt),
             "updatedAt": isoDate(p.updatedAt)
         ]
@@ -520,6 +755,7 @@ enum MCPProjectHandlers {
             "id": stableID(of: p).uuidString,
             "type": "music",
             "name": p.name,
+            "groupId": groupIDJSON(p.groupID),
             "createdAt": isoDate(p.createdAt),
             "updatedAt": isoDate(p.updatedAt)
         ]
@@ -529,6 +765,7 @@ enum MCPProjectHandlers {
             "id": stableID(of: p).uuidString,
             "type": "image",
             "name": p.name,
+            "groupId": groupIDJSON(p.groupID),
             "createdAt": isoDate(p.createdAt),
             "updatedAt": isoDate(p.updatedAt)
         ]
@@ -539,6 +776,7 @@ enum MCPProjectHandlers {
             "id": p.id.uuidString,
             "type": "remotion",
             "name": p.name,
+            "groupId": groupIDJSON(p.groupID),
             "createdAt": isoDate(p.createdAt),
             "updatedAt": isoDate(p.updatedAt)
         ]
@@ -827,6 +1065,14 @@ enum MCPProjectHandlers {
         "enum": ["narrative", "music", "image", "remotion", "caption"],
         "description": "Which domain the project belongs to. For 'caption', project_get returns a summary only — use caption_list_segments to read the captions."
     ]
+
+    private static let nullableGroupIDProperty: [String: Any] = [
+        "anyOf": [
+            ["type": "string"],
+            ["type": "null"]
+        ],
+        "description": "Project-group UUID. Null filters/moves to Ungrouped; omit from list_projects to return all groups."
+    ]
 }
 
 enum ProjectType: String {
@@ -835,6 +1081,28 @@ enum ProjectType: String {
     case image
     case remotion
     case caption
+}
+
+private enum ProjectGroupFilter {
+    case all
+    case ungrouped
+    case group(UUID)
+
+    func matches(_ groupID: UUID?) -> Bool {
+        switch self {
+        case .all:
+            return true
+        case .ungrouped:
+            return groupID == nil
+        case .group(let expected):
+            return groupID == expected
+        }
+    }
+}
+
+private func groupIDJSON(_ groupID: UUID?) -> Any {
+    if let groupID { return groupID.uuidString }
+    return NSNull()
 }
 
 private func isoDate(_ d: Date) -> String {

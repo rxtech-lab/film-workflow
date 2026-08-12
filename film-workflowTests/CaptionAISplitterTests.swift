@@ -5,7 +5,7 @@ import Testing
 
 /// A stand-in engine, so the splitter can be tested without a model.
 private struct StubCaptionAIEngine: CaptionAIEngine {
-    var backend: CaptionAIBackend = .openAICompatible
+    var backend: AgentBackend = .openAICompatible
     var plan: (@Sendable (CaptionSplitRequest) throws -> CaptionSplitPlan)?
     var review: (@Sendable (CaptionTermReviewRequest) throws -> CaptionTermReviewResult)?
 

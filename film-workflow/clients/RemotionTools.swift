@@ -1,9 +1,9 @@
 #if os(macOS)
 import Foundation
 
-/// Reusable implementations of the file/screenshot/image-gen tools the in-app
-/// `RemotionAgent` calls and the MCP server exposes. Behavior mirrors the
-/// existing `RemotionAgent.dispatch` cases so both code paths stay aligned.
+/// Reusable implementations of the file/screenshot/image-gen tools the MCP
+/// server exposes for Remotion projects. Now the single implementation of each
+/// operation, reached identically by in-process and command-line agents.
 enum RemotionToolsError: LocalizedError {
     case pathOutsideProject(String)
     case fileNotFound(String)

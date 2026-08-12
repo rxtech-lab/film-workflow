@@ -48,6 +48,7 @@ struct FlowLayout: Layout {
 struct SongStructureEditorView: View {
     @Binding var entries: [SongStructureEntry]
     var duration: TimeInterval = 60
+    @State private var pendingDeletion: UUID?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -86,11 +87,7 @@ struct SongStructureEditorView: View {
                         SongStructureEntryRow(
                             entry: $entry,
                             duration: duration,
-                            onDelete: {
-                                withAnimation {
-                                    entries.removeAll { $0.id == targetID }
-                                }
-                            },
+                            onDelete: { pendingDeletion = targetID },
                             onMoveUp: canMoveUp ? {
                                 guard let from = entries.firstIndex(where: { $0.id == targetID }),
                                       from > 0 else { return }
@@ -115,6 +112,23 @@ struct SongStructureEditorView: View {
                     }
                 }
             }
+        }
+        .confirmationDialog(
+            "Delete this song section?",
+            isPresented: Binding(
+                get: { pendingDeletion != nil },
+                set: { if !$0 { pendingDeletion = nil } }
+            ),
+            titleVisibility: .visible,
+            presenting: pendingDeletion
+        ) { entryID in
+            Button("Delete Section", role: .destructive) {
+                withAnimation { entries.removeAll { $0.id == entryID } }
+                pendingDeletion = nil
+            }
+            Button("Cancel", role: .cancel) { pendingDeletion = nil }
+        } message: { _ in
+            Text("This song-structure section will be permanently deleted.")
         }
     }
 

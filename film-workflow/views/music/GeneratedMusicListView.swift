@@ -9,6 +9,7 @@ struct GeneratedMusicListView: View {
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     #endif
     @State private var selectedFile: GeneratedMusic?
+    @State private var pendingDeletion: GeneratedMusic?
 
     private var sortedFiles: [GeneratedMusic] {
         files.sorted { $0.createdAt > $1.createdAt }
@@ -31,6 +32,23 @@ struct GeneratedMusicListView: View {
             } else {
                 cardListContent
             }
+        }
+        .confirmationDialog(
+            "Delete this generated track?",
+            isPresented: Binding(
+                get: { pendingDeletion != nil },
+                set: { if !$0 { pendingDeletion = nil } }
+            ),
+            titleVisibility: .visible,
+            presenting: pendingDeletion
+        ) { file in
+            Button("Delete Track", role: .destructive) {
+                delete(file: file)
+                pendingDeletion = nil
+            }
+            Button("Cancel", role: .cancel) { pendingDeletion = nil }
+        } message: { _ in
+            Text("The generated audio file will be permanently deleted.")
         }
     }
 
@@ -70,7 +88,7 @@ struct GeneratedMusicListView: View {
                 }
                 .swipeActions(edge: .trailing, allowsFullSwipe: true) {
                     Button(role: .destructive) {
-                        delete(file: file)
+                        pendingDeletion = file
                     } label: {
                         Label("Delete", systemImage: "trash")
                     }
@@ -96,7 +114,7 @@ struct GeneratedMusicListView: View {
                         file: file,
                         isSelected: selectedFile?.id == file.id,
                         onSelect: { selectedFile = file },
-                        onDelete: { delete(file: file) }
+                        onDelete: { pendingDeletion = file }
                     )
                 }
             }

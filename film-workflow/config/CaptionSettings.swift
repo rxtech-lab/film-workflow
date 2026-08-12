@@ -80,7 +80,7 @@ final class CaptionSettings {
 
     /// Engine used for caption AI work — splitting, glossary review, and the
     /// assistant's opening backend.
-    var aiBackend: CaptionAIBackend {
+    var aiBackend: AgentBackend {
         didSet {
             guard aiBackend != oldValue else { return }
             UserDefaults.standard.set(aiBackend.rawValue, forKey: Keys.aiBackend)
@@ -111,6 +111,42 @@ final class CaptionSettings {
         didSet {
             guard narrativeAlignmentMinConfidence != oldValue else { return }
             UserDefaults.standard.set(narrativeAlignmentMinConfidence, forKey: Keys.narrativeAlignmentMinConfidence)
+        }
+    }
+
+    /// What produces caption translations.
+    ///
+    /// Separate from `aiBackend` because they answer different questions:
+    /// Apple's translation engine isn't an AI backend at all, and picking it
+    /// shouldn't change which model the assistant talks to.
+    var translationEngine: CaptionTranslationEngineKind {
+        didSet {
+            guard translationEngine != oldValue else { return }
+            UserDefaults.standard.set(translationEngine.rawValue, forKey: Keys.translationEngine)
+        }
+    }
+
+    /// Target languages pre-selected in the translate sheet.
+    var defaultTranslationLanguages: [String] {
+        didSet {
+            guard defaultTranslationLanguages != oldValue else { return }
+            UserDefaults.standard.set(
+                defaultTranslationLanguages,
+                forKey: Keys.defaultTranslationLanguages
+            )
+        }
+    }
+
+    /// Pass the project glossary to the translator, so a product name survives
+    /// the crossing. Only the AI engine can honour this — Apple's has no
+    /// glossary input — so it is a no-op for `.appleTranslation`.
+    var translationRespectsGlossary: Bool {
+        didSet {
+            guard translationRespectsGlossary != oldValue else { return }
+            UserDefaults.standard.set(
+                translationRespectsGlossary,
+                forKey: Keys.translationRespectsGlossary
+            )
         }
     }
 
@@ -154,7 +190,7 @@ final class CaptionSettings {
         self.splitMode = CaptionSplitMode(rawValue: storedSplitMode) ?? .characterLimit
 
         let storedBackend = defaults.string(forKey: Keys.aiBackend) ?? ""
-        self.aiBackend = CaptionAIBackend(rawValue: storedBackend) ?? .appleIntelligence
+        self.aiBackend = AgentBackend(rawValue: storedBackend) ?? .appleIntelligence
 
         // Both default to on for a *missing* key, so `bool(forKey:)`'s false
         // default can't silently opt an existing user out.
@@ -167,6 +203,17 @@ final class CaptionSettings {
             defaults.set(true, forKey: Keys.termsBiasTranscription)
         }
         self.termsBiasTranscription = defaults.bool(forKey: Keys.termsBiasTranscription)
+
+        let storedTranslationEngine = defaults.string(forKey: Keys.translationEngine) ?? ""
+        self.translationEngine = CaptionTranslationEngineKind(rawValue: storedTranslationEngine)
+            ?? .appleTranslation
+        self.defaultTranslationLanguages =
+            defaults.stringArray(forKey: Keys.defaultTranslationLanguages) ?? []
+
+        if defaults.object(forKey: Keys.translationRespectsGlossary) == nil {
+            defaults.set(true, forKey: Keys.translationRespectsGlossary)
+        }
+        self.translationRespectsGlossary = defaults.bool(forKey: Keys.translationRespectsGlossary)
 
         let storedConfidence = defaults.double(forKey: Keys.narrativeAlignmentMinConfidence)
         self.narrativeAlignmentMinConfidence = storedConfidence == 0 ? 0.75 : storedConfidence
@@ -189,6 +236,9 @@ final class CaptionSettings {
         static let aiBackend = "caption.aiBackend"
         static let aiConfirmChanges = "caption.aiConfirmChanges"
         static let termsBiasTranscription = "caption.termsBiasTranscription"
+        static let translationEngine = "caption.translationEngine"
+        static let defaultTranslationLanguages = "caption.defaultTranslationLanguages"
+        static let translationRespectsGlossary = "caption.translationRespectsGlossary"
         static let narrativeAlignmentMinConfidence = "caption.narrativeAlignmentMinConfidence"
         static let keepWhisperModelLoaded = "caption.keepWhisperModelLoaded"
     }

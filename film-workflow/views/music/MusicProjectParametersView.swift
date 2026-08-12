@@ -9,6 +9,7 @@ struct MusicProjectParametersView: View {
     @Bindable var project: MusicProject
     @State private var selectedInstruments: Set<MusicInstrument> = []
     @State private var showImagePicker = false
+    @State private var pendingImageDeletion: Int?
     #if os(iOS)
     @State private var showPhotoPicker = false
     @State private var selectedPhotoItems: [PhotosPickerItem] = []
@@ -48,6 +49,23 @@ struct MusicProjectParametersView: View {
             handlePhotoImport(newItems)
         }
         #endif
+        .confirmationDialog(
+            "Delete this reference image?",
+            isPresented: Binding(
+                get: { pendingImageDeletion != nil },
+                set: { if !$0 { pendingImageDeletion = nil } }
+            ),
+            titleVisibility: .visible,
+            presenting: pendingImageDeletion
+        ) { index in
+            Button("Delete Image", role: .destructive) {
+                removeImage(at: index)
+                pendingImageDeletion = nil
+            }
+            Button("Cancel", role: .cancel) { pendingImageDeletion = nil }
+        } message: { _ in
+            Text("The stored reference image file will be permanently deleted.")
+        }
     }
 
     // MARK: - Sections
@@ -179,7 +197,7 @@ struct MusicProjectParametersView: View {
                                 }
 
                                 Button {
-                                    removeImage(at: index)
+                                    pendingImageDeletion = index
                                 } label: {
                                     Image(systemName: "xmark.circle.fill")
                                         .foregroundStyle(.white, .red)

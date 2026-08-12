@@ -19,14 +19,16 @@ struct CaptionEditProposalTests {
         startMs: Int = 0,
         endMs: Int = 4_000,
         text: String,
-        words: [CaptionWord] = []
+        words: [CaptionWord] = [],
+        translations: [String: String] = [:]
     ) -> CaptionSegmentSnapshot {
         CaptionSegmentSnapshot(
             id: id,
             startMs: startMs,
             endMs: endMs,
             text: text,
-            words: words
+            words: words,
+            translations: translations
         )
     }
 
@@ -268,6 +270,144 @@ struct CaptionEditProposalTests {
         #expect(proposal.items[0].displayIndex == 2)
         #expect(proposal.items[0].startMs == 1_000)
         #expect(proposal.items[0].before == "Second.")
+    }
+
+    // MARK: - Retiming
+
+    @Test("A nudge that clears its neighbours is accepted")
+    func retimeWithinItsGapIsOK() {
+        let verdict = CaptionProposalBuilder.retimeVerdict(
+            startMs: 1_100,
+            endMs: 1_900,
+            position: 1,
+            transcript: transcript([
+                segment(startMs: 0, endMs: 1_000, text: "One."),
+                segment(startMs: 1_000, endMs: 2_000, text: "Two."),
+                segment(startMs: 2_000, endMs: 3_000, text: "Three."),
+            ])
+        )
+        #expect(verdict == .ok)
+    }
+
+    @Test("A span that runs into the next caption is flagged, not refused")
+    func retimeOverlapIsFlagged() {
+        let verdict = CaptionProposalBuilder.retimeVerdict(
+            startMs: 1_000,
+            endMs: 2_400,
+            position: 1,
+            transcript: transcript([
+                segment(startMs: 0, endMs: 1_000, text: "One."),
+                segment(startMs: 1_000, endMs: 2_000, text: "Two."),
+                segment(startMs: 2_000, endMs: 3_000, text: "Three."),
+            ])
+        )
+        #expect(verdict == .timingOverlap)
+        // Flagged rows are still applicable — the user can approve them.
+        #expect(!verdict.isOK)
+    }
+
+    @Test("A backwards or off-the-end span is refused outright")
+    func retimeRejectsImpossibleSpans() {
+        let one = transcript([segment(startMs: 1_000, endMs: 2_000, text: "Only.")])
+
+        if case .notApplicable = CaptionProposalBuilder.retimeVerdict(
+            startMs: 2_000, endMs: 1_000, position: 0, transcript: one
+        ) {} else {
+            Issue.record("an end before the start should be unapplicable")
+        }
+
+        if case .notApplicable = CaptionProposalBuilder.retimeVerdict(
+            startMs: 1_000, endMs: 90_000, position: 0, transcript: one
+        ) {} else {
+            Issue.record("a span past the audio should be unapplicable")
+        }
+    }
+
+    @Test("A retime row shows both spans, since the header only has the old start")
+    func retimeItemShowsBothSpans() {
+        let target = UUID()
+        let proposal = CaptionProposalBuilder.build(
+            operations: [.retime(segment: target, startMs: 1_200, endMs: 2_500)],
+            transcript: transcript([
+                segment(id: target, startMs: 1_000, endMs: 2_000, text: "Two.")
+            ]),
+            terms: [],
+            policy: .free,
+            maxRunes: 80
+        )
+        #expect(proposal.items.count == 1)
+        #expect(proposal.items[0].before.contains("00:01.000"))
+        #expect(proposal.items[0].before.contains("Two."))
+        #expect(proposal.items[0].after == "00:01.200 – 00:02.500")
+    }
+
+    @Test("A retime to the times it already has is not a change")
+    func retimeToSameSpanProducesNoItem() {
+        let target = UUID()
+        let proposal = CaptionProposalBuilder.build(
+            operations: [.retime(segment: target, startMs: 1_000, endMs: 2_000)],
+            transcript: transcript([
+                segment(id: target, startMs: 1_000, endMs: 2_000, text: "Two.")
+            ]),
+            terms: [],
+            policy: .free,
+            maxRunes: 80
+        )
+        #expect(proposal.isEmpty)
+    }
+
+    // MARK: - Translations
+
+    @Test("A translation row pairs the original with the wording it replaces")
+    func translationItemShowsOriginalAndCurrent() {
+        let target = UUID()
+        let proposal = CaptionProposalBuilder.build(
+            operations: [
+                .setTranslation(segment: target, language: "zh-Hans", text: "身份随行。")
+            ],
+            transcript: transcript([
+                segment(id: target, text: "Carry your identity.", translations: ["zh-Hans": "带上你的身份。"])
+            ]),
+            terms: [],
+            policy: .free,
+            maxRunes: 80
+        )
+        #expect(proposal.items.count == 1)
+        #expect(proposal.items[0].verdict.isOK)
+        #expect(proposal.items[0].before.contains("Carry your identity."))
+        #expect(proposal.items[0].before.contains("带上你的身份。"))
+        #expect(proposal.items[0].after == "身份随行。")
+    }
+
+    @Test("Proposing the translation that is already there is not a change")
+    func unchangedTranslationProducesNoItem() {
+        let target = UUID()
+        let proposal = CaptionProposalBuilder.build(
+            operations: [
+                .setTranslation(segment: target, language: "zh-Hans", text: "带上你的身份。")
+            ],
+            transcript: transcript([
+                segment(id: target, text: "Carry your identity.", translations: ["zh-Hans": "带上你的身份。"])
+            ]),
+            terms: [],
+            policy: .free,
+            maxRunes: 80
+        )
+        #expect(proposal.isEmpty)
+    }
+
+    @Test("A translation with no language is surfaced rather than written blind")
+    func translationWithoutLanguageIsUnapplicable() {
+        let target = UUID()
+        let proposal = CaptionProposalBuilder.build(
+            operations: [.setTranslation(segment: target, language: "", text: "身份随行。")],
+            transcript: transcript([segment(id: target, text: "Carry your identity.")]),
+            terms: [],
+            policy: .free,
+            maxRunes: 80
+        )
+        #expect(proposal.items.count == 1)
+        #expect(!proposal.items[0].verdict.isOK)
     }
 
     // MARK: - Word boundary mapping

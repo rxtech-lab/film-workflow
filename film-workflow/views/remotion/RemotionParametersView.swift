@@ -11,7 +11,7 @@ struct RemotionParametersView: View {
     @Binding var isSeeding: Bool
 
     @Environment(\.modelContext) private var modelContext
-    @Environment(RemotionChatController.self) private var chatController
+    @Environment(\.openWindow) private var openWindow
 
     @State private var showImagePicker = false
     @State private var showReferencePicker = false
@@ -175,7 +175,7 @@ struct RemotionParametersView: View {
         } header: {
             Text("Prompt")
         } footer: {
-            Text("Tell the model what kind of video to build (style, motion, mood, structure). Used both for the initial generation and as context for follow-up chat edits.")
+            Text("Tell the model what kind of video to build (style, motion, mood, structure). Used as context whenever the agent edits this composition.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
@@ -277,7 +277,7 @@ struct RemotionParametersView: View {
                 }
             }
 
-            Text("Used as a visual style guide passed to the LLM during chat edits.")
+            Text("Used as a visual style guide when the agent edits this composition.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
@@ -287,7 +287,7 @@ struct RemotionParametersView: View {
     private var generatedImagesSection: some View {
         Section {
             if generatedImages.isEmpty {
-                Text("Images you generate via the chat appear here.")
+                Text("Images the agent generates for this project appear here.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             } else {
@@ -406,8 +406,13 @@ struct RemotionParametersView: View {
                 } label: {
                     HStack {
                         if isSeeding { ProgressView().controlSize(.small) }
-                        Text(isSeeding ? "Generating…" : "Generate Initial Composition")
+                        Text(isSeeding ? "Starting…" : "Create Composition & Start Studio")
                     }
+                }
+                .disabled(isSeeding)
+
+                Button("Generate with AI…") {
+                    openAgent()
                 }
                 .disabled(isSeeding)
 
@@ -415,7 +420,7 @@ struct RemotionParametersView: View {
                     Text(status).font(.caption).foregroundStyle(.secondary)
                 }
             } footer: {
-                Text("Builds a starting Composition.tsx from these inputs and launches Studio. Use the chat below to refine.")
+                Text("Builds a starting Composition.tsx from these inputs and launches Studio. Use the agent window to refine it.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -455,66 +460,50 @@ struct RemotionParametersView: View {
 
     // MARK: - Actions
 
+    /// Seeds a starting composition and boots Studio, with no model involved.
+    ///
+    /// This is the same path `MCPProjectHandlers` already uses for projects
+    /// created over MCP, so it is proven and needs no credentials — you get a
+    /// running preview immediately and refine it in the agent window. The old
+    /// button called the in-app agent and could not do anything at all until an
+    /// OpenAI endpoint was configured.
     private func seed() {
-        let config: AppConfig
-        do {
-            config = try AppConfig.loadFromKeychain()
-        } catch {
-            statusMessage = "Could not load credentials: \(error.localizedDescription)"
-            return
-        }
-        guard !config.openAIEndpoint.isEmpty,
-              !config.openAIKey.isEmpty,
-              !config.openAIModel.isEmpty else {
-            statusMessage = "Set OpenAI endpoint, key, and model in Settings before generating."
-            return
-        }
-
         isSeeding = true
-        statusMessage = "Generating composition with the agent…"
+        statusMessage = "Creating composition…"
+
         let projectId = project.id
         let bindable = project
-        let history = bindable.messages.sorted(by: { $0.createdAt < $1.createdAt })
-        let instruction = """
-        Generate the initial Remotion composition from scratch. Create src/Composition.tsx (with the required COMPOSITION_* exports and MyComposition) plus any src/components/*.tsx files the design needs, using the project settings, brief, and assets shown above. Animate thoughtfully — interpolate/spring rather than static frames.
-        """
+        let source = RemotionCodeBuilder.defaultComposition(project: bindable)
+        bindable.compositionSource = source
+        bindable.updatedAt = Date()
 
-        chatController.send(
-            instruction: instruction,
-            project: bindable,
-            history: history,
-            config: config,
-            modelContext: modelContext,
-            onCompleted: { anyFileWritten in
-                guard anyFileWritten else {
-                    isSeeding = false
-                    statusMessage = "Agent finished without writing any files."
-                    return
-                }
-                // Force constants to match the project settings even if the model hardcoded
-                // different values.
-                let current = bindable.compositionSource
-                let patched = RemotionCodeBuilder.patchProjectConstants(in: current, project: bindable)
-                if patched != current {
-                    bindable.compositionSource = patched
-                    try? RemotionCodeBuilder.writeComposition(project: bindable, source: patched)
-                }
+        Task { @MainActor in
+            defer { isSeeding = false }
+            do {
+                try RemotionCodeBuilder.writeComposition(project: bindable, source: source)
                 statusMessage = "Starting Remotion Studio…"
-                Task { @MainActor in
-                    do {
-                        try await RemotionRuntime.shared.start(projectId: projectId)
-                        statusMessage = "Studio running. Refine via the Chat tab."
-                    } catch {
-                        statusMessage = error.localizedDescription
-                    }
-                    isSeeding = false
-                }
-            },
-            onError: { error in
+                try await RemotionRuntime.shared.start(projectId: projectId)
+                statusMessage = "Studio running. Refine it in the agent window."
+            } catch {
                 statusMessage = error.localizedDescription
-                isSeeding = false
             }
+        }
+    }
+
+    /// Points the agent window at this project and opens it.
+    ///
+    /// The composition still has to exist before the agent can edit it, so this
+    /// seeds first when the project is empty — otherwise the agent's first
+    /// `remotion_read_file` would find nothing.
+    private func openAgent() {
+        if project.compositionSource.isEmpty {
+            seed()
+        }
+        AppNavigation.shared.currentTarget = AgentTarget(
+            kind: .remotion,
+            projectUUID: project.id
         )
+        openWindow(id: AgentWindowID.value)
     }
 
     private func handleImageImport(_ result: Result<[URL], Error>) {

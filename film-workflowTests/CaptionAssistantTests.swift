@@ -30,7 +30,7 @@ struct CaptionAssistantTests {
         let source = transcript(["First.", "Second.", "Third."])
         let lines = CaptionAIContext.lines(from: source.segments)
 
-        let proposal = try #require(CaptionAssistantController.proposal(
+        let proposal = try #require(CaptionProposalMapping.proposal(
             from: [CaptionChatEdit(number: 2, kind: .replaceText, pieces: ["Second, revised."])],
             lines: lines,
             transcript: source,
@@ -53,7 +53,7 @@ struct CaptionAssistantTests {
         let source = transcript(["First.", "Second."])
         let lines = CaptionAIContext.lines(from: source.segments)
 
-        let proposal = CaptionAssistantController.proposal(
+        let proposal = CaptionProposalMapping.proposal(
             from: [CaptionChatEdit(number: 99, kind: .delete)],
             lines: lines,
             transcript: source,
@@ -68,7 +68,7 @@ struct CaptionAssistantTests {
         let source = transcript(["First.", "Second."])
         let lines = CaptionAIContext.lines(from: source.segments)
 
-        let proposal = CaptionAssistantController.proposal(
+        let proposal = CaptionProposalMapping.proposal(
             from: [CaptionChatEdit(number: 2, kind: .mergeWithNext)],
             lines: lines,
             transcript: source,
@@ -83,7 +83,7 @@ struct CaptionAssistantTests {
         let source = transcript(["First.", "Second.", "Third."])
         let lines = CaptionAIContext.lines(from: source.segments)
 
-        let proposal = try #require(CaptionAssistantController.proposal(
+        let proposal = try #require(CaptionProposalMapping.proposal(
             from: [CaptionChatEdit(number: 1, kind: .mergeWithNext)],
             lines: lines,
             transcript: source,
@@ -100,7 +100,7 @@ struct CaptionAssistantTests {
         let source = transcript(["One two three."])
         let lines = CaptionAIContext.lines(from: source.segments)
 
-        let proposal = CaptionAssistantController.proposal(
+        let proposal = CaptionProposalMapping.proposal(
             from: [CaptionChatEdit(number: 1, kind: .split, pieces: ["One two three."])],
             lines: lines,
             transcript: source,
@@ -115,7 +115,7 @@ struct CaptionAssistantTests {
         let source = transcript(["Wrong entirely."])
         let lines = CaptionAIContext.lines(from: source.segments)
 
-        let proposal = try #require(CaptionAssistantController.proposal(
+        let proposal = try #require(CaptionProposalMapping.proposal(
             from: [CaptionChatEdit(number: 1, kind: .replaceText, pieces: ["Something else."])],
             lines: lines,
             transcript: source,
@@ -131,7 +131,7 @@ struct CaptionAssistantTests {
         let source = transcript(["First.", "Second."])
         let lines = CaptionAIContext.lines(from: source.segments)
 
-        let proposal = try #require(CaptionAssistantController.proposal(
+        let proposal = try #require(CaptionProposalMapping.proposal(
             from: [
                 CaptionChatEdit(
                     number: 1,
@@ -154,7 +154,7 @@ struct CaptionAssistantTests {
         let lines = CaptionAIContext.lines(from: source.segments)
 
         #expect(
-            CaptionAssistantController.proposal(
+            CaptionProposalMapping.proposal(
                 from: [],
                 lines: lines,
                 transcript: source,

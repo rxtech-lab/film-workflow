@@ -2,10 +2,11 @@ import Foundation
 import SwiftData
 
 @Model
-final class NarrativeProject {
+final class NarrativeProject: GroupableProject {
     var name: String
     var createdAt: Date
     var updatedAt: Date
+    var groupID: UUID?
 
     var provider: String
     var sceneDescription: String
@@ -29,6 +30,7 @@ final class NarrativeProject {
         self.name = name
         self.createdAt = Date()
         self.updatedAt = Date()
+        self.groupID = nil
         self.provider = NarrativeProvider.gemini.rawValue
         self.sceneDescription = ""
         self.notes = ""

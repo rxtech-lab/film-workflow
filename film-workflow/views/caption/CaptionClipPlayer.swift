@@ -51,19 +51,22 @@ final class CaptionClipPlayer {
 
         let player = AVPlayer(playerItem: item)
         player.actionAtItemEnd = .pause
+        // The audio is a local file, so there is nothing to buffer for. Left on,
+        // AVPlayer sits in `.waitingToPlayAtSpecifiedRate` for a beat on the
+        // first play of a file, which delays the start for no benefit.
+        player.automaticallyWaitsToMinimizeStalling = false
         self.player = player
         playingClipID = clipID
 
-        player.seek(
-            to: CMTime(value: CMTimeValue(startMs), timescale: 1000),
-            toleranceBefore: .zero,
-            toleranceAfter: .zero
-        ) { [weak self] _ in
-            MainActor.assumeIsolated {
-                guard let self, self.playingClipID == clipID else { return }
-                player.play()
-                self.startMonitor(clipID: clipID, endMs: endMs)
-            }
+        monitor = Task { @MainActor [weak self] in
+            await player.seek(
+                to: CMTime(value: CMTimeValue(startMs), timescale: 1000),
+                toleranceBefore: .zero,
+                toleranceAfter: .zero
+            )
+            guard let self, self.playingClipID == clipID, !Task.isCancelled else { return }
+            player.play()
+            await self.monitorPlayback(clipID: clipID, endMs: endMs)
         }
     }
 
@@ -75,18 +78,47 @@ final class CaptionClipPlayer {
         playingClipID = nil
     }
 
-    private func startMonitor(clipID: String, endMs: Int) {
-        monitor?.cancel()
-        monitor = Task { @MainActor [weak self] in
-            while !Task.isCancelled {
-                try? await Task.sleep(for: .milliseconds(100))
-                guard let self, self.playingClipID == clipID, let player = self.player else { return }
+    /// Polls until the clip reaches `endMs`, then tears the player down.
+    ///
+    /// Startup is the subtle part: `play()` does not put the player in
+    /// `.playing` synchronously, and on the first play of a file it can spend a
+    /// few hundred milliseconds getting there. So "not playing" only means
+    /// finished once playback has actually been observed — otherwise the first
+    /// tick would stop a clip that had not started yet, and the button would do
+    /// nothing until a second click found the file warm.
+    private func monitorPlayback(clipID: String, endMs: Int) async {
+        var hasStarted = false
+        var ticksWaitingToStart = 0
 
-                let current = Int((CMTimeGetSeconds(player.currentTime()) * 1000).rounded())
-                // Treat "paused" as done too: that's what actionAtItemEnd does
-                // when the forward end time is reached.
-                if player.timeControlStatus != .playing || current >= endMs - 20 {
-                    self.stop()
+        while !Task.isCancelled {
+            try? await Task.sleep(for: .milliseconds(100))
+            guard playingClipID == clipID, let player else { return }
+
+            let current = Int((CMTimeGetSeconds(player.currentTime()) * 1000).rounded())
+            if current >= endMs - 20 {
+                stop()
+                return
+            }
+
+            if player.currentItem?.status == .failed {
+                stop()
+                return
+            }
+
+            if player.timeControlStatus == .playing {
+                hasStarted = true
+            } else if hasStarted {
+                // Paused before the end time: `actionAtItemEnd` fired, or the
+                // item ran out early.
+                if player.timeControlStatus == .paused {
+                    stop()
+                    return
+                }
+            } else {
+                // Never got going — don't leave the row stuck on "stop".
+                ticksWaitingToStart += 1
+                if ticksWaitingToStart >= 50 {
+                    stop()
                     return
                 }
             }

@@ -31,6 +31,9 @@ final class CaptionEditorAudioPlayer {
     init(url: URL) {
         player = AVPlayer(url: url)
         player.actionAtItemEnd = .pause
+        // Local file: there is nothing to buffer for, and waiting only stalls
+        // the first play by a few hundred milliseconds.
+        player.automaticallyWaitsToMinimizeStalling = false
 
         // 100 ms matches the retimer's needs without burning CPU on a long file.
         let interval = CMTime(seconds: 0.1, preferredTimescale: 1000)
@@ -43,7 +46,10 @@ final class CaptionEditorAudioPlayer {
                 if seconds.isFinite {
                     self.currentMs = Int((seconds * 1000).rounded())
                 }
-                self.isPlaying = self.player.timeControlStatus == .playing
+                // `.waitingToPlayAtSpecifiedRate` counts as playing: the player
+                // is ramping up after `play()`, and flipping the button back to
+                // "play" there makes the user's first click look ignored.
+                self.isPlaying = self.player.timeControlStatus != .paused
             }
         }
 

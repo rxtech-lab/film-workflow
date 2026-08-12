@@ -16,6 +16,7 @@ final class AppNavigation {
     /// The tabs of `SettingsView`, so a caller can ask for one by name.
     enum SettingsSection: String, Hashable, CaseIterable, Identifiable {
         case aiProvider
+        case agent
         case captions
         case mcp
 
@@ -33,6 +34,13 @@ final class AppNavigation {
 
     var settingsSection: SettingsSection = .aiProvider
 
+    /// What the app is currently showing, so the agent window can follow along.
+    ///
+    /// Set by each tab as its project selection changes. Only ever used to seed
+    /// a **new** thread — an existing thread keeps whatever it was pointed at,
+    /// so switching tabs can't retarget a turn that is already running.
+    var currentTarget: AgentTarget = .none
+
     /// Consumed by the settings view once it has scrolled to the target, so
     /// reopening Settings later doesn't jump around unprompted.
     var pendingSettingsFocus: SettingsFocus?
@@ -46,6 +54,18 @@ final class AppNavigation {
     func showCaptionSettings(focus: SettingsFocus? = nil) {
         settingsSection = .captions
         pendingSettingsFocus = focus
+        #if !os(macOS)
+            tab = .Settings
+        #endif
+    }
+
+    /// Opens the AI provider settings, where the endpoint and key live.
+    ///
+    /// Same macOS caveat as `showCaptionSettings`: the caller must also invoke
+    /// `openSettings()` from the environment.
+    func showAIProviderSettings() {
+        settingsSection = .aiProvider
+        pendingSettingsFocus = nil
         #if !os(macOS)
             tab = .Settings
         #endif

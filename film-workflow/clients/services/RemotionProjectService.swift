@@ -40,26 +40,14 @@ enum RemotionProjectService {
 
         context.insert(copy)
 
-        for msg in source.messages.sorted(by: { $0.createdAt < $1.createdAt }) {
-            let copiedMsg = RemotionMessage(
-                role: msg.role,
-                content: msg.content,
-                project: copy,
-                kind: RemotionMessageKind(rawValue: msg.kind) ?? .text,
-                toolName: msg.toolName,
-                toolArgs: msg.toolArgs,
-                toolResult: msg.toolResult,
-                toolStatus: msg.toolStatus.flatMap { RemotionToolStatus(rawValue: $0) },
-                toolCallId: msg.toolCallId
-            )
-            context.insert(copiedMsg)
-            copy.messages.append(copiedMsg)
-        }
+        // Agent threads are not copied: a thread belongs to a conversation, not
+        // to a project, and duplicating one would leave two threads believing
+        // they own the same CLI session id.
 
         return copy
     }
 
-    /// Cleans up files + remotion project dir + chat messages, then deletes the row.
+    /// Cleans up files + remotion project dir, then deletes the row.
     static func delete(
         _ project: RemotionProject,
         context: ModelContext

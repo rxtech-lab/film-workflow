@@ -2,10 +2,11 @@ import Foundation
 import SwiftData
 
 @Model
-final class MusicProject {
+final class MusicProject: GroupableProject {
     var name: String
     var createdAt: Date
     var updatedAt: Date
+    var groupID: UUID?
 
     var inputMode: String
     var promptText: String
@@ -32,6 +33,7 @@ final class MusicProject {
         self.name = name
         self.createdAt = Date()
         self.updatedAt = Date()
+        self.groupID = nil
         self.inputMode = InputMode.editor.rawValue
         self.promptText = ""
         self.generalPrompt = ""

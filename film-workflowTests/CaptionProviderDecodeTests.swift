@@ -195,6 +195,114 @@ struct CaptionProviderDecodeTests {
         )
     }
 
+    // MARK: - Vercel AI Gateway
+
+    @Test("Gateway endpoints are detected and rerouted off the /v1 tree")
+    func gatewayEndpointRouting() throws {
+        #expect(OpenAITranscriptionClient.isVercelGatewayEndpoint("https://ai-gateway.vercel.sh/v1"))
+        #expect(OpenAITranscriptionClient.isVercelGatewayEndpoint("https://ai-gateway.vercel.sh"))
+        #expect(!OpenAITranscriptionClient.isVercelGatewayEndpoint("https://api.openai.com/v1"))
+        #expect(!OpenAITranscriptionClient.isVercelGatewayEndpoint(""))
+
+        #expect(
+            try OpenAITranscriptionClient
+                .resolveGatewayTranscriptionURL(from: "https://ai-gateway.vercel.sh/v1")
+                .absoluteString == "https://ai-gateway.vercel.sh/v4/ai/transcription-model"
+        )
+        // A trailing slash or a stray query must not survive into the path.
+        #expect(
+            try OpenAITranscriptionClient
+                .resolveGatewayTranscriptionURL(from: "https://ai-gateway.vercel.sh/v1/?x=1")
+                .absoluteString == "https://ai-gateway.vercel.sh/v4/ai/transcription-model"
+        )
+    }
+
+    /// Verbatim from a live `POST /v4/ai/transcription-model` call — note there
+    /// is no word array anywhere in the protocol.
+    @Test("Gateway transcriptions decode to sentence-level phrases with no words")
+    func decodeGatewayJSON() throws {
+        let json = """
+        {"text":"The quick brown fox jumps over the lazy dog, testing 1-2-3-4-5.",\
+        "segments":[{"text":" The quick brown fox jumps over the lazy dog, testing 1-2-3-4-5.",\
+        "startSecond":0,"endSecond":4.679999828338623}],\
+        "language":"en","durationInSeconds":4.78000020980835,"warnings":[]}
+        """
+        let transcript = try OpenAITranscriptionClient.decodeGatewayJSON(
+            Data(json.utf8), fallbackDurationMs: 0
+        )
+
+        #expect(transcript.phrases.count == 1)
+        #expect(transcript.phrases[0].offsetMs == 0)
+        #expect(transcript.phrases[0].durationMs == 4680)
+        #expect(transcript.phrases[0].words.isEmpty)
+        #expect(transcript.phrases[0].speaker == 0)
+        #expect(transcript.durationMs == 4780)
+        #expect(transcript.detectedLanguage == "en")
+    }
+
+    @Test("A gateway response with no segments falls back to one whole-file phrase")
+    func decodeGatewayTextOnly() throws {
+        let transcript = try OpenAITranscriptionClient.decodeGatewayJSON(
+            Data(#"{"text":"Just the text.","segments":[],"language":"en"}"#.utf8),
+            fallbackDurationMs: 3000
+        )
+        #expect(transcript.phrases.count == 1)
+        #expect(transcript.phrases[0].durationMs == 3000)
+        #expect(transcript.phrases[0].words.isEmpty)
+    }
+
+    @Test("An empty gateway transcription is reported as no speech")
+    func decodeGatewayEmpty() {
+        #expect(throws: CaptionTranscriberError.self) {
+            _ = try OpenAITranscriptionClient.decodeGatewayJSON(
+                Data(#"{"text":"","segments":[]}"#.utf8), fallbackDurationMs: 0
+            )
+        }
+    }
+
+    @Test("gpt-4o transcribe models are known not to carry word timings")
+    func modelWordTimingSupport() {
+        #expect(OpenAITranscriptionClient.modelSupportsWordTimings("whisper-1"))
+        #expect(OpenAITranscriptionClient.modelSupportsWordTimings("openai/whisper-1"))
+        #expect(!OpenAITranscriptionClient.modelSupportsWordTimings("gpt-4o-transcribe"))
+        #expect(!OpenAITranscriptionClient.modelSupportsWordTimings("openai/gpt-4o-mini-transcribe"))
+    }
+
+    // MARK: - Model capability filtering
+
+    @Test("A declared type settles whether a model transcribes")
+    func transcriptionModelDeclaredType() {
+        // `speech` means text-to-speech; offering tts-1 as a transcriber was the
+        // bug this filter exists to prevent.
+        #expect(!OpenAIModelInfo(id: "tts-1", type: "speech", tags: nil).isTranscriptionModel)
+        #expect(!OpenAIModelInfo(id: "openai/tts-1-hd", type: "speech", tags: nil).isTranscriptionModel)
+
+        #expect(OpenAIModelInfo(id: "some-house-model", type: "transcription", tags: nil)
+            .isTranscriptionModel)
+        #expect(OpenAIModelInfo(id: "openai/whisper-1", type: "transcription", tags: nil)
+            .isTranscriptionModel)
+
+        // A declared type outranks the name, in both directions.
+        #expect(!OpenAIModelInfo(id: "whisper-image-remix", type: "image", tags: nil)
+            .isTranscriptionModel)
+        #expect(!OpenAIModelInfo(id: "gpt-4o-transcribe-chat", type: "language", tags: nil)
+            .isTranscriptionModel)
+    }
+
+    @Test("Untyped endpoints fall back to the id heuristic")
+    func transcriptionModelHeuristic() {
+        #expect(OpenAIModelInfo(id: "whisper-1", type: nil, tags: nil).isTranscriptionModel)
+        #expect(OpenAIModelInfo(id: "gpt-4o-transcribe", type: nil, tags: nil).isTranscriptionModel)
+        #expect(OpenAIModelInfo(id: "grok-stt", type: nil, tags: nil).isTranscriptionModel)
+
+        #expect(!OpenAIModelInfo(id: "tts-1", type: nil, tags: nil).isTranscriptionModel)
+        #expect(!OpenAIModelInfo(id: "gpt-5", type: nil, tags: nil).isTranscriptionModel)
+
+        // Tags are consulted before the name.
+        #expect(OpenAIModelInfo(id: "house-asr", type: nil, tags: ["speech-to-text"])
+            .isTranscriptionModel)
+    }
+
     // MARK: - Gemini
 
     @Test("Gemini structured output is unwrapped from the candidate envelope")
@@ -282,6 +390,49 @@ struct CaptionProviderDecodeTests {
         #expect(merged.phrases[1].offsetMs == 60_200)
         #expect(merged.phrases[1].words[0].offsetMs == 60_200)
         #expect(merged.durationMs == 120_000)
+    }
+
+    // MARK: - Model selection
+
+    @Test("A per-project OpenAI model wins over the app-wide one")
+    @MainActor func openAITranscriptionModelPrecedence() {
+        var config = AppConfig(
+            googleAIKey: "",
+            azureSpeechKey: "",
+            azureSpeechEndpoint: "",
+            openAIEndpoint: "https://api.openai.com/v1",
+            openAIKey: "sk-test",
+            openAIModel: "",
+            defaultImageModel: ""
+        )
+        config.openAITranscriptionModel = "gpt-4o-transcribe"
+
+        let project = CaptionProject(name: "P")
+        let settings = CaptionSettings.shared
+
+        // No override: fall back to the app-wide model.
+        #expect(
+            CaptionTranscriptionService
+                .options(for: .openAI, config: config, settings: settings, project: project)
+                .model == "gpt-4o-transcribe"
+        )
+
+        // Override set: it wins.
+        project.openAITranscriptionModelOverride = "whisper-1"
+        #expect(
+            CaptionTranscriptionService
+                .options(for: .openAI, config: config, settings: settings, project: project)
+                .model == "whisper-1"
+        )
+
+        // Neither set: left empty so the client's own `whisper-1` default applies.
+        config.openAITranscriptionModel = ""
+        project.openAITranscriptionModelOverride = ""
+        #expect(
+            CaptionTranscriptionService
+                .options(for: .openAI, config: config, settings: settings, project: project)
+                .model.isEmpty
+        )
     }
 
     // MARK: - Speaker roster

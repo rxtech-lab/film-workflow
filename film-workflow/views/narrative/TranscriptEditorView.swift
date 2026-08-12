@@ -3,6 +3,7 @@ import SwiftUI
 
 struct TranscriptEditorView: View {
     @Bindable var project: NarrativeProject
+    @State private var pendingParagraphDeletion: UUID?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -31,10 +32,7 @@ struct TranscriptEditorView: View {
                                     speakers: project.speakers,
                                     provider: project.providerEnum,
                                     onDelete: {
-                                        withAnimation {
-                                            project.paragraphs.removeAll { $0.id == paragraph.id }
-                                            project.updatedAt = Date()
-                                        }
+                                        pendingParagraphDeletion = paragraph.id
                                     }
                                 )
                                 .id(paragraph.id)
@@ -52,6 +50,26 @@ struct TranscriptEditorView: View {
                     }
                 }
             }
+        }
+        .confirmationDialog(
+            "Delete this paragraph?",
+            isPresented: Binding(
+                get: { pendingParagraphDeletion != nil },
+                set: { if !$0 { pendingParagraphDeletion = nil } }
+            ),
+            titleVisibility: .visible,
+            presenting: pendingParagraphDeletion
+        ) { paragraphID in
+            Button("Delete Paragraph", role: .destructive) {
+                withAnimation {
+                    project.paragraphs.removeAll { $0.id == paragraphID }
+                    project.updatedAt = Date()
+                }
+                pendingParagraphDeletion = nil
+            }
+            Button("Cancel", role: .cancel) { pendingParagraphDeletion = nil }
+        } message: { _ in
+            Text("The paragraph and its shortcode content will be permanently deleted.")
         }
     }
 

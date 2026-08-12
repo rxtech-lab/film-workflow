@@ -2,11 +2,12 @@ import Foundation
 import SwiftData
 
 @Model
-final class RemotionProject {
+final class RemotionProject: GroupableProject {
     var id: UUID
     var name: String
     var createdAt: Date
     var updatedAt: Date
+    var groupID: UUID?
 
     var text: String
     var durationSeconds: Double
@@ -27,14 +28,12 @@ final class RemotionProject {
     /// projects never show the "Generate Initial Composition" button.
     var createdViaMCP: Bool = false
 
-    @Relationship(deleteRule: .cascade, inverse: \RemotionMessage.project)
-    var messages: [RemotionMessage]
-
     init(name: String) {
         self.id = UUID()
         self.name = name
         self.createdAt = Date()
         self.updatedAt = Date()
+        self.groupID = nil
         self.text = ""
         self.durationSeconds = 5
         self.themeColorHex = "#1E1E1E"
@@ -47,6 +46,5 @@ final class RemotionProject {
         self.compositionFps = 30
         self.compositionSource = ""
         self.createdViaMCP = false
-        self.messages = []
     }
 }

@@ -149,4 +149,20 @@ nonisolated enum CaptionTranscriptValidator {
         }
         return out
     }
+
+    /// Segment-level findings keyed by stable caption id for the editor rows.
+    ///
+    /// Building this once keeps row rendering O(1). Previously every visible
+    /// row rebuilt and validated the full transcript snapshot before filtering
+    /// down to its own findings, which made opening a long project quadratic.
+    static func rowIssuesBySegmentID(
+        in snapshot: CaptionTranscriptSnapshot
+    ) -> [UUID: [CaptionValidationIssue]] {
+        var grouped: [UUID: [CaptionValidationIssue]] = [:]
+        for issue in issues(in: snapshot) where issue.wordIndex == nil {
+            guard snapshot.segments.indices.contains(issue.segmentIndex) else { continue }
+            grouped[snapshot.segments[issue.segmentIndex].id, default: []].append(issue)
+        }
+        return grouped
+    }
 }

@@ -44,6 +44,20 @@ final class CaptionSegment {
 
     var words: [CaptionWord] = []
 
+    /// The transcription run this caption came from.
+    ///
+    /// `nil` on rows written before versioning existed; those belong to the
+    /// project's implicit legacy version, which is exactly what
+    /// `CaptionProject.activeSegments` returns when `activeVersionID` is nil too.
+    /// Deliberately not a `@Relationship` — the version is an embedded value on
+    /// the project, and a plain UUID keeps this schema change additive. There is
+    /// also no `= UUID()` default: a per-row random default would give every
+    /// legacy row its own phantom version.
+    var versionID: UUID?
+
+    /// This caption in other languages, at most one entry per language code.
+    var translations: [CaptionTranslation] = []
+
     var project: CaptionProject?
 
     init(

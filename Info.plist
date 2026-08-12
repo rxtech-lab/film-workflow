@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Merged into the Info.plist Xcode generates for the film-workflow target
+  (GENERATE_INFOPLIST_FILE stays YES; this file only adds keys Xcode has no
+  build setting for).
+
+  Sparkle reads both keys at launch: SUFeedURL is the appcast published to
+  GitHub Pages by .github/workflows/build.yaml, and SUPublicEDKey is the EdDSA
+  public key whose private half lives in the SPARKLE_KEY secret. Changing either
+  one without the other stops updates from installing.
+
+  It lives outside film-workflow/ because that directory is a synchronized
+  group — a file named Info.plist inside it would also be copied into the app
+  bundle's Resources.
+-->
+<plist version="1.0">
+<dict>
+	<key>SUFeedURL</key>
+	<string>https://filmstudio.rxlab.app/appcast.xml</string>
+	<key>SUPublicEDKey</key>
+	<string>OOJs50Q9V9lpqBgeRi0ow0YBdiAlmc9uJ3B9hABDsqQ=</string>
+</dict>
+</plist>

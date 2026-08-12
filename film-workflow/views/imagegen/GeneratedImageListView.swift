@@ -5,6 +5,7 @@ struct GeneratedImageListView: View {
     var onDelete: (GeneratedImage) -> Void
 
     @State private var previewedFile: GeneratedImage?
+    @State private var pendingDeletion: GeneratedImage?
 
     private let columns = [GridItem(.adaptive(minimum: 160), spacing: 12)]
 
@@ -23,7 +24,7 @@ struct GeneratedImageListView: View {
                             GeneratedImageCard(
                                 file: file,
                                 onTap: { previewedFile = file },
-                                onDelete: onDelete
+                                onDelete: { pendingDeletion = $0 }
                             )
                         }
                     }
@@ -35,6 +36,23 @@ struct GeneratedImageListView: View {
             GeneratedImagePreviewSheet(file: file) {
                 previewedFile = nil
             }
+        }
+        .confirmationDialog(
+            "Delete this generated image?",
+            isPresented: Binding(
+                get: { pendingDeletion != nil },
+                set: { if !$0 { pendingDeletion = nil } }
+            ),
+            titleVisibility: .visible,
+            presenting: pendingDeletion
+        ) { file in
+            Button("Delete Image", role: .destructive) {
+                onDelete(file)
+                pendingDeletion = nil
+            }
+            Button("Cancel", role: .cancel) { pendingDeletion = nil }
+        } message: { _ in
+            Text("The generated image file will be permanently deleted.")
         }
     }
 }
