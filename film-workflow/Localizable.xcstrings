@@ -565,6 +565,7 @@
       }
     },
     "AI" : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -3865,6 +3866,16 @@
         }
       }
     },
+    "More" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "更多"
+          }
+        }
+      }
+    },
     "move" : {
       "localizations" : {
         "zh-Hans" : {
@@ -4068,6 +4079,9 @@
           }
         }
       }
+    },
+    "New Folder…" : {
+
     },
     "New Group" : {
 
@@ -4481,6 +4495,7 @@
       }
     },
     "Open Assistant" : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -4499,6 +4514,12 @@
           }
         }
       }
+    },
+    "Open the agent" : {
+
+    },
+    "Open the agent (running)" : {
+
     },
     "Open the assistant from a caption project." : {
       "extractionState" : "stale",
@@ -6943,6 +6964,7 @@
 
     },
     "Tools" : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {

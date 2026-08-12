@@ -27,7 +27,7 @@ struct AgentMessageRow: View {
                     HStack {
                         Spacer(minLength: 40)
                         Text(message.content)
-                            .font(.callout)
+                            .font(.body)
                             .textSelection(.enabled)
                             .padding(.horizontal, 10)
                             .padding(.vertical, 7)
@@ -40,6 +40,7 @@ struct AgentMessageRow: View {
                     StructuredText(markdown: message.content)
                         .textual.structuredTextStyle(.gitHub)
                         .textual.textSelection(.enabled)
+                        .font(.body)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(.horizontal, 4)
                         .padding(.vertical, 2)

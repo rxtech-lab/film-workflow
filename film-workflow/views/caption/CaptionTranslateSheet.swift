@@ -14,12 +14,18 @@ struct CaptionTranslateSheet: View {
     let onStart: (CaptionTranslateChoice) -> Void
 
     @Environment(\.dismiss) private var dismiss
+    #if os(macOS)
+        @Environment(\.openSettings) private var openSettings
+    #endif
     @State private var settings = CaptionSettings.shared
     @State private var availability = CaptionTranslationAvailability.shared
+    @State private var backendAvailability = AgentBackendAvailability.shared
 
     @State private var language: String = ""
     @State private var customLanguage: String = ""
     @State private var engine: CaptionTranslationEngineKind = .appleTranslation
+    @State private var aiBackend: AgentBackend = .appleIntelligence
+    @State private var aiConfig: AppConfig?
     @State private var scope: CaptionTranslationService.Scope = .missingOrStale
     @State private var isRedoingAll = false
 
@@ -40,6 +46,19 @@ struct CaptionTranslateSheet: View {
             codes.append(existing)
         }
         return codes.filter { $0 != project.sourceLanguageCode }
+    }
+
+    /// CLI agents work a transcript through MCP, one turn at a time, so they
+    /// are not suitable for the batched translation runner. Keep this picker
+    /// aligned with the capability check used when the runner is built.
+    private var translationBackends: [AgentBackend] {
+        AgentBackend.supported.filter { $0.supports(.translation) }
+    }
+
+    private var canStart: Bool {
+        guard !resolvedLanguage.isEmpty else { return false }
+        guard engine == .aiBackend else { return true }
+        return backendAvailability.isConfigured(aiBackend, config: aiConfig)
     }
 
     var body: some View {
@@ -84,6 +103,34 @@ struct CaptionTranslateSheet: View {
                     }
                     .pickerStyle(.inline)
                     .labelsHidden()
+
+                    if engine == .aiBackend {
+                        Picker("Provider", selection: $aiBackend) {
+                            ForEach(translationBackends) { backend in
+                                Text(backend.displayName).tag(backend)
+                            }
+                        }
+
+                        if let reason = backendAvailability.unavailableReason(
+                            aiBackend,
+                            config: aiConfig
+                        ) {
+                            Label {
+                                Text(reason)
+                            } icon: {
+                                Image(systemName: "exclamationmark.triangle.fill")
+                            }
+                            .font(.caption)
+                            .foregroundStyle(.orange)
+
+                            if aiBackend == .openAICompatible {
+                                Button("Open AI Provider settings") {
+                                    openAIProviderSettings()
+                                }
+                                .font(.caption)
+                            }
+                        }
+                    }
                 } header: {
                     Text("Engine")
                 } footer: {
@@ -116,11 +163,13 @@ struct CaptionTranslateSheet: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Translate") { start() }
-                        .disabled(resolvedLanguage.isEmpty)
+                        .disabled(!canStart)
                 }
             }
             .task {
                 await availability.refreshIfNeeded()
+                aiConfig = try? AppConfig.loadFromKeychain()
+                backendAvailability.refresh()
                 seed()
             }
         }
@@ -158,8 +207,19 @@ struct CaptionTranslateSheet: View {
 
     // MARK: - Actions
 
+    private func openAIProviderSettings() {
+        AppNavigation.shared.settingsSection = .aiProvider
+        #if os(macOS)
+            openSettings()
+        #else
+            dismiss()
+            AppNavigation.shared.tab = .Settings
+        #endif
+    }
+
     private func seed() {
         engine = settings.translationEngine
+        aiBackend = settings.aiBackend
         guard language.isEmpty else { return }
         // Prefer a language this project already has, then a configured default,
         // so the common case — topping up an existing translation — is one tap.
@@ -174,12 +234,16 @@ struct CaptionTranslateSheet: View {
 
     private func start() {
         let code = resolvedLanguage
-        guard !code.isEmpty else { return }
+        guard canStart else { return }
         settings.translationEngine = engine
+        if engine == .aiBackend {
+            settings.aiBackend = aiBackend
+        }
         onStart(
             CaptionTranslateChoice(
                 languageCode: code,
                 engine: engine,
+                preferredBackend: engine == .aiBackend ? aiBackend : nil,
                 scope: resolvedScope
             )
         )
@@ -195,5 +259,8 @@ struct CaptionTranslateSheet: View {
 struct CaptionTranslateChoice {
     var languageCode: String
     var engine: CaptionTranslationEngineKind
+    /// The provider explicitly chosen for this run. `nil` lets non-sheet
+    /// callers use the app-wide Caption AI default and its fallback behavior.
+    var preferredBackend: AgentBackend? = nil
     var scope: CaptionTranslationService.Scope
 }

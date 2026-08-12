@@ -127,12 +127,31 @@ enum CaptionTranslationService {
         config: AppConfig?,
         preferredBackend: AgentBackend? = nil
     ) throws -> AICaptionTranslationRunner {
-        let preferred = preferredBackend ?? CaptionSettings.shared.aiBackend
-        let backend = try AgentBackendAvailability.shared.resolved(
-            preferred: preferred,
-            config: config,
-            for: .translation
-        )
+        let availability = AgentBackendAvailability.shared
+        let backend: AgentBackend
+        if let preferredBackend {
+            guard preferredBackend.supports(.translation) else {
+                throw CaptionAIError.backendUnavailable(
+                    preferredBackend,
+                    "The selected AI provider doesn't support caption translation."
+                )
+            }
+            guard availability.isConfigured(preferredBackend, config: config) else {
+                throw CaptionAIError.backendUnavailable(
+                    preferredBackend,
+                    "The selected AI provider isn't available. Check its setup in Settings."
+                )
+            }
+            // A provider chosen in the Translate sheet is an explicit request:
+            // do not silently run the captions through a different model.
+            backend = preferredBackend
+        } else {
+            backend = try availability.resolved(
+                preferred: CaptionSettings.shared.aiBackend,
+                config: config,
+                for: .translation
+            )
+        }
         return AICaptionTranslationRunner(
             engine: try CaptionAIEngineFactory.make(backend: backend, config: config),
             sourceLanguage: project.sourceLanguageCode,

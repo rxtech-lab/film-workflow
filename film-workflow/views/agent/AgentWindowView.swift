@@ -46,8 +46,6 @@ struct AgentWindowView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            header
-            Divider()
             if let thread = selectedThread {
                 AgentThreadView(thread: thread, targets: targetOptions)
                     .id(thread.id)
@@ -61,9 +59,29 @@ struct AgentWindowView: View {
                 }
             }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .toolbar {
+            ToolbarItemGroup {
+                threadsMenu
+                targetMenu
+            }
+
+            ToolbarItemGroup(placement: .primaryAction) {
+                Button {
+                    selectedThread?.isPinned.toggle()
+                } label: {
+                    Image(systemName: selectedThread?.isPinned == true ? "pin.fill" : "pin")
+                }
+                .disabled(selectedThread == nil)
+                .help(selectedThread?.isPinned == true ? "Unpin this thread" : "Pin this thread")
+                Button(action: newThread) {
+                    Image(systemName: "square.and.pencil")
+                }
+                .keyboardShortcut("n", modifiers: [.command, .shift])
+                .help("New thread")
+            }
+        }
         .task {
-            // Opening an empty window and being asked to press a button first
-            // would be pointless — there is always something to type into.
             if threads.isEmpty { newThread() }
         }
         .onChange(of: selectedThreadID) { _, newValue in
@@ -89,33 +107,7 @@ struct AgentWindowView: View {
         }
     }
 
-    // MARK: - Header
-
-    private var header: some View {
-        HStack(spacing: 10) {
-            threadsMenu
-            Divider().frame(height: 16)
-            targetMenu
-            Spacer(minLength: 0)
-            if let thread = selectedThread {
-                Button {
-                    thread.isPinned.toggle()
-                } label: {
-                    Image(systemName: thread.isPinned ? "pin.fill" : "pin")
-                }
-                .buttonStyle(.borderless)
-                .help(thread.isPinned ? "Unpin this thread" : "Pin this thread")
-            }
-            Button(action: newThread) {
-                Image(systemName: "square.and.pencil")
-            }
-            .buttonStyle(.borderless)
-            .keyboardShortcut("n", modifiers: [.command, .shift])
-            .help("New thread")
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
-    }
+    // MARK: - Toolbar menus
 
     private var threadsMenu: some View {
         Menu {

@@ -5,6 +5,10 @@ struct ContentView: View {
     // Shared rather than local @State so a deep-linked screen (e.g. "download a
     // Whisper model") can switch tabs.
     @State private var navigation = AppNavigation.shared
+    #if os(macOS)
+        @Environment(\.openWindow) private var openWindow
+        @State private var agentController = AgentController.shared
+    #endif
 
     var body: some View {
         TabView(selection: $navigation.tab) {
@@ -40,6 +44,30 @@ struct ContentView: View {
             #endif
         }
         .dismissKeyboardOnTapAndScroll()
+        #if os(macOS)
+            .toolbar {
+                ToolbarItem(placement: .primaryAction) {
+                    Button {
+                        openWindow(id: AgentWindowID.value)
+                    } label: {
+                        Label("Agent", systemImage: "sparkles")
+                            .overlay(alignment: .topTrailing) {
+                                if agentController.runningCount > 0 {
+                                    Circle()
+                                        .fill(Color.accentColor)
+                                        .frame(width: 6, height: 6)
+                                        .offset(x: 3, y: -2)
+                                }
+                            }
+                    }
+                    .help(
+                        agentController.runningCount > 0
+                            ? "Open the agent (running)"
+                            : "Open the agent"
+                    )
+                }
+            }
+        #endif
     }
 }
 

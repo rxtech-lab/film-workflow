@@ -1,5 +1,5 @@
-import SwiftUI
 import SwiftData
+import SwiftUI
 
 @main
 struct film_workflowApp: App {
@@ -28,7 +28,7 @@ struct film_workflowApp: App {
     }()
 
     #if os(macOS)
-        @Environment(\.openWindow) private var openWindow
+    @Environment(\.openWindow) private var openWindow
     #endif
 
     init() {
@@ -53,14 +53,14 @@ struct film_workflowApp: App {
         }
         .modelContainer(sharedModelContainer)
         #if os(macOS)
-        .commands {
-            CommandGroup(after: .toolbar) {
-                Button("Agent") {
-                    openWindow(id: AgentWindowID.value)
+            .commands {
+                CommandGroup(after: .toolbar) {
+                    Button("Agent") {
+                        openWindow(id: AgentWindowID.value)
+                    }
+                    .keyboardShortcut("0", modifiers: [.command, .option])
                 }
-                .keyboardShortcut("0", modifiers: [.command, .option])
             }
-        }
         #endif
 
         #if os(macOS)
@@ -76,6 +76,7 @@ struct film_workflowApp: App {
         }
         .modelContainer(sharedModelContainer)
         .defaultSize(width: 760, height: 720)
+        .windowStyle(.hiddenTitleBar)
 
         Settings {
             SettingsView()

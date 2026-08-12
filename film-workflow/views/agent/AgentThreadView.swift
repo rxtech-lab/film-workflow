@@ -14,6 +14,7 @@ struct AgentThreadView: View {
     @State private var scrollRequestTask: Task<Void, Never>?
     @State private var reviewingProposal: CaptionEditProposal?
     @State private var showClearConfirm = false
+    @State private var composerHeight: CGFloat = 80
 
     private var threadID: UUID { thread.id }
     private var run: AgentController.Run { controller.run(for: threadID) }
@@ -21,23 +22,24 @@ struct AgentThreadView: View {
     private var isStreaming: Bool { run.isSending }
 
     var body: some View {
-        VStack(spacing: 0) {
+        ZStack(alignment: .bottom) {
             transcript
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .contentMargins(.top, 16, for: .scrollContent)
+                .safeAreaInset(edge: .bottom, spacing: 0) {
+                    composerArea
+                        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: {
+                            composerHeight = $0
+                        }
+                }
 
-            if let error = run.errorMessage {
-                errorBar(error)
+            if isStreaming {
+                TypingIndicator()
+                    .padding(.horizontal, 18)
+                    .padding(.bottom, composerHeight + 6)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .allowsHitTesting(false)
             }
-
-            Divider()
-
-            AgentComposer(
-                thread: thread,
-                targets: targets,
-                isStreaming: isStreaming,
-                onSend: send,
-                onStop: { controller.cancel(threadID: threadID) },
-                onCommand: handle
-            )
         }
         .confirmationDialog(
             "Clear this conversation?",
@@ -55,8 +57,6 @@ struct AgentThreadView: View {
         .onChange(of: messages.count) { _, _ in
             requestScrollToBottom()
         }
-        // A turn finishing on the thread you are already watching isn't news;
-        // only a background thread should light up the "done" dot in the menu.
         .onChange(of: isStreaming) { _, streaming in
             guard !streaming else { return }
             controller.markSeen(threadID)
@@ -66,6 +66,24 @@ struct AgentThreadView: View {
             requestScrollToBottom(animated: false)
         }
         .onDisappear { scrollRequestTask?.cancel() }
+    }
+
+    private var composerArea: some View {
+        VStack(spacing: 0) {
+            if let error = run.errorMessage {
+                errorBar(error)
+            }
+            AgentComposer(
+                thread: thread,
+                targets: targets,
+                isStreaming: isStreaming,
+                onSend: send,
+                onStop: { controller.cancel(threadID: threadID) },
+                onCommand: handle
+            )
+        }
+        .background(.regularMaterial)
+        .shadow(color: .black.opacity(0.08), radius: 8, y: -2)
     }
 
     // MARK: - Transcript
@@ -95,11 +113,11 @@ struct AgentThreadView: View {
             Text("Ask for changes in plain language.")
                 .font(.callout)
             Text("""
-                “merge captions 12 and 13”, “make the title yellow and slow the fade”, \
-                “list my projects”, “export the captions as SRT”.
-                """)
-                .font(.caption)
-                .foregroundStyle(.secondary)
+            “merge captions 12 and 13”, “make the title yellow and slow the fade”, \
+            “list my projects”, “export the captions as SRT”.
+            """)
+            .font(.caption)
+            .foregroundStyle(.secondary)
             Text("Type @ to pick a project, / for commands.")
                 .font(.caption2)
                 .foregroundStyle(.tertiary)
@@ -134,7 +152,8 @@ struct AgentThreadView: View {
            let project = try? MCPCaptionHandlers.fetchCaption(
                id: uuid.uuidString,
                context: modelContext
-           ) {
+           )
+        {
             CaptionAIReviewSheet(project: project, proposal: proposal) { _ in
                 controller.setPendingProposal(nil, forProjectUUID: uuid)
             }
@@ -211,6 +230,33 @@ struct AgentThreadView: View {
         let folded = live.prefix(cutoff)
         let text = folded.map { "\($0.roleEnum.rawValue): \($0.content)" }.joined(separator: "\n")
         thread.summary = String((thread.summary + "\n" + text).suffix(600))
-        for message in folded { message.isCompacted = true }
+        for message in folded {
+            message.isCompacted = true
+        }
+    }
+}
+
+private struct TypingIndicator: View {
+    @State private var animate = false
+
+    var body: some View {
+        HStack(spacing: 5) {
+            ForEach(0 ..< 3, id: \.self) { i in
+                Circle()
+                    .fill(Color.secondary.opacity(0.6))
+                    .frame(width: 7, height: 7)
+                    .scaleEffect(animate ? 1.0 : 0.5)
+                    .animation(
+                        .easeInOut(duration: 0.45)
+                            .repeatForever(autoreverses: true)
+                            .delay(Double(i) * 0.15),
+                        value: animate
+                    )
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 9)
+        .background(Color.secondary.opacity(0.1), in: RoundedRectangle(cornerRadius: 16))
+        .onAppear { animate = true }
     }
 }
