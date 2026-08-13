@@ -14,6 +14,12 @@ nonisolated struct FileStorage {
         appSupportURL.appendingPathComponent("images", isDirectory: true)
     }
 
+    /// Generated video clips. Poster frames live in `images/` alongside every
+    /// other still rather than here.
+    static var videosDir: URL {
+        appSupportURL.appendingPathComponent("videos", isDirectory: true)
+    }
+
     /// Audio imported for captioning. Caption projects that own their audio
     /// keep it here; narrative-sourced projects point at `generated/` instead.
     static var captionsDir: URL {
@@ -48,6 +54,7 @@ nonisolated struct FileStorage {
         let fm = FileManager.default
         try? fm.createDirectory(at: generatedDir, withIntermediateDirectories: true)
         try? fm.createDirectory(at: imagesDir, withIntermediateDirectories: true)
+        try? fm.createDirectory(at: videosDir, withIntermediateDirectories: true)
         try? fm.createDirectory(at: captionsDir, withIntermediateDirectories: true)
         try? fm.createDirectory(at: whisperModelsDir, withIntermediateDirectories: true)
         try? fm.createDirectory(at: tempDir, withIntermediateDirectories: true)
@@ -96,6 +103,36 @@ nonisolated struct FileStorage {
         let dest = imagesDir.appendingPathComponent(filename)
         try data.write(to: dest)
         return "images/" + filename
+    }
+
+    static func saveVideo(_ data: Data, fileExtension: String = "mp4") throws -> String {
+        let ext = fileExtension.trimmingCharacters(in: CharacterSet(charactersIn: ".")).lowercased()
+        let finalExt = ext.isEmpty ? "mp4" : ext
+        let filename = UUID().uuidString + "." + finalExt
+        let dest = videosDir.appendingPathComponent(filename)
+        try data.write(to: dest)
+        return "videos/" + filename
+    }
+
+    /// Moves a freshly downloaded clip into `videos/`, returning its relative
+    /// path. A move rather than a copy because the source is the temp file
+    /// `URLSession.download` hands back, and a generated video is large enough
+    /// that reading it into memory to re-write it would be wasteful.
+    static func importVideo(movingFrom sourceURL: URL, fileExtension: String = "mp4") throws -> String {
+        let ext = fileExtension.trimmingCharacters(in: CharacterSet(charactersIn: ".")).lowercased()
+        let finalExt = ext.isEmpty ? "mp4" : ext
+        let filename = UUID().uuidString + "." + finalExt
+        let dest = videosDir.appendingPathComponent(filename)
+        let fm = FileManager.default
+        do {
+            try fm.moveItem(at: sourceURL, to: dest)
+        } catch {
+            // Falls back for the cross-volume case, where a move is not atomic
+            // and Foundation refuses it.
+            try fm.copyItem(at: sourceURL, to: dest)
+            try? fm.removeItem(at: sourceURL)
+        }
+        return "videos/" + filename
     }
 
     /// Copies audio the user picked into `captions/`, returning its relative

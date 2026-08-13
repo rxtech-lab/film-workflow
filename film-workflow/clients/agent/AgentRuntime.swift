@@ -99,9 +99,9 @@ enum AgentRuntime {
         container: ModelContainer,
         emit: @escaping (AgentEvent) -> Void
     ) async throws {
-        guard !config.openAIEndpoint.isEmpty,
-              !config.openAIKey.isEmpty,
-              !config.openAIModel.isEmpty else {
+        let route = try AIRoute.resolve(config, for: .chat)
+        let model = config.usesSubscription ? config.subscriptionChatModel : config.openAIModel
+        guard !model.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             throw AgentRuntimeError.missingLLMConfig
         }
 
@@ -135,14 +135,25 @@ enum AgentRuntime {
         for _ in 0..<max(1, request.maxIterations) {
             try Task.checkCancellation()
 
-            let response = try await OpenAIClient.chatWithTools(
-                messages: messages,
-                tools: tools,
-                endpoint: config.openAIEndpoint,
-                apiKey: config.openAIKey,
-                model: config.openAIModel,
-                extraBody: ["providerOptions": ["gateway": ["caching": "auto"]]]
-            )
+            let response: OpenAIAssistantResponse
+            switch route {
+            case .subscription:
+                response = try await OpenAIClient.chatWithToolsViaSubscription(
+                    messages: messages,
+                    tools: tools,
+                    model: model,
+                    extraBody: ["providerOptions": ["gateway": ["caching": "auto"]]]
+                )
+            case .byok:
+                response = try await OpenAIClient.chatWithTools(
+                    messages: messages,
+                    tools: tools,
+                    endpoint: config.openAIEndpoint,
+                    apiKey: config.openAIKey,
+                    model: model,
+                    extraBody: ["providerOptions": ["gateway": ["caching": "auto"]]]
+                )
+            }
 
             if let text = response.content?.trimmingCharacters(in: .whitespacesAndNewlines),
                !text.isEmpty {

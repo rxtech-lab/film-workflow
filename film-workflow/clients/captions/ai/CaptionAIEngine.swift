@@ -230,7 +230,8 @@ enum CaptionAIEngineFactory {
             return OpenAICaptionEngine(
                 endpoint: config.openAIEndpoint,
                 apiKey: config.openAIKey,
-                model: config.openAIModel
+                model: config.usesSubscription ? config.subscriptionChatModel : config.openAIModel,
+                usesSubscription: config.usesSubscription
             )
 
         case .claudeCode, .codex:

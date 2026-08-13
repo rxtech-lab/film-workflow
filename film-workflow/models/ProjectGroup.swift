@@ -96,6 +96,7 @@ enum ProjectGroupService {
             "narrative": try context.fetch(FetchDescriptor<NarrativeProject>()).count { $0.groupID == groupID },
             "caption": try context.fetch(FetchDescriptor<CaptionProject>()).count { $0.groupID == groupID },
             "image": try context.fetch(FetchDescriptor<ImageGenProject>()).count { $0.groupID == groupID },
+            "video": try context.fetch(FetchDescriptor<VideoGenProject>()).count { $0.groupID == groupID },
             "remotion": try context.fetch(FetchDescriptor<RemotionProject>()).count { $0.groupID == groupID }
         ]
     }
@@ -125,6 +126,9 @@ enum ProjectGroupService {
             project.groupID = nil
         }
         for project in try context.fetch(FetchDescriptor<ImageGenProject>()) where project.groupID == groupID {
+            project.groupID = nil
+        }
+        for project in try context.fetch(FetchDescriptor<VideoGenProject>()) where project.groupID == groupID {
             project.groupID = nil
         }
         for project in try context.fetch(FetchDescriptor<RemotionProject>()) where project.groupID == groupID {

@@ -1,4 +1,5 @@
 import SwiftUI
+import TipKit
 import UniformTypeIdentifiers
 
 /// A project the `@` popup can insert.
@@ -94,6 +95,7 @@ struct AgentComposer: View {
     private var composer: some View {
         VStack(spacing: 6) {
             inputField
+                .popoverTip(FilmWorkflowTips.AgentComposerTip(), arrowEdge: .top)
             actionRow
         }
         .padding(12)

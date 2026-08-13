@@ -20,6 +20,7 @@ final class film_workflowUITestsLaunchTests: XCTestCase {
     @MainActor
     func testLaunch() throws {
         let app = XCUIApplication()
+        app.launchArguments.append("-uiTesting")
         app.launch()
 
         // Insert steps here to perform after app launch but before taking a screenshot,

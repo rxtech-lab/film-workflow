@@ -334,6 +334,10 @@ final class AgentBackendAvailability {
             return isAppleIntelligenceAvailable
         case .openAICompatible:
             guard let config else { return false }
+            if config.usesSubscription {
+                return AuthManager.shared.isAuthenticated
+                    && !config.subscriptionChatModel.trimmingCharacters(in: .whitespaces).isEmpty
+            }
             return !config.openAIEndpoint.trimmingCharacters(in: .whitespaces).isEmpty
                 && !config.openAIKey.trimmingCharacters(in: .whitespaces).isEmpty
                 && !config.openAIModel.trimmingCharacters(in: .whitespaces).isEmpty
@@ -349,6 +353,9 @@ final class AgentBackendAvailability {
         case .appleIntelligence:
             return appleIntelligenceUnavailableReason
         case .openAICompatible:
+            if config?.usesSubscription == true {
+                return "Sign in and choose a chat model in Settings › AI Provider."
+            }
             return "Add an endpoint, key and model in Settings › AI Provider."
         case .claudeCode:
             return "The claude command isn't installed."

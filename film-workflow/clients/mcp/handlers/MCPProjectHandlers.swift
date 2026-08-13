@@ -44,7 +44,7 @@ enum MCPProjectHandlers {
         ),
         MCPToolDescriptor(
             name: "update_project",
-            description: "Patch fields on a project. `fields` is an object whose recognized keys depend on `type` (see field allowlists in tool description). Unknown keys are ignored. Narrative fields: name, provider (Gemini|Azure), sceneDescription, notes, context, speakers (array of {displayName, voice, geminiVoice, azureVoice, azurePitch, azureRate, azureVolume, azureRole, azureStyleDegree}), paragraphs (array of {speakerId, emotion, content}), azureOutputFormat (mp3|wav). Music fields: name, inputMode (editor|prompt), promptText, generalPrompt, genre, instruments (array), bpm, keyScale, mood, musicLength, generationType (withLyrics|noLyrics), lyricsLanguage, outputFormat (mp3|wav), songStructureEntries (array of {type, startTime, endTime, intensity, description}), lyricEntries (array of {timestamp, content}). Image fields: name, provider (openai|google), prompt, googleModel, googleAspectRatio, googleResolution, openAIModel, openAISize, openAICustomWidth, openAICustomHeight, openAIQuality, openAIFormat, openAICompression, openAIBackground, openAITransparent. Remotion fields: name, text, durationSeconds, themeColorHex (#RRGGBB), prompt, compositionWidth, compositionHeight, compositionFps, compositionSource (TSX).",
+            description: "Patch fields on a project. `fields` is an object whose recognized keys depend on `type` (see field allowlists in tool description). Unknown keys are ignored. Narrative fields: name, provider (Gemini|Azure), sceneDescription, notes, context, speakers (array of {displayName, voice, geminiVoice, azureVoice, azurePitch, azureRate, azureVolume, azureRole, azureStyleDegree}), paragraphs (array of {speakerId, emotion, content}), azureOutputFormat (mp3|wav). Music fields: name, inputMode (editor|prompt), promptText, generalPrompt, genre, instruments (array), bpm, keyScale, mood, musicLength, generationType (withLyrics|noLyrics), lyricsLanguage, outputFormat (mp3|wav), songStructureEntries (array of {type, startTime, endTime, intensity, description}), lyricEntries (array of {timestamp, content}). Image fields: name, provider (openai|google), prompt, googleModel, googleAspectRatio, googleResolution, openAIModel, openAISize, openAICustomWidth, openAICustomHeight, openAIQuality, openAIFormat, openAICompression, openAIBackground, openAITransparent. Video fields: name, prompt, negativePrompt, googleModel, googleAspectRatio (16:9|9:16), googleResolution (720p|1080p|4k), googleDuration (4|5|6|8), googlePersonGeneration (allow_all|allow_adult|dont_allow), googleNumberOfVideos, googleGenerateAudio, useSeed, seed. Remotion fields: name, text, durationSeconds, themeColorHex (#RRGGBB), prompt, compositionWidth, compositionHeight, compositionFps, compositionSource (TSX).",
             inputSchema: [
                 "type": "object",
                 "properties": [
@@ -315,6 +315,11 @@ enum MCPProjectHandlers {
                 sortBy: [SortDescriptor(\.updatedAt, order: .reverse)]
             ))
             return MCPToolRegistry.jsonResult(items.filter { groupFilter.matches($0.groupID) }.map(imageSummary))
+        case .video:
+            let items = try context.fetch(FetchDescriptor<VideoGenProject>(
+                sortBy: [SortDescriptor(\.updatedAt, order: .reverse)]
+            ))
+            return MCPToolRegistry.jsonResult(items.filter { groupFilter.matches($0.groupID) }.map(videoSummary))
         case .remotion:
             #if os(macOS)
             let items = try context.fetch(FetchDescriptor<RemotionProject>(
@@ -345,6 +350,9 @@ enum MCPProjectHandlers {
         case .image:
             let p = try fetchImage(id: id, context: context)
             return MCPToolRegistry.jsonResult(imageFull(p))
+        case .video:
+            let p = try fetchVideo(id: id, context: context)
+            return MCPToolRegistry.jsonResult(videoFull(p))
         case .remotion:
             #if os(macOS)
             let p = try fetchRemotion(id: id, context: context)
@@ -387,6 +395,16 @@ enum MCPProjectHandlers {
             context.insert(p)
             try context.save()
             return MCPToolRegistry.jsonResult(imageSummary(p))
+        case .video:
+            let p = VideoGenProject(name: name)
+            p.groupID = groupID
+            if let config = try? AppConfig.loadFromKeychain(), !config.defaultVideoModel.isEmpty {
+                p.googleModel = config.defaultVideoModel
+                VeoModelFamily.clamp(p)
+            }
+            context.insert(p)
+            try context.save()
+            return MCPToolRegistry.jsonResult(videoSummary(p))
         case .remotion:
             #if os(macOS)
             let p = RemotionProject(name: name)
@@ -451,6 +469,10 @@ enum MCPProjectHandlers {
             let project = try fetchImage(id: id, context: context)
             try ProjectGroupService.move(project, to: groupID, context: context)
             return MCPToolRegistry.jsonResult(imageSummary(project))
+        case .video:
+            let project = try fetchVideo(id: id, context: context)
+            try ProjectGroupService.move(project, to: groupID, context: context)
+            return MCPToolRegistry.jsonResult(videoSummary(project))
         case .remotion:
             #if os(macOS)
             let project = try fetchRemotion(id: id, context: context)
@@ -493,6 +515,12 @@ enum MCPProjectHandlers {
             p.updatedAt = Date()
             try context.save()
             return MCPToolRegistry.jsonResult(imageFull(p))
+        case .video:
+            let p = try fetchVideo(id: id, context: context)
+            applyVideoFields(p, fields: fields)
+            p.updatedAt = Date()
+            try context.save()
+            return MCPToolRegistry.jsonResult(videoFull(p))
         case .remotion:
             #if os(macOS)
             let p = try fetchRemotion(id: id, context: context)
@@ -528,6 +556,16 @@ enum MCPProjectHandlers {
         case .image:
             let p = try fetchImage(id: id, context: context)
             for f in p.generatedFiles { FileStorage.deleteFile(at: f.imageFilePath) }
+            context.delete(p)
+        case .video:
+            let p = try fetchVideo(id: id, context: context)
+            for f in p.generatedFiles {
+                FileStorage.deleteFile(at: f.videoFilePath)
+                if let thumbnail = f.thumbnailFilePath { FileStorage.deleteFile(at: thumbnail) }
+            }
+            for path in p.googleReferenceImagePaths { FileStorage.deleteFile(at: path) }
+            if let path = p.googleFirstFrameImagePath { FileStorage.deleteFile(at: path) }
+            if let path = p.googleLastFrameImagePath { FileStorage.deleteFile(at: path) }
             context.delete(p)
         case .remotion:
             #if os(macOS)
@@ -619,6 +657,31 @@ enum MCPProjectHandlers {
             context.insert(copy)
             try context.save()
             return MCPToolRegistry.jsonResult(imageSummary(copy))
+        case .video:
+            let src = try fetchVideo(id: id, context: context)
+            let copy = VideoGenProject(name: newName ?? (src.name + " Copy"))
+            copy.groupID = src.groupID
+            copy.provider = src.provider
+            copy.prompt = src.prompt
+            copy.negativePrompt = src.negativePrompt
+            copy.useSeed = src.useSeed
+            copy.seed = src.seed
+            copy.googleModel = src.googleModel
+            copy.googleAspectRatio = src.googleAspectRatio
+            copy.googleResolution = src.googleResolution
+            copy.googleDuration = src.googleDuration
+            copy.googlePersonGeneration = src.googlePersonGeneration
+            copy.googleNumberOfVideos = src.googleNumberOfVideos
+            copy.googleGenerateAudio = src.googleGenerateAudio
+            // Frames and references are copied so deleting either project
+            // cannot pull the files out from under the other. The pending job
+            // and the render history deliberately do not come along.
+            copy.googleFirstFrameImagePath = src.googleFirstFrameImagePath.flatMap(copyStoredImage(atRelative:))
+            copy.googleLastFrameImagePath = src.googleLastFrameImagePath.flatMap(copyStoredImage(atRelative:))
+            copy.googleReferenceImagePaths = src.googleReferenceImagePaths.compactMap(copyStoredImage(atRelative:))
+            context.insert(copy)
+            try context.save()
+            return MCPToolRegistry.jsonResult(videoSummary(copy))
         case .remotion:
             #if os(macOS)
             let src = try fetchRemotion(id: id, context: context)
@@ -714,6 +777,20 @@ enum MCPProjectHandlers {
         return p
     }
 
+    static func fetchVideo(id: String, context: ModelContext) throws -> VideoGenProject {
+        guard let uuid = UUID(uuidString: id) else { throw MCPToolError.projectNotFound(id) }
+        let all = try context.fetch(FetchDescriptor<VideoGenProject>())
+        guard let p = all.first(where: { summaryUUID(of: $0) == uuid }) else {
+            throw MCPToolError.projectNotFound(id)
+        }
+        return p
+    }
+
+    /// Duplicates a stored image so two projects never share one file.
+    private static func copyStoredImage(atRelative path: String) -> String? {
+        try? FileStorage.copyImage(from: FileStorage.absoluteURL(for: path))
+    }
+
     #if os(macOS)
     static func fetchRemotion(id: String, context: ModelContext) throws -> RemotionProject {
         guard let uuid = UUID(uuidString: id) else { throw MCPToolError.projectNotFound(id) }
@@ -737,6 +814,7 @@ enum MCPProjectHandlers {
     private static func summaryUUID(of p: NarrativeProject) -> UUID { stableID(of: p) }
     private static func summaryUUID(of p: MusicProject) -> UUID { stableID(of: p) }
     private static func summaryUUID(of p: ImageGenProject) -> UUID { stableID(of: p) }
+    private static func summaryUUID(of p: VideoGenProject) -> UUID { stableID(of: p) }
 
     // MARK: - Encoders
 
@@ -770,6 +848,17 @@ enum MCPProjectHandlers {
             "updatedAt": isoDate(p.updatedAt)
         ]
     }
+    private static func videoSummary(_ p: VideoGenProject) -> [String: Any] {
+        [
+            "id": stableID(of: p).uuidString,
+            "type": "video",
+            "name": p.name,
+            "groupId": groupIDJSON(p.groupID),
+            "createdAt": isoDate(p.createdAt),
+            "updatedAt": isoDate(p.updatedAt)
+        ]
+    }
+
     #if os(macOS)
     private static func remotionSummary(_ p: RemotionProject) -> [String: Any] {
         [
@@ -888,6 +977,42 @@ enum MCPProjectHandlers {
             [
                 "imageFilePath": $0.imageFilePath,
                 "prompt": $0.prompt,
+                "createdAt": isoDate($0.createdAt)
+            ] as [String: Any]
+        }
+        return out
+    }
+
+    private static func videoFull(_ p: VideoGenProject) -> [String: Any] {
+        var out = videoSummary(p)
+        out["provider"] = p.provider
+        out["prompt"] = p.prompt
+        out["negativePrompt"] = p.negativePrompt
+        out["useSeed"] = p.useSeed
+        out["seed"] = p.seed
+        out["googleModel"] = p.googleModel
+        out["googleAspectRatio"] = p.googleAspectRatio
+        out["googleResolution"] = p.googleResolution
+        out["googleDuration"] = p.googleDuration
+        out["googlePersonGeneration"] = p.googlePersonGeneration
+        out["googleNumberOfVideos"] = p.googleNumberOfVideos
+        out["googleGenerateAudio"] = p.googleGenerateAudio
+        out["googleFirstFrameImagePath"] = p.googleFirstFrameImagePath as Any
+        out["googleLastFrameImagePath"] = p.googleLastFrameImagePath as Any
+        out["googleReferenceImagePaths"] = p.googleReferenceImagePaths
+        // Surfaced so an agent whose video_generate call timed out can tell a
+        // job that is still running from one that never started.
+        out["pendingJobId"] = p.pendingJobID as Any
+        out["pendingJobStartedAt"] = p.pendingJobStartedAt.map(isoDate) as Any
+        out["generatedFiles"] = p.generatedFiles.map {
+            [
+                "videoFilePath": $0.videoFilePath,
+                "thumbnailFilePath": $0.thumbnailFilePath as Any,
+                "prompt": $0.prompt,
+                "modelId": $0.modelID,
+                "durationSeconds": $0.durationSeconds,
+                "width": $0.width,
+                "height": $0.height,
                 "createdAt": isoDate($0.createdAt)
             ] as [String: Any]
         }
@@ -1020,6 +1145,25 @@ enum MCPProjectHandlers {
         if let b = fields["openAITransparent"] as? Bool { p.openAITransparent = b }
     }
 
+    private static func applyVideoFields(_ p: VideoGenProject, fields: [String: Any]) {
+        if let s = fields["name"] as? String { p.name = s }
+        if let s = fields["prompt"] as? String { p.prompt = s }
+        if let s = fields["negativePrompt"] as? String { p.negativePrompt = s }
+        if let s = fields["googleModel"] as? String { p.googleModel = s }
+        if let s = fields["googleAspectRatio"] as? String, VideoAspectRatio(rawValue: s) != nil { p.googleAspectRatio = s }
+        if let s = fields["googleResolution"] as? String, VideoResolution(rawValue: s) != nil { p.googleResolution = s }
+        if let s = fields["googleDuration"] as? String, VideoDuration(rawValue: s) != nil { p.googleDuration = s }
+        if let n = fields["googleDuration"] as? Int, VideoDuration(rawValue: String(n)) != nil { p.googleDuration = String(n) }
+        if let s = fields["googlePersonGeneration"] as? String, VideoPersonGeneration(rawValue: s) != nil { p.googlePersonGeneration = s }
+        if let n = fields["googleNumberOfVideos"] as? Int { p.googleNumberOfVideos = n }
+        if let b = fields["googleGenerateAudio"] as? Bool { p.googleGenerateAudio = b }
+        if let b = fields["useSeed"] as? Bool { p.useSeed = b }
+        if let n = fields["seed"] as? Int { p.seed = n }
+        // The agent can set fields in any order, so the combination is only
+        // legal once every key has been applied.
+        VeoModelFamily.clamp(p)
+    }
+
     #if os(macOS)
     private static func applyRemotionFields(_ p: RemotionProject, fields: [String: Any]) {
         if let s = fields["name"] as? String { p.name = s }
@@ -1062,7 +1206,7 @@ enum MCPProjectHandlers {
 
     private static let typeProperty: [String: Any] = [
         "type": "string",
-        "enum": ["narrative", "music", "image", "remotion", "caption"],
+        "enum": ["narrative", "music", "image", "video", "remotion", "caption"],
         "description": "Which domain the project belongs to. For 'caption', project_get returns a summary only — use caption_list_segments to read the captions."
     ]
 
@@ -1079,6 +1223,7 @@ enum ProjectType: String {
     case narrative
     case music
     case image
+    case video
     case remotion
     case caption
 }

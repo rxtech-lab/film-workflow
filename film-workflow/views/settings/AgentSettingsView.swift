@@ -1,4 +1,5 @@
 import SwiftUI
+import TipKit
 
 /// Settings for the agent window.
 struct AgentSettingsView: View {
@@ -28,6 +29,7 @@ struct AgentSettingsView: View {
                     Text(backend.displayName).tag(backend)
                 }
             }
+            .popoverTip(FilmWorkflowTips.AgentBackendTip(), arrowEdge: .top)
 
             if let reason = availability.unavailableReason(settings.defaultBackend, config: config) {
                 Label {

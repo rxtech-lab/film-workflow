@@ -1,0 +1,9 @@
+APP_AUTH_ISSUER = https:/$()/auth.rxlab.app
+APP_AUTH_URL_SCHEME = filmstudio
+APP_AUTH_REDIRECT_URI = $(APP_AUTH_URL_SCHEME):/$()/callback
+// rxlab-auth fails the whole token exchange when any requested scope falls
+// outside the client's allow-list, and it has no `offline_access` scope at all
+// (refresh tokens are issued unconditionally). Add `email` here only after
+// granting it to this client in the rxauth admin console.
+APP_AUTH_SCOPES = openid
+APP_AUTH_CLIENT_ID = client_87eb0fcb4e8b41f49336255bdeefa5ad

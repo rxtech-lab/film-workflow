@@ -196,6 +196,12 @@ function Nav({ release }: { release: Awaited<ReturnType<typeof getLatestRelease>
 
         <div className="flex items-center gap-3 sm:gap-5">
           <a
+            href="/login"
+            className="font-mono text-[11px] tracking-[0.14em] text-muted transition-colors hover:text-accent"
+          >
+            Sign in
+          </a>
+          <a
             href={release.url}
             target="_blank"
             rel="noreferrer"

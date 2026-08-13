@@ -1,5 +1,6 @@
 import SwiftData
 import SwiftUI
+import TipKit
 
 /// Reviews a batch of AI-proposed caption changes before any of them is written.
 ///
@@ -31,6 +32,7 @@ struct CaptionAIReviewSheet: View {
     var body: some View {
         VStack(spacing: 0) {
             header
+                .popoverTip(FilmWorkflowTips.AgentProposalTip(), arrowEdge: .top)
             Divider()
             if proposal.isEmpty {
                 ContentUnavailableView(

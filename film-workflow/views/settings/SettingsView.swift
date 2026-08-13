@@ -6,6 +6,12 @@ struct SettingsView: View {
 
     var body: some View {
         TabView(selection: $navigation.settingsSection) {
+            AccountSettingsView()
+                .tabItem {
+                    Label("Account", systemImage: "person.crop.circle")
+                }
+                .tag(AppNavigation.SettingsSection.account)
+
             AIProviderSettingsView()
                 .tabItem {
                     Label("AI Provider", systemImage: "sparkles")

@@ -65,7 +65,16 @@ nonisolated enum CaptionTranscriberFactory {
         options: CaptionProviderOptions,
         onProgress: (@MainActor @Sendable (CaptionProgress) -> Void)? = nil
     ) async throws -> CaptionTranscript {
-        try await client(for: provider).transcribe(
+        if config.usesSubscription, provider != .whisperLocal {
+            return try await BackendTranscriptionClient.transcribe(
+                provider: provider,
+                request: request,
+                config: config,
+                options: options,
+                onProgress: onProgress
+            )
+        }
+        return try await client(for: provider).transcribe(
             request: request,
             config: config,
             options: options,

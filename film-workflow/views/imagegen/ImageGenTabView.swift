@@ -20,6 +20,7 @@ struct ImageGenTabView: View {
     @State private var isGenerating = false
     @State private var errorMessage: String?
     @State private var showError = false
+    @State private var insufficientCredits: InsufficientCreditsNotice?
     @State private var showHistorySheet = false
 
     private var isCompact: Bool {
@@ -53,6 +54,7 @@ struct ImageGenTabView: View {
             )
         }
         .navigationSplitViewColumnWidth(min: 200, ideal: 240)
+        .accountSidebarFooter()
         .navigationTitle("Projects")
         .toolbar {
             ToolbarItemGroup {
@@ -171,6 +173,7 @@ struct ImageGenTabView: View {
         } message: {
             Text(errorMessage ?? "An unknown error occurred.")
         }
+        .insufficientCreditsAlert($insufficientCredits)
         .sheet(isPresented: $showHistorySheet) {
             if let project = selectedProject {
                 NavigationStack {
@@ -289,6 +292,10 @@ struct ImageGenTabView: View {
                 config: config
             )
         } catch {
+            if let notice = InsufficientCreditsNotice(error) {
+                insufficientCredits = notice
+                return
+            }
             errorMessage = error.localizedDescription
             showError = true
         }
