@@ -1,6 +1,7 @@
 import HeroVideo from "./hero-video";
 import { ReelStage, type Reel } from "./reel-stage";
 import { getLatestRelease } from "./lib/release";
+import { getCurrentUser, type AppUser } from "@/lib/auth";
 
 const REELS: Reel[] = [
   {
@@ -79,14 +80,17 @@ const REELS: Reel[] = [
 ];
 
 export default async function Home() {
-  const release = await getLatestRelease();
+  const [release, user] = await Promise.all([
+    getLatestRelease(),
+    getCurrentUser(),
+  ]);
 
   return (
     <main className="grain relative">
       <Backdrop />
       <Rails />
       <Reel />
-      <Nav release={release} />
+      <Nav release={release} user={user} />
 
       {/*
         ── Hero ──────────────────────────────────────────────
@@ -183,7 +187,13 @@ export default async function Home() {
  * The top bar is a scrim rather than a plate — a hard bottom edge would cut a
  * line straight across the trailer while it plays full-bleed.
  */
-function Nav({ release }: { release: Awaited<ReturnType<typeof getLatestRelease>> }) {
+function Nav({
+  release,
+  user,
+}: {
+  release: Awaited<ReturnType<typeof getLatestRelease>>;
+  user: AppUser | null;
+}) {
   return (
     <header className="nav-reveal fixed inset-x-0 top-0 z-50 bg-gradient-to-b from-ink/95 via-ink/70 to-transparent pb-6">
       <nav className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
@@ -195,11 +205,12 @@ function Nav({ release }: { release: Awaited<ReturnType<typeof getLatestRelease>
         </a>
 
         <div className="flex items-center gap-3 sm:gap-5">
+          {/* Signed in, the same slot carries the name straight to the account. */}
           <a
-            href="/login"
-            className="font-mono text-[11px] tracking-[0.14em] text-muted transition-colors hover:text-accent"
+            href={user ? "/dashboard" : "/login"}
+            className="max-w-[9rem] truncate font-mono text-[11px] tracking-[0.14em] text-muted transition-colors hover:text-accent"
           >
-            Sign in
+            {user ? user.name : "Sign in"}
           </a>
           <a
             href={release.url}

@@ -66,7 +66,7 @@ function mp3Duration(data: Buffer) {
   const bitrateTable = [0, 32, 40, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320, 0];
   while (offset + 4 <= data.length) {
     const header = data.readUInt32BE(offset);
-    if ((header & 0xffe00000) === 0xffe00000) {
+    if (header >>> 21 === 0x7ff) {
       const bitrate = bitrateTable[(header >> 12) & 0xf] * 1000;
       if (bitrate > 0) return (data.length - offset) * 8 / bitrate;
     }

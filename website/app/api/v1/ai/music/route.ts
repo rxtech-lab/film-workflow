@@ -25,8 +25,11 @@ async function generate(input: z.infer<typeof schema>) {
   if (!key) throw new Error("GOOGLE_AI_NOT_CONFIGURED");
   const parts: Array<Record<string, unknown>> = [{ text: input.prompt }];
   for (const image of input.images ?? []) parts.push({ inline_data: { mime_type: image.mime_type, data: image.base64 } });
+  // lyria-3-pro-preview always returns MP3 and rejects any audio format request: responseMimeType
+  // takes text mimetypes only, and responseFormat.audio.mimeType 400s on every enum value (verified
+  // against the live API). response_mime_type is accepted from clients but only used as a fallback
+  // label below; revisit if WAV, which the docs advertise, actually ships.
   const generationConfig: Record<string, unknown> = { responseModalities: ["AUDIO", "TEXT"] };
-  if (input.response_mime_type) generationConfig.responseMimeType = input.response_mime_type;
   const response = await fetch("https://generativelanguage.googleapis.com/v1beta/models/lyria-3-pro-preview:generateContent", { method: "POST", headers: { "Content-Type": "application/json", "x-goog-api-key": key }, body: JSON.stringify({ contents: [{ parts }], generationConfig }), signal: AbortSignal.timeout(290_000) });
   if (!response.ok) await providerError(response);
   const body = await response.json() as { candidates?: Array<{ content?: { parts?: Array<{ text?: string; inlineData?: { data?: string; mimeType?: string }; inline_data?: { data?: string; mime_type?: string } }> } }> };
@@ -34,7 +37,7 @@ async function generate(input: z.infer<typeof schema>) {
   for (const candidate of body.candidates ?? []) for (const part of candidate.content?.parts ?? []) {
     if (part.text) lyrics = [lyrics, part.text].filter(Boolean).join("\n");
     const inline = part.inlineData ?? (part.inline_data ? { data: part.inline_data.data, mimeType: part.inline_data.mime_type } : undefined);
-    if (inline?.data) return { audio: Buffer.from(inline.data, "base64"), mime: inline.mimeType ?? input.response_mime_type ?? "audio/wav", lyrics };
+    if (inline?.data) return { audio: Buffer.from(inline.data, "base64"), mime: inline.mimeType ?? input.response_mime_type ?? "audio/mpeg", lyrics };
   }
   throw new Error("INVALID_PROVIDER_RESPONSE");
 }

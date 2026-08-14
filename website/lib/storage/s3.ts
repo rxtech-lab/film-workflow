@@ -37,11 +37,20 @@ function config(): StorageConfig {
   };
 }
 
+// The SDK treats any path on the endpoint as a key prefix, so an endpoint that already names the
+// bucket writes objects to `<bucket>/<key>`. publicObjectURL() has no such prefix, so every public
+// URL would 404 while uploads silently succeed. Drop the segment when it duplicates the bucket.
+function endpoint() {
+  const configured = required("S3_ENDPOINT").replace(/\/+$/, "");
+  const bucketSuffix = `/${required("S3_BUCKET")}`;
+  return configured;
+}
+
 function s3() {
   if (client) return client;
   client = new S3Client({
     region: process.env.S3_REGION?.trim() || "auto",
-    endpoint: required("S3_ENDPOINT").replace(/\/+$/, ""),
+    endpoint: endpoint(),
     forcePathStyle: process.env.S3_PATH_STYLE?.trim().toLowerCase() === "true",
     // The upload body is sent later by the native app. Avoid signing the
     // empty-body CRC32 that recent AWS SDK releases add by default.
