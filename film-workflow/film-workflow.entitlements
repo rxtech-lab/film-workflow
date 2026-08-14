@@ -18,5 +18,16 @@
 	<true/>
 	<key>com.apple.security.network.server</key>
 	<true/>
+	<!-- Passkey sign-in. AuthenticationServices only honours a passkey request
+	     whose relying party is covered here, and the domain must list this app's
+	     <TEAMID>.<BUNDLEID> in its AASA:
+	     https://rxlab.app/.well-known/apple-app-site-association
+	     The ?mode=developer variant lets a locally built app validate against
+	     the live AASA without waiting on Apple's CDN cache. -->
+	<key>com.apple.developer.associated-domains</key>
+	<array>
+		<string>webcredentials:rxlab.app</string>
+		<string>webcredentials:rxlab.app?mode=developer</string>
+	</array>
 </dict>
 </plist>

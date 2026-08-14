@@ -66,12 +66,13 @@ struct LyriaClient {
             ])
         }
 
-        var generationConfig: [String: Any] = [
+        // lyria-3-pro-preview always returns MP3 and rejects any audio format request: responseMimeType
+        // takes text mimetypes only, and responseFormat.audio.mimeType 400s on every enum value (verified
+        // against the live API). responseMimeType stays in the signature as a fallback label only;
+        // revisit if WAV, which the docs advertise, actually ships.
+        let generationConfig: [String: Any] = [
             "responseModalities": ["AUDIO", "TEXT"]
         ]
-        if let responseMimeType {
-            generationConfig["responseMimeType"] = responseMimeType
-        }
 
         let body: [String: Any] = [
             "contents": [["parts": parts]],

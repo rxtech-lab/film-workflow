@@ -28,8 +28,10 @@ enum MCPRouter {
             return MCPHTTP.makeResponse(status: 405, contentType: "text/plain", body: Data("Method Not Allowed".utf8))
         }
 
-        // Auth: required when bound to all interfaces.
-        if settings.bindAll {
+        // Account-backed tools can spend prepaid credits, so even localhost
+        // requires the local MCP token while subscription mode is selected.
+        let usesSubscription = (try? AppConfig.loadFromKeychain())?.usesSubscription == true
+        if settings.bindAll || usesSubscription {
             let header = request.headers["authorization"] ?? ""
             let provided = header.lowercased().hasPrefix("bearer ")
                 ? String(header.dropFirst("bearer ".count)).trimmingCharacters(in: .whitespaces)

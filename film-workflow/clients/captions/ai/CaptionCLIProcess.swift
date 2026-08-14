@@ -107,6 +107,17 @@ nonisolated enum CaptionCLIProcess {
 
         outPipe.fileHandleForReading.readabilityHandler = nil
         errPipe.fileHandleForReading.readabilityHandler = nil
+
+        // `terminationHandler` fires when the process dies, not when its pipes
+        // are drained, so bytes can still be sitting in the pipe buffer here —
+        // detaching the handler without reading them throws them away. A
+        // line-streaming agent loses a trailing fragment; `codex debug models`,
+        // whose whole reply is one ~320 KB line, loses the tail of its JSON and
+        // becomes unparseable.
+        let remainingOutput = drain(outPipe.fileHandleForReading)
+        if !remainingOutput.isEmpty { collector.append(remainingOutput) }
+        let remainingErrors = drain(errPipe.fileHandleForReading)
+        if !remainingErrors.isEmpty { errors.append(remainingErrors) }
         collector.flush()
 
         if Task.isCancelled {
@@ -119,6 +130,31 @@ nonisolated enum CaptionCLIProcess {
             throw Failure.exited(tool, result.exitCode, result.errorOutput)
         }
         return result
+    }
+
+    /// Reads whatever is still sitting in a pipe's buffer, without blocking.
+    ///
+    /// `readDataToEndOfFile()` would be a one-liner but it waits for the write
+    /// end to close, and these agents spawn children that inherit it — the same
+    /// reason cancellation needs `ProcessTreeKiller`. One surviving grandchild
+    /// would wedge the caller forever. A non-blocking read takes what the exited
+    /// process left behind and stops at EOF, or as soon as nothing more is ready.
+    private static func drain(_ handle: FileHandle) -> Data {
+        let descriptor = handle.fileDescriptor
+        let flags = fcntl(descriptor, F_GETFL)
+        guard flags != -1, fcntl(descriptor, F_SETFL, flags | O_NONBLOCK) != -1 else { return Data() }
+        defer { _ = fcntl(descriptor, F_SETFL, flags) }
+
+        var output = Data()
+        var chunk = [UInt8](repeating: 0, count: 64 * 1024)
+        while true {
+            // 0 is EOF; -1 is EAGAIN (nothing buffered right now) or a real
+            // error. Either way there is nothing further for us to collect.
+            let count = chunk.withUnsafeMutableBytes { read(descriptor, $0.baseAddress, $0.count) }
+            guard count > 0 else { break }
+            output.append(contentsOf: chunk[0 ..< count])
+        }
+        return output
     }
 }
 

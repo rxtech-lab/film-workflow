@@ -1,5 +1,6 @@
 import SwiftData
 import SwiftUI
+import TipKit
 
 @main
 struct film_workflowApp: App {
@@ -12,6 +13,8 @@ struct film_workflowApp: App {
             RemotionProject.self,
             ImageGenProject.self,
             GeneratedImage.self,
+            VideoGenProject.self,
+            GeneratedVideo.self,
             CaptionProject.self,
             CaptionSegment.self,
             ProjectGroup.self,
@@ -36,6 +39,13 @@ struct film_workflowApp: App {
 
     init() {
         FileStorage.ensureDirectories()
+        try? Tips.configure([
+            .displayFrequency(.immediate),
+            .datastoreLocation(.applicationDefault),
+        ])
+        if ProcessInfo.processInfo.arguments.contains("-uiTesting") {
+            Tips.hideAllTipsForTesting()
+        }
         // Audio chunks and multipart bodies staged during transcription can be
         // hundreds of megabytes; a crash mid-run would otherwise leak them.
         FileStorage.clearTemp()
@@ -51,6 +61,7 @@ struct film_workflowApp: App {
             ContentView()
                 .environment(AgentController.shared)
                 .task {
+                    await AuthManager.shared.checkExistingAuth()
                     MCPServer.shared.bootstrap(container: sharedModelContainer)
                 }
         }
@@ -68,6 +79,7 @@ struct film_workflowApp: App {
                     }
                     .keyboardShortcut("0", modifiers: [.command, .option])
                 }
+                AccountCommands()
             }
         #endif
 

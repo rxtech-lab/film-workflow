@@ -20,7 +20,10 @@ struct ImageGenTabView: View {
     @State private var isGenerating = false
     @State private var errorMessage: String?
     @State private var showError = false
+    @State private var insufficientCredits: InsufficientCreditsNotice?
     @State private var showHistorySheet = false
+    @State private var usesSubscription = false
+    @State private var subscriptionImageModel = ""
 
     private var isCompact: Bool {
         #if os(iOS)
@@ -53,6 +56,7 @@ struct ImageGenTabView: View {
             )
         }
         .navigationSplitViewColumnWidth(min: 200, ideal: 240)
+        .accountSidebarFooter()
         .navigationTitle("Projects")
         .toolbar {
             ToolbarItemGroup {
@@ -166,11 +170,17 @@ struct ImageGenTabView: View {
                 }
             }
         }
+        .onAppear {
+            let config = try? AppConfig.loadFromKeychain()
+            usesSubscription = config?.usesSubscription == true
+            subscriptionImageModel = config?.subscriptionImageModel ?? ""
+        }
         .alert("Error", isPresented: $showError) {
             Button("OK") {}
         } message: {
             Text(errorMessage ?? "An unknown error occurred.")
         }
+        .insufficientCreditsAlert($insufficientCredits)
         .sheet(isPresented: $showHistorySheet) {
             if let project = selectedProject {
                 NavigationStack {
@@ -267,6 +277,13 @@ struct ImageGenTabView: View {
 
     private func canGenerate(_ project: ImageGenProject) -> Bool {
         guard !project.prompt.trimmingCharacters(in: .whitespaces).isEmpty else { return false }
+        // The subscription route picks the provider from the chosen model and
+        // never reads the BYOK model fields, which stay empty in that mode. It
+        // needs a model on the project, or an app default to fall back to.
+        if usesSubscription {
+            return !project.subscriptionModel.trimmingCharacters(in: .whitespaces).isEmpty
+                || !subscriptionImageModel.trimmingCharacters(in: .whitespaces).isEmpty
+        }
         if project.providerEnum == .openai && project.openAIModel.trimmingCharacters(in: .whitespaces).isEmpty {
             return false
         }
@@ -289,6 +306,10 @@ struct ImageGenTabView: View {
                 config: config
             )
         } catch {
+            if let notice = InsufficientCreditsNotice(error) {
+                insufficientCredits = notice
+                return
+            }
             errorMessage = error.localizedDescription
             showError = true
         }

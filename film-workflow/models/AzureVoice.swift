@@ -1,6 +1,6 @@
 import Foundation
 
-struct AzureVoice: Codable, Hashable, Identifiable {
+nonisolated struct AzureVoice: Codable, Hashable, Identifiable, Sendable {
     let shortName: String
     let localName: String
     let locale: String

@@ -1,4 +1,5 @@
 import SwiftUI
+import TipKit
 
 struct CaptionSettingsView: View {
     @State private var settings = CaptionSettings.shared
@@ -370,6 +371,7 @@ struct CaptionSettingsView: View {
             .font(.caption)
             .foregroundStyle(.secondary)
         }
+        .popoverTip(FilmWorkflowTips.WhisperModelTip(), arrowEdge: .top)
     }
 
     @ViewBuilder

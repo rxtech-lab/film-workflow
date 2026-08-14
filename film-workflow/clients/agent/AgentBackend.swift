@@ -25,6 +25,10 @@ nonisolated enum AgentBackend: String, CaseIterable, Identifiable, Sendable {
     case appleIntelligence
     /// The endpoint, key and model from Settings › AI Provider.
     case openAICompatible
+    /// The RxFilm server, billed to the signed-in account's credits. Its model
+    /// list comes from `GET /api/v1/models`, so it is the live gateway catalog
+    /// rather than anything configured on this machine.
+    case subscription
     /// The `claude` CLI, talking to this app over MCP. macOS only.
     case claudeCode
     /// The `codex` CLI, same arrangement. macOS only.
@@ -36,6 +40,7 @@ nonisolated enum AgentBackend: String, CaseIterable, Identifiable, Sendable {
         switch self {
         case .appleIntelligence: return "Apple Intelligence"
         case .openAICompatible: return "OpenAI-compatible model"
+        case .subscription: return "RxFilm subscription"
         case .claudeCode: return "Claude Code"
         case .codex: return "Codex"
         }
@@ -48,9 +53,15 @@ nonisolated enum AgentBackend: String, CaseIterable, Identifiable, Sendable {
         switch self {
         case .appleIntelligence: return "Apple Intelligence"
         case .openAICompatible: return "OpenAI-compatible model"
+        case .subscription: return "RxFilm subscription"
         case .claudeCode: return "Claude Code"
         case .codex: return "Codex"
         }
+    }
+
+    /// Backends whose model id says more than their name does.
+    private var isModelNamed: Bool {
+        self == .openAICompatible || self == .subscription
     }
 
     /// The label an engine for this backend will report, known before one is
@@ -61,7 +72,7 @@ nonisolated enum AgentBackend: String, CaseIterable, Identifiable, Sendable {
         // For an OpenAI-compatible endpoint the backend name says nothing —
         // the model id *is* the answer. For a CLI the product name is what the
         // user recognizes, so the model qualifies it rather than replacing it.
-        return self == .openAICompatible ? model : "\(engineLabel) (\(model))"
+        return isModelNamed ? model : "\(engineLabel) (\(model))"
     }
 
     /// The model id configured for this backend, or empty for "whatever it
@@ -71,7 +82,8 @@ nonisolated enum AgentBackend: String, CaseIterable, Identifiable, Sendable {
         guard let config else { return "" }
         let raw: String
         switch self {
-        case .openAICompatible: raw = config.openAIModel
+        case .openAICompatible: raw = config.usesSubscription ? config.subscriptionChatModel : config.openAIModel
+        case .subscription: raw = config.subscriptionChatModel
         case .claudeCode: raw = config.claudeCodeModel
         case .codex: raw = config.codexModel
         case .appleIntelligence: return ""
@@ -114,7 +126,7 @@ nonisolated enum AgentBackend: String, CaseIterable, Identifiable, Sendable {
     var isCommandLine: Bool {
         switch self {
         case .claudeCode, .codex: return true
-        case .appleIntelligence, .openAICompatible: return false
+        case .appleIntelligence, .openAICompatible, .subscription: return false
         }
     }
 
@@ -127,7 +139,7 @@ nonisolated enum AgentBackend: String, CaseIterable, Identifiable, Sendable {
     var contextBudgetCharacters: Int {
         switch self {
         case .appleIntelligence: return 2_500
-        case .openAICompatible: return 40_000
+        case .openAICompatible, .subscription: return 40_000
         case .claudeCode, .codex: return 40_000
         }
     }
@@ -144,7 +156,7 @@ nonisolated enum AgentBackend: String, CaseIterable, Identifiable, Sendable {
     var translationBatchCharacters: Int {
         switch self {
         case .appleIntelligence: return 900
-        case .openAICompatible: return 6_000
+        case .openAICompatible, .subscription: return 6_000
         case .claudeCode, .codex: return 12_000
         }
     }
@@ -157,7 +169,7 @@ nonisolated enum AgentBackend: String, CaseIterable, Identifiable, Sendable {
     var translationBatchLines: Int {
         switch self {
         case .appleIntelligence: return 12
-        case .openAICompatible: return 60
+        case .openAICompatible, .subscription: return 60
         case .claudeCode, .codex: return 120
         }
     }
@@ -334,9 +346,17 @@ final class AgentBackendAvailability {
             return isAppleIntelligenceAvailable
         case .openAICompatible:
             guard let config else { return false }
+            // In subscription mode this engine already routes to the server, so
+            // it stays selectable there — threads created before the dedicated
+            // subscription engine existed keep working.
+            if config.usesSubscription { return isConfigured(.subscription, config: config) }
             return !config.openAIEndpoint.trimmingCharacters(in: .whitespaces).isEmpty
                 && !config.openAIKey.trimmingCharacters(in: .whitespaces).isEmpty
                 && !config.openAIModel.trimmingCharacters(in: .whitespaces).isEmpty
+        case .subscription:
+            // A thread can pin its own model from the composer, so the account
+            // is the only thing that has to be set up here.
+            return AuthManager.shared.isAuthenticated
         case .claudeCode, .codex:
             return executablePath(for: backend) != nil
         }
@@ -349,7 +369,12 @@ final class AgentBackendAvailability {
         case .appleIntelligence:
             return appleIntelligenceUnavailableReason
         case .openAICompatible:
+            if config?.usesSubscription == true {
+                return "Sign in to your RxLab account on the Account tab."
+            }
             return "Add an endpoint, key and model in Settings › AI Provider."
+        case .subscription:
+            return "Sign in to your RxLab account on the Account tab."
         case .claudeCode:
             return "The claude command isn't installed."
         case .codex:
@@ -385,7 +410,7 @@ extension AgentBackend {
         switch self {
         case .claudeCode: return "claude"
         case .codex: return "codex"
-        case .appleIntelligence, .openAICompatible: return ""
+        case .appleIntelligence, .openAICompatible, .subscription: return ""
         }
     }
 }

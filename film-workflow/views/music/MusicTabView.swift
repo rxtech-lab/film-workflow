@@ -1,5 +1,6 @@
 import SwiftData
 import SwiftUI
+import TipKit
 
 struct MusicTabView: View {
     @Environment(\.modelContext) private var modelContext
@@ -20,6 +21,7 @@ struct MusicTabView: View {
     @State private var isGenerating = false
     @State private var errorMessage: String?
     @State private var showError = false
+    @State private var insufficientCredits: InsufficientCreditsNotice?
     @State private var showGeneratedSheet = false
     @State private var showPromptSheet = false
 
@@ -54,6 +56,7 @@ struct MusicTabView: View {
             )
         }
         .navigationSplitViewColumnWidth(min: 200, ideal: 240)
+        .accountSidebarFooter()
         .navigationTitle("Projects")
         .toolbar {
             ToolbarItemGroup {
@@ -166,6 +169,7 @@ struct MusicTabView: View {
                         }
                     }
                     .disabled(isGenerating)
+                    .popoverTip(FilmWorkflowTips.GenerateMusicTip(), arrowEdge: .top)
                 }
 
                 ToolbarItem(placement: .primaryAction) {
@@ -183,6 +187,7 @@ struct MusicTabView: View {
         } message: {
             Text(errorMessage ?? "An unknown error occurred.")
         }
+        .insufficientCreditsAlert($insufficientCredits)
         .sheet(isPresented: $showGeneratedSheet) {
             if let project = selectedProject {
                 NavigationStack {
@@ -357,6 +362,10 @@ struct MusicTabView: View {
                 config: config
             )
         } catch {
+            if let notice = InsufficientCreditsNotice(error) {
+                insufficientCredits = notice
+                return
+            }
             errorMessage = error.localizedDescription
             showError = true
         }
@@ -452,6 +461,7 @@ struct MusicProjectDetailPanes: View {
                         }
                     }
                     .disabled(isGenerating)
+                    .popoverTip(FilmWorkflowTips.GenerateMusicTip(), arrowEdge: .top)
                 }
 
                 ToolbarItem(placement: .primaryAction) {

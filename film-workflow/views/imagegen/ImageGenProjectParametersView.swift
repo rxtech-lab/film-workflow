@@ -10,8 +10,22 @@ struct ImageGenProjectParametersView: View {
     @State private var googleImagenModels: [GoogleModelInfo] = []
     @State private var isLoadingGoogleModels = false
     @State private var googleModelsError: String?
+    @State private var usesSubscription = false
+    @State private var subscriptionModels: [PickableModel] = []
+    @State private var isLoadingSubscriptionModels = false
+    @State private var subscriptionModelsError: String?
 
+    /// Subscription models carry the provider the backend will actually call, so
+    /// the form follows that rather than guessing from the id: a Google model
+    /// runs on AI Studio and takes aspect ratio and resolution, while a gateway
+    /// model takes the size/quality/format controls.
     private var googleStyleForm: Bool {
+        if usesSubscription {
+            if let model = subscriptionModels.first(where: { $0.id == project.subscriptionModel }) {
+                return model.provider == "google"
+            }
+            return project.subscriptionModel.lowercased().contains("imagen")
+        }
         if project.providerEnum == .google { return true }
         if project.providerEnum == .openai
             && project.openAIModel.lowercased().contains("google") { return true }
@@ -20,18 +34,22 @@ struct ImageGenProjectParametersView: View {
 
     var body: some View {
         Form {
-            Section {
-                Picker("Provider", selection: Binding(
-                    get: { project.providerEnum },
-                    set: { project.providerEnum = $0; project.updatedAt = Date() }
-                )) {
-                    ForEach(ImageProvider.allCases) { provider in
-                        Text(provider.displayName).tag(provider)
+            // The subscription route picks the provider from the chosen model, so
+            // a provider toggle here would control nothing.
+            if !usesSubscription {
+                Section {
+                    Picker("Provider", selection: Binding(
+                        get: { project.providerEnum },
+                        set: { project.providerEnum = $0; project.updatedAt = Date() }
+                    )) {
+                        ForEach(ImageProvider.allCases) { provider in
+                            Text(provider.displayName).tag(provider)
+                        }
                     }
+                    .pickerStyle(.segmented)
+                } header: {
+                    Text("Provider")
                 }
-                .pickerStyle(.segmented)
-            } header: {
-                Text("Provider")
             }
 
             Section {
@@ -42,7 +60,36 @@ struct ImageGenProjectParametersView: View {
                 Text("Prompt")
             }
 
-            if project.providerEnum == .openai {
+            if usesSubscription {
+                Section {
+                    HStack {
+                        Picker("Model", selection: $project.subscriptionModel) {
+                            Text("Use app default").tag("")
+                            if !project.subscriptionModel.isEmpty,
+                               !subscriptionModels.contains(where: { $0.id == project.subscriptionModel }) {
+                                Text(project.subscriptionModel).tag(project.subscriptionModel)
+                            }
+                            ForEach(subscriptionModels) { model in
+                                Text(model.pickerLabel).tag(model.id)
+                            }
+                        }
+                        Button {
+                            Task { await loadSubscriptionModels(forceRefresh: true) }
+                        } label: {
+                            if isLoadingSubscriptionModels { ProgressView().controlSize(.small) }
+                            else { Image(systemName: "arrow.clockwise") }
+                        }
+                        .disabled(isLoadingSubscriptionModels)
+                    }
+                    if let subscriptionModelsError {
+                        Text(subscriptionModelsError).font(.caption).foregroundStyle(.red)
+                    }
+                } header: {
+                    Text("Subscription model")
+                }
+            }
+
+            if !usesSubscription && project.providerEnum == .openai {
                 Section {
                     HStack {
                         Picker("Model", selection: $project.openAIModel) {
@@ -79,7 +126,7 @@ struct ImageGenProjectParametersView: View {
                 }
             }
 
-            if project.providerEnum == .google {
+            if !usesSubscription && project.providerEnum == .google {
                 Section {
                     HStack {
                         Picker("Model", selection: $project.googleModel) {
@@ -124,7 +171,14 @@ struct ImageGenProjectParametersView: View {
         }
         .formStyle(.grouped)
         .onAppear {
-            if project.providerEnum == .openai {
+            let config = try? AppConfig.loadFromKeychain()
+            usesSubscription = config?.usesSubscription == true
+            if usesSubscription {
+                if project.subscriptionModel.isEmpty {
+                    project.subscriptionModel = config?.subscriptionImageModel ?? ""
+                }
+                Task { await loadSubscriptionModels(forceRefresh: false) }
+            } else if project.providerEnum == .openai {
                 Task { await loadImageModels(forceRefresh: false) }
             } else if project.providerEnum == .google {
                 Task { await loadGoogleImagenModels(forceRefresh: false) }
@@ -313,6 +367,21 @@ struct ImageGenProjectParametersView: View {
             googleImagenModels = models
         } catch {
             googleModelsError = error.localizedDescription
+        }
+    }
+
+    @MainActor
+    private func loadSubscriptionModels(forceRefresh: Bool) async {
+        isLoadingSubscriptionModels = true
+        subscriptionModelsError = nil
+        defer { isLoadingSubscriptionModels = false }
+        do {
+            subscriptionModels = try await BackendModelCatalog.shared.models(
+                capability: .image,
+                forceRefresh: forceRefresh
+            )
+        } catch {
+            subscriptionModelsError = error.localizedDescription
         }
     }
 }

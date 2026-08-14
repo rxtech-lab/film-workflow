@@ -6,6 +6,7 @@ enum Tabs: Codable, Identifiable, CaseIterable {
     case Narrative
     case Caption
     case ImageGen
+    case VideoGen
     case Remotion
     /// iOS only — on macOS the agent is its own window, not a tab.
     case Agent
@@ -17,6 +18,7 @@ enum Tabs: Codable, Identifiable, CaseIterable {
         case .Narrative: return "Narrative"
         case .Caption: return "Caption"
         case .ImageGen: return "ImageGen"
+        case .VideoGen: return "VideoGen"
         case .Remotion: return "Remotion"
         case .Agent: return "Agent"
         case .Settings: return "Settings"
@@ -29,6 +31,7 @@ enum Tabs: Codable, Identifiable, CaseIterable {
         case .Narrative: return "Narrative"
         case .Caption: return "Caption"
         case .ImageGen: return "Image"
+        case .VideoGen: return "Video"
         case .Remotion: return "Remotion"
         case .Agent: return "Agent"
         case .Settings: return "Settings"
@@ -41,6 +44,7 @@ enum Tabs: Codable, Identifiable, CaseIterable {
         case .Narrative: return "text.book.closed"
         case .Caption: return "captions.bubble"
         case .ImageGen: return "photo.on.rectangle.angled"
+        case .VideoGen: return "video.badge.waveform"
         case .Remotion: return "film.stack"
         case .Agent: return "sparkles"
         case .Settings: return "gear"
