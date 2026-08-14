@@ -9,6 +9,14 @@ enum AIRoute: Sendable {
     case byok
     case subscription
 
+    /// The subscription route regardless of the configured credential mode, for
+    /// callers that picked it explicitly — the agent window's subscription
+    /// engine, which a BYOK-mode user can still choose per thread.
+    static func requireSubscription() throws -> AIRoute {
+        guard AuthManager.shared.isAuthenticated else { throw AIRouteError.notSignedIn }
+        return .subscription
+    }
+
     static func resolve(_ config: AppConfig, for capability: AICapability) throws -> AIRoute {
         if config.usesSubscription {
             guard AuthManager.shared.isAuthenticated else { throw AIRouteError.notSignedIn }

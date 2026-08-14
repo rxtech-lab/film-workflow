@@ -7,12 +7,14 @@ import Foundation
 /// fallback is not optional in practice: proxies routinely accept the field and
 /// ignore it, or reject the request outright.
 nonisolated struct OpenAICaptionEngine: CaptionAIEngine {
-    var backend: AgentBackend { .openAICompatible }
-
     let endpoint: String
     let apiKey: String
     let model: String
     let usesSubscription: Bool
+    /// Which engine the user picked. The same loop serves both the configured
+    /// endpoint and the subscription server, and errors should name the one
+    /// that was chosen.
+    var backend: AgentBackend = .openAICompatible
 
     /// The model id, which is what the user actually chose — "OpenAI-compatible
     /// model" would tell them nothing they didn't already know.

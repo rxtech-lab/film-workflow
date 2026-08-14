@@ -28,18 +28,42 @@ actor BackendModelCatalog {
     static let shared = BackendModelCatalog()
 
     private let key = "subscription.modelCatalog"
-    private let ttl: TimeInterval = 24 * 60 * 60
+    /// The server catalog tracks the live gateway list, so a day-old snapshot
+    /// hides models that already exist. Short enough to pick new ones up on the
+    /// next visit, long enough that reopening a picker isn't a round trip.
+    private let ttl: TimeInterval = 60 * 60
     private var memory: ModelCatalogCache?
+    private var inFlight: Task<[PickableModel], Error>?
 
     func models(capability: AICapability, forceRefresh: Bool = false) async throws -> [PickableModel] {
-        if !forceRefresh, let cache = currentCache(), Date().timeIntervalSince(cache.fetchedAt) < ttl {
+        let cache = currentCache()
+        if !forceRefresh, let cache, Date().timeIntervalSince(cache.fetchedAt) < ttl {
             return cache.models.filter { $0.capability == capability.rawValue }
         }
-        let response: ModelCatalogResponse = try await BackendClient.shared.get("api/v1/models")
-        let cache = ModelCatalogCache(fetchedAt: Date(), models: response.models)
+        do {
+            return try await fetch().filter { $0.capability == capability.rawValue }
+        } catch {
+            // A failed refresh must not empty a picker that already has a list.
+            guard let cache else { throw error }
+            return cache.models.filter { $0.capability == capability.rawValue }
+        }
+    }
+
+    /// One request however many capabilities ask at once — the settings pane
+    /// loads chat, image and transcription in parallel off a single catalog.
+    private func fetch() async throws -> [PickableModel] {
+        if let inFlight { return try await inFlight.value }
+        let task = Task {
+            let response: ModelCatalogResponse = try await BackendClient.shared.get("api/v1/models")
+            return response.models
+        }
+        inFlight = task
+        defer { inFlight = nil }
+        let models = try await task.value
+        let cache = ModelCatalogCache(fetchedAt: Date(), models: models)
         memory = cache
         if let data = try? JSONEncoder().encode(cache) { UserDefaults.standard.set(data, forKey: key) }
-        return response.models.filter { $0.capability == capability.rawValue }
+        return models
     }
 
     private func currentCache() -> ModelCatalogCache? {

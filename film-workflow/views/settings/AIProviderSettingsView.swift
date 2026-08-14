@@ -585,9 +585,16 @@ struct AIProviderSettingsView: View {
         capability: AICapability,
         selection: Binding<String>
     ) -> some View {
+        let models = subscriptionModels.filter { $0.capability == capability.rawValue }
         Picker(title, selection: selection) {
             Text("Select a model").tag("")
-            ForEach(subscriptionModels.filter { $0.capability == capability.rawValue }) { model in
+            // The catalog tracks the live gateway list, so a saved model can
+            // vanish from it. Keep its row rather than showing a blank picker.
+            if !selection.wrappedValue.isEmpty,
+               !models.contains(where: { $0.id == selection.wrappedValue }) {
+                Text(selection.wrappedValue).tag(selection.wrappedValue)
+            }
+            ForEach(models) { model in
                 Text(model.pickerLabel).tag(model.id)
             }
         }

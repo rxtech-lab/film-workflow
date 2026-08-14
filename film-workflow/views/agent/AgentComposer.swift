@@ -88,6 +88,9 @@ struct AgentComposer: View {
         .onChange(of: text.wrappedValue) { _, newValue in
             updatePopups(for: newValue)
         }
+        // Fills the subscription engine's model submenu. Cheap after the first
+        // load — the catalog is cached and shared with the settings pane.
+        .task { await modelCatalog.loadSubscriptionChatModels(forceRefresh: false) }
     }
 
     // MARK: - Composer
@@ -225,7 +228,7 @@ struct AgentComposer: View {
             }
             Divider()
             ForEach(AgentBackend.supported) { backend in
-                if backend.isCommandLine {
+                if backend.isCommandLine || backend == .subscription {
                     Menu(backend.engineLabel) {
                         modelButton(backend: backend, model: nil)
                         Divider()

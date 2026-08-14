@@ -18,12 +18,15 @@ nonisolated enum AgentEvent: Sendable {
 
 nonisolated enum AgentRuntimeError: LocalizedError {
     case missingLLMConfig
+    case missingSubscriptionModel
     case maxIterationsExceeded(Int)
 
     var errorDescription: String? {
         switch self {
         case .missingLLMConfig:
             return "Set an OpenAI-compatible endpoint, key and model in Settings › AI Provider."
+        case .missingSubscriptionModel:
+            return "Choose a chat model in Settings › AI Provider, or pick one from the engine menu below the composer."
         case .maxIterationsExceeded(let n):
             return "The agent stopped after \(n) rounds of tool calls without finishing."
         }
@@ -68,9 +71,14 @@ enum AgentRuntime {
     /// conversation.
     private static let maxToolResultCharacters = 120_000
 
+    /// `route` and `model` are resolved by the caller rather than read back out
+    /// of `config`: the engine a thread picked decides where the turn goes, and
+    /// a thread may pin a model the settings don't name.
     static func run(
         request: AgentRunRequest,
         config: AppConfig,
+        route: AIRoute,
+        model: String,
         container: ModelContainer
     ) -> AsyncThrowingStream<AgentEvent, Error> {
         AsyncThrowingStream { continuation in
@@ -79,6 +87,8 @@ enum AgentRuntime {
                     try await runLoop(
                         request: request,
                         config: config,
+                        route: route,
+                        model: model,
                         container: container,
                         emit: { continuation.yield($0) }
                     )
@@ -96,13 +106,15 @@ enum AgentRuntime {
     private static func runLoop(
         request: AgentRunRequest,
         config: AppConfig,
+        route: AIRoute,
+        model: String,
         container: ModelContainer,
         emit: @escaping (AgentEvent) -> Void
     ) async throws {
-        let route = try AIRoute.resolve(config, for: .chat)
-        let model = config.usesSubscription ? config.subscriptionChatModel : config.openAIModel
         guard !model.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-            throw AgentRuntimeError.missingLLMConfig
+            throw route == .subscription
+                ? AgentRuntimeError.missingSubscriptionModel
+                : AgentRuntimeError.missingLLMConfig
         }
 
         let tools = AgentToolPolicy.openAIToolDefinitions(policy: request.policy)

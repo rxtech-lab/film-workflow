@@ -1,53 +1,17 @@
 import "server-only";
 
-import { gateway } from "@ai-sdk/gateway";
+import { gatewayModels, tokenPricing, type TokenPricing } from "@/lib/ai/gateway-models";
 import { NANO_USD_PER_USD } from "@/lib/billing/config";
 import type { AiUsageSnapshot } from "@/lib/db/schema";
 
-const CATALOG_TTL_MS = 15 * 60 * 1000;
-
-type ModelPricing = {
-  input: number;
-  output: number;
-  cachedInputTokens: number | null;
-  cacheCreationInputTokens: number | null;
-};
-
-let catalog: { loadedAt: number; prices: Map<string, ModelPricing> } | null = null;
-let inFlight: Promise<Map<string, ModelPricing>> | null = null;
-
-function usdPerToken(value: string | undefined) {
-  if (value === undefined) return null;
-  const parsed = Number(value);
-  return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
-}
-
-async function loadCatalog() {
-  const { models } = await gateway.getAvailableModels();
-  const prices = new Map<string, ModelPricing>();
+async function modelPrices() {
+  const models = await gatewayModels();
+  const prices = new Map<string, TokenPricing>();
   for (const model of models) {
-    const input = usdPerToken(model.pricing?.input);
-    const output = usdPerToken(model.pricing?.output);
-    if (input === null || output === null) continue;
-    prices.set(model.id, {
-      input,
-      output,
-      cachedInputTokens: usdPerToken(model.pricing?.cachedInputTokens ?? undefined),
-      cacheCreationInputTokens: usdPerToken(model.pricing?.cacheCreationInputTokens ?? undefined),
-    });
+    const price = tokenPricing(model);
+    if (price) prices.set(model.id, price);
   }
   return prices;
-}
-
-async function modelPrices(now: number) {
-  if (catalog && now - catalog.loadedAt < CATALOG_TTL_MS) return catalog.prices;
-  inFlight ??= loadCatalog()
-    .then((prices) => {
-      catalog = { loadedAt: Date.now(), prices };
-      return prices;
-    })
-    .finally(() => { inFlight = null; });
-  return inFlight;
 }
 
 /**
@@ -62,9 +26,9 @@ async function modelPrices(now: number) {
  * unreachable, so callers can fall back to manual review.
  */
 export async function estimatedCostNanoUsd(model: string, usage: AiUsageSnapshot): Promise<number | null> {
-  let prices: Map<string, ModelPricing>;
+  let prices: Map<string, TokenPricing>;
   try {
-    prices = await modelPrices(Date.now());
+    prices = await modelPrices();
   } catch {
     return null;
   }

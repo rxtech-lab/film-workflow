@@ -281,10 +281,28 @@ final class AgentController {
         )
 
         switch backend {
-        case .openAICompatible:
+        case .openAICompatible, .subscription:
             guard let config else { throw AgentRuntimeError.missingLLMConfig }
+            // The engine picks the route; `.openAICompatible` keeps following
+            // the credential mode, so threads that predate the subscription
+            // engine behave exactly as before.
+            let route = backend == .subscription
+                ? try AIRoute.requireSubscription()
+                : try AIRoute.resolve(config, for: .chat)
+            // The thread's own pick wins over Settings, as it does for the CLI
+            // engines — a thread can run a model the settings never named.
+            let pinned = thread.modelOverride(for: backend)?.trimmingCharacters(in: .whitespaces)
+            let model = pinned?.isEmpty == false
+                ? pinned!
+                : (route == .subscription ? config.subscriptionChatModel : config.openAIModel)
             try await consume(
-                AgentRuntime.run(request: request, config: config, container: container),
+                AgentRuntime.run(
+                    request: request,
+                    config: config,
+                    route: route,
+                    model: model,
+                    container: container
+                ),
                 thread: thread,
                 context: context
             )

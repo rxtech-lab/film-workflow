@@ -76,7 +76,7 @@ enum AgentCLIRunner {
             try await runClaude(context: context, emit: emit)
         case .codex:
             try await runCodex(context: context, emit: emit)
-        case .appleIntelligence, .openAICompatible:
+        case .appleIntelligence, .openAICompatible, .subscription:
             assertionFailure("AgentCLIRunner called with a non-CLI backend")
         }
     }

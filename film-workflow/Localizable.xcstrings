@@ -1489,6 +1489,16 @@
         }
       }
     },
+    "Choose a chat model in Settings › AI Provider, or pick one from the engine menu below the composer." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "请在“设置 › AI 提供方”中选择对话模型，或在输入框下方的引擎菜单中选择一个。"
+          }
+        }
+      }
+    },
     "Choose a Narration" : {
       "localizations" : {
         "zh-Hans" : {
@@ -6077,6 +6087,16 @@
         }
       }
     },
+    "RxFilm subscription" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "RxFilm 订阅"
+          }
+        }
+      }
+    },
     "sad" : {
       "localizations" : {
         "zh-Hans" : {
@@ -6581,9 +6601,6 @@
     "Sign in" : {
 
     },
-    "Sign in and choose a chat model in Settings › AI Provider." : {
-
-    },
     "Sign in on the Account tab before generating" : {
 
     },
@@ -6599,6 +6616,16 @@
     },
     "Sign in to RxLab" : {
 
+    },
+    "Sign in to your RxLab account on the Account tab." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "请在“账户”标签页登录你的 RxLab 账户。"
+          }
+        }
+      }
     },
     "Sign In…" : {
 

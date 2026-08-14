@@ -1,13 +1,13 @@
 import { gateway } from "@ai-sdk/gateway";
 import { generateImage } from "ai";
 import { z } from "zod";
-import { requireCatalogModel } from "@/lib/ai/catalog";
+import { imageUnitNanoUsd, requireCatalogModel } from "@/lib/ai/catalog";
 import { aiRouteError, noStoreHeaders, providerError } from "@/lib/ai/http";
 import { withMeteredOperation } from "@/lib/ai/meter";
 import { requireApiUser } from "@/lib/auth/bearer";
 import { billingConfig, reserveWithMargin } from "@/lib/billing/config";
 import { getBillingSummary } from "@/lib/billing/repository";
-import { estimateReservationPoints } from "@/lib/billing/unit-pricing";
+import { pointsForNanoUsd, unitPrice } from "@/lib/billing/unit-pricing";
 import { gatewayProviderOptions, recordUnitUsage, type MeteringContext } from "@/lib/billing/usage";
 
 export const maxDuration = 300;
@@ -75,25 +75,29 @@ export async function POST(request: Request) {
     const parsed = schema.safeParse(await request.json().catch(() => null));
     if (!parsed.success) return Response.json({ code: "bad_request", error: parsed.error.issues[0]?.message ?? "Invalid image request" }, { status: 400, headers: noStoreHeaders() });
     const input = parsed.data;
-    const model = requireCatalogModel(input.model, "image");
+    const model = await requireCatalogModel(input.model, "image");
     if (model.provider !== "google" && model.provider !== "gateway") throw new Error("MODEL_NOT_ALLOWED:image");
-    const billingProvider: "google" | "openai" = model.provider === "gateway" ? "openai" : "google";
-    const billingModel = model.provider === "gateway"
-      ? `${model.id.replace(/^openai\//, "")}:${input.quality === "low" || input.quality === "high" ? input.quality : "medium"}`
-      : model.id;
-    const reservePoints = reserveWithMargin(estimateReservationPoints({ provider: billingProvider, model: billingModel, unit: "images", units: input.n, floorPoints: billingConfig.imageReservationPoints }));
+    const quality = input.quality === "low" || input.quality === "high" ? input.quality : "medium";
+    // Gateway models are priced from the gateway's own published rate, falling
+    // back to the hand-maintained table for the ones it prices by tokens.
+    const nanoUsdPerImage = model.provider === "gateway"
+      ? await imageUnitNanoUsd(model.id, quality)
+      : unitPrice("google", model.id, "images")?.nanoUsdPerUnit ?? null;
+    if (nanoUsdPerImage === null) throw new Error(`PRICE_NOT_FOUND:${model.provider}:${model.id}:images`);
+    const billingModel = model.provider === "gateway" ? `${model.id}:${quality}` : model.id;
+    const reservePoints = reserveWithMargin(pointsForNanoUsd(nanoUsdPerImage * input.n, billingConfig.imageReservationPoints));
     const operationKey = request.headers.get("idempotency-key")?.slice(0, 180) || `image:${user.id}:${crypto.randomUUID()}`;
     const { value } = await withMeteredOperation({ user, feature: `Image · ${model.displayName}`, capability: "image", operationKey, reservePoints, run: async (context) => {
       const images = model.provider === "google" ? await googleImages(input) : await gatewayImages(input, context);
       if (!images.length) throw new Error("INVALID_PROVIDER_RESPONSE");
       const usage = await recordUnitUsage({
         context,
-        provider: model.provider === "gateway" ? "vercel-ai-gateway" : billingProvider,
-        pricingProvider: billingProvider,
+        provider: model.provider === "gateway" ? "vercel-ai-gateway" : "google",
         model: billingModel,
         capability: "image",
         unit: "images",
         units: images.length,
+        nanoUsdPerUnit: nanoUsdPerImage,
         eventId: "images",
       });
       return { images, chargedPoints: usage?.chargedPoints ?? 0 };

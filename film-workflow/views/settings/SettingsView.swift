@@ -6,12 +6,6 @@ struct SettingsView: View {
 
     var body: some View {
         TabView(selection: $navigation.settingsSection) {
-            AccountSettingsView()
-                .tabItem {
-                    Label("Account", systemImage: "person.crop.circle")
-                }
-                .tag(AppNavigation.SettingsSection.account)
-
             AIProviderSettingsView()
                 .tabItem {
                     Label("AI Provider", systemImage: "sparkles")
@@ -35,6 +29,12 @@ struct SettingsView: View {
                     Label("MCP Server", systemImage: "network")
                 }
                 .tag(AppNavigation.SettingsSection.mcp)
+
+            AccountSettingsView()
+                .tabItem {
+                    Label("Account", systemImage: "person.crop.circle")
+                }
+                .tag(AppNavigation.SettingsSection.account)
         }
         #if os(macOS)
         // Taller than the other tabs need: the Whisper model list is long.

@@ -5,7 +5,7 @@ import type { EmbeddingModelUsage, LanguageModelUsage, ProviderMetadata } from "
 import { billingConfig } from "@/lib/billing/config";
 import { estimatedCostNanoUsd } from "@/lib/billing/pricing";
 import { createPendingUsage, markUsageNeedsReview, nanoUsdFromUsd, settleProviderUsage } from "@/lib/billing/repository";
-import { unitCostNanoUsd, type UnitPrice } from "@/lib/billing/unit-pricing";
+import { unitCostFromRate, unitCostNanoUsd, type UnitPrice } from "@/lib/billing/unit-pricing";
 import type { AiUsageSnapshot, Capability, UnitKind } from "@/lib/db/schema";
 
 export type MeteringContext = {
@@ -153,6 +153,8 @@ export async function recordUnitUsage(input: {
   capability: Capability;
   unit: Exclude<UnitKind, "tokens">;
   units: number;
+  /** Rate published by the gateway for this model. Overrides the hand-maintained `UNIT_PRICES` table. */
+  nanoUsdPerUnit?: number;
   externalId?: string | null;
   eventId?: string;
 }) {
@@ -166,12 +168,14 @@ export async function recordUnitUsage(input: {
     unitKind: input.unit,
     unitCount: Math.ceil(input.units),
     externalId: input.externalId,
-    costNanoUsd: unitCostNanoUsd({
-      provider: input.pricingProvider ?? (input.provider as UnitPrice["provider"]),
-      model: input.model,
-      unit: input.unit,
-      units: input.units,
-    }),
+    costNanoUsd: input.nanoUsdPerUnit !== undefined
+      ? unitCostFromRate(input.nanoUsdPerUnit, input.units)
+      : unitCostNanoUsd({
+        provider: input.pricingProvider ?? (input.provider as UnitPrice["provider"]),
+        model: input.model,
+        unit: input.unit,
+        units: input.units,
+      }),
     idempotencyKey: `unit:${input.context.operationId}:${input.eventId ?? input.capability}`,
   });
 }

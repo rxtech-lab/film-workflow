@@ -234,6 +234,22 @@ enum CaptionAIEngineFactory {
                 usesSubscription: config.usesSubscription
             )
 
+        case .subscription:
+            guard let config else { throw CaptionAIError.noBackendAvailable }
+            guard AuthManager.shared.isAuthenticated else {
+                throw CaptionAIError.backendUnavailable(
+                    backend,
+                    AIRouteError.notSignedIn.localizedDescription
+                )
+            }
+            return OpenAICaptionEngine(
+                endpoint: config.openAIEndpoint,
+                apiKey: config.openAIKey,
+                model: config.subscriptionChatModel,
+                usesSubscription: true,
+                backend: .subscription
+            )
+
         case .claudeCode, .codex:
             #if os(macOS)
                 guard task == .translation else {

@@ -44,6 +44,11 @@ export function unitPrice(provider: UnitPrice["provider"], model: string, unit: 
     .sort((a, b) => b.model.replaceAll("*", "").length - a.model.replaceAll("*", "").length)[0] ?? null;
 }
 
+/** Exact-match lookup, for callers that must not inherit a wildcard row's price (`gpt-image-1*` is not a price for `gpt-image-1-mini`). */
+export function exactUnitPrice(provider: UnitPrice["provider"], model: string, unit: UnitPrice["unit"]) {
+  return UNIT_PRICES.find((entry) => entry.provider === provider && entry.unit === unit && entry.model === model) ?? null;
+}
+
 export function unitCostNanoUsd(input: { provider: UnitPrice["provider"]; model: string; unit: UnitPrice["unit"]; units: number }) {
   const price = unitPrice(input.provider, input.model, input.unit);
   if (!price) throw new Error(`PRICE_NOT_FOUND:${input.provider}:${input.model}:${input.unit}`);
@@ -52,6 +57,16 @@ export function unitCostNanoUsd(input: { provider: UnitPrice["provider"]; model:
 }
 
 export function estimateReservationPoints(input: { provider: UnitPrice["provider"]; model: string; unit: UnitPrice["unit"]; units: number; floorPoints?: number }) {
-  const cost = unitCostNanoUsd(input);
-  return Math.max(input.floorPoints ?? 1, Math.ceil(cost / NANO_USD_PER_POINT));
+  return pointsForNanoUsd(unitCostNanoUsd(input), input.floorPoints);
+}
+
+/** Cost of `units` at a rate resolved outside the table — the gateway's own published per-unit price. */
+export function unitCostFromRate(nanoUsdPerUnit: number, units: number) {
+  if (!Number.isFinite(nanoUsdPerUnit) || nanoUsdPerUnit < 0) throw new Error("INVALID_UNIT_RATE");
+  if (!Number.isFinite(units) || units < 0) throw new Error("INVALID_BILLABLE_UNITS");
+  return Math.ceil(units * nanoUsdPerUnit);
+}
+
+export function pointsForNanoUsd(nanoUsd: number, floorPoints?: number) {
+  return Math.max(floorPoints ?? 1, Math.ceil(nanoUsd / NANO_USD_PER_POINT));
 }

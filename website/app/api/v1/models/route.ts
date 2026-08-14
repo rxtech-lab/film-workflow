@@ -4,7 +4,7 @@ import { requireApiUser, unauthorizedResponse, UnauthorizedError } from "@/lib/a
 export async function GET(request: Request) {
   try {
     await requireApiUser(request);
-    const models = catalogForCapability(new URL(request.url).searchParams.get("capability"));
+    const models = await catalogForCapability(new URL(request.url).searchParams.get("capability"));
     return Response.json({ models }, { headers: { "Cache-Control": "private, max-age=0", "CDN-Cache-Control": "s-maxage=900" } });
   } catch (cause) {
     if (cause instanceof UnauthorizedError) return unauthorizedResponse();

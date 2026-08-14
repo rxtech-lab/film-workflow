@@ -70,7 +70,7 @@ export async function POST(request: Request) {
     const user = await requireApiUser(request);
     const input = await parseInput(request, user.id);
     try {
-      requireCatalogModel(input.model, "transcription");
+      await requireCatalogModel(input.model, "transcription");
       if (input.audio.length > 300 * 1024 * 1024) return Response.json({ code: "audio_too_large", error: "Audio exceeds the 300 MB limit." }, { status: 413, headers: noStoreHeaders() });
       const minutes = Math.ceil(measuredAudioDurationSeconds(input.audio, input.mimeType) / 60);
       const billingModel = input.provider === "azure" ? "azure-fast-transcription" : input.model;

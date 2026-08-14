@@ -19,11 +19,11 @@ describe("RxFilm billing rules", () => {
     expect(() => unitCostNanoUsd({ provider: "google", model: "unknown", unit: "images", units: 1 })).toThrow(/PRICE_NOT_FOUND/);
   });
 
-  it("keeps every catalog unit model covered by the pricing table", async () => {
-    const { MODEL_CATALOG } = await import("@/lib/ai/catalog");
-    expect(MODEL_CATALOG.length).toBeGreaterThan(0);
-    expect(MODEL_CATALOG.filter((entry) => entry.provider !== "gateway").every((entry) => entry.estimate)).toBe(true);
-    expect(MODEL_CATALOG).toContainEqual(expect.objectContaining({
+  it("keeps every direct-provider catalog model covered by the pricing table", async () => {
+    const { DIRECT_MODEL_CATALOG, GATEWAY_FALLBACK_CATALOG } = await import("@/lib/ai/catalog");
+    expect(DIRECT_MODEL_CATALOG.length).toBeGreaterThan(0);
+    expect(DIRECT_MODEL_CATALOG.every((entry) => entry.provider !== "gateway" && entry.estimate)).toBe(true);
+    expect(GATEWAY_FALLBACK_CATALOG).toContainEqual(expect.objectContaining({
       id: "openai/gpt-image-1",
       provider: "gateway",
       capability: "image",

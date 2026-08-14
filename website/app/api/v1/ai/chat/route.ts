@@ -25,7 +25,7 @@ export async function POST(request: Request) {
     const user = await requireApiUser(request);
     const parsed = schema.safeParse(await request.json().catch(() => null));
     if (!parsed.success) return Response.json({ code: "bad_request", error: parsed.error.issues[0]?.message ?? "Invalid chat request" }, { status: 400, headers: noStoreHeaders() });
-    const model = requireCatalogModel(parsed.data.model, "chat");
+    const model = await requireCatalogModel(parsed.data.model, "chat");
     if (model.provider !== "gateway") throw new Error("MODEL_NOT_ALLOWED:chat");
     const key = process.env.AI_GATEWAY_API_KEY?.trim();
     if (!key) throw new Error("AI_GATEWAY_NOT_CONFIGURED");
