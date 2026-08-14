@@ -73,3 +73,5 @@ appcast.xml
 release_notes.md
 release_notes.html
 xcodebuild-archive.log
+*.mdb
+index-build
