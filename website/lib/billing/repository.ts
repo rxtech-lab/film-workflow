@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, count, desc, eq, sql } from "drizzle-orm";
+import { and, count, desc, eq, ne, sql } from "drizzle-orm";
 import { billingConfig, CREDIT_PACKS, NANO_USD_PER_POINT } from "@/lib/billing/config";
 import { InsufficientCreditsError } from "@/lib/billing/errors";
 import { db } from "@/lib/db";
@@ -19,6 +19,7 @@ import {
 export type UsageFundingScope = "user" | "platform";
 
 export const BILLING_HISTORY_PAGE_SIZE = 20;
+export const USAGE_EVENT_PAGE_SIZE = 10;
 export const BILLING_SUMMARY_HISTORY_LIMIT = 10;
 
 export function nanoUsdFromUsd(usd: number) {
@@ -94,13 +95,13 @@ export async function getBillingSummary(userId: string) {
   };
 }
 
-function paginatedHistory(total: number, requestedPage: number) {
-  const pageCount = Math.max(1, Math.ceil(total / BILLING_HISTORY_PAGE_SIZE));
+function paginatedHistory(total: number, requestedPage: number, pageSize = BILLING_HISTORY_PAGE_SIZE) {
+  const pageCount = Math.max(1, Math.ceil(total / pageSize));
   const currentPage = Math.min(Math.max(1, requestedPage), pageCount);
   return {
     currentPage,
     pageCount,
-    offset: (currentPage - 1) * BILLING_HISTORY_PAGE_SIZE,
+    offset: (currentPage - 1) * pageSize,
   };
 }
 
@@ -114,6 +115,20 @@ export async function getPointHistory(userId: string, requestedPage: number) {
     .limit(BILLING_HISTORY_PAGE_SIZE)
     .offset(pagination.offset);
   return { entries, total, currentPage: pagination.currentPage, pageCount: pagination.pageCount };
+}
+
+export async function getUsageEventHistory(userId: string, requestedPage: number) {
+  // Everything except pending placeholders: an operation awaiting reconciliation
+  // still consumed provider capacity, so hiding it reads as "nothing happened".
+  const visibleForUser = and(eq(usageEvents.userId, userId), ne(usageEvents.status, "pending"));
+  const [{ total }] = await db.select({ total: count() }).from(usageEvents).where(visibleForUser);
+  const pagination = paginatedHistory(total, requestedPage, USAGE_EVENT_PAGE_SIZE);
+  const events = await db.select().from(usageEvents)
+    .where(visibleForUser)
+    .orderBy(desc(usageEvents.createdAt), desc(usageEvents.id))
+    .limit(USAGE_EVENT_PAGE_SIZE)
+    .offset(pagination.offset);
+  return { events, total, currentPage: pagination.currentPage, pageCount: pagination.pageCount };
 }
 
 export async function getInvoiceHistory(userId: string, requestedPage: number) {

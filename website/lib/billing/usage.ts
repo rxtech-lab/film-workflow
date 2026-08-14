@@ -70,6 +70,25 @@ export function gatewayGenerationId(responseId: string | null | undefined, provi
   return findGenerationId(providerMetadata) ?? (responseId?.startsWith("gen_") ? responseId : null);
 }
 
+const GENERATION_LOOKUP_ATTEMPTS = 4;
+const GENERATION_LOOKUP_BACKOFF_MS = 750;
+
+/**
+ * The gateway indexes a generation slightly after the completion response is
+ * flushed, so an immediate lookup 404s and would park the reservation for the
+ * reconcile cron. Retry briefly before giving up.
+ */
+async function generationInfo(id: string) {
+  for (let attempt = 1; ; attempt += 1) {
+    try {
+      return await gateway.getGenerationInfo({ id });
+    } catch (cause) {
+      if (attempt >= GENERATION_LOOKUP_ATTEMPTS) throw cause;
+      await new Promise((resolve) => setTimeout(resolve, GENERATION_LOOKUP_BACKOFF_MS * attempt));
+    }
+  }
+}
+
 export async function recordAiUsage(input: {
   context: MeteringContext;
   model: string;
@@ -98,7 +117,7 @@ export async function recordAiUsage(input: {
     });
   }
   try {
-    const generation = await gateway.getGenerationInfo({ id: generationId });
+    const generation = await generationInfo(generationId);
     return settleProviderUsage({
       userId: input.context.userId,
       reservationId: input.context.reservationId,

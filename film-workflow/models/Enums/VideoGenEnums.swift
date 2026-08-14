@@ -119,10 +119,16 @@ enum VeoModelFamily {
 
     var maxVideos: Int { self == .veo2 ? 2 : 1 }
 
+    /// Veo 3 onwards returns exactly one clip and rejects the parameter
+    /// outright — it can't be sent even as `1`.
+    var supportsNumberOfVideos: Bool { maxVideos > 1 }
+
     var supportsSeed: Bool { self != .veo2 }
 
-    /// Native audio arrived with Veo 3.
-    var supportsAudio: Bool { self != .veo2 }
+    /// Native audio arrived with Veo 3, but only as a *switchable* parameter:
+    /// Veo 2 has no audio at all and 3.1 Lite rejects the key outright (it
+    /// decides for itself), so neither can be sent one.
+    var supportsAudio: Bool { self != .veo2 && self != .veo31Lite }
 
     var supportsReferenceImages: Bool { self == .veo31 || self == .veo31Fast }
 

@@ -15,10 +15,16 @@ struct ImageGenProjectParametersView: View {
     @State private var isLoadingSubscriptionModels = false
     @State private var subscriptionModelsError: String?
 
+    /// Subscription models carry the provider the backend will actually call, so
+    /// the form follows that rather than guessing from the id: a Google model
+    /// runs on AI Studio and takes aspect ratio and resolution, while a gateway
+    /// model takes the size/quality/format controls.
     private var googleStyleForm: Bool {
         if usesSubscription {
+            if let model = subscriptionModels.first(where: { $0.id == project.subscriptionModel }) {
+                return model.provider == "google"
+            }
             return project.subscriptionModel.lowercased().contains("imagen")
-                || project.subscriptionModel.lowercased().contains("google")
         }
         if project.providerEnum == .google { return true }
         if project.providerEnum == .openai
@@ -28,18 +34,22 @@ struct ImageGenProjectParametersView: View {
 
     var body: some View {
         Form {
-            Section {
-                Picker("Provider", selection: Binding(
-                    get: { project.providerEnum },
-                    set: { project.providerEnum = $0; project.updatedAt = Date() }
-                )) {
-                    ForEach(ImageProvider.allCases) { provider in
-                        Text(provider.displayName).tag(provider)
+            // The subscription route picks the provider from the chosen model, so
+            // a provider toggle here would control nothing.
+            if !usesSubscription {
+                Section {
+                    Picker("Provider", selection: Binding(
+                        get: { project.providerEnum },
+                        set: { project.providerEnum = $0; project.updatedAt = Date() }
+                    )) {
+                        ForEach(ImageProvider.allCases) { provider in
+                            Text(provider.displayName).tag(provider)
+                        }
                     }
+                    .pickerStyle(.segmented)
+                } header: {
+                    Text("Provider")
                 }
-                .pickerStyle(.segmented)
-            } header: {
-                Text("Provider")
             }
 
             Section {

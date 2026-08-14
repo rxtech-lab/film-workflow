@@ -37,9 +37,16 @@ function azureMime(format: string) {
 async function azureSpeech(ssml: string, format: string) {
   const key = process.env.AZURE_SPEECH_KEY?.trim();
   if (!key) throw new Error("AZURE_SPEECH_NOT_CONFIGURED");
+  const startedAt = Date.now();
   const response = await fetch(`https://${azureRegion()}.tts.speech.microsoft.com/cognitiveservices/v1`, { method: "POST", headers: { "Ocp-Apim-Subscription-Key": key, "Content-Type": "application/ssml+xml", "X-Microsoft-OutputFormat": format, "User-Agent": "RxFilm-Studio" }, body: ssml, signal: AbortSignal.timeout(290_000) });
+  console.info("Speech provider responded", { provider: "azure", status: response.status, elapsedMs: Date.now() - startedAt, ssmlLength: ssml.length, format });
   if (!response.ok) await providerError(response);
-  return { audio: Buffer.from(await response.arrayBuffer()), mime: response.headers.get("content-type") ?? azureMime(format) };
+  const audio = Buffer.from(await response.arrayBuffer());
+  if (!audio.length) {
+    console.error("Azure speech returned an empty body", { status: response.status, elapsedMs: Date.now() - startedAt, ssml: ssml.slice(0, 800) });
+    throw new Error("INVALID_PROVIDER_RESPONSE");
+  }
+  return { audio, mime: response.headers.get("content-type") ?? azureMime(format) };
 }
 
 async function geminiSpeech(transcript: string, speakers: Array<{ name: string; voice: string }>) {
@@ -48,13 +55,31 @@ async function geminiSpeech(transcript: string, speakers: Array<{ name: string; 
   const speechConfig = speakers.length === 1
     ? { voiceConfig: { prebuiltVoiceConfig: { voiceName: speakers[0].voice } } }
     : { multiSpeakerVoiceConfig: { speakerVoiceConfigs: speakers.map((item) => ({ speaker: item.name, voiceConfig: { prebuiltVoiceConfig: { voiceName: item.voice } } })) } };
+  const startedAt = Date.now();
   const response = await fetch("https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-tts-preview:generateContent", { method: "POST", headers: { "Content-Type": "application/json", "x-goog-api-key": key }, body: JSON.stringify({ contents: [{ parts: [{ text: transcript }] }], generationConfig: { responseModalities: ["AUDIO"], speechConfig } }), signal: AbortSignal.timeout(290_000) });
+  console.info("Speech provider responded", { provider: "gemini", status: response.status, elapsedMs: Date.now() - startedAt, transcriptLength: transcript.length, speakers: speakers.map((item) => item.voice) });
   if (!response.ok) await providerError(response);
-  const body = await response.json() as { candidates?: Array<{ content?: { parts?: Array<{ inlineData?: { data?: string; mimeType?: string }; inline_data?: { data?: string; mime_type?: string } }> } }> };
+  const body = await response.json() as {
+    promptFeedback?: { blockReason?: string; safetyRatings?: unknown };
+    candidates?: Array<{ finishReason?: string; safetyRatings?: unknown; content?: { parts?: Array<{ text?: string; inlineData?: { data?: string; mimeType?: string }; inline_data?: { data?: string; mime_type?: string } }> } }>;
+  };
   for (const candidate of body.candidates ?? []) for (const part of candidate.content?.parts ?? []) {
     const inline = part.inlineData ?? (part.inline_data ? { data: part.inline_data.data, mimeType: part.inline_data.mime_type } : undefined);
     if (inline?.data) return { audio: Buffer.from(inline.data, "base64"), mime: inline.mimeType ?? "audio/L16;rate=24000" };
   }
+  // A 200 with no audio part is the model declining or truncating, never a transport
+  // failure — the reason only lives in blockReason/finishReason, so log it before
+  // it collapses into a generic INVALID_PROVIDER_RESPONSE.
+  console.error("Gemini speech returned no audio", {
+    elapsedMs: Date.now() - startedAt,
+    blockReason: body.promptFeedback?.blockReason ?? null,
+    finishReasons: (body.candidates ?? []).map((candidate) => candidate.finishReason ?? null),
+    partKinds: (body.candidates ?? []).flatMap((candidate) => (candidate.content?.parts ?? []).map((part) => Object.keys(part).join("+"))),
+    textParts: (body.candidates ?? []).flatMap((candidate) => (candidate.content?.parts ?? []).map((part) => part.text).filter(Boolean)),
+    promptFeedback: body.promptFeedback ?? null,
+    safetyRatings: (body.candidates ?? []).map((candidate) => candidate.safetyRatings ?? null),
+    transcript: transcript.slice(0, 800),
+  });
   throw new Error("INVALID_PROVIDER_RESPONSE");
 }
 
@@ -86,7 +111,10 @@ export async function POST(request: Request) {
   try {
     const user = await requireApiUser(request);
     const parsed = schema.safeParse(await request.json().catch(() => null));
-    if (!parsed.success) return Response.json({ code: "bad_request", error: parsed.error.issues[0]?.message ?? "Invalid speech request" }, { status: 400, headers: noStoreHeaders() });
+    if (!parsed.success) {
+      console.error("Speech request rejected", { issues: parsed.error.issues.map((issue) => `${issue.path.join(".")}: ${issue.message}`) });
+      return Response.json({ code: "bad_request", error: parsed.error.issues[0]?.message ?? "Invalid speech request" }, { status: 400, headers: noStoreHeaders() });
+    }
     const input = parsed.data;
     const operationKey = request.headers.get("idempotency-key")?.slice(0, 180) || `speech:${user.id}:${crypto.randomUUID()}`;
     const characters = billableCharacters(input.provider === "azure" ? input.ssml : input.transcript);
@@ -94,6 +122,7 @@ export async function POST(request: Request) {
     const estimated = input.provider === "azure"
       ? estimateReservationPoints({ provider: "azure", model, unit: "characters", units: characters, floorPoints: billingConfig.speechReservationPoints })
       : estimateReservationPoints({ provider: "google", model, unit: "audio_seconds", units: Math.max(1, characters / 12), floorPoints: billingConfig.speechReservationPoints });
+    console.info("Speech request", { provider: input.provider, model, characters, estimatedPoints: estimated, operationKey });
     const { value } = await withMeteredOperation({ user, feature: input.provider === "azure" ? "Narrative · Azure TTS" : "Narrative · Gemini TTS", capability: "speech", operationKey, reservePoints: reserveWithMargin(estimated), run: async (context) => {
       const output = input.provider === "azure" ? await azureSpeech(input.ssml, input.format) : await geminiSpeech(input.transcript, input.speakers);
       const usage = input.provider === "azure"
@@ -105,6 +134,14 @@ export async function POST(request: Request) {
       return { audio: responseAudio.toString("base64"), mime: responseMime, chargedPoints: usage?.chargedPoints ?? 0 };
     } });
     const summary = await getBillingSummary(user.id);
+    console.info("Speech request completed", { provider: input.provider, model, characters, audioBytes: Math.floor(value.audio.length * 3 / 4), chargedPoints: value.chargedPoints });
     return Response.json({ audio_base64: value.audio, mime_type: value.mime, characters, usage: { chargedPoints: value.chargedPoints, availablePoints: summary.availablePoints } }, { headers: noStoreHeaders() });
-  } catch (cause) { return aiRouteError(cause); }
+  } catch (cause) {
+    // aiRouteError only logs the message; the stack is what separates a provider
+    // rejection from a billing or database failure.
+    if (!(cause instanceof Error) || cause.name !== "UnauthorizedError") {
+      console.error("Speech request failed", { error: cause instanceof Error ? cause.message : String(cause), stack: cause instanceof Error ? cause.stack : undefined });
+    }
+    return aiRouteError(cause);
+  }
 }

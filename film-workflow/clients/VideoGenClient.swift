@@ -202,10 +202,13 @@ struct VideoGenClient {
         // rather than sent with a default — Veo rejects unknown combinations.
         var parameters: [String: Any] = [
             "aspectRatio": aspectRatio.rawValue,
-            "durationSeconds": duration.rawValue,
-            "personGeneration": personGeneration.rawValue,
-            "numberOfVideos": max(1, min(numberOfVideos, family.maxVideos))
+            // Number, not the enum's string rawValue — Veo rejects `"4"`.
+            "durationSeconds": duration.seconds,
+            "personGeneration": personGeneration.rawValue
         ]
+        if family.supportsNumberOfVideos {
+            parameters["numberOfVideos"] = max(1, min(numberOfVideos, family.maxVideos))
+        }
         if family.resolutions.contains(resolution) {
             parameters["resolution"] = resolution.rawValue
         }

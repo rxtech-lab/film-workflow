@@ -22,6 +22,8 @@ struct ImageGenTabView: View {
     @State private var showError = false
     @State private var insufficientCredits: InsufficientCreditsNotice?
     @State private var showHistorySheet = false
+    @State private var usesSubscription = false
+    @State private var subscriptionImageModel = ""
 
     private var isCompact: Bool {
         #if os(iOS)
@@ -168,6 +170,11 @@ struct ImageGenTabView: View {
                 }
             }
         }
+        .onAppear {
+            let config = try? AppConfig.loadFromKeychain()
+            usesSubscription = config?.usesSubscription == true
+            subscriptionImageModel = config?.subscriptionImageModel ?? ""
+        }
         .alert("Error", isPresented: $showError) {
             Button("OK") {}
         } message: {
@@ -270,6 +277,13 @@ struct ImageGenTabView: View {
 
     private func canGenerate(_ project: ImageGenProject) -> Bool {
         guard !project.prompt.trimmingCharacters(in: .whitespaces).isEmpty else { return false }
+        // The subscription route picks the provider from the chosen model and
+        // never reads the BYOK model fields, which stay empty in that mode. It
+        // needs a model on the project, or an app default to fall back to.
+        if usesSubscription {
+            return !project.subscriptionModel.trimmingCharacters(in: .whitespaces).isEmpty
+                || !subscriptionImageModel.trimmingCharacters(in: .whitespaces).isEmpty
+        }
         if project.providerEnum == .openai && project.openAIModel.trimmingCharacters(in: .whitespaces).isEmpty {
             return false
         }

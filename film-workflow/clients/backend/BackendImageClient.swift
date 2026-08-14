@@ -26,7 +26,14 @@ enum BackendImageClient {
             ? config.subscriptionImageModel
             : project.subscriptionModel
         guard !model.isEmpty else { throw BackendError.badRequest("Select a subscription image model.") }
-        let googleStyle = model.lowercased().contains("imagen") || model.lowercased().contains("google")
+        // The catalog says which provider the backend calls: Google models run on
+        // AI Studio and take aspect ratio and resolution, gateway models take the
+        // OpenAI-style size/quality/format controls. Fall back to the id only when
+        // the catalog is unreachable.
+        let catalog = (try? await BackendModelCatalog.shared.models(capability: .image)) ?? []
+        let provider = catalog.first { $0.id == model }?.provider
+        let googleStyle = provider == "google"
+            || (provider == nil && model.lowercased().contains("imagen"))
         let customSize = project.openAISizeEnum == .custom
             ? "\(project.openAICustomWidth)x\(project.openAICustomHeight)"
             : project.openAISizeEnum.apiValue

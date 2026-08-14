@@ -11,7 +11,10 @@ export function aiRouteError(cause: unknown) {
   const code = cause instanceof Error ? cause.message : "AI_REQUEST_FAILED";
   if (code.startsWith("MODEL_NOT_ALLOWED:")) return Response.json({ code: "model_not_allowed", error: "This model is not available for the selected capability." }, { status: 400, headers: noStoreHeaders() });
   if (code.startsWith("PRICE_NOT_FOUND:")) return Response.json({ code: "price_not_found", error: "Pricing is not configured for this model." }, { status: 400, headers: noStoreHeaders() });
-  if (code === "INVALID_PROVIDER_RESPONSE") return Response.json({ code: "provider_response_invalid", error: "The provider returned an unreadable response." }, { status: 502, headers: noStoreHeaders() });
+  if (code === "INVALID_PROVIDER_RESPONSE") {
+    console.error("Metered AI request failed", { code });
+    return Response.json({ code: "provider_response_invalid", error: "The provider returned an unreadable response." }, { status: 502, headers: noStoreHeaders() });
+  }
   console.error("Metered AI request failed", { code });
   return Response.json({ code: "ai_request_failed", error: "The AI request could not be completed." }, { status: 502, headers: noStoreHeaders() });
 }

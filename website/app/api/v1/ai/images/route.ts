@@ -1,13 +1,14 @@
 import { gateway } from "@ai-sdk/gateway";
 import { generateImage } from "ai";
 import { z } from "zod";
-import { imageUnitNanoUsd, requireCatalogModel } from "@/lib/ai/catalog";
+import { googleImagePrice, imageUnitNanoUsd, requireCatalogModel } from "@/lib/ai/catalog";
+import { googleImageMode, googleModels, type GoogleImageMode } from "@/lib/ai/google-models";
 import { aiRouteError, noStoreHeaders, providerError } from "@/lib/ai/http";
 import { withMeteredOperation } from "@/lib/ai/meter";
 import { requireApiUser } from "@/lib/auth/bearer";
 import { billingConfig, reserveWithMargin } from "@/lib/billing/config";
 import { getBillingSummary } from "@/lib/billing/repository";
-import { pointsForNanoUsd, unitPrice } from "@/lib/billing/unit-pricing";
+import { pointsForNanoUsd } from "@/lib/billing/unit-pricing";
 import { gatewayProviderOptions, recordUnitUsage, type MeteringContext } from "@/lib/billing/usage";
 
 export const maxDuration = 300;
@@ -27,18 +28,71 @@ const schema = z.object({
 
 type ImageResult = { b64_json: string; mime_type: string };
 
-async function googleImages(input: z.infer<typeof schema>): Promise<ImageResult[]> {
+function googleApiKey() {
   const key = process.env.GOOGLE_GENERATIVE_AI_API_KEY?.trim();
   if (!key) throw new Error("GOOGLE_AI_NOT_CONFIGURED");
-  const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(input.model)}:predict`, {
+  return key;
+}
+
+function googleUrl(model: string, method: string) {
+  return `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:${method}`;
+}
+
+/** How AI Studio serves this model. Resolved from the live list so a new image model needs no code change. */
+async function googleMethod(id: string): Promise<GoogleImageMode> {
+  const model = (await googleModels().catch(() => [])).find((entry) => entry.id === id);
+  const mode = model ? googleImageMode(model) : null;
+  if (!mode) throw new Error(`MODEL_NOT_ALLOWED:image:${id}`);
+  return mode;
+}
+
+/** Imagen: one `:predict` call returns `sampleCount` images. */
+async function imagenPredict(input: z.infer<typeof schema>): Promise<ImageResult[]> {
+  const response = await fetch(googleUrl(input.model, "predict"), {
     method: "POST",
-    headers: { "Content-Type": "application/json", "x-goog-api-key": key },
+    headers: { "Content-Type": "application/json", "x-goog-api-key": googleApiKey() },
     body: JSON.stringify({ instances: [{ prompt: input.prompt }], parameters: { sampleCount: input.n, ...(input.aspect_ratio ? { aspectRatio: input.aspect_ratio } : {}), ...(input.resolution ? { imageSize: input.resolution } : {}) } }),
     signal: AbortSignal.timeout(290_000),
   });
   if (!response.ok) await providerError(response);
   const body = await response.json() as { predictions?: Array<{ bytesBase64Encoded?: string; mimeType?: string }> };
   return (body.predictions ?? []).flatMap((image) => image.bytesBase64Encoded ? [{ b64_json: image.bytesBase64Encoded, mime_type: image.mimeType ?? "image/png" }] : []);
+}
+
+/**
+ * Gemini image models emit an inline image part from an ordinary
+ * `:generateContent` turn. They take no sample count, so `n` images means `n`
+ * calls — and billing counts what actually comes back, not what was asked for.
+ */
+async function geminiImages(input: z.infer<typeof schema>): Promise<ImageResult[]> {
+  const imageConfig = {
+    ...(input.aspect_ratio ? { aspectRatio: input.aspect_ratio } : {}),
+    ...(input.resolution ? { imageSize: input.resolution } : {}),
+  };
+  const once = async (): Promise<ImageResult[]> => {
+    const response = await fetch(googleUrl(input.model, "generateContent"), {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-goog-api-key": googleApiKey() },
+      body: JSON.stringify({
+        contents: [{ role: "user", parts: [{ text: input.prompt }] }],
+        generationConfig: { responseModalities: ["IMAGE"], ...(Object.keys(imageConfig).length ? { imageConfig } : {}) },
+      }),
+      signal: AbortSignal.timeout(290_000),
+    });
+    if (!response.ok) await providerError(response);
+    const body = await response.json() as {
+      candidates?: Array<{ content?: { parts?: Array<{ inlineData?: { data?: string; mimeType?: string } }> } }>;
+    };
+    return (body.candidates ?? []).flatMap((candidate) => (candidate.content?.parts ?? []).flatMap((part) =>
+      part.inlineData?.data ? [{ b64_json: part.inlineData.data, mime_type: part.inlineData.mimeType ?? "image/png" }] : []));
+  };
+  const batches = await Promise.all(Array.from({ length: input.n }, () => once()));
+  return batches.flat();
+}
+
+async function googleImages(input: z.infer<typeof schema>): Promise<ImageResult[]> {
+  const mode = await googleMethod(input.model);
+  return mode === "predict" ? imagenPredict(input) : geminiImages(input);
 }
 
 async function gatewayImages(input: z.infer<typeof schema>, context: MeteringContext): Promise<ImageResult[]> {
@@ -79,12 +133,14 @@ export async function POST(request: Request) {
     if (model.provider !== "google" && model.provider !== "gateway") throw new Error("MODEL_NOT_ALLOWED:image");
     const quality = input.quality === "low" || input.quality === "high" ? input.quality : "medium";
     // Gateway models are priced from the gateway's own published rate, falling
-    // back to the hand-maintained table for the ones it prices by tokens.
+    // back to the hand-maintained table for the ones it prices by tokens. Google
+    // models are priced per requested output resolution.
+    const googlePrice = model.provider === "google" ? googleImagePrice(model.id, input.resolution) : null;
     const nanoUsdPerImage = model.provider === "gateway"
       ? await imageUnitNanoUsd(model.id, quality)
-      : unitPrice("google", model.id, "images")?.nanoUsdPerUnit ?? null;
+      : googlePrice?.nanoUsdPerUnit ?? null;
     if (nanoUsdPerImage === null) throw new Error(`PRICE_NOT_FOUND:${model.provider}:${model.id}:images`);
-    const billingModel = model.provider === "gateway" ? `${model.id}:${quality}` : model.id;
+    const billingModel = model.provider === "gateway" ? `${model.id}:${quality}` : googlePrice?.model ?? model.id;
     const reservePoints = reserveWithMargin(pointsForNanoUsd(nanoUsdPerImage * input.n, billingConfig.imageReservationPoints));
     const operationKey = request.headers.get("idempotency-key")?.slice(0, 180) || `image:${user.id}:${crypto.randomUUID()}`;
     const { value } = await withMeteredOperation({ user, feature: `Image · ${model.displayName}`, capability: "image", operationKey, reservePoints, run: async (context) => {
