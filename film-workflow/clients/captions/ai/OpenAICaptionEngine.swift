@@ -7,11 +7,14 @@ import Foundation
 /// fallback is not optional in practice: proxies routinely accept the field and
 /// ignore it, or reject the request outright.
 nonisolated struct OpenAICaptionEngine: CaptionAIEngine {
-    var backend: AgentBackend { .openAICompatible }
-
     let endpoint: String
     let apiKey: String
     let model: String
+    let usesSubscription: Bool
+    /// Which engine the user picked. The same loop serves both the configured
+    /// endpoint and the subscription server, and errors should name the one
+    /// that was chosen.
+    var backend: AgentBackend = .openAICompatible
 
     /// The model id, which is what the user actually chose — "OpenAI-compatible
     /// model" would tell them nothing they didn't already know.
@@ -224,14 +227,23 @@ nonisolated struct OpenAICaptionEngine: CaptionAIEngine {
 
         let reply: OpenAIAssistantResponse
         do {
-            reply = try await OpenAIClient.chatWithTools(
-                messages: messages,
-                tools: [],
-                endpoint: endpoint,
-                apiKey: apiKey,
-                model: model,
-                extraBody: structured
-            )
+            if usesSubscription {
+                reply = try await OpenAIClient.chatWithToolsViaSubscription(
+                    messages: messages,
+                    tools: [],
+                    model: model,
+                    extraBody: structured
+                )
+            } else {
+                reply = try await OpenAIClient.chatWithTools(
+                    messages: messages,
+                    tools: [],
+                    endpoint: endpoint,
+                    apiKey: apiKey,
+                    model: model,
+                    extraBody: structured
+                )
+            }
         } catch {
             // Only a gateway feature gap is worth asking twice. Re-sending an
             // over-long prompt verbatim just spends another request to fail the
@@ -244,21 +256,30 @@ nonisolated struct OpenAICaptionEngine: CaptionAIEngine {
             guard CaptionAIRetryPolicy.isWorthSplitting(error) else { throw error }
 
             do {
-                reply = try await OpenAIClient.chatWithTools(
-                    messages: [
-                        OpenAIRichMessage(
-                            role: "system",
-                            content: instructions
-                                + "\n\nReply with JSON only, matching this shape:\n"
-                                + describe(schema)
-                        ),
-                        OpenAIRichMessage(role: "user", content: prompt),
-                    ],
-                    tools: [],
-                    endpoint: endpoint,
-                    apiKey: apiKey,
-                    model: model
-                )
+                let fallbackMessages = [
+                    OpenAIRichMessage(
+                        role: "system",
+                        content: instructions
+                            + "\n\nReply with JSON only, matching this shape:\n"
+                            + describe(schema)
+                    ),
+                    OpenAIRichMessage(role: "user", content: prompt),
+                ]
+                if usesSubscription {
+                    reply = try await OpenAIClient.chatWithToolsViaSubscription(
+                        messages: fallbackMessages,
+                        tools: [],
+                        model: model
+                    )
+                } else {
+                    reply = try await OpenAIClient.chatWithTools(
+                        messages: fallbackMessages,
+                        tools: [],
+                        endpoint: endpoint,
+                        apiKey: apiKey,
+                        model: model
+                    )
+                }
             } catch {
                 // The fallback's own failure says nothing the first one didn't.
                 throw error

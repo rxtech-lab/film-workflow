@@ -193,6 +193,7 @@ struct RemotionTabView: View {
             )
         }
         .navigationSplitViewColumnWidth(min: 180, ideal: 220)
+        .accountSidebarFooter()
         .navigationTitle("Remotion Projects")
         .toolbar {
             ToolbarItemGroup {

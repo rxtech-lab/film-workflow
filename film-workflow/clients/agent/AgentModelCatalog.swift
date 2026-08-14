@@ -128,12 +128,37 @@ final class AgentModelCatalog {
         #endif
     }
 
+    // MARK: - Subscription
+
+    /// Chat models the RxFilm server offers, which is the live gateway catalog
+    /// rather than anything this machine knows. Empty until a signed-in load
+    /// succeeds — the menu then falls back to the model chosen in Settings.
+    private(set) var subscriptionChatModels: [AgentModelOption] = []
+    private(set) var isLoadingSubscriptionModels = false
+
+    func loadSubscriptionChatModels(forceRefresh: Bool) async {
+        guard !isLoadingSubscriptionModels, AuthManager.shared.isAuthenticated else { return }
+        isLoadingSubscriptionModels = true
+        defer { isLoadingSubscriptionModels = false }
+        // Silent on failure: this fills a menu the user may never open, and
+        // `BackendModelCatalog` already serves its cache when the server is
+        // unreachable.
+        guard let models = try? await BackendModelCatalog.shared.models(
+            capability: .chat,
+            forceRefresh: forceRefresh
+        ) else { return }
+        subscriptionChatModels = models.map {
+            AgentModelOption(id: $0.id, displayName: $0.displayName)
+        }
+    }
+
     // MARK: - Lookup
 
     func options(for backend: AgentBackend) -> [AgentModelOption] {
         switch backend {
         case .claudeCode: return Self.claudeModels
         case .codex: return codexModels
+        case .subscription: return subscriptionChatModels
         case .appleIntelligence, .openAICompatible: return []
         }
     }

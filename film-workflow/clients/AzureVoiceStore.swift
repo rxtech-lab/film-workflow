@@ -6,13 +6,13 @@ import Observation
 final class AzureVoiceStore {
     static let shared = AzureVoiceStore()
 
-    struct MenuItem: Identifiable, Hashable {
+    nonisolated struct MenuItem: Identifiable, Hashable, Sendable {
         let shortName: String
         let displayText: String
         var id: String { shortName }
     }
 
-    struct LocaleGroup: Identifiable {
+    nonisolated struct LocaleGroup: Identifiable, Sendable {
         let locale: String
         let localeName: String
         let items: [MenuItem]
@@ -65,16 +65,23 @@ final class AzureVoiceStore {
             return
         }
 
-        guard !config.azureSpeechKey.isEmpty, !config.azureSpeechEndpoint.isEmpty else {
-            lastError = "Add your Azure Speech key and endpoint in Settings."
-            return
-        }
-
         do {
-            let fetched = try await AzureTTSClient.fetchVoices(
-                apiKey: config.azureSpeechKey,
-                endpoint: config.azureSpeechEndpoint
-            )
+            let fetched: [AzureVoice]
+            if config.usesSubscription {
+                fetched = try await BackendClient.shared.get(
+                    "api/v1/ai/voices",
+                    query: [URLQueryItem(name: "provider", value: "azure")]
+                )
+            } else {
+                guard !config.azureSpeechKey.isEmpty, !config.azureSpeechEndpoint.isEmpty else {
+                    lastError = "Add your Azure Speech key and endpoint in Settings."
+                    return
+                }
+                fetched = try await AzureTTSClient.fetchVoices(
+                    apiKey: config.azureSpeechKey,
+                    endpoint: config.azureSpeechEndpoint
+                )
+            }
             voices = sorted(fetched)
             saveDiskCache(voices)
         } catch {

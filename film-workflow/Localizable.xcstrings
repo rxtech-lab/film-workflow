@@ -43,6 +43,9 @@
     "\"%@\" and its generated images will be permanently deleted." : {
 
     },
+    "\"%@\" and its generated videos will be permanently deleted." : {
+
+    },
     "\"%@\" and its known spelling variants will be permanently deleted." : {
 
     },
@@ -163,6 +166,9 @@
         }
       }
     },
+    "%@ credits" : {
+
+    },
     "%@ doesn't detect speakers. You can select captions in the editor and assign speakers in bulk." : {
       "localizations" : {
         "zh-Hans" : {
@@ -192,6 +198,9 @@
           }
         }
       }
+    },
+    "%@ reserved for work in progress" : {
+
     },
     "%@ returns no word timings, so caption times will be estimated. Azure or on-device Whisper are much more accurate here." : {
       "localizations" : {
@@ -273,6 +282,9 @@
           }
         }
       }
+    },
+    "%lld credits" : {
+
     },
     "%lld ms" : {
       "localizations" : {
@@ -388,6 +400,9 @@
       },
       "shouldTranslate" : false
     },
+    "−%@" : {
+
+    },
     "−10" : {
       "localizations" : {
         "zh-Hans" : {
@@ -410,6 +425,9 @@
       },
       "shouldTranslate" : false
     },
+    "1080p and 4K render 8-second clips only." : {
+
+    },
     "7711" : {
       "localizations" : {
         "zh-Hans" : {
@@ -430,6 +448,12 @@
         }
       }
     },
+    "A generation is still running" : {
+
+    },
+    "A generation is still running with the provider." : {
+
+    },
     "A Major" : {
       "localizations" : {
         "zh-Hans" : {
@@ -449,6 +473,12 @@
           }
         }
       }
+    },
+    "Account" : {
+
+    },
+    "Account…" : {
+
     },
     "Acoustic Guitar" : {
       "localizations" : {
@@ -510,6 +540,12 @@
         }
       }
     },
+    "Add Credits" : {
+
+    },
+    "Add Credits…" : {
+
+    },
     "Add Images" : {
       "localizations" : {
         "zh-Hans" : {
@@ -543,6 +579,9 @@
         }
       }
     },
+    "Add Reference Images" : {
+
+    },
     "Add sections above to define your song structure." : {
       "localizations" : {
         "zh-Hans" : {
@@ -572,6 +611,9 @@
           }
         }
       }
+    },
+    "Adults only" : {
+
     },
     "Agent" : {
 
@@ -606,6 +648,9 @@
           }
         }
       }
+    },
+    "AI credentials" : {
+
     },
     "AI model" : {
       "localizations" : {
@@ -697,6 +742,9 @@
         }
       }
     },
+    "Allow all" : {
+
+    },
     "amazement" : {
       "localizations" : {
         "zh-Hans" : {
@@ -769,6 +817,16 @@
     },
     "Apple Intelligence runs on device and cannot call tools, so it can answer questions but not change your projects. Caption edits are the exception — it can still propose those." : {
 
+    },
+    "Apple Intelligence stays on device. The other backends use your provider settings or a CLI you already have installed." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Apple Intelligence 在设备端运行。其他后端使用您的服务商设置，或已安装的命令行工具。"
+          }
+        }
+      }
     },
     "Apple Translation" : {
       "localizations" : {
@@ -846,6 +904,16 @@
         }
       }
     },
+    "Ask the agent to do the work" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "让智能体代您完成工作"
+          }
+        }
+      }
+    },
     "Aspect Ratio" : {
       "localizations" : {
         "zh-Hans" : {
@@ -885,6 +953,9 @@
           }
         }
       }
+    },
+    "Available credits" : {
+
     },
     "Azure Speech" : {
       "localizations" : {
@@ -1232,6 +1303,16 @@
     "Caption edits" : {
 
     },
+    "Caption edits from AI arrive here as proposals you can accept or reject one by one." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "AI 提出的字幕修改会以建议形式显示在这里，您可以逐条接受或拒绝。"
+          }
+        }
+      }
+    },
     "Caption generation failed" : {
       "localizations" : {
         "zh-Hans" : {
@@ -1408,6 +1489,16 @@
         }
       }
     },
+    "Choose a chat model in Settings › AI Provider, or pick one from the engine menu below the composer." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "请在“设置 › AI 提供方”中选择对话模型，或在输入框下方的引擎菜单中选择一个。"
+          }
+        }
+      }
+    },
     "Choose a Narration" : {
       "localizations" : {
         "zh-Hans" : {
@@ -1474,6 +1565,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "选择一个音频文件，或已生成的旁白。"
+          }
+        }
+      }
+    },
+    "Choose where AI work runs" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "选择 AI 任务的运行位置"
           }
         }
       }
@@ -1625,6 +1726,9 @@
       }
     },
     "Click \"Create Composition & Start Studio\" to start the preview." : {
+
+    },
+    "Clips: %lld" : {
 
     },
     "Close" : {
@@ -1814,6 +1918,9 @@
     "Create Composition & Start Studio" : {
 
     },
+    "Credential mode" : {
+
+    },
     "Custom…" : {
       "localizations" : {
         "zh-Hans" : {
@@ -1907,6 +2014,9 @@
         }
       }
     },
+    "Default video model" : {
+
+    },
     "Defaults for new projects" : {
       "localizations" : {
         "zh-Hans" : {
@@ -1979,6 +2089,9 @@
 
     },
     "Delete this generated track?" : {
+
+    },
+    "Delete this generated video?" : {
 
     },
     "Delete this glossary term?" : {
@@ -2070,6 +2183,9 @@
         }
       }
     },
+    "Delete this video project?" : {
+
+    },
     "Delete Thread" : {
 
     },
@@ -2077,6 +2193,9 @@
 
     },
     "Delete Version" : {
+
+    },
+    "Delete Video" : {
 
     },
     "Delete…" : {
@@ -2111,6 +2230,26 @@
         }
       }
     },
+    "Describe what you want in plain language; the agent operates the projects for you." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "用自然语言描述需求，智能体会操作您的项目。"
+          }
+        }
+      }
+    },
+    "Describe what you want in plain language; the agent operates the projects for you. ⌘⌥0 opens it any time." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "用自然语言描述需求，智能体会操作您的项目。按 ⌘⌥0 可随时打开。"
+          }
+        }
+      }
+    },
     "Detect speakers" : {
       "localizations" : {
         "zh-Hans" : {
@@ -2141,6 +2280,9 @@
         }
       }
     },
+    "Don't allow people" : {
+
+    },
     "Don't re-wrap long captions" : {
       "localizations" : {
         "zh-Hans" : {
@@ -2167,6 +2309,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "下载模型…"
+          }
+        }
+      }
+    },
+    "Download a Whisper model once and captions are generated entirely on this device." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Whisper 模型只需下载一次，即可完全在本设备上生成字幕。"
           }
         }
       }
@@ -2210,6 +2362,9 @@
           }
         }
       }
+    },
+    "Downloading video…" : {
+
     },
     "Dreamy" : {
       "localizations" : {
@@ -2270,6 +2425,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "E小调"
+          }
+        }
+      }
+    },
+    "Each run keeps the previous takes, so you can compare before you commit to one." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "每次生成都会保留之前的版本，方便比较后再决定采用哪一个。"
           }
         }
       }
@@ -2611,6 +2776,16 @@
     "Every message and the saved summary in this thread will be permanently deleted. Projects are not affected." : {
 
     },
+    "Every thread targets one project" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "每个对话都对应一个项目"
+          }
+        }
+      }
+    },
     "Excitable" : {
       "localizations" : {
         "zh-Hans" : {
@@ -2761,6 +2936,9 @@
         }
       }
     },
+    "First frame" : {
+
+    },
     "Flute" : {
       "localizations" : {
         "zh-Hans" : {
@@ -2834,6 +3012,9 @@
           }
         }
       }
+    },
+    "Frames" : {
+
     },
     "French" : {
       "localizations" : {
@@ -2935,6 +3116,16 @@
         }
       }
     },
+    "Generate a take" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "生成一个版本"
+          }
+        }
+      }
+    },
     "Generate Approximate Timings" : {
       "localizations" : {
         "zh-Hans" : {
@@ -2944,6 +3135,9 @@
           }
         }
       }
+    },
+    "Generate audio" : {
+
     },
     "Generate audio in the Narrative tab first." : {
       "localizations" : {
@@ -3058,6 +3252,15 @@
         }
       }
     },
+    "Generated Video" : {
+
+    },
+    "Generated Videos" : {
+
+    },
+    "Generated videos will appear here." : {
+
+    },
     "Generating Audio" : {
       "localizations" : {
         "zh-Hans" : {
@@ -3077,6 +3280,12 @@
           }
         }
       }
+    },
+    "Generating Video" : {
+
+    },
+    "Generating video…" : {
+
     },
     "Genre" : {
       "localizations" : {
@@ -3530,6 +3739,12 @@
         }
       }
     },
+    "Keep Waiting" : {
+
+    },
+    "Keeps characters or objects consistent across shots. Describe the scene in the prompt — Veo has no token syntax for referring to them." : {
+
+    },
     "Keeps the word between its neighbours." : {
       "localizations" : {
         "zh-Hans" : {
@@ -3620,6 +3835,9 @@
         }
       }
     },
+    "Last frame" : {
+
+    },
     "Last run" : {
       "localizations" : {
         "zh-Hans" : {
@@ -3700,6 +3918,16 @@
         }
       }
     },
+    "Let other tools drive this app" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "让其他工具控制此应用"
+          }
+        }
+      }
+    },
     "Limits" : {
 
     },
@@ -3758,6 +3986,9 @@
           }
         }
       }
+    },
+    "Loading subscription catalog…" : {
+
     },
     "Loading the Studio preview…" : {
       "localizations" : {
@@ -3839,6 +4070,9 @@
           }
         }
       }
+    },
+    "Manage credits and subscription usage." : {
+
     },
     "Mature" : {
       "localizations" : {
@@ -4164,6 +4398,9 @@
         }
       }
     },
+    "Negative Prompt" : {
+
+    },
     "Network" : {
       "localizations" : {
         "zh-Hans" : {
@@ -4303,6 +4540,9 @@
         }
       }
     },
+    "No metered usage yet." : {
+
+    },
     "No model downloaded yet. Download one below to transcribe on this device." : {
       "localizations" : {
         "zh-Hans" : {
@@ -4367,6 +4607,9 @@
     "No project" : {
 
     },
+    "No reference images." : {
+
+    },
     "No Sections" : {
       "localizations" : {
         "zh-Hans" : {
@@ -4388,6 +4631,9 @@
       }
     },
     "No Threads" : {
+
+    },
+    "No videos yet" : {
 
     },
     "No voices loaded. Configure Azure in Settings and retry." : {
@@ -4460,6 +4706,9 @@
           }
         }
       }
+    },
+    "Not enough credits" : {
+
     },
     "Not selected" : {
       "localizations" : {
@@ -4709,6 +4958,12 @@
         }
       }
     },
+    "Optional. A first frame animates that image; adding a last frame makes the model interpolate between the two." : {
+
+    },
+    "Options follow what the selected model supports." : {
+
+    },
     "Or type a model id" : {
       "localizations" : {
         "zh-Hans" : {
@@ -4862,6 +5117,9 @@
         }
       }
     },
+    "People" : {
+
+    },
     "Percussion" : {
       "localizations" : {
         "zh-Hans" : {
@@ -4901,6 +5159,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "选择"
+          }
+        }
+      }
+    },
+    "Pick a provider in Settings › Captions first — on-device Whisper needs a model downloaded." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "请先在“设置 › 字幕”中选择服务商；设备端 Whisper 需要先下载模型。"
           }
         }
       }
@@ -5029,6 +5297,9 @@
         }
       }
     },
+    "Prefilled on new video projects. Uses the Google AI API key above." : {
+
+    },
     "Preparing audio…" : {
       "localizations" : {
         "zh-Hans" : {
@@ -5065,6 +5336,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "预览语音"
+          }
+        }
+      }
+    },
+    "Preview your composition" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "预览合成"
           }
         }
       }
@@ -5138,6 +5419,9 @@
           }
         }
       }
+    },
+    "Provider credentials stay on the RxFilm server. Model prices are estimates; actual usage is deducted after each operation." : {
+
     },
     "Providers" : {
       "localizations" : {
@@ -5243,6 +5527,9 @@
         }
       }
     },
+    "Recent usage" : {
+
+    },
     "Recommended" : {
       "localizations" : {
         "zh-Hans" : {
@@ -5283,6 +5570,9 @@
         }
       }
     },
+    "Reference images render 8-second clips only." : {
+
+    },
     "Refresh" : {
       "localizations" : {
         "zh-Hans" : {
@@ -5302,6 +5592,9 @@
           }
         }
       }
+    },
+    "Refresh model catalog" : {
+
     },
     "Refresh model list" : {
       "localizations" : {
@@ -5379,6 +5672,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Remotion 项目"
+          }
+        }
+      }
+    },
+    "Remotion Studio runs inside the app; the runtime installs itself the first time you open it." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Remotion Studio 在应用内运行；第一次打开时会自动安装运行环境。"
           }
         }
       }
@@ -5530,7 +5833,11 @@
         }
       }
     },
+    "Required on every request. Subscription mode can spend credits, including through localhost tools." : {
+
+    },
     "Required only when bound to all interfaces. Localhost requests skip the check." : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -5541,6 +5848,7 @@
       }
     },
     "Required when bound to 0.0.0.0. Send `Authorization: Bearer <token>` on every request." : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -5549,6 +5857,9 @@
           }
         }
       }
+    },
+    "Required when bound to all interfaces. Localhost BYOK requests skip the check." : {
+
     },
     "Reset parameters" : {
       "localizations" : {
@@ -5579,6 +5890,12 @@
           }
         }
       }
+    },
+    "Resume" : {
+
+    },
+    "Resume It" : {
+
     },
     "Retime Captions" : {
       "localizations" : {
@@ -5677,6 +5994,16 @@
     "Review before applying" : {
 
     },
+    "Review before it applies" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "应用前先审阅"
+          }
+        }
+      }
+    },
     "Review Splits…" : {
       "localizations" : {
         "zh-Hans" : {
@@ -5756,6 +6083,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "俄语"
+          }
+        }
+      }
+    },
+    "RxFilm subscription" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "RxFilm 订阅"
           }
         }
       }
@@ -5850,6 +6187,9 @@
         }
       }
     },
+    "Saving…" : {
+
+    },
     "Saxophone" : {
       "localizations" : {
         "zh-Hans" : {
@@ -5929,6 +6269,9 @@
           }
         }
       }
+    },
+    "Seed" : {
+
     },
     "Select a Caption Project" : {
       "localizations" : {
@@ -6145,6 +6488,16 @@
         }
       }
     },
+    "Set your AI provider once" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "一次设置 AI 服务商"
+          }
+        }
+      }
+    },
     "Sets the overall feeling or atmosphere of the music. Included at the top of the generated prompt." : {
       "localizations" : {
         "zh-Hans" : {
@@ -6244,6 +6597,44 @@
           }
         }
       }
+    },
+    "Sign in" : {
+
+    },
+    "Sign in on the Account tab before generating" : {
+
+    },
+    "Sign in on the Account tab, choose RxFilm credits here, and add credits when needed. Each hosted generation deducts its actual usage." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在“账户”标签页登录，在此选择“RxFilm 点数”，并按需充值。每次托管式生成都会按实际用量扣除点数。"
+          }
+        }
+      }
+    },
+    "Sign in to RxLab" : {
+
+    },
+    "Sign in to your RxLab account on the Account tab." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "请在“账户”标签页登录你的 RxLab 账户。"
+          }
+        }
+      }
+    },
+    "Sign In…" : {
+
+    },
+    "Sign Out" : {
+
+    },
+    "Sign out?" : {
+
     },
     "Size" : {
       "localizations" : {
@@ -6485,6 +6876,9 @@
         }
       }
     },
+    "Start a New One" : {
+
+    },
     "Start a new thread" : {
 
     },
@@ -6540,6 +6934,12 @@
           }
         }
       }
+    },
+    "Started %@ ago" : {
+
+    },
+    "Starting a new generation abandons the running one — the provider may still bill it." : {
+
     },
     "Starting Remotion Studio…" : {
       "localizations" : {
@@ -6625,6 +7025,12 @@
     "Stop the running turn" : {
 
     },
+    "Stop Waiting" : {
+
+    },
+    "Stop waiting for this video?" : {
+
+    },
     "Strings" : {
       "localizations" : {
         "zh-Hans" : {
@@ -6665,6 +7071,9 @@
         }
       }
     },
+    "Submitting…" : {
+
+    },
     "SubRip" : {
       "localizations" : {
         "zh-Hans" : {
@@ -6684,6 +7093,12 @@
           }
         }
       }
+    },
+    "Subscription model" : {
+
+    },
+    "Subscription models" : {
+
     },
     "Switch between transcription runs" : {
 
@@ -6832,6 +7247,16 @@
         }
       }
     },
+    "The endpoint, key and model here are what the agent, caption review and translation all use." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此处的端点、密钥和模型会供智能体、字幕审阅和翻译共同使用。"
+          }
+        }
+      }
+    },
     "The engine that produced these suggestions." : {
       "localizations" : {
         "zh-Hans" : {
@@ -6846,6 +7271,9 @@
 
     },
     "The generated image file will be permanently deleted." : {
+
+    },
+    "The generated video file will be permanently deleted." : {
 
     },
     "The model decides where a long caption should break — at a clause boundary, never mid-phrase, and never leaving a stub second line. It leaves a caption alone when no split improves it. The length above is the threshold it works to." : {
@@ -6903,6 +7331,9 @@
           }
         }
       }
+    },
+    "The provider will keep working on it and may still bill this job. You can resume it from the project later." : {
+
     },
     "The shortcode will be permanently removed from this paragraph." : {
 
@@ -6967,6 +7398,9 @@
         }
       }
     },
+    "This generation is over a day old and probably expired." : {
+
+    },
     "This lyric section will be permanently deleted." : {
 
     },
@@ -6979,6 +7413,9 @@
           }
         }
       }
+    },
+    "This project already has a generation running." : {
+
     },
     "This proposal can no longer be read." : {
       "localizations" : {
@@ -7110,6 +7547,9 @@
         }
       }
     },
+    "Top Up" : {
+
+    },
     "TR-808 Drum Machine" : {
       "localizations" : {
         "zh-Hans" : {
@@ -7136,6 +7576,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "将此音频转写为字幕"
+          }
+        }
+      }
+    },
+    "Transcribe without sending audio anywhere" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无需上传音频即可转写"
           }
         }
       }
@@ -7345,6 +7795,16 @@
         }
       }
     },
+    "Turn audio into captions" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "将音频转换为字幕"
+          }
+        }
+      }
+    },
     "Turn on Apple Intelligence in System Settings to use it here." : {
       "localizations" : {
         "zh-Hans" : {
@@ -7355,12 +7815,32 @@
         }
       }
     },
+    "Turning this on starts a local server your editor or agent can connect to with the generated token." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "开启后会启动本地服务器，编辑器或智能体可使用生成的令牌连接。"
+          }
+        }
+      }
+    },
     "Type" : {
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "类型"
+          }
+        }
+      }
+    },
+    "Type @ in the composer to switch the project. The thread keeps that target, so several conversations can work on different projects." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在输入框中键入 @ 可切换项目。对话会记住所选目标，因此多个对话可以同时处理不同项目。"
           }
         }
       }
@@ -7464,6 +7944,15 @@
         }
       }
     },
+    "Usage by capability" : {
+
+    },
+    "Use a fixed seed" : {
+
+    },
+    "Use app default" : {
+
+    },
     "Use current audio time (%@)" : {
       "localizations" : {
         "zh-Hans" : {
@@ -7490,6 +7979,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "使用旁白…"
+          }
+        }
+      }
+    },
+    "Use RxFilm credits" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "使用 RxFilm 点数"
           }
         }
       }
@@ -7526,6 +8025,9 @@
           }
         }
       }
+    },
+    "Use your account to manage credits and subscription usage." : {
+
     },
     "Used" : {
       "localizations" : {
@@ -7575,6 +8077,9 @@
           }
         }
       }
+    },
+    "Using your RxLab account balance" : {
+
     },
     "Variants: %lld" : {
       "localizations" : {
@@ -7639,6 +8144,15 @@
         }
       }
     },
+    "Video" : {
+
+    },
+    "Video generation usually takes a few minutes." : {
+
+    },
+    "Video Parameters" : {
+
+    },
     "Vietnamese" : {
       "localizations" : {
         "zh-Hans" : {
@@ -7648,6 +8162,9 @@
           }
         }
       }
+    },
+    "View full history in browser" : {
+
     },
     "View Source" : {
       "localizations" : {
@@ -7728,6 +8245,9 @@
           }
         }
       }
+    },
+    "What to keep out of the shot. Optional." : {
+
     },
     "When nudging" : {
       "localizations" : {
@@ -7965,6 +8485,19 @@
     "Write %@ in a translated caption and it becomes the wording set here. Change the wording and every caption using the placeholder updates — no re-translation. A language left blank falls back to the spelling above." : {
 
     },
+    "You need %@ credits; %@ are available." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "You need %1$@ credits; %2$@ are available."
+          }
+        }
+      }
+    },
+    "You will need to sign in again to use subscription credits." : {
+
+    },
     "Young Adult Female" : {
       "localizations" : {
         "zh-Hans" : {
@@ -7984,6 +8517,9 @@
           }
         }
       }
+    },
+    "Your AI settings have been saved to the Keychain." : {
+
     },
     "Your API key is stored securely in the Keychain." : {
       "localizations" : {
@@ -8006,6 +8542,7 @@
       }
     },
     "Your keys have been saved to the Keychain." : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {

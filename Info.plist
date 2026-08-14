@@ -20,5 +20,28 @@
 	<string>https://update.filmstudio.rxlab.app/appcast.xml</string>
 	<key>SUPublicEDKey</key>
 	<string>OOJs50Q9V9lpqBgeRi0ow0YBdiAlmc9uJ3B9hABDsqQ=</string>
+	<key>AppAPIBaseURL</key>
+	<string>$(APP_API_BASE_URL)</string>
+	<key>AppWebBaseURL</key>
+	<string>$(APP_WEB_BASE_URL)</string>
+	<key>AppAuthIssuer</key>
+	<string>$(APP_AUTH_ISSUER)</string>
+	<key>AppAuthClientID</key>
+	<string>$(APP_AUTH_CLIENT_ID)</string>
+	<key>AppAuthRedirectURI</key>
+	<string>$(APP_AUTH_REDIRECT_URI)</string>
+	<key>AppAuthScopes</key>
+	<string>$(APP_AUTH_SCOPES)</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>RxFilm Studio</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>$(APP_AUTH_URL_SCHEME)</string>
+			</array>
+		</dict>
+	</array>
 </dict>
 </plist>

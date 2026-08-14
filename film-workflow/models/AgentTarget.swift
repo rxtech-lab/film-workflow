@@ -16,6 +16,7 @@ nonisolated enum AgentTargetKind: String, Codable, CaseIterable, Identifiable, S
     case music
     case narrative
     case imageGen
+    case videoGen
 
     var id: String { rawValue }
 
@@ -27,6 +28,7 @@ nonisolated enum AgentTargetKind: String, Codable, CaseIterable, Identifiable, S
         case .music: return "Music"
         case .narrative: return "Narrative"
         case .imageGen: return "Image"
+        case .videoGen: return "Video"
         }
     }
 
@@ -38,6 +40,7 @@ nonisolated enum AgentTargetKind: String, Codable, CaseIterable, Identifiable, S
         case .music: return "music.note"
         case .narrative: return "text.book.closed"
         case .imageGen: return "photo.on.rectangle.angled"
+        case .videoGen: return "video.badge.waveform"
         }
     }
 
@@ -51,6 +54,7 @@ nonisolated enum AgentTargetKind: String, Codable, CaseIterable, Identifiable, S
         case .music: return "music"
         case .narrative: return "narrative"
         case .imageGen: return "image"
+        case .videoGen: return "video"
         }
     }
 
@@ -114,6 +118,8 @@ enum AgentTargetResolver {
             return (try? MCPProjectHandlers.fetchNarrative(id: id, context: context))?.name
         case .imageGen:
             return (try? MCPProjectHandlers.fetchImage(id: id, context: context))?.name
+        case .videoGen:
+            return (try? MCPProjectHandlers.fetchVideo(id: id, context: context))?.name
         case .remotion:
             #if os(macOS)
                 return (try? MCPProjectHandlers.fetchRemotion(id: id, context: context))?.name

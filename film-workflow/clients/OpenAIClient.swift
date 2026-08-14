@@ -1,6 +1,6 @@
 import Foundation
 
-enum OpenAIError: LocalizedError {
+nonisolated enum OpenAIError: LocalizedError {
     case missingConfig
     case invalidEndpoint
     case invalidResponse
@@ -26,7 +26,7 @@ enum OpenAIError: LocalizedError {
     }
 }
 
-struct OpenAIChatMessage {
+nonisolated struct OpenAIChatMessage {
     let role: String
     let content: String
 }
@@ -34,7 +34,7 @@ struct OpenAIChatMessage {
 // MARK: - Rich messages (tool use + multimodal)
 
 /// A content block that can appear inside a multimodal message body.
-enum OpenAIContentPart {
+nonisolated enum OpenAIContentPart {
     case text(String)
     /// `dataURL` should be a full data URL, e.g. "data:image/png;base64,…", or any http(s) URL.
     case imageURL(String)
@@ -50,7 +50,7 @@ enum OpenAIContentPart {
 }
 
 /// A single tool call requested by the assistant.
-struct OpenAIToolCall {
+nonisolated struct OpenAIToolCall {
     let id: String
     let name: String
     let argumentsJSON: String
@@ -70,7 +70,7 @@ struct OpenAIToolCall {
 /// A message in the rich chat protocol. Either `content` or `parts` carries the body
 /// (mutually exclusive). Assistant messages may also carry `toolCalls`. Tool-role
 /// messages must carry `toolCallId`.
-struct OpenAIRichMessage {
+nonisolated struct OpenAIRichMessage {
     let role: String
     let content: String?
     let parts: [OpenAIContentPart]?
@@ -128,7 +128,7 @@ struct OpenAIRichMessage {
 }
 
 /// Tool definition (OpenAI function-calling shape).
-struct OpenAIToolDefinition {
+nonisolated struct OpenAIToolDefinition {
     let name: String
     let description: String
     /// JSON Schema dictionary for `parameters`.
@@ -147,7 +147,7 @@ struct OpenAIToolDefinition {
 }
 
 /// A parsed assistant response from `chatWithTools`.
-struct OpenAIAssistantResponse {
+nonisolated struct OpenAIAssistantResponse {
     let content: String?
     let toolCalls: [OpenAIToolCall]
     /// Why the model stopped. `"length"` means the completion was cut off at
@@ -263,6 +263,44 @@ struct OpenAIClient {
             throw OpenAIError.httpError(http.statusCode, bodyString)
         }
 
+        return try parseAssistantResponse(data)
+    }
+
+    static func chatWithToolsViaSubscription(
+        messages: [OpenAIRichMessage],
+        tools: [OpenAIToolDefinition],
+        model: String,
+        extraBody: [String: Any] = [:]
+    ) async throws -> OpenAIAssistantResponse {
+        let trimmedModel = model.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedModel.isEmpty else { throw OpenAIError.missingConfig }
+        var body: [String: Any] = [
+            "model": trimmedModel,
+            "messages": messages.map { $0.json },
+            "stream": false,
+        ]
+        if !tools.isEmpty {
+            body["tools"] = tools.map { $0.json }
+            body["tool_choice"] = "auto"
+        }
+        for (key, value) in extraBody { body[key] = value }
+        let requestData = try JSONSerialization.data(withJSONObject: body)
+        let data = try await BackendClient.shared.data(
+            "api/v1/ai/chat",
+            method: "POST",
+            body: requestData,
+            contentType: "application/json",
+            idempotencyKey: "chat:\(UUID().uuidString)"
+        )
+        if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+           let usage = json["rxlab_usage"] as? [String: Any],
+           let available = usage["availablePoints"] as? Int {
+            CreditBalanceStore.shared.apply(available: available)
+        }
+        return try parseAssistantResponse(data)
+    }
+
+    private static func parseAssistantResponse(_ data: Data) throws -> OpenAIAssistantResponse {
         guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
               let choices = json["choices"] as? [[String: Any]],
               let first = choices.first,
@@ -281,7 +319,6 @@ struct OpenAIClient {
                 toolCalls.append(OpenAIToolCall(id: id, name: name, argumentsJSON: args))
             }
         }
-
         return OpenAIAssistantResponse(
             content: content,
             toolCalls: toolCalls,

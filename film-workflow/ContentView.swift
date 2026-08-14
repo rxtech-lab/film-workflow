@@ -1,10 +1,12 @@
 import SwiftData
 import SwiftUI
+import TipKit
 
 struct ContentView: View {
     // Shared rather than local @State so a deep-linked screen (e.g. "download a
     // Whisper model") can switch tabs.
     @State private var navigation = AppNavigation.shared
+    @Environment(\.scenePhase) private var scenePhase
     #if os(macOS)
         @Environment(\.openWindow) private var openWindow
         @State private var agentController = AgentController.shared
@@ -23,6 +25,9 @@ struct ContentView: View {
             }
             Tab(Tabs.ImageGen.displayName, systemImage: Tabs.ImageGen.systemImage, value: Tabs.ImageGen) {
                 ImageGenTabView()
+            }
+            Tab(Tabs.VideoGen.displayName, systemImage: Tabs.VideoGen.systemImage, value: Tabs.VideoGen) {
+                VideoGenTabView()
             }
             #if os(macOS)
             Tab(Tabs.Remotion.displayName, systemImage: Tabs.Remotion.systemImage, value: Tabs.Remotion) {
@@ -44,6 +49,14 @@ struct ContentView: View {
             #endif
         }
         .dismissKeyboardOnTapAndScroll()
+        .sheet(isPresented: $navigation.showAccountSheet) {
+            AccountSheet()
+        }
+        .onOpenURL { AuthSessionBridge.handle($0) }
+        .onChange(of: scenePhase) { _, phase in
+            guard phase == .active else { return }
+            Task { await CreditBalanceStore.shared.refresh() }
+        }
         #if os(macOS)
             .toolbar {
                 ToolbarItem(placement: .primaryAction) {
@@ -65,6 +78,7 @@ struct ContentView: View {
                             ? "Open the agent (running)"
                             : "Open the agent"
                     )
+                    .popoverTip(FilmWorkflowTips.AgentButtonTip(), arrowEdge: .top)
                 }
             }
         #endif
@@ -74,5 +88,5 @@ struct ContentView: View {
 #Preview {
     ContentView()
         .environment(AgentController.shared)
-        .modelContainer(for: [MusicProject.self, GeneratedMusic.self, NarrativeProject.self, GeneratedNarrative.self, RemotionProject.self, ImageGenProject.self, GeneratedImage.self, CaptionProject.self, CaptionSegment.self, ProjectGroup.self, AgentThread.self, AgentMessage.self], inMemory: true)
+        .modelContainer(for: [MusicProject.self, GeneratedMusic.self, NarrativeProject.self, GeneratedNarrative.self, RemotionProject.self, ImageGenProject.self, GeneratedImage.self, VideoGenProject.self, GeneratedVideo.self, CaptionProject.self, CaptionSegment.self, ProjectGroup.self, AgentThread.self, AgentMessage.self], inMemory: true)
 }

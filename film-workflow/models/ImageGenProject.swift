@@ -26,6 +26,7 @@ final class ImageGenProject: GroupableProject {
     var openAICompression: Int
     var openAIBackground: String
     var openAITransparent: Bool
+    var subscriptionModel: String = ""
 
     @Relationship(deleteRule: .cascade, inverse: \GeneratedImage.project)
     var generatedFiles: [GeneratedImage]
@@ -49,6 +50,7 @@ final class ImageGenProject: GroupableProject {
         self.openAICompression = 80
         self.openAIBackground = ImageBackground.auto.rawValue
         self.openAITransparent = false
+        self.subscriptionModel = ""
         self.generatedFiles = []
     }
 

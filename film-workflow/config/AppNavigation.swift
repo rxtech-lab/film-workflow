@@ -15,6 +15,7 @@ final class AppNavigation {
 
     /// The tabs of `SettingsView`, so a caller can ask for one by name.
     enum SettingsSection: String, Hashable, CaseIterable, Identifiable {
+        case account
         case aiProvider
         case agent
         case captions
@@ -32,7 +33,8 @@ final class AppNavigation {
     /// Settings is a tab; on macOS it's a separate window with no tab to select.
     var tab: Tabs = .Music
 
-    var settingsSection: SettingsSection = .aiProvider
+    var settingsSection: SettingsSection = .account
+    var showAccountSheet = false
 
     /// What the app is currently showing, so the agent window can follow along.
     ///
@@ -65,6 +67,14 @@ final class AppNavigation {
     /// `openSettings()` from the environment.
     func showAIProviderSettings() {
         settingsSection = .aiProvider
+        pendingSettingsFocus = nil
+        #if !os(macOS)
+            tab = .Settings
+        #endif
+    }
+
+    func showAccountSettings() {
+        settingsSection = .account
         pendingSettingsFocus = nil
         #if !os(macOS)
             tab = .Settings

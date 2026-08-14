@@ -1,6 +1,7 @@
 #if os(macOS)
 import SwiftData
 import SwiftUI
+import TipKit
 import UniformTypeIdentifiers
 
 struct RemotionParametersView: View {
@@ -410,6 +411,7 @@ struct RemotionParametersView: View {
                     }
                 }
                 .disabled(isSeeding)
+                .popoverTip(FilmWorkflowTips.RemotionStudioTip(), arrowEdge: .top)
 
                 Button("Generate with AI…") {
                     openAgent()

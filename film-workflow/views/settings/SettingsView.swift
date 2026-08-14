@@ -29,6 +29,12 @@ struct SettingsView: View {
                     Label("MCP Server", systemImage: "network")
                 }
                 .tag(AppNavigation.SettingsSection.mcp)
+
+            AccountSettingsView()
+                .tabItem {
+                    Label("Account", systemImage: "person.crop.circle")
+                }
+                .tag(AppNavigation.SettingsSection.account)
         }
         #if os(macOS)
         // Taller than the other tabs need: the Whisper model list is long.

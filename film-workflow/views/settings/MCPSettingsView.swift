@@ -1,4 +1,5 @@
 import SwiftUI
+import TipKit
 
 struct MCPSettingsView: View {
     @State private var settings = MCPSettings.shared
@@ -14,6 +15,7 @@ struct MCPSettingsView: View {
                     get: { settings.enabled },
                     set: { settings.enabled = $0 }
                 ))
+                .popoverTip(FilmWorkflowTips.MCPServerTip(), arrowEdge: .top)
             } header: {
                 Text("MCP Server")
             } footer: {
@@ -110,16 +112,16 @@ struct MCPSettingsView: View {
             } header: {
                 Text("Bearer token")
             } footer: {
-                Text(settings.bindAll
-                     ? "Required when bound to 0.0.0.0. Send `Authorization: Bearer <token>` on every request."
-                     : "Required only when bound to all interfaces. Localhost requests skip the check.")
+                Text(requiresToken
+                     ? "Required on every request. Subscription mode can spend credits, including through localhost tools."
+                     : "Required when bound to all interfaces. Localhost BYOK requests skip the check.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
 
             if let url = server.displayURL, settings.enabled {
                 Section("Connect from Claude Code") {
-                    let cmd = connectCommand(url: url, bindAll: settings.bindAll, token: settings.token)
+                    let cmd = connectCommand(url: url, requiresToken: requiresToken, token: settings.token)
                     HStack(alignment: .top) {
                         Text(cmd)
                             .font(.system(.caption, design: .monospaced))
@@ -146,6 +148,10 @@ struct MCPSettingsView: View {
                 : "Running on port \(port) (base \(settings.basePort) was busy)"
         }
         return settings.statusMessage
+    }
+
+    private var requiresToken: Bool {
+        settings.bindAll || ((try? AppConfig.loadFromKeychain())?.usesSubscription == true)
     }
 
     private func commitPort() {
@@ -190,8 +196,8 @@ struct MCPSettingsView: View {
         }
     }
 
-    private func connectCommand(url: String, bindAll: Bool, token: String?) -> String {
-        if bindAll, let token, !token.isEmpty {
+    private func connectCommand(url: String, requiresToken: Bool, token: String?) -> String {
+        if requiresToken, let token, !token.isEmpty {
             return "claude mcp add --transport http film \(url) -H \"Authorization: Bearer \(token)\""
         }
         return "claude mcp add --transport http film \(url)"

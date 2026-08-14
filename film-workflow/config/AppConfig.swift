@@ -1,7 +1,21 @@
 import Foundation
 import Security
 
-enum KeychainError: LocalizedError {
+nonisolated enum CredentialMode: String, Codable, CaseIterable, Sendable, Identifiable {
+    case byok
+    case subscription
+
+    var id: String { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .byok: "Bring your own keys"
+        case .subscription: "RxFilm credits"
+        }
+    }
+}
+
+nonisolated enum KeychainError: LocalizedError {
     case itemNotFound
     case duplicateItem
     case unexpectedStatus(OSStatus)
@@ -21,7 +35,7 @@ enum KeychainError: LocalizedError {
     }
 }
 
-struct AppConfig: Codable {
+nonisolated struct AppConfig: Codable, Sendable {
     var googleAIKey: String
     var azureSpeechKey: String
     var azureSpeechEndpoint: String
@@ -29,6 +43,8 @@ struct AppConfig: Codable {
     var openAIKey: String
     var openAIModel: String
     var defaultImageModel: String
+    /// Veo model id prefilled on new video projects. Empty means "ask the user".
+    var defaultVideoModel: String = ""
     /// Model id for the OpenAI-compatible `/v1/audio/transcriptions` endpoint.
     var openAITranscriptionModel: String = ""
     /// Gemini model used for multimodal transcription.
@@ -46,6 +62,10 @@ struct AppConfig: Codable {
     ///
     /// No Claude Code twin: `claude --effort` exists, but nothing here sets it.
     var codexReasoningEffort: String = ""
+    var credentialMode: CredentialMode = .byok
+    var subscriptionChatModel: String = ""
+    var subscriptionImageModel: String = ""
+    var subscriptionTranscriptionModel: String = ""
 
     private static let service = "com.rxlab.film-workflow"
     private static let googleAccount = "googleAIKey"
@@ -55,11 +75,18 @@ struct AppConfig: Codable {
     private static let openAIKeyAccount = "openAIKey"
     private static let openAIModelAccount = "openAIModel"
     private static let defaultImageModelAccount = "defaultImageModel"
+    private static let defaultVideoModelAccount = "defaultVideoModel"
     private static let openAITranscriptionModelAccount = "openAITranscriptionModel"
     private static let geminiTranscriptionModelAccount = "geminiTranscriptionModel"
     private static let claudeCodeModelAccount = "claudeCodeModel"
     private static let codexModelAccount = "codexModel"
     private static let codexReasoningEffortAccount = "codexReasoningEffort"
+    private static let credentialModeAccount = "credentialMode"
+    private static let subscriptionChatModelAccount = "subscriptionChatModel"
+    private static let subscriptionImageModelAccount = "subscriptionImageModel"
+    private static let subscriptionTranscriptionModelAccount = "subscriptionTranscriptionModel"
+
+    var usesSubscription: Bool { credentialMode == .subscription }
 
     static func loadFromKeychain() throws -> AppConfig {
         AppConfig(
@@ -70,11 +97,16 @@ struct AppConfig: Codable {
             openAIKey: (try? loadString(account: openAIKeyAccount)) ?? "",
             openAIModel: (try? loadString(account: openAIModelAccount)) ?? "",
             defaultImageModel: (try? loadString(account: defaultImageModelAccount)) ?? "",
+            defaultVideoModel: (try? loadString(account: defaultVideoModelAccount)) ?? "",
             openAITranscriptionModel: (try? loadString(account: openAITranscriptionModelAccount)) ?? "",
             geminiTranscriptionModel: (try? loadString(account: geminiTranscriptionModelAccount)) ?? "",
             claudeCodeModel: (try? loadString(account: claudeCodeModelAccount)) ?? "",
             codexModel: (try? loadString(account: codexModelAccount)) ?? "",
-            codexReasoningEffort: (try? loadString(account: codexReasoningEffortAccount)) ?? ""
+            codexReasoningEffort: (try? loadString(account: codexReasoningEffortAccount)) ?? "",
+            credentialMode: CredentialMode(rawValue: (try? loadString(account: credentialModeAccount)) ?? "") ?? .byok,
+            subscriptionChatModel: (try? loadString(account: subscriptionChatModelAccount)) ?? "",
+            subscriptionImageModel: (try? loadString(account: subscriptionImageModelAccount)) ?? "",
+            subscriptionTranscriptionModel: (try? loadString(account: subscriptionTranscriptionModelAccount)) ?? ""
         )
     }
 
@@ -86,11 +118,16 @@ struct AppConfig: Codable {
         try Self.saveString(openAIKey, account: Self.openAIKeyAccount)
         try Self.saveString(openAIModel, account: Self.openAIModelAccount)
         try Self.saveString(defaultImageModel, account: Self.defaultImageModelAccount)
+        try Self.saveString(defaultVideoModel, account: Self.defaultVideoModelAccount)
         try Self.saveString(openAITranscriptionModel, account: Self.openAITranscriptionModelAccount)
         try Self.saveString(geminiTranscriptionModel, account: Self.geminiTranscriptionModelAccount)
         try Self.saveString(claudeCodeModel, account: Self.claudeCodeModelAccount)
         try Self.saveString(codexModel, account: Self.codexModelAccount)
         try Self.saveString(codexReasoningEffort, account: Self.codexReasoningEffortAccount)
+        try Self.saveString(credentialMode.rawValue, account: Self.credentialModeAccount)
+        try Self.saveString(subscriptionChatModel, account: Self.subscriptionChatModelAccount)
+        try Self.saveString(subscriptionImageModel, account: Self.subscriptionImageModelAccount)
+        try Self.saveString(subscriptionTranscriptionModel, account: Self.subscriptionTranscriptionModelAccount)
     }
 
     static func deleteFromKeychain() throws {
@@ -101,11 +138,16 @@ struct AppConfig: Codable {
         try deleteString(account: openAIKeyAccount)
         try deleteString(account: openAIModelAccount)
         try deleteString(account: defaultImageModelAccount)
+        try deleteString(account: defaultVideoModelAccount)
         try deleteString(account: openAITranscriptionModelAccount)
         try deleteString(account: geminiTranscriptionModelAccount)
         try deleteString(account: claudeCodeModelAccount)
         try deleteString(account: codexModelAccount)
         try deleteString(account: codexReasoningEffortAccount)
+        try deleteString(account: credentialModeAccount)
+        try deleteString(account: subscriptionChatModelAccount)
+        try deleteString(account: subscriptionImageModelAccount)
+        try deleteString(account: subscriptionTranscriptionModelAccount)
     }
 
     // MARK: - Keychain helpers

@@ -1,6 +1,7 @@
 import OSLog
 import SwiftData
 import SwiftUI
+import TipKit
 
 private let captionDetailLogger = Logger(
     subsystem: Bundle.main.bundleIdentifier ?? "film-workflow",
@@ -35,6 +36,7 @@ struct CaptionTabView: View {
     @State private var transcriptionTask: Task<Void, Never>?
     @State private var errorMessage: String?
     @State private var showError = false
+    @State private var insufficientCredits: InsufficientCreditsNotice?
     @State private var successNotice: String?
     @State private var pendingRetranscribe: CaptionProject?
     @State private var preparedDetail: CaptionPreparedDetail?
@@ -77,6 +79,7 @@ struct CaptionTabView: View {
             )
         }
         .navigationSplitViewColumnWidth(min: 200, ideal: 240)
+        .accountSidebarFooter()
         .navigationTitle("Captions")
         .toolbar {
             ToolbarItemGroup {
@@ -262,6 +265,7 @@ struct CaptionTabView: View {
         } message: {
             Text(errorMessage ?? "An unknown error occurred.")
         }
+        .insufficientCreditsAlert($insufficientCredits)
         .alert(
             "Captions ready",
             isPresented: Binding(
@@ -486,6 +490,10 @@ struct CaptionTabView: View {
             } catch let error as URLError where error.code == .cancelled {
                 // Same, surfaced from URLSession.
             } catch {
+                if let notice = InsufficientCreditsNotice(error) {
+                    insufficientCredits = notice
+                    return
+                }
                 errorMessage = error.localizedDescription
                 showError = true
             }
@@ -518,6 +526,7 @@ private struct CaptionTranscribeButton: View {
         .help(canTranscribe
             ? "Transcribe this audio into captions"
             : "Choose an audio file or a narration first")
+        .popoverTip(FilmWorkflowTips.TranscribeTip(), arrowEdge: .top)
     }
 }
 

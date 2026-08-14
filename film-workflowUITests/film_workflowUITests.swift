@@ -26,6 +26,7 @@ final class film_workflowUITests: XCTestCase {
     func testExample() throws {
         // UI tests must launch the application that they test.
         let app = XCUIApplication()
+        app.launchArguments.append("-uiTesting")
         app.launch()
 
         // Use XCTAssert and related functions to verify your tests produce the correct results.
@@ -35,7 +36,9 @@ final class film_workflowUITests: XCTestCase {
     func testLaunchPerformance() throws {
         // This measures how long it takes to launch your application.
         measure(metrics: [XCTApplicationLaunchMetric()]) {
-            XCUIApplication().launch()
+            let app = XCUIApplication()
+            app.launchArguments.append("-uiTesting")
+            app.launch()
         }
     }
 }

@@ -63,7 +63,7 @@ nonisolated struct CLICaptionEngine: CaptionAIEngine {
             reply = try await runClaude(instructions: instructions, prompt: prompt)
         case .codex:
             reply = try await runCodex(instructions: instructions, prompt: prompt)
-        case .appleIntelligence, .openAICompatible:
+        case .appleIntelligence, .openAICompatible, .subscription:
             throw CaptionAIError.backendUnavailable(
                 backend,
                 "\(backend.engineLabel) doesn't run as a command-line tool."

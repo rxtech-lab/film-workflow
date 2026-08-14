@@ -10,6 +10,10 @@ enum ImageGenerationService {
         config: AppConfig
     ) async throws -> GeneratedImage {
         let result: ImageGenResult
+        switch try AIRoute.resolve(config, for: .image) {
+        case .subscription:
+            result = try await BackendImageClient.generate(project: project, config: config)
+        case .byok:
         if project.providerEnum == .google {
             guard !config.googleAIKey.isEmpty, !project.googleModel.isEmpty else {
                 throw ImageGenError.missingConfig
@@ -55,6 +59,7 @@ enum ImageGenerationService {
                     transparent: project.openAITransparent
                 )
             }
+        }
         }
 
         let relativePath = try FileStorage.saveImage(result.imageData, fileExtension: result.fileExtension)

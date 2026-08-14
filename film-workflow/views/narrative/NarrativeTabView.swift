@@ -23,6 +23,7 @@ struct NarrativeTabView: View {
     @State private var generationTask: Task<Void, Never>?
     @State private var errorMessage: String?
     @State private var showError = false
+    @State private var insufficientCredits: InsufficientCreditsNotice?
     @State private var showGeneratedSheet = false
     @State private var showPromptSheet = false
 
@@ -57,6 +58,7 @@ struct NarrativeTabView: View {
             )
         }
         .navigationSplitViewColumnWidth(min: 200, ideal: 240)
+        .accountSidebarFooter()
         .navigationTitle("Narratives")
         .toolbar {
             ToolbarItemGroup {
@@ -188,6 +190,7 @@ struct NarrativeTabView: View {
         } message: {
             Text(errorMessage ?? "An unknown error occurred.")
         }
+        .insufficientCreditsAlert($insufficientCredits)
         .sheet(isPresented: $showGeneratedSheet) {
             if let project = selectedProject {
                 #if os(macOS)
@@ -362,6 +365,10 @@ struct NarrativeTabView: View {
         } catch let urlError as URLError where urlError.code == .cancelled {
             // In-flight URLSession requests surface cancellation as URLError.cancelled.
         } catch {
+            if let notice = InsufficientCreditsNotice(error) {
+                insufficientCredits = notice
+                return
+            }
             errorMessage = error.localizedDescription
             showError = true
         }

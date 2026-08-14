@@ -31,6 +31,13 @@ struct GoogleModelInfo: Codable, Equatable, Identifiable, Hashable {
         id.lowercased().contains("imagen")
             && supportedGenerationMethods.contains("predict")
     }
+
+    /// Video generation is the only thing served over long-running operations,
+    /// so no id matching is needed — and none is wanted, because Veo model ids
+    /// get renamed between previews.
+    var supportsVeoLongRunning: Bool {
+        supportedGenerationMethods.contains("predictLongRunning")
+    }
 }
 
 struct GoogleModelsCacheEntry: Codable {
@@ -70,6 +77,13 @@ actor GoogleModelsClient {
         let all = try await models(apiKey: apiKey, forceRefresh: forceRefresh)
         return all
             .filter { $0.supportsImagenPredict }
+            .sorted { $0.id.localizedCaseInsensitiveCompare($1.id) == .orderedAscending }
+    }
+
+    func veoModels(apiKey: String, forceRefresh: Bool = false) async throws -> [GoogleModelInfo] {
+        let all = try await models(apiKey: apiKey, forceRefresh: forceRefresh)
+        return all
+            .filter { $0.supportsVeoLongRunning }
             .sorted { $0.id.localizedCaseInsensitiveCompare($1.id) == .orderedAscending }
     }
 
