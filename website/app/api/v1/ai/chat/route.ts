@@ -4,7 +4,7 @@ import { aiRouteError, noStoreHeaders, providerError } from "@/lib/ai/http";
 import { withMeteredOperation } from "@/lib/ai/meter";
 import { requireApiUser } from "@/lib/auth/bearer";
 import { billingConfig, reserveWithMargin } from "@/lib/billing/config";
-import { getBillingSummary } from "@/lib/billing/repository";
+import { getBalance } from "@/lib/billing/subscription";
 import { recordAiUsage } from "@/lib/billing/usage";
 
 export const maxDuration = 300;
@@ -39,7 +39,7 @@ export async function POST(request: Request) {
       const event = await recordAiUsage({ context, model: model.id, responseId: body.id, usage, eventId: "completion" });
       return { body, chargedPoints: event?.chargedPoints ?? 0 };
     } });
-    const summary = await getBillingSummary(user.id);
-    return Response.json({ ...value.body, rxlab_usage: { chargedPoints: value.chargedPoints, availablePoints: summary.availablePoints } }, { headers: noStoreHeaders() });
+    const balance = await getBalance(user);
+    return Response.json({ ...value.body, rxlab_usage: { chargedPoints: value.chargedPoints, availablePoints: balance.available } }, { headers: noStoreHeaders() });
   } catch (cause) { return aiRouteError(cause); }
 }

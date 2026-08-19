@@ -10,7 +10,7 @@ export function BillingPagination({
   searchParams,
   label = "History pages",
 }: {
-  pathname: "/usage" | "/invoices";
+  pathname: "/usage";
   currentPage: number;
   pageCount: number;
   param?: string;

@@ -1,6 +1,6 @@
 import { requireApiUser, unauthorizedResponse, UnauthorizedError } from "@/lib/auth/bearer";
 import { billingConfig } from "@/lib/billing/config";
-import { getBillingSummary } from "@/lib/billing/repository";
+import { getBalance } from "@/lib/billing/subscription";
 import { db } from "@/lib/db";
 import { deviceSessions } from "@/lib/db/schema";
 
@@ -35,15 +35,15 @@ export async function GET(request: Request) {
         set: { platform: clientPlatform, appVersion: request.headers.get("x-client-version")?.slice(0, 80) ?? null, deviceName: request.headers.get("x-client-device-name")?.slice(0, 160) ?? null, lastSeenAt: now },
       });
     }
-    const summary = await getBillingSummary(user.id);
+    const balance = await getBalance(user);
     const origin = new URL(request.url).origin;
     return Response.json({
       user,
       billing: {
-        enabled: summary.enabled,
-        balancePoints: summary.balancePoints,
-        reservedPoints: summary.reservedPoints,
-        availablePoints: summary.availablePoints,
+        enabled: billingConfig.enabled,
+        balancePoints: balance.amount,
+        reservedPoints: balance.amount - balance.available,
+        availablePoints: balance.available,
         pointsPerUsd: billingConfig.pointsPerProviderUsd,
       },
       urls: { credits: `${origin}/credits?app=1`, usage: `${origin}/usage` },
