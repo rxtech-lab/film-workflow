@@ -1,5 +1,10 @@
-import NextAuth from "next-auth";
-import { createRxLabAuth, RX_LAB_REFRESH_TOKEN_ERROR } from "@rxtech-lab/authjs-rxlab";
+import NextAuth, { type NextAuthResult } from "next-auth";
+import type { NextMiddleware } from "next/server";
+import {
+  createRxLabAuth,
+  RX_LAB_REFRESH_TOKEN_ERROR,
+  type RxLabAuthResult,
+} from "@rxtech-lab/authjs-rxlab";
 import { redirect } from "next/navigation";
 
 const rxLabConfigured = Boolean(
@@ -19,7 +24,23 @@ const authResult = rxLabConfigured
     })
   : NextAuth({ providers: [], trustHost: true, secret: process.env.AUTH_SECRET ?? "local-development-only-secret-change-me" });
 
+function hasRxLabProxy(result: NextAuthResult): result is RxLabAuthResult {
+  return "proxy" in result;
+}
+
+const continueRequest: NextMiddleware = () => undefined;
+
 export const { handlers, signIn, signOut, auth } = authResult;
+
+/**
+ * Auth.js's no-argument `auth()` refreshes the access token but never copies the
+ * rotated session cookie onto an RSC response, so the browser keeps the stale
+ * JWT until the old refresh token expires. Running this wrapped handler from
+ * `proxy.ts` forces Auth.js's request/response path, which persists the cookie.
+ */
+export const proxy = hasRxLabProxy(authResult)
+  ? authResult.proxy
+  : authResult.auth(continueRequest);
 export { RX_LAB_REFRESH_TOKEN_ERROR };
 
 export type AppUser = {

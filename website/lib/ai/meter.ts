@@ -15,7 +15,7 @@ export async function withMeteredOperation<T>(input: {
   run: (context: MeteringContext) => Promise<T>;
 }) {
   const reservation = await reserveCredits({
-    userId: input.user.id,
+    user: input.user,
     operationKey: input.operationKey,
     feature: input.feature,
     points: input.reservePoints,
@@ -30,10 +30,10 @@ export async function withMeteredOperation<T>(input: {
   };
   try {
     const value = await input.run(context);
-    if (reservation) await closeReservation({ reservationId: reservation.id, userId: input.user.id, success: true, scopeId: input.scopeId });
+    if (reservation) await closeReservation({ reservationId: reservation.id, userId: input.user.id, success: true });
     return { value, reservationId: reservation?.id ?? null };
   } catch (cause) {
-    if (reservation) await closeReservation({ reservationId: reservation.id, userId: input.user.id, success: false, scopeId: input.scopeId });
+    if (reservation) await closeReservation({ reservationId: reservation.id, userId: input.user.id, success: false });
     throw cause;
   }
 }

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 
-type CreditPack = { id: string; points: number; amountCents: number };
+type CreditPack = { id: string; points: number; amountCents: number; currency: string; name: string; eligible: boolean };
 
 export function CreditPacks({ packs, enabled }: { packs: CreditPack[]; enabled: boolean }) {
   const [pendingPack, setPendingPack] = useState<string | null>(null);
@@ -37,9 +37,9 @@ export function CreditPacks({ packs, enabled }: { packs: CreditPack[]; enabled: 
             <span className="font-mono text-[10px] tracking-[.18em] text-muted uppercase">Prepaid credits</span>
             <strong className="mt-4 block text-3xl">{pack.points.toLocaleString("en-US")}</strong>
             <p className="text-sm text-muted">credits</p>
-            <div className="mt-5 text-sm">${(pack.amountCents / 100).toFixed(2)} USD</div>
-            <button className="mt-5 w-full rounded-full bg-accent px-4 py-2 text-sm font-medium text-black disabled:opacity-40" type="button" disabled={!enabled || pendingPack !== null} onClick={() => checkout(pack.id)}>
-              {pendingPack === pack.id ? "Opening checkout…" : enabled ? "Buy credits" : "Purchases unavailable"}
+            <div className="mt-5 text-sm">${(pack.amountCents / 100).toFixed(2)} {pack.currency.toUpperCase()}</div>
+            <button className="mt-5 w-full rounded-full bg-accent px-4 py-2 text-sm font-medium text-black disabled:opacity-40" type="button" disabled={!enabled || !pack.eligible || pendingPack !== null} onClick={() => checkout(pack.id)}>
+              {pendingPack === pack.id ? "Opening checkout…" : !enabled ? "Purchases unavailable" : pack.eligible ? "Buy credits" : "Not available on your plan"}
             </button>
           </article>
         ))}
