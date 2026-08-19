@@ -3,7 +3,7 @@ import { aiRouteError, noStoreHeaders, providerError } from "@/lib/ai/http";
 import { withMeteredOperation } from "@/lib/ai/meter";
 import { requireApiUser } from "@/lib/auth/bearer";
 import { billingConfig, reserveWithMargin } from "@/lib/billing/config";
-import { getBillingSummary } from "@/lib/billing/repository";
+import { getBalance } from "@/lib/billing/subscription";
 import { estimateReservationPoints } from "@/lib/billing/unit-pricing";
 import { recordUnitUsage } from "@/lib/billing/usage";
 
@@ -133,9 +133,9 @@ export async function POST(request: Request) {
       const responseMime = input.provider === "gemini" ? "audio/wav" : output.mime;
       return { audio: responseAudio.toString("base64"), mime: responseMime, chargedPoints: usage?.chargedPoints ?? 0 };
     } });
-    const summary = await getBillingSummary(user.id);
+    const balance = await getBalance(user);
     console.info("Speech request completed", { provider: input.provider, model, characters, audioBytes: Math.floor(value.audio.length * 3 / 4), chargedPoints: value.chargedPoints });
-    return Response.json({ audio_base64: value.audio, mime_type: value.mime, characters, usage: { chargedPoints: value.chargedPoints, availablePoints: summary.availablePoints } }, { headers: noStoreHeaders() });
+    return Response.json({ audio_base64: value.audio, mime_type: value.mime, characters, usage: { chargedPoints: value.chargedPoints, availablePoints: balance.available } }, { headers: noStoreHeaders() });
   } catch (cause) {
     // aiRouteError only logs the message; the stack is what separates a provider
     // rejection from a billing or database failure.

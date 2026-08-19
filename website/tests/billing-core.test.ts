@@ -6,10 +6,10 @@ describe("RxFilm billing rules", () => {
   it("rounds every positive provider cost up and keeps no remainder", async () => {
     process.env.BILLING_MIN_CHARGE_POINTS = "1";
     const { pointsFromCost } = await import("@/lib/billing/repository");
-    expect(pointsFromCost(0)).toEqual({ points: 0, remainderNanoUsd: 0 });
-    expect(pointsFromCost(1)).toEqual({ points: 1, remainderNanoUsd: 0 });
-    expect(pointsFromCost(1_000_000)).toEqual({ points: 1, remainderNanoUsd: 0 });
-    expect(pointsFromCost(1_000_001)).toEqual({ points: 2, remainderNanoUsd: 0 });
+    expect(pointsFromCost(0)).toBe(0);
+    expect(pointsFromCost(1)).toBe(1);
+    expect(pointsFromCost(1_000_000)).toBe(1);
+    expect(pointsFromCost(1_000_001)).toBe(2);
   });
 
   it("prices exact and wildcard unit models and fails closed", async () => {

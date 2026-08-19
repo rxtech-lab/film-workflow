@@ -5,7 +5,7 @@ import { aiRouteError, noStoreHeaders, providerError } from "@/lib/ai/http";
 import { withMeteredOperation } from "@/lib/ai/meter";
 import { requireApiUser } from "@/lib/auth/bearer";
 import { billingConfig, reserveWithMargin } from "@/lib/billing/config";
-import { getBillingSummary } from "@/lib/billing/repository";
+import { getBalance } from "@/lib/billing/subscription";
 import { estimateReservationPoints } from "@/lib/billing/unit-pricing";
 import { recordUnitUsage } from "@/lib/billing/usage";
 import { deleteObject, getObjectBytes, ownsTranscriptionObject } from "@/lib/storage/s3";
@@ -81,8 +81,8 @@ export async function POST(request: Request) {
         const usage = await recordUnitUsage({ context, provider: input.provider, model: billingModel, capability: "transcription", unit: "audio_minutes", units: minutes, eventId: "transcription" });
         return { body, chargedPoints: usage?.chargedPoints ?? 0 };
       } });
-      const summary = await getBillingSummary(user.id);
-      return Response.json({ ...value.body, rxlab_usage: { chargedPoints: value.chargedPoints, availablePoints: summary.availablePoints } }, { headers: noStoreHeaders() });
+      const balance = await getBalance(user);
+      return Response.json({ ...value.body, rxlab_usage: { chargedPoints: value.chargedPoints, availablePoints: balance.available } }, { headers: noStoreHeaders() });
     } finally {
       if (input.sourceObjectKey) {
         await deleteObject(input.sourceObjectKey).catch((cause) => console.error("Failed to delete transcription upload", { key: input.sourceObjectKey, cause }));

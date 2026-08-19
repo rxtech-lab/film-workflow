@@ -50,7 +50,7 @@ export async function POST(request: Request) {
     const jobId = crypto.randomUUID();
     const operationKey = request.headers.get("idempotency-key")?.slice(0, 180) || `music:${user.id}:${jobId}`;
     const reservePoints = reserveWithMargin(estimateReservationPoints({ provider: "google", model: "lyria-3-pro-preview", unit: "audio_seconds", units: 180, floorPoints: billingConfig.musicReservationPoints }));
-    const reservation = await reserveCredits({ userId: user.id, operationKey, feature: "Music · Lyria 3 Pro", points: reservePoints, scopeId: jobId });
+    const reservation = await reserveCredits({ user, operationKey, feature: "Music · Lyria 3 Pro", points: reservePoints, scopeId: jobId });
     const now = new Date();
     await db.insert(aiJobs).values({ id: jobId, userId: user.id, reservationId: reservation?.id ?? null, capability: "music", status: "queued", requestJson: { prompt: parsed.data.prompt, responseMimeType: parsed.data.response_mime_type, imageCount: parsed.data.images?.length ?? 0 }, progressPercent: 0, createdAt: now, updatedAt: now });
     after(async () => {
@@ -63,12 +63,12 @@ export async function POST(request: Request) {
         const extension = output.mime.includes("mp3") || output.mime.includes("mpeg") ? "mp3" : "wav";
         const stored = await putObject({ key: `music/${user.id}/${jobId}.${extension}`, body: output.audio, contentType: output.mime });
         await db.update(aiJobs).set({ status: "succeeded", progressPercent: 100, resultObjectKey: stored.key, resultMeta: { mimeType: output.mime, lyricsText: output.lyrics, durationSeconds: seconds, chargedPoints: usage?.chargedPoints ?? 0 }, updatedAt: new Date() }).where(and(eq(aiJobs.id, jobId), eq(aiJobs.userId, user.id)));
-        if (reservation) await closeReservation({ reservationId: reservation.id, userId: user.id, success: true, scopeId: jobId });
+        if (reservation) await closeReservation({ reservationId: reservation.id, userId: user.id, success: true });
       } catch (cause) {
         const code = cause instanceof Error ? cause.message : "MUSIC_GENERATION_FAILED";
         console.error("Music job failed", { jobId, code });
         await db.update(aiJobs).set({ status: "failed", errorCode: code.slice(0, 120), errorMessage: "Music generation could not be completed.", updatedAt: new Date() }).where(and(eq(aiJobs.id, jobId), eq(aiJobs.userId, user.id)));
-        if (reservation) await closeReservation({ reservationId: reservation.id, userId: user.id, success: false, scopeId: jobId });
+        if (reservation) await closeReservation({ reservationId: reservation.id, userId: user.id, success: false });
       }
     });
     return Response.json({ job_id: jobId, status: "queued", poll_url: `/api/v1/jobs/${jobId}` }, { status: 202, headers: noStoreHeaders() });

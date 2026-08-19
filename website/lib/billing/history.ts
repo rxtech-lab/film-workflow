@@ -13,8 +13,24 @@ export function parseBillingHistoryPage(searchParams: BillingHistorySearchParams
   return Number.isSafeInteger(requestedPage) && requestedPage > 0 ? requestedPage : 1;
 }
 
+/**
+ * Invoices page backwards/forwards through Stripe by invoice id rather than by
+ * page number, so it carries a cursor instead of an offset. The two are
+ * mutually exclusive — rx-subscription 400s when both are sent.
+ */
+export function parseInvoiceCursor(searchParams: BillingHistorySearchParams) {
+  const after = firstSearchParam(searchParams.after);
+  if (after) return { after };
+  const before = firstSearchParam(searchParams.before);
+  return before ? { before } : {};
+}
+
+export function invoiceCursorHref(cursor: { after?: string; before?: string }) {
+  return `/invoices?${new URLSearchParams(cursor)}`;
+}
+
 export function billingHistoryHref(
-  pathname: "/usage" | "/invoices",
+  pathname: "/usage",
   page: number,
   options?: { param?: string; searchParams?: BillingHistorySearchParams },
 ) {
