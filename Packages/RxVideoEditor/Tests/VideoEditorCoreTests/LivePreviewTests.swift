@@ -97,6 +97,8 @@ struct LivePreviewTests {
         let preview = TimelinePreviewController(transport: transport)
         preview.setVisible(true); preview.load(timeline, resolver: resolver)
         defer { preview.unload(); transport.unload() }
+        try await wait { !preview.isLoading && preview.layers.count == 1 }
+        preview.layers.first?.live?.received(type: "ready")
         try await wait { resolver.renders == 1 && preview.layers.first?.live == nil && !preview.isLoading }
         #expect(preview.timeline == timeline)
         #expect(preview.layers.first?.clip == clip)

@@ -171,6 +171,7 @@ final class ProjectDocument: Identifiable {
         save()
         #if os(macOS)
         RemotionPreviewSessions.shared.stopAll(in: packageURL)
+        await RemotionStudioSessions.stopAll(in: packageURL)
         if let dir = RemotionRuntime.shared.currentProjectDir,
            dir.standardizedFileURL.path.hasPrefix(packageURL.path) {
             await RemotionRuntime.shared.stop()

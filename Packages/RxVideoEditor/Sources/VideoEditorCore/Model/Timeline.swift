@@ -1,8 +1,8 @@
 import CoreGraphics
 import Foundation
 
-/// What kind of media a clip plays. `remotion` is a video whose file only
-/// exists once the app has rendered it; `captions` is a list of timed cues.
+/// What kind of media a clip plays. `remotion` previews live and resolves to
+/// a rendered video for export; `captions` is a list of timed cues.
 public enum SourceKind: String, Codable, Sendable, CaseIterable {
     case video
     case audio

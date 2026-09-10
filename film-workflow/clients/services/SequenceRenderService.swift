@@ -1,6 +1,26 @@
+import AVFoundation
 import Foundation
 import SwiftData
 import VideoEditorCore
+
+/// Where a sequence render goes: kept in the film as a version, or written
+/// to a folder the user picked.
+enum SequenceRenderDestination: Equatable {
+    case film
+    case folder(URL)
+}
+
+enum SequenceRenderOutput {
+    case version(SequenceRender)
+    case file(URL)
+
+    var url: URL {
+        switch self {
+        case .version(let render): return render.videoURL
+        case .file(let url): return url
+        }
+    }
+}
 
 enum SequenceRenderProgress: Equatable {
     case preparingRemotion(clipIndex: Int, total: Int, RenderProgress)
@@ -81,6 +101,7 @@ enum SequenceRenderService {
         }
     }
 
+    /// Renders into the film as a new version with the default H.264 + AAC options.
     @discardableResult
     static func render(
         sequence: SequenceProject,
@@ -88,42 +109,85 @@ enum SequenceRenderService {
         preset: TimelineExporter.Preset,
         onProgress: @escaping @MainActor (SequenceRenderProgress) -> Void
     ) async throws -> SequenceRender {
+        guard case .version(let render) = try await render(
+            sequence: sequence, document: document, options: TimelineExporter.Options(video: preset), destination: .film, onProgress: onProgress
+        ) else { preconditionFailure("film destination always yields a version") }
+        return render
+    }
+
+    /// Renders `sequence` with `options`. `.film` records the file as the next
+    /// version; `.folder` writes `<name>.<ext>` there and records nothing.
+    @discardableResult
+    static func render(
+        sequence: SequenceProject,
+        document: ProjectDocument,
+        options: TimelineExporter.Options,
+        destination: SequenceRenderDestination,
+        onProgress: @escaping @MainActor (SequenceRenderProgress) -> Void
+    ) async throws -> SequenceRenderOutput {
         // Work in the context that owns `sequence`: an MCP call's context holds
         // edits the window's main context may not have merged yet.
         let context = sequence.modelContext ?? document.container.mainContext
+        let options = options.normalized
         try await renderRemotionClips(in: sequence, context: context, onProgress: onProgress)
 
         let storage = document.storage
-        let existing = renders(for: sequence, context: context)
-        let version = (existing.map(\.versionNumber).max() ?? 0) + 1
-        let dir = storage.sequenceRenderDir(sequenceID: sequence.id)
-        let outputURL = dir.appendingPathComponent(String(format: "v%03d.mp4", version))
+        let version = (renders(for: sequence, context: context).map(\.versionNumber).max() ?? 0) + 1
+        let outputURL: URL
+        switch destination {
+        case .film:
+            outputURL = storage.sequenceRenderDir(sequenceID: sequence.id)
+                .appendingPathComponent(String(format: "v%03d.%@", version, options.fileExtension))
+        case .folder(let folder):
+            outputURL = Self.unusedFileURL(in: folder, name: sequence.name, ext: options.fileExtension)
+        }
 
         let resolver = DocumentMediaResolver(document: document, width: sequence.width, height: sequence.height, fps: sequence.fps)
         onProgress(.exporting(0))
-        try await TimelineExporter.export(sequence.timeline, resolver: resolver, to: outputURL, preset: preset) { fraction in
+        try await TimelineExporter.export(sequence.timeline, resolver: resolver, to: outputURL, options: options) { fraction in
             Task { @MainActor in onProgress(.exporting(fraction)) }
         }
         onProgress(.finalizing)
+        guard case .film = destination else { return .file(outputURL) }
 
         let relative = storage.relativePath(for: outputURL) ?? "Renders/Sequences/\(sequence.id.uuidString)/\(outputURL.lastPathComponent)"
-        let thumbnail = await VideoThumbnailer.generate(for: outputURL, storage: storage)
-        let probed = await VideoThumbnailer.probe(url: outputURL)
+        let thumbnail = options.isAudioOnly ? nil : await VideoThumbnailer.generate(for: outputURL, storage: storage)
+        let probed = options.isAudioOnly ? nil : await VideoThumbnailer.probe(url: outputURL)
+        let size = options.outputSize(for: sequence.timeline.size)
+        let duration: Double
+        if let probed { duration = probed.duration } else {
+            duration = (try? await CMTimeGetSeconds(AVURLAsset(url: outputURL).load(.duration))) ?? sequence.timeline.duration
+        }
         let render = SequenceRender(
             sequenceID: sequence.id,
             versionNumber: version,
             filePath: relative,
             thumbnailFilePath: thumbnail,
-            width: probed?.width ?? sequence.width,
-            height: probed?.height ?? sequence.height,
-            fps: sequence.fps,
-            durationSeconds: probed?.duration ?? sequence.timeline.duration,
-            preset: preset.rawValue
+            width: probed?.width ?? size.map { Int($0.width) } ?? 0,
+            height: probed?.height ?? size.map { Int($0.height) } ?? 0,
+            fps: options.isAudioOnly ? 0 : sequence.fps,
+            durationSeconds: duration,
+            preset: options.video?.rawValue ?? "audio"
         )
         context.insert(render)
         sequence.updatedAt = Date()
         try context.save()
-        return render
+        return .version(render)
+    }
+
+    /// `<name>.<ext>` in `folder`, or `<name> 2.<ext>`, `<name> 3.<ext>`… when taken.
+    static func unusedFileURL(in folder: URL, name: String, ext: String) -> URL {
+        let base = name.replacingOccurrences(of: "[/:]", with: "-", options: .regularExpression)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let stem = base.isEmpty ? "Sequence" : base
+        let fm = FileManager.default
+        var candidate = folder.appendingPathComponent("\(stem).\(ext)")
+        var counter = 2
+        while fm.fileExists(atPath: candidate.path) {
+            candidate = folder.appendingPathComponent("\(stem) \(counter).\(ext)")
+            counter += 1
+        }
+        return candidate
     }
 
     static func delete(_ render: SequenceRender, context: ModelContext) {

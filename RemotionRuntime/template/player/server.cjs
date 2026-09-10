@@ -16,7 +16,7 @@ async function main() {
   let status = {type: 'building'};
   const broadcast = (message) => {
     status = message;
-    if (message.type === 'compiled') console.log('RX_PREVIEW_CHANGED');
+    console.log('RX_PREVIEW_CHANGED');
     for (const res of listeners) res.write(`data: ${JSON.stringify(message)}\n\n`);
   };
   const html = `<!doctype html><html><head><meta charset="utf-8"><style>html,body,#root{margin:0;width:100%;height:100%;overflow:hidden;background:transparent}*{user-select:none}</style></head><body><div id="root"></div><script>
@@ -91,7 +91,9 @@ async function main() {
   });
   let assetTimer;
   const assets = fs.existsSync(publicRoot) ? fs.watch(publicRoot, {recursive:true}, () => {
-    clearTimeout(assetTimer); assetTimer = setTimeout(() => broadcast({type:'compiled'}), 180);
+    clearTimeout(assetTimer); assetTimer = setTimeout(() => {
+      if (status.type === 'compiled') broadcast({type:'compiled'});
+    }, 180);
   }) : null;
   const close = () => { assets?.close(); watcher.close(() => server.close(() => process.exit(0))); for (const res of listeners) res.end(); };
   process.on('SIGTERM', close); process.on('SIGINT', close);

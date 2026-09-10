@@ -81,12 +81,11 @@ struct EditorWindowView: View {
             reloadPlayer()
         }
         .onChange(of: currentSequence?.timelineData) { _, _ in
-            if let clipID = state.selectedClipID, currentSequence?.timeline.clip(id: clipID) == nil {
-                state.selectedClipID = nil
-            }
+            let stale = state.selectedClipIDs.filter { currentSequence?.timeline.clip(id: $0) == nil }
+            if !stale.isEmpty { state.selectedClipIDs.subtract(stale) }
             reloadPlayer()
         }
-        .onChange(of: remotions.map { "\($0.id):\($0.durationSeconds):\($0.compositionFps):\($0.compositionWidth):\($0.compositionHeight)" }) { _, _ in
+        .onChange(of: remotions.map { "\($0.id):\($0.durationSeconds):\($0.compositionFps):\($0.compositionWidth):\($0.compositionHeight):\($0.compositionSource.isEmpty)" }) { _, _ in
             if currentSequence?.timeline.allClips.contains(where: { $0.source.kind == .remotion }) == true { reloadPlayer() }
         }
         .onDisappear { state.preview.unload(); state.player.unload() }
@@ -103,9 +102,9 @@ struct EditorWindowView: View {
         }
         .sheet(isPresented: $state.showRenderSheet) {
             if let sequence = currentSequence {
-                SequenceRenderSheet(sequence: sequence) { preset in
+                SequenceRenderSheet(sequence: sequence) { options, destination in
                     state.showRenderSheet = false
-                    startRender(sequence: sequence, preset: preset)
+                    startRender(sequence: sequence, options: options, destination: destination)
                 } onCancel: {
                     state.showRenderSheet = false
                 }
@@ -330,7 +329,7 @@ struct EditorWindowView: View {
         state.showRenderSheet = true
     }
 
-    private func startRender(sequence: SequenceProject, preset: TimelineExporter.Preset) {
+    private func startRender(sequence: SequenceProject, options: TimelineExporter.Options, destination: SequenceRenderDestination) {
         state.renderError = nil
         state.renderProgress = .exporting(0)
         state.renderTask = Task { @MainActor in
@@ -339,11 +338,16 @@ struct EditorWindowView: View {
                 state.renderTask = nil
             }
             do {
-                _ = try await SequenceRenderService.render(sequence: sequence, document: document, preset: preset) { p in
+                let output = try await SequenceRenderService.render(sequence: sequence, document: document, options: options, destination: destination) { p in
                     state.renderProgress = p
                 }
-                state.inspectorTab = .sequence
-                reloadPlayer()
+                switch output {
+                case .version:
+                    state.inspectorTab = .sequence
+                    reloadPlayer()
+                case .file(let url):
+                    NSWorkspace.shared.activateFileViewerSelecting([url])
+                }
             } catch is CancellationError {
                 // User cancelled.
             } catch TimelineExportError.cancelled {

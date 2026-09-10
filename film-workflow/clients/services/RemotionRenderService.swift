@@ -18,7 +18,8 @@ enum RemotionRenderService {
 
     /// The hash a render must carry to be current for `project` at the given size.
     static func currentHash(project: RemotionProject, width: Int, height: Int, fps: Int, preserveAlpha: Bool = false) throws -> String {
-        if !project.compositionSource.isEmpty {
+        let sourceURL = project.projectDir.appendingPathComponent("src/Composition.tsx")
+        if !FileManager.default.fileExists(atPath: sourceURL.path), !project.compositionSource.isEmpty {
             try RemotionCodeBuilder.writeComposition(project: project, source: project.compositionSource)
         }
         let hash = try RemotionSourceHasher.hash(projectDir: project.projectDir, width: width, height: height, fps: fps)

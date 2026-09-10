@@ -422,8 +422,8 @@ enum MCPProjectHandlers {
             var studioStatus: String = "starting"
             var studioURL: String?
             do {
-                try await RemotionRuntime.shared.start(projectId: p.id, projectDir: p.projectDir)
-                studioURL = RemotionRuntime.shared.currentURL?.absoluteString
+                let runtime = try await RemotionStudioSessions.keepRunning(projectID: p.id, directory: p.projectDir)
+                studioURL = runtime.currentURL?.absoluteString
                 studioStatus = "running"
             } catch {
                 studioStatus = "failed: \(error.localizedDescription)"

@@ -109,7 +109,9 @@ struct CaptionProjectViewer: View {
 /// project has a composition and stops it when the viewer goes away.
 struct RemotionStudioViewer: View {
     let project: RemotionProject
-    @State private var runtime = RemotionRuntime()
+    @State private var studioLease: RemotionStudioLease?
+    @State private var isStarting = false
+    private var runtime: RemotionRuntime? { studioLease?.runtime }
     @State private var reloadToken = 0
     @State private var statusMessage: String?
     @State private var presentedError: String?
@@ -117,17 +119,17 @@ struct RemotionStudioViewer: View {
     var body: some View {
         ZStack {
             Color(NSColor.windowBackgroundColor)
-            if runtime.isStarting {
+            if isStarting {
                 VStack(spacing: 8) {
                     ProgressView()
                     Text("Starting Remotion Studio…").font(.callout).foregroundStyle(.secondary)
                 }
-            } else if runtime.currentURL != nil, runtime.currentProjectId == project.id {
+            } else if let runtime, runtime.currentURL != nil, runtime.currentProjectId == project.id {
                 RemotionPreviewWebView(url: runtime.currentURL, reloadToken: reloadToken)
             } else {
                 VStack(spacing: 8) {
                     Image(systemName: "play.rectangle").font(.largeTitle).foregroundStyle(.secondary)
-                    Text((runtime.lastError ?? statusMessage) != nil
+                    Text((runtime?.lastError ?? statusMessage) != nil
                          ? "Preview unavailable."
                          : project.compositionSource.isEmpty
                          ? "Create a composition from the inspector to start the preview."
@@ -139,7 +141,7 @@ struct RemotionStudioViewer: View {
             }
         }
 
-        .onChange(of: runtime.lastError ?? statusMessage, initial: true) { _, error in
+        .onChange(of: runtime?.lastError ?? statusMessage, initial: true) { _, error in
             presentedError = error
         }
         .alert("Couldn’t Start Preview", isPresented: Binding(
@@ -150,7 +152,7 @@ struct RemotionStudioViewer: View {
         } message: {
             Text(presentedError ?? "")
         }
-        .task(id: project.id) { await startStudio() }
+        .task(id: "\(project.id):\(project.compositionSource.isEmpty)") { await startStudio() }
         .onReceive(NotificationCenter.default.publisher(for: .agentDidMutateProject)) { note in
             guard let tool = note.userInfo?["tool"] as? String, tool.hasPrefix("remotion_") else { return }
             reloadToken += 1
@@ -160,33 +162,33 @@ struct RemotionStudioViewer: View {
                 try? RemotionCodeBuilder.writeComposition(project: project, source: patched)
             }
         }
-        .onChange(of: project.compositionSource.isEmpty) { wasEmpty, isEmpty in
-            if wasEmpty, !isEmpty { Task { await startStudio() } }
-        }
         .onDisappear {
-            Task { await runtime.stop() }
+            studioLease?.release(); studioLease = nil
         }
     }
 
     private func startStudio() async {
         // The DB copy of the source can lag behind disk after agent edits.
-        if project.compositionSource.isEmpty {
-            let onDisk = project.projectDir.appendingPathComponent("src/Composition.tsx")
-            if let recovered = try? String(contentsOf: onDisk, encoding: .utf8),
-               !recovered.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                project.compositionSource = recovered
-            }
+        let onDisk = project.projectDir.appendingPathComponent("src/Composition.tsx")
+        if let recovered = try? String(contentsOf: onDisk, encoding: .utf8),
+           !recovered.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            project.compositionSource = recovered
         }
         guard !project.compositionSource.isEmpty else {
-            await runtime.stop()
+            studioLease?.release(); studioLease = nil
             return
         }
         let patched = RemotionCodeBuilder.patchProjectConstants(in: project.compositionSource, project: project)
         if patched != project.compositionSource { project.compositionSource = patched }
         try? RemotionCodeBuilder.writeComposition(project: project, source: patched)
         do {
-            try await runtime.start(projectId: project.id, projectDir: project.projectDir)
+            isStarting = true
+            defer { isStarting = false }
+            let lease = try await RemotionStudioSessions.acquire(projectID: project.id, directory: project.projectDir)
+            studioLease?.release()
+            studioLease = lease
             reloadToken += 1
+        } catch is CancellationError {
         } catch {
             statusMessage = error.localizedDescription
         }

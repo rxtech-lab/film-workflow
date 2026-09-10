@@ -97,8 +97,12 @@ private final class RemotionPreviewSession {
     }
 
     func start() async throws -> URL {
-        if let starting { return try await starting.value }
+        if let starting {
+            if let process, !process.isRunning { stop() }
+            else { return try await starting.value }
+        }
         let task = Task { @MainActor in
+            try Task.checkCancellation()
             let proc = Process()
             proc.executableURL = FileStorage.remotionRoot.appendingPathComponent("bun")
             proc.arguments = [FileStorage.remotionRoot.appendingPathComponent("player/server.cjs").path, directory.path, cache.path]
@@ -123,6 +127,7 @@ private final class RemotionPreviewSession {
                 }
             }
             process = proc; pipe = output
+            try Task.checkCancellation()
             try proc.run()
             for _ in 0..<300 {
                 try Task.checkCancellation()
@@ -156,7 +161,12 @@ private final class RemotionPreviewSession {
 /// Disposable alpha-preserving media. It never inserts a RemotionRender version.
 @MainActor
 enum RemotionPreviewRenderCache {
-    private static var jobs: [String: Task<URL, Error>] = [:]
+    private struct Job {
+        let id: UUID
+        let task: Task<URL, Error>
+        var consumers: [UUID: @MainActor (RenderProgress) -> Void]
+    }
+    private static var jobs: [String: Job] = [:]
 
     static func render(project: RemotionProject, width: Int, height: Int,
                        progress: @escaping @MainActor (RenderProgress) -> Void) async throws -> URL {
@@ -164,29 +174,58 @@ enum RemotionPreviewRenderCache {
         let fps = max(1, project.compositionFps)
         let sourceHash = try RemotionSourceHasher.hash(projectDir: projectDir, width: width, height: height, fps: fps)
         let key = SHA256.hash(data: Data("alpha-v1:\(projectDir.path):\(sourceHash)".utf8)).map { String(format: "%02x", $0) }.joined()
-        if let job = jobs[key] { return try await job.value }
         let root = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("com.rxlab.film-workflow/RemotionPreview/\(key)", isDirectory: true)
         let output = root.appendingPathComponent("source.mov")
         if FileManager.default.fileExists(atPath: output.path) { return output }
-        let job = Task { @MainActor in
+        let consumer = UUID()
+        if jobs[key] == nil {
+            let jobID = UUID()
+            let task = Task { @MainActor in
             let fm = FileManager.default
-            let snapshot = root.appendingPathComponent("project", isDirectory: true)
-            try? fm.removeItem(at: snapshot)
+            let work = root.appendingPathComponent(jobID.uuidString, isDirectory: true)
+            let snapshot = work.appendingPathComponent("project", isDirectory: true)
             try fm.createDirectory(at: snapshot, withIntermediateDirectories: true)
+            defer { try? fm.removeItem(at: work) }
             for name in ["src", "public", "remotion.config.ts", "tsconfig.json", "package.json"] {
                 let source = projectDir.appendingPathComponent(name)
                 if fm.fileExists(atPath: source.path) { try fm.copyItem(at: source, to: snapshot.appendingPathComponent(name)) }
             }
-            defer { try? fm.removeItem(at: snapshot) }
-            let temporary = root.appendingPathComponent("rendering.mov")
+            try Task.checkCancellation()
+            guard try RemotionSourceHasher.hash(projectDir: projectDir, width: width, height: height, fps: fps) == sourceHash else {
+                throw CancellationError()
+            }
+            let temporary = work.appendingPathComponent("rendering.mov")
             try await RemotionRenderer.render(projectDir: snapshot, to: temporary, width: width, height: height,
-                                              fps: fps, preserveAlpha: true, onProgress: progress)
-            try fm.moveItem(at: temporary, to: output)
+                                              fps: fps, preserveAlpha: true) { update in
+                guard let job = jobs[key], job.id == jobID else { return }
+                for callback in job.consumers.values { callback(update) }
+            }
+            try Task.checkCancellation()
+            if !fm.fileExists(atPath: output.path) { try fm.moveItem(at: temporary, to: output) }
             return output
+            }
+            jobs[key] = Job(id: jobID, task: task, consumers: [:])
         }
-        jobs[key] = job
-        defer { jobs.removeValue(forKey: key) }
-        return try await job.value
+        jobs[key]!.consumers[consumer] = progress
+        let task = jobs[key]!.task
+        defer { release(key: key, consumer: consumer) }
+        return try await withTaskCancellationHandler {
+            try Task.checkCancellation()
+            let result = try await task.value
+            try Task.checkCancellation()
+            return result
+        } onCancel: {
+            Task { @MainActor in release(key: key, consumer: consumer) }
+        }
+    }
+
+    private static func release(key: String, consumer: UUID) {
+        guard var job = jobs[key] else { return }
+        job.consumers.removeValue(forKey: consumer)
+        if job.consumers.isEmpty {
+            jobs.removeValue(forKey: key)
+            job.task.cancel()
+        } else { jobs[key] = job }
     }
 }

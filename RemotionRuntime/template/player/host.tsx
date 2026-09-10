@@ -26,12 +26,19 @@ function Preview() {
 
   useEffect(() => {
     const player = ref.current!;
+    const mediaRateProbe = document.createElement('audio');
     const apply = (next: Command) => {
       if (!Number.isFinite(next.frame) || next.serial < lastSerial.current) return;
       lastSerial.current = next.serial;
       if (!(next.rate > 0 && next.rate <= 10) || !(next.volume >= 0 && next.volume <= 1)) {
         player.pause();
         emit('limitation', {message: 'This speed or volume needs a rendered preview.'});
+        return;
+      }
+      try { mediaRateProbe.playbackRate = next.rate; }
+      catch {
+        player.pause();
+        emit('limitation', {message: 'This playback speed needs a rendered preview.'});
         return;
       }
       const previous = command.current;

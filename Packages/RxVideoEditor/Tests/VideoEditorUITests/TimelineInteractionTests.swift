@@ -31,4 +31,21 @@ final class TimelineInteractionTests: XCTestCase {
         clip.source.capabilities.remove(.speed)
         XCTAssertFalse(TimelineClipInteraction.showsSpeedOverlay(for: clip))
     }
+
+    @MainActor
+    func testMarqueeLaneRange() {
+        let ruler: CGFloat = 24, lane: CGFloat = 52
+        func lanes(_ minY: CGFloat, _ maxY: CGFloat, count: Int = 4) -> ClosedRange<Int>? {
+            TimelineClipInteraction.laneRange(minY: minY, maxY: maxY, rulerHeight: ruler, laneHeight: lane, laneCount: count)
+        }
+        XCTAssertEqual(lanes(30, 40), 0...0)
+        XCTAssertEqual(lanes(30, 90), 0...1)
+        // Starting in the ruler still reaches the first lane.
+        XCTAssertEqual(lanes(0, 30), 0...0)
+        XCTAssertNil(lanes(0, 10))
+        XCTAssertNil(lanes(30, 40, count: 0))
+        // Below the last lane clamps to it.
+        XCTAssertEqual(lanes(100, 5000), 1...3)
+        XCTAssertEqual(lanes(4000, 5000), 3...3)
+    }
 }

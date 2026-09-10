@@ -50,6 +50,9 @@ struct InspectorPanel: View {
         case .clip:
             if let sequence, let clipID = state.selectedClipID {
                 clipInspector(sequence: sequence, clipID: clipID)
+            } else if state.selectedClipIDs.count > 1 {
+                StudioEmptyState(title: "\(state.selectedClipIDs.count) Clips Selected", symbol: "rectangle.stack",
+                                 message: "Drag them to move together, or press Delete to remove them all.")
             } else {
                 StudioEmptyState(title: "No Clip Selected", symbol: "rectangle.dashed",
                                  message: "Select a clip on the timeline.")
@@ -94,7 +97,7 @@ struct InspectorPanel: View {
         let remotion = remotionProject(for: clipID, in: sequence)
         let status: String? = remotion.map { project in
             RemotionRenderService.cachedRender(project: project, width: sequence.width, height: sequence.height, fps: project.compositionFps, context: document.container.mainContext, preserveAlpha: true) == nil
-                ? "Not rendered for this sequence" : ""
+                ? "Live preview available · renders when exporting" : ""
         }.flatMap { $0.isEmpty ? nil : $0 }
         ClipInspectorView(timeline: timeline, clipID: clipID, renderStatus: status, onRender: remotion == nil ? nil : onRender)
     }

@@ -29,13 +29,22 @@ struct TimelinePanel: View {
             SequenceTimelineView(
                 timeline: Binding(get: { sequence.timeline }, set: { sequence.editTimeline($0, undoManager: undoManager) }),
                 playhead: Binding(get: { state.playhead }, set: { state.playhead = $0 }),
-                selectedClipID: $state.selectedClipID,
+                selectedClipIDs: $state.selectedClipIDs,
                 pixelsPerSecond: Binding(get: { sequence.timelinePixelsPerSecond }, set: { sequence.timelinePixelsPerSecond = $0 }),
                 resolver: DocumentMediaResolver(document: document, width: sequence.width, height: sequence.height, fps: sequence.fps),
                 onDrop: { item, trackID, time in
                     Task { await insert(item, on: trackID, at: time, into: sequence) }
                 },
-                onDeselect: { state.select(nil) }
+                onDeleteClips: { ids in
+                    var timeline = sequence.timeline
+                    TimelineEditor.remove(&timeline, clipIDs: ids)
+                    sequence.editTimeline(timeline, undoManager: undoManager,
+                                          actionName: ids.count > 1 ? String(localized: "Delete Clips") : String(localized: "Delete Clip"))
+                },
+                onDeselect: { state.select(nil) },
+                alignment: { clip, timeline in
+                    CaptionAudioAlignment.alignment(for: clip, in: timeline, context: modelContext)
+                }
             )
             .alert("Couldn’t add footage", isPresented: Binding(get: { dropError != nil }, set: { if !$0 { dropError = nil } })) {
                 Button("OK") { dropError = nil }

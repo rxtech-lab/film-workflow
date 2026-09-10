@@ -82,8 +82,15 @@ final class EditorWindowState {
     /// Items without an entry use their newest output.
     var currentVersions: [LibraryItemID: UUID] = [:]
     var currentSequenceID: UUID?
+    /// The clips selected on the timeline; they move and delete together.
+    var selectedClipIDs: Set<UUID> = [] {
+        didSet { if !selectedClipIDs.isEmpty { inspectorTab = .clip; showSequenceViewer() } }
+    }
+    /// The single selected clip, for the inspector and single-clip edits.
+    /// Nil while several clips are selected.
     var selectedClipID: UUID? {
-        didSet { if selectedClipID != nil { inspectorTab = .clip; showSequenceViewer() } }
+        get { selectedClipIDs.count == 1 ? selectedClipIDs.first : nil }
+        set { selectedClipIDs = newValue.map { [$0] } ?? [] }
     }
     var inspectorTab: InspectorTab = .footage
     /// Sequence playback has one position; footage players own their own time.
@@ -120,7 +127,7 @@ final class EditorWindowState {
             if item != nil { player.pause() }
             inspectorTab = .footage
         }
-        selectedClipID = nil
+        selectedClipIDs = []
     }
 
     func currentVersion(for item: LibraryItemID) -> UUID? { currentVersions[item] }

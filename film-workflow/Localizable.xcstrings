@@ -259,16 +259,6 @@
       },
       "shouldTranslate" : false
     },
-    "%lld × %lld @ %lld fps, %@. Saved into the film as version %lld." : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "%1$lld × %2$lld @ %3$lld fps, %4$@. Saved into the film as version %5$lld."
-          }
-        }
-      }
-    },
     "%lld captions" : {
       "localizations" : {
         "zh-Hans" : {
@@ -288,6 +278,9 @@
           }
         }
       }
+    },
+    "%lld Clips Selected" : {
+
     },
     "%lld credits" : {
 
@@ -727,6 +720,9 @@
         }
       }
     },
+    "Align with Original Audio" : {
+
+    },
     "Aligning to your script…" : {
       "localizations" : {
         "zh-Hans" : {
@@ -977,6 +973,9 @@
           }
         }
       }
+    },
+    "Audio" : {
+
     },
     "Audio (optional)" : {
       "localizations" : {
@@ -1821,9 +1820,6 @@
         }
       }
     },
-    "Codec" : {
-
-    },
     "Codex" : {
       "localizations" : {
         "zh-Hans" : {
@@ -2156,6 +2152,12 @@
     "Delete Caption" : {
 
     },
+    "Delete Clip" : {
+
+    },
+    "Delete Clips" : {
+
+    },
     "Delete every message in this thread" : {
 
     },
@@ -2468,6 +2470,9 @@
       }
     },
     "Downloading video…" : {
+
+    },
+    "Drag them to move together, or press Delete to remove them all." : {
 
     },
     "Dreamy" : {
@@ -4922,6 +4927,12 @@
         }
       }
     },
+    "None (Audio Only)" : {
+
+    },
+    "None (Silent)" : {
+
+    },
     "None on the timeline" : {
 
     },
@@ -5268,6 +5279,9 @@
           }
         }
       }
+    },
+    "Other Folder…" : {
+
     },
     "Other…" : {
       "localizations" : {
@@ -5931,6 +5945,9 @@
         }
       }
     },
+    "Reload preview" : {
+
+    },
     "reluctantly" : {
       "localizations" : {
         "zh-Hans" : {
@@ -6243,6 +6260,9 @@
         }
       }
     },
+    "Retry Preview" : {
+
+    },
     "Reveal" : {
       "localizations" : {
         "zh-Hans" : {
@@ -6477,7 +6497,6 @@
       }
     },
     "Save To" : {
-      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -7771,6 +7790,9 @@
           }
         }
       }
+    },
+    "This Film · Version %lld" : {
+
     },
     "This lyric section will be permanently deleted." : {
 

@@ -68,6 +68,7 @@ private struct PreviewPictureLayer: View {
         Group {
             if let live = layer.live {
                 liveSurface(live)
+                    .id(live.id)
                     .frame(width: max(1, placed.width), height: max(1, placed.height))
                     .position(x: placed.midX, y: canvas.height - placed.midY)
                     .opacity(layer.trackKind == .audio || !live.ready ? 0 : Double(layer.clip.opacity))

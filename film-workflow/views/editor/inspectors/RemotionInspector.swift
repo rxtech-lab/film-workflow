@@ -67,8 +67,6 @@ struct RemotionInspector: View {
                     renderProgress = p
                 }
                 refreshToken += 1
-                // The renderer stops Studio; bring the preview back.
-                try? await RemotionRuntime.shared.start(projectId: project.id, projectDir: project.projectDir)
             } catch is CancellationError {
             } catch {
                 renderError = error.localizedDescription

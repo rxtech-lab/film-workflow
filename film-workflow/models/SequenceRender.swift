@@ -36,8 +36,8 @@ final class SequenceRender {
     var dimensionsLabel: String {
         var parts: [String] = []
         if durationSeconds > 0 { parts.append("\(Int(durationSeconds.rounded()))s") }
-        parts.append("\(width)×\(height)")
-        parts.append("\(fps) fps")
+        if width > 0, height > 0 { parts.append("\(width)×\(height)") }
+        if fps > 0 { parts.append("\(fps) fps") }
         parts.append(preset.uppercased())
         return parts.joined(separator: " · ")
     }

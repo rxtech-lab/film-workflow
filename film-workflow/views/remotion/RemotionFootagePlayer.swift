@@ -5,7 +5,6 @@ import VideoEditorUI
 struct RemotionViewer: View {
     let project: RemotionProject
     let document: ProjectDocument
-    @State private var studio = false
     @State private var retry = 0
 
     var body: some View {
@@ -13,15 +12,10 @@ struct RemotionViewer: View {
             HStack {
                 Text(project.name).font(.headline).lineLimit(1)
                 Spacer()
-                Picker("Remotion viewer", selection: $studio) {
-                    Text("Player").tag(false)
-                    Text("Studio").tag(true)
-                }.pickerStyle(.segmented).frame(width: 160)
                 Button { retry += 1 } label: { Image(systemName: "arrow.clockwise") }
                     .help("Reload preview")
             }.padding(10).background(.bar)
-            if studio { RemotionStudioViewer(project: project).id(retry) }
-            else { RemotionFootagePlayer(project: project, document: document).id(retry) }
+            RemotionFootagePlayer(project: project, document: document).id(retry)
         }
     }
 }
@@ -43,7 +37,7 @@ private struct RemotionFootagePlayer: View {
     @State private var resumeAfterScrub = false
     @State private var revision = 0
 
-    private var settings: String { "\(project.id):\(project.durationSeconds):\(project.compositionWidth):\(project.compositionHeight):\(project.compositionFps)" }
+    private var settings: String { "\(project.id):\(project.durationSeconds):\(project.compositionWidth):\(project.compositionHeight):\(project.compositionFps):\(project.compositionSource.isEmpty)" }
 
     var body: some View {
         VStack(spacing: 0) {

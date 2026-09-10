@@ -64,6 +64,7 @@ public final class TimelinePlayerController {
         loadTask?.cancel()
         loadGeneration += 1
         let generation = loadGeneration
+        lastError = nil
         if let loadedTimeline, timeline != loadedTimeline,
            loadedAudioOnly == audioOnly,
            Self.withoutAudioLevels(timeline) == Self.withoutAudioLevels(loadedTimeline),
@@ -82,6 +83,8 @@ public final class TimelinePlayerController {
             item.audioMix = mix
             self.loadedTimeline = timeline
             lastError = nil
+            isLoading = false
+            onTransportChange?()
             return
         }
         frameDuration = timeline.frameDuration

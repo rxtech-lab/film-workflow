@@ -98,12 +98,16 @@ enum MCPSequenceHandlers {
         ),
         MCPToolDescriptor(
             name: "sequence_render",
-            description: "Render a sequence to mp4 inside the film as a new version. Remotion clips without a current render are rendered first. Slow: minutes for long sequences.",
+            description: "Render a sequence, by default as a new mp4 version inside the film. Remotion clips without a current render are rendered first. Slow: minutes for long sequences.",
             inputSchema: [
                 "type": "object",
                 "properties": [
                     "sequence_id": ["type": "string"] as [String: Any],
-                    "codec": ["type": "string", "enum": ["h264", "hevc"], "description": "Default h264."] as [String: Any],
+                    "codec": ["type": "string", "enum": ["h264", "hevc", "none"], "description": "Video codec; `none` exports audio only. Default h264."] as [String: Any],
+                    "audio": ["type": "string", "enum": ["aac", "none"], "description": "Audio codec; `none` drops every audio track. Default aac."] as [String: Any],
+                    "resolution": ["type": "string", "enum": TimelineExporter.Resolution.allCases.map(\.rawValue), "description": "Longest edge of the picture, aspect kept. Default source."] as [String: Any],
+                    "format": ["type": "string", "enum": TimelineExporter.Container.allCases.map(\.rawValue), "description": "Container. Audio-only always writes m4a. Default mp4."] as [String: Any],
+                    "output_dir": ["type": "string", "description": "Absolute folder path. When given the file is written there as `<sequence name>.<ext>` and is not kept as a film version."] as [String: Any],
                 ],
                 "required": ["sequence_id"]
             ]
@@ -408,14 +412,49 @@ enum MCPSequenceHandlers {
         guard let document = ProjectDocumentController.shared.document(forContainer: context.container) else {
             throw MCPToolError.invalidArguments("the film is not open in a window")
         }
-        let preset = TimelineExporter.Preset(rawValue: (arguments["codec"] as? String) ?? "h264") ?? .h264
-        let render: SequenceRender
+        var options = TimelineExporter.Options()
+        if let codec = arguments["codec"] as? String, codec != "h264" {
+            guard codec == "none" || TimelineExporter.VideoCodec(rawValue: codec) != nil else {
+                throw MCPToolError.invalidArguments("codec must be h264, hevc or none")
+            }
+            options.video = TimelineExporter.VideoCodec(rawValue: codec)
+        }
+        if let audio = arguments["audio"] as? String, audio != "aac" {
+            guard audio == "none" || TimelineExporter.AudioCodec(rawValue: audio) != nil else {
+                throw MCPToolError.invalidArguments("audio must be aac or none")
+            }
+            options.audio = TimelineExporter.AudioCodec(rawValue: audio)
+        }
+        if let raw = arguments["resolution"] as? String {
+            guard let resolution = TimelineExporter.Resolution(rawValue: raw) else {
+                throw MCPToolError.invalidArguments("resolution must be one of \(TimelineExporter.Resolution.allCases.map(\.rawValue).joined(separator: ", "))")
+            }
+            options.resolution = resolution
+        }
+        if let raw = arguments["format"] as? String {
+            guard let container = TimelineExporter.Container(rawValue: raw) else {
+                throw MCPToolError.invalidArguments("format must be mp4, mov or m4a")
+            }
+            options.container = container
+        }
+        var destination = SequenceRenderDestination.film
+        if let dir = arguments["output_dir"] as? String, !dir.isEmpty {
+            var isDirectory: ObjCBool = false
+            guard FileManager.default.fileExists(atPath: dir, isDirectory: &isDirectory), isDirectory.boolValue else {
+                throw MCPToolError.invalidArguments("output_dir must be an existing folder")
+            }
+            destination = .folder(URL(fileURLWithPath: dir, isDirectory: true))
+        }
+        let output: SequenceRenderOutput
         do {
-            render = try await SequenceRenderService.render(sequence: sequence, document: document, preset: preset) { _ in }
+            output = try await SequenceRenderService.render(sequence: sequence, document: document, options: options, destination: destination) { _ in }
         } catch {
             throw MCPToolError.underlying(error)
         }
-        return MCPToolRegistry.jsonResult(renderJSON(render))
+        switch output {
+        case .version(let render): return MCPToolRegistry.jsonResult(renderJSON(render))
+        case .file(let url): return MCPToolRegistry.jsonResult(["path": url.path, "codec": options.video?.rawValue ?? "audio"] as [String: Any])
+        }
     }
 
     private static func sequenceRenders(_ arguments: [String: Any], context: ModelContext) throws -> [String: Any] {

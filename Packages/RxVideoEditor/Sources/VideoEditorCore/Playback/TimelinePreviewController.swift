@@ -22,6 +22,7 @@ public final class TimelinePreviewLayer: Identifiable {
     @ObservationIgnored private var seekSerial = 0
     @ObservationIgnored private var seekTarget: Double?
     @ObservationIgnored private var lastPlaying = false
+    @ObservationIgnored private var seekInFlight = false
 
     init(clip: Clip, track: Track, source: TimelinePreviewSource) {
         id = clip.id
@@ -86,29 +87,35 @@ public final class TimelinePreviewLayer: Identifiable {
 
     func synchronize(time: Double, playing: Bool) {
         guard let player else { return }
-        let local = max(0, time - clip.start)
+        let local = min(clip.duration, max(0, time - clip.start))
         let desired = active && playing
         let drift = abs(player.currentTime().seconds - local)
         let needsSeek = lastPlaying != desired || (!desired && seekTarget != local) || (desired && drift > 0.08)
         lastPlaying = desired
         if !desired { player.pause() }
-        if needsSeek {
+        if needsSeek && (!desired || !seekInFlight) {
             seekTarget = local
+            seekInFlight = true
             seekSerial += 1
             let serial = seekSerial
             player.seek(to: CMTime(seconds: local, preferredTimescale: 600), toleranceBefore: .zero, toleranceAfter: .zero) { [weak self] finished in
                 Task { @MainActor [weak self] in
-                    guard let self, finished, self.seekSerial == serial else { return }
-                    if desired, self.lastPlaying { player.play() }
+                    guard let self, self.seekSerial == serial else { return }
+                    self.seekInFlight = false
+                    if finished, desired, self.lastPlaying { player.play() }
                 }
             }
-        } else if desired && player.rate == 0 { player.play() }
+        } else if desired && player.rate == 0 && !seekInFlight { player.play() }
+    }
+
+    func releaseNative() {
+        nativeTask?.cancel(); nativeTask = nil
+        seekSerial += 1; seekTarget = nil; lastPlaying = false; seekInFlight = false
+        player?.pause(); player?.replaceCurrentItem(with: nil); player = nil
     }
 
     func stop() {
-        nativeTask?.cancel(); nativeTask = nil
-        seekSerial += 1; seekTarget = nil; lastPlaying = false
-        player?.pause(); player?.replaceCurrentItem(with: nil); player = nil
+        releaseNative()
         live?.update(time: 0, playing: false, rate: 1, volume: 0, muted: true, force: true)
         live?.onChange = nil
     }
@@ -155,6 +162,12 @@ public final class TimelinePreviewController {
         self.timeline = timeline
         enabled = true; isLoading = true; lastError = nil
         transport.setBuffering(true)
+        // A suspended master clock must also suspend already-mounted live/audio surfaces.
+        for layer in layers {
+            layer.player?.pause()
+            layer.live?.update(time: layer.clip.sourceTime(at: transport.currentTime), playing: false,
+                               rate: 1, volume: 0, muted: true, force: true)
+        }
         let previousResolver = self.resolver
         self.resolver = resolver
         loadTask = Task { @MainActor in
@@ -212,7 +225,7 @@ public final class TimelinePreviewController {
             ticker?.cancel(); ticker = nil
             transport.pause()
             for layer in layers {
-                layer.player?.pause(); layer.mounted = false
+                layer.releaseNative(); layer.mounted = false
                 layer.live?.update(time: layer.clip.inPoint, playing: false, rate: 1, volume: 0, muted: true, force: true)
             }
         }
@@ -253,16 +266,24 @@ public final class TimelinePreviewController {
         synchronizing = true
         defer { synchronizing = false }
         let time = transport.currentTime
+        if !transport.isLoading, let error = transport.lastError { lastError = error }
+        if let item = transport.player.currentItem, item.status == .failed {
+            lastError = item.error?.localizedDescription ?? "The sequence audio could not be played."
+        }
         var blocked = isLoading || lastError != nil || transport.isLoading
+        if let item = transport.player.currentItem, item.status != .readyToPlay || item.isPlaybackBufferEmpty { blocked = true }
         for layer in layers {
+            if let live = layer.live { layer.naturalDuration = live.descriptor.duration }
             let inSource = layer.naturalDuration.map { layer.clip.sourceTime(at: time) < $0 } ?? true
             layer.active = layer.clip.range.contains(time) && inSource
             layer.mounted = time >= layer.clip.start - 2 && time < layer.clip.end && inSource
             if layer.mounted {
                 layer.prepareNative()
-                if let live = layer.live, live.limitation != nil || layer.clip.playbackRate > 10 || layer.clip.volume > 1 {
+                if let live = layer.live, live.limitation != nil || (live.ready && (layer.clip.playbackRate > 10 || layer.clip.volume > 1)) {
                     prepareFallback(layer)
                 }
+            } else if layer.player != nil {
+                layer.releaseNative()
             }
             if layer.active && layer.blocked { blocked = true }
         }

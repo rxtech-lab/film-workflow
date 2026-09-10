@@ -21,10 +21,8 @@ struct RemotionParametersView: View {
     @State private var generatedImages: [URL] = []
     @State private var pendingDeletion: PendingDeletion?
     @State private var showDeleteAlert = false
-    @State private var runtime = RemotionRuntime.shared
-
     private var isStudioRunning: Bool {
-        runtime.currentURL != nil && runtime.currentProjectId == project.id
+        RemotionStudioSessions.runtime(for: project.projectDir)?.currentURL != nil
     }
 
     private enum PendingDeletion: Identifiable {
@@ -474,7 +472,6 @@ struct RemotionParametersView: View {
         isSeeding = true
         statusMessage = "Creating composition…"
 
-        let projectId = project.id
         let bindable = project
         let source = RemotionCodeBuilder.defaultComposition(project: bindable)
         bindable.compositionSource = source
@@ -484,9 +481,7 @@ struct RemotionParametersView: View {
             defer { isSeeding = false }
             do {
                 try RemotionCodeBuilder.writeComposition(project: bindable, source: source)
-                statusMessage = "Starting Remotion Studio…"
-                try await RemotionRuntime.shared.start(projectId: projectId, projectDir: bindable.projectDir)
-                statusMessage = "Studio running. Refine it in the agent window."
+                statusMessage = "Composition ready. Preview it in the viewer."
             } catch {
                 statusMessage = error.localizedDescription
             }

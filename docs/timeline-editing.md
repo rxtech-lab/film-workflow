@@ -25,6 +25,26 @@ movement, trimming, cuts, speed and reverse, track changes, clip properties,
 and sequence settings. A drag or trim commits as one undo step. Each window
 uses its own native undo history, and text fields keep their normal shortcuts.
 
+Clicking a clip selects it alone. Command- or shift-click adds a clip to the
+selection or removes it. Dragging across empty lane space sweeps a blue
+selection rectangle; every clip it touches on the lanes it spans becomes
+selected, and holding shift or command keeps the existing selection. A plain
+click on a lane still moves the playhead. Dragging any selected clip moves the
+whole selection together, keeping its layout, snapping the grabbed clip's edge,
+and changing lane only when every clip fits the new lane. Delete, Backspace, or
+the context menu remove the whole selection as one undo step; Ripple Delete
+closes each gap. Speed, Reverse, and the inspector need exactly one selected
+clip; the toolbar shows the count otherwise.
+
+Caption clips offer Align with Original Audio in their context menu. It moves
+the caption clip onto the start of the clip that plays the audio the captions
+were transcribed from, a narration, a music take or an imported asset, and
+copies that clip's in point and length so the cues play in step. The item
+appears for every caption project that has audio and stays disabled until a
+clip playing that audio is on the timeline; when that audio has been split,
+the earliest piece is the target. The caption clip stays on its own track and
+must fit there without overlapping.
+
 Clip edges trim without selecting first. A retimed clip shows an orange strip
 at its top with the current percentage. Dragging the strip's left handle
 changes speed while holding the end fixed; the right handle holds the start

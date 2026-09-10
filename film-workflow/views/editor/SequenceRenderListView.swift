@@ -133,9 +133,10 @@ struct SequenceRenderListView: View {
 
     private func exportRender(_ render: SequenceRender) {
         let panel = NSSavePanel()
-        panel.allowedContentTypes = [.mpeg4Movie]
+        let ext = render.videoURL.pathExtension.isEmpty ? "mp4" : render.videoURL.pathExtension
+        panel.allowedContentTypes = [UTType(filenameExtension: ext) ?? .mpeg4Movie]
         panel.canCreateDirectories = true
-        panel.nameFieldStringValue = "\(sequence.name)-\(render.versionLabel).mp4"
+        panel.nameFieldStringValue = "\(sequence.name)-\(render.versionLabel).\(ext)"
         panel.directoryURL = FileManager.default.urls(for: .moviesDirectory, in: .userDomainMask).first
         guard panel.runModal() == .OK, let url = panel.url else { return }
         do {

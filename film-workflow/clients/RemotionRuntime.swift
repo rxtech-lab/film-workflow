@@ -113,6 +113,7 @@ final class RemotionRuntime {
             return
         }
         await stop()
+        try Task.checkCancellation()
 
         try ensureRuntimeInstalled()
 
@@ -160,6 +161,7 @@ final class RemotionRuntime {
         }
 
         do {
+            try Task.checkCancellation()
             try proc.run()
         } catch {
             throw RemotionRuntimeError.studioFailedToStart(error.localizedDescription)
@@ -324,6 +326,7 @@ final class RemotionRuntime {
         var request = URLRequest(url: url)
         request.timeoutInterval = 2
         while Date() < deadline {
+            if Task.isCancelled { return false }
             do {
                 let (_, response) = try await URLSession.shared.data(for: request)
                 if let http = response as? HTTPURLResponse, http.statusCode < 500 {

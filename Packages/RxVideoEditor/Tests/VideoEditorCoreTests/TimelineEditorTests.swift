@@ -34,6 +34,44 @@ struct TimelineEditorTests {
         #expect(t.duration == 9)
     }
 
+    @Test("Align takes the target's start, in point and length on the clip's own track")
+    func alignWithOrigin() throws {
+        var t = timeline
+        let a = audioTrack(t)
+        let overlay = t.tracks.first { $0.kind == .overlay }!.id
+        var narration = Clip(source: ClipSource(id: "narration:n", kind: .audio, displayName: "n"), start: 6, duration: 5)
+        narration.inPoint = 1.5
+        try TimelineEditor.insert(&t, clip: narration, on: a)
+        let captions = Clip(source: ClipSource(id: "caption:c", kind: .captions, displayName: "c"), start: 0, duration: 3)
+        try TimelineEditor.insert(&t, clip: captions, on: overlay)
+
+        try TimelineEditor.align(&t, clipID: captions.id, with: narration.id)
+        let aligned = try #require(t.clip(id: captions.id))
+        #expect(aligned.start == 6)
+        #expect(aligned.inPoint == 1.5)
+        #expect(aligned.duration == 5)
+        #expect(t.track(containing: captions.id)?.id == overlay)
+
+        // Still (fixed-length) clips only move.
+        var still = Clip(source: ClipSource(id: "image:i", kind: .image, displayName: "i", capabilities: [.drag]), start: 0, duration: 2)
+        still.inPoint = 0
+        try TimelineEditor.insert(&t, clip: still, on: videoTrack(t))
+        try TimelineEditor.align(&t, clipID: still.id, with: narration.id)
+        #expect(t.clip(id: still.id)?.start == 6)
+        #expect(t.clip(id: still.id)?.duration == 2)
+
+        // Anything already occupying the target span blocks the move.
+        let blocker = Clip(source: ClipSource(id: "caption:b", kind: .captions, displayName: "b"), start: 12, duration: 2)
+        try TimelineEditor.insert(&t, clip: blocker, on: overlay)
+        try TimelineEditor.move(&t, clipID: narration.id, to: 11)
+        #expect(throws: TimelineEditError.overlap) { try TimelineEditor.align(&t, clipID: captions.id, with: narration.id) }
+        #expect(t.clip(id: captions.id)?.start == 6)
+        #expect(throws: TimelineEditError.unknownClip(UUID(uuidString: "00000000-0000-0000-0000-000000000000")!)) {
+            try TimelineEditor.align(&t, clipID: captions.id, with: UUID(uuidString: "00000000-0000-0000-0000-000000000000")!)
+        }
+        #expect(throws: TimelineEditError.unsupportedOperation) { try TimelineEditor.align(&t, clipID: captions.id, with: captions.id) }
+    }
+
     @Test("Next free start walks past occupied ranges")
     func nextFree() throws {
         var t = timeline
@@ -107,6 +145,110 @@ struct TimelineEditorTests {
         TimelineEditor.remove(&t, clipID: b.id)
         #expect(t.clip(id: c.id)?.start == 4)
         #expect(t.allClips.count == 1)
+    }
+
+    @Test("A group moves together, keeps its layout and stops at zero")
+    func groupMove() throws {
+        var t = timeline
+        let v = videoTrack(t)
+        let a = video("a", start: 1, duration: 2)
+        let b = video("b", start: 4, duration: 2)
+        let c = video("c", start: 8, duration: 1)
+        try TimelineEditor.insert(&t, clip: a, on: v)
+        try TimelineEditor.insert(&t, clip: b, on: v)
+        try TimelineEditor.insert(&t, clip: c, on: v)
+
+        try TimelineEditor.move(&t, clipIDs: [a.id, b.id], by: 1)
+        #expect(t.clip(id: a.id)?.start == 2)
+        #expect(t.clip(id: b.id)?.start == 5)
+        #expect(t.clip(id: c.id)?.start == 8)
+
+        // Too far left: the earliest clip stops at zero and the rest follow.
+        try TimelineEditor.move(&t, clipIDs: [a.id, b.id], by: -10)
+        #expect(t.clip(id: a.id)?.start == 0)
+        #expect(t.clip(id: b.id)?.start == 3)
+
+        // Landing on c would overlap, so nothing moves.
+        let before = t
+        #expect(throws: TimelineEditError.overlap) {
+            try TimelineEditor.move(&t, clipIDs: [a.id, b.id], by: 4.5)
+        }
+        #expect(t == before)
+        #expect(t[trackID: v]!.sortedClips.map(\.id) == [a.id, b.id, c.id])
+    }
+
+    @Test("A group changes lane only when every clip fits the new lane")
+    func groupLaneShift() throws {
+        var t = timeline
+        let v = videoTrack(t)
+        let a = video("a", start: 0, duration: 2)
+        let b = video("b", start: 3, duration: 2)
+        try TimelineEditor.insert(&t, clip: a, on: v)
+        try TimelineEditor.insert(&t, clip: b, on: v)
+
+        // Video lane sits under the overlay lane and above the audio lanes.
+        #expect(TimelineEditor.canShiftLanes(t, clipIDs: [a.id, b.id], by: 1))
+        #expect(!TimelineEditor.canShiftLanes(t, clipIDs: [a.id, b.id], by: -1))
+        #expect(!TimelineEditor.canShiftLanes(t, clipIDs: [a.id, b.id], by: 3))
+        #expect(TimelineEditor.canShiftLanes(t, clipIDs: [a.id, b.id], by: 0))
+
+        try TimelineEditor.move(&t, clipIDs: [a.id, b.id], by: 1, laneOffset: 1)
+        let audio = audioTrack(t)
+        #expect(t.track(containing: a.id)?.id == audio)
+        #expect(t.track(containing: b.id)?.id == audio)
+        #expect(t.clip(id: a.id)?.start == 1)
+        #expect(t.clip(id: b.id)?.start == 4)
+        #expect(t[trackID: v]!.clips.isEmpty)
+
+        #expect(throws: TimelineEditError.kindNotAllowed(.video, on: .overlay)) {
+            try TimelineEditor.move(&t, clipIDs: [a.id, b.id], by: 0, laneOffset: -2)
+        }
+    }
+
+    @Test("Removing and ripple deleting several clips at once")
+    func groupDelete() throws {
+        var t = timeline
+        let v = videoTrack(t)
+        let a = video("a", start: 0, duration: 2)
+        let b = video("b", start: 2, duration: 2)
+        let c = video("c", start: 4, duration: 2)
+        let d = video("d", start: 6, duration: 2)
+        try TimelineEditor.insert(&t, clip: a, on: v)
+        try TimelineEditor.insert(&t, clip: b, on: v)
+        try TimelineEditor.insert(&t, clip: c, on: v)
+        try TimelineEditor.insert(&t, clip: d, on: v)
+
+        var plain = t
+        TimelineEditor.remove(&plain, clipIDs: [a.id, c.id])
+        #expect(plain[trackID: v]!.sortedClips.map(\.id) == [b.id, d.id])
+        #expect(plain.clip(id: d.id)?.start == 6)
+
+        try TimelineEditor.rippleDelete(&t, clipIDs: [a.id, c.id])
+        #expect(t[trackID: v]!.sortedClips.map(\.id) == [b.id, d.id])
+        #expect(t.clip(id: b.id)?.start == 0)
+        #expect(t.clip(id: d.id)?.start == 2)
+    }
+
+    @Test("A selection rectangle picks the clips it touches on the lanes it spans")
+    func marqueeQuery() throws {
+        var t = timeline
+        let v = videoTrack(t)
+        let a = video("a", start: 0, duration: 2)
+        let b = video("b", start: 5, duration: 2)
+        let onAudio = video("audio", start: 1, duration: 2)
+        try TimelineEditor.insert(&t, clip: a, on: v)
+        try TimelineEditor.insert(&t, clip: b, on: v)
+        try TimelineEditor.insert(&t, clip: onAudio, on: audioTrack(t))
+        let videoLane = t.tracks.firstIndex { $0.id == v }!
+        let audioLane = t.tracks.firstIndex { $0.id == audioTrack(t) }!
+
+        #expect(TimelineEditor.clipIDs(t, intersecting: 1...1.5, trackIndices: videoLane...videoLane) == [a.id])
+        #expect(TimelineEditor.clipIDs(t, intersecting: 1...6, trackIndices: videoLane...videoLane) == [a.id, b.id])
+        #expect(TimelineEditor.clipIDs(t, intersecting: 1...1.5, trackIndices: videoLane...audioLane) == [a.id, onAudio.id])
+        // Touching only the gap, or only an edge, selects nothing.
+        #expect(TimelineEditor.clipIDs(t, intersecting: 3...4, trackIndices: videoLane...audioLane).isEmpty)
+        #expect(TimelineEditor.clipIDs(t, intersecting: 2...5, trackIndices: videoLane...videoLane).isEmpty)
+        #expect(TimelineEditor.snapPoints(t, excluding: [a.id, b.id]) == [0, 1, 3])
     }
 
     @Test("Snapping picks the nearest edge inside the tolerance")

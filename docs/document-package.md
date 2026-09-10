@@ -35,7 +35,7 @@ My Film.rxfilmstudio/
 | `ProjectStorage` | Package layout and media helpers. Resolved from a `ModelContainer` (`forContainer`) or a model (`for(model:)`), so services keep their `ModelContext` signatures. |
 | `AppModelContainer` | App-level store (`Agent.store` in Application Support) for agent threads, which span films. |
 | `DocumentMediaResolver` | Maps timeline source ids (`video:<uuid>`, `remotion:<uuid>`, …) to files and caption cues. |
-| `SequenceRenderService` | Renders stale Remotion clips, then exports the timeline through the `RxVideoEditor` package. |
+| `SequenceRenderService` | Renders stale Remotion clips, then exports the timeline through the `RxVideoEditor` package. `TimelineExporter.Options` picks the video codec (H.264, HEVC or none for audio only), audio (AAC or none), resolution (source or a long-edge preset from 480p to 4K) and container (mp4, mov, m4a). The destination is either the film, which records a `SequenceRender` version under `Renders/Sequences/`, or a folder the user chose, which records nothing. The last options and folder are remembered in `UserDefaults`. |
 
 ## Panel layout
 

@@ -17,7 +17,8 @@ generated media. See `docs/document-package.md`.
   (Whisper/Azure/OpenAI), Images, Video (Veo), Remotion compositions, imported files
 - Every generation is kept as a version; Remotion renders are cached by source hash
 - Timeline: drag footage from the library, trim, move, split; captions burn in
-- Render: Remotion clips are rendered first, then the sequence exports as a new version
+- Render: Remotion clips are rendered first, then the sequence exports as a new
+  version in the film or to a folder, with codec, audio, resolution and format options
 - An embedded MCP server and agent window that can build and render films
   (`footage_list`, `sequence_add_clip`, `sequence_render`, …)
 

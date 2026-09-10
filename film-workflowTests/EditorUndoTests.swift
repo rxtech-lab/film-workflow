@@ -129,13 +129,7 @@ struct EditorUndoTests {
         }
         let window = try #require(editorWindow)
         defer { window.close() }
-        let activationPolicy = NSApp.activationPolicy()
-        defer { NSApp.setActivationPolicy(activationPolicy) }
-        NSApp.setActivationPolicy(.regular)
-        window.makeKeyAndOrderFront(nil)
-        NSApp.activate(ignoringOtherApps: true)
         try await Task.sleep(for: .milliseconds(300))
-        #expect(NSApp.keyWindow === window)
         let opened = try #require(controller.document(for: url))
         let editedSequence = try #require(opened.container.mainContext.fetch(FetchDescriptor<SequenceProject>()).first)
         let manager = try #require(window.undoManager)
@@ -146,18 +140,30 @@ struct EditorUndoTests {
         try await Task.sleep(for: .milliseconds(100))
         #expect(manager.canUndo)
 
-        let menu = try #require(NSApp.mainMenu)
-        func validate(_ menu: NSMenu) {
-            menu.update()
+        func command(_ action: Selector, in menu: NSMenu) -> NSMenuItem? {
             for item in menu.items {
-                if let submenu = item.submenu { validate(submenu) }
+                if item.action == action { return item }
+                if let submenu = item.submenu, let found = command(action, in: submenu) { return found }
             }
+            return nil
+        }
+        // XCTest's host may not become the active application. Copy the real
+        // menu shortcuts and explicitly target this editor to make dispatch
+        // independent of which application the user currently has in front.
+        let appMenu = try #require(NSApp.mainMenu)
+        let menu = NSMenu()
+        for action in [Selector(("undo:")), Selector(("redo:"))] {
+            let native = try #require(command(action, in: appMenu))
+            let item = NSMenuItem(title: native.title, action: action, keyEquivalent: native.keyEquivalent)
+            item.keyEquivalentModifierMask = native.keyEquivalentModifierMask
+            item.target = window
+            menu.addItem(item)
         }
         for redo in [false, true] {
             let key = try #require(CGEvent(keyboardEventSource: nil, virtualKey: 6, keyDown: true))
             key.flags = redo ? [.maskCommand, .maskShift] : [.maskCommand]
             let event = try #require(NSEvent(cgEvent: key))
-            validate(menu)
+            menu.update()
             #expect(menu.performKeyEquivalent(with: event))
             try await Task.sleep(for: .milliseconds(100))
             #expect(editedSequence.timeline.tracks.count == original.tracks.count + (redo ? 1 : 0))

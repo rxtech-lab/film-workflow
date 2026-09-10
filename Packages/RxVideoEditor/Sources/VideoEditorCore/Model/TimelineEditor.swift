@@ -100,6 +100,98 @@ public enum TimelineEditor {
         timeline.tracks[destinationIndex].clips.sort { $0.start < $1.start }
     }
 
+    /// Whether every clip in `clipIDs` can shift `laneOffset` tracks: the
+    /// target lane exists and takes the clip's kind. Zero is always allowed.
+    public static func canShiftLanes(_ timeline: Timeline, clipIDs: Set<UUID>, by laneOffset: Int) -> Bool {
+        guard laneOffset != 0 else { return true }
+        for (index, track) in timeline.tracks.enumerated() {
+            for clip in track.clips where clipIDs.contains(clip.id) {
+                let target = index + laneOffset
+                guard timeline.tracks.indices.contains(target),
+                      timeline.tracks[target].kind.accepts(clip.source.kind) else { return false }
+            }
+        }
+        return true
+    }
+
+    /// Moves several clips together by the same time delta, optionally
+    /// shifting all of them `laneOffset` tracks. The group keeps its relative
+    /// layout: the delta is limited so the earliest clip stops at zero. Either
+    /// every clip moves or none does.
+    public static func move(
+        _ timeline: inout Timeline,
+        clipIDs: Set<UUID>,
+        by delta: TimeInterval,
+        laneOffset: Int = 0
+    ) throws {
+        guard delta.isFinite else { throw TimelineEditError.invalidDuration }
+        var placements: [(clip: Clip, trackIndex: Int)] = []
+        for id in clipIDs {
+            guard let fromIndex = timeline.tracks.firstIndex(where: { $0.clips.contains { $0.id == id } }),
+                  let clip = timeline.clip(id: id) else { throw TimelineEditError.unknownClip(id) }
+            guard clip.source.capabilities.contains(.drag) else { throw TimelineEditError.unsupportedOperation }
+            let target = fromIndex + laneOffset
+            guard timeline.tracks.indices.contains(target) else { throw TimelineEditError.unknownTrack(timeline.tracks[fromIndex].id) }
+            guard timeline.tracks[target].kind.accepts(clip.source.kind) else {
+                throw TimelineEditError.kindNotAllowed(clip.source.kind, on: timeline.tracks[target].kind)
+            }
+            placements.append((clip, target))
+        }
+        guard !placements.isEmpty else { return }
+
+        let earliest = placements.map(\.clip.start).min() ?? 0
+        let shift = max(delta, -earliest)
+        for i in placements.indices {
+            placements[i].clip.start = timeline.quantized(placements[i].clip.start + shift)
+        }
+
+        // Moved clips may not overlap anything left behind on their target
+        // track, nor each other once they land.
+        for (clip, target) in placements {
+            let others = timeline.tracks[target].clips.filter { !clipIDs.contains($0.id) }
+            guard !others.contains(where: { $0.overlaps(clip) }) else { throw TimelineEditError.overlap }
+            for (other, otherTarget) in placements where otherTarget == target && other.id != clip.id {
+                guard !other.overlaps(clip) else { throw TimelineEditError.overlap }
+            }
+        }
+
+        for i in timeline.tracks.indices {
+            timeline.tracks[i].clips.removeAll { clipIDs.contains($0.id) }
+        }
+        for (clip, target) in placements {
+            timeline.tracks[target].clips.append(clip)
+        }
+        for (_, target) in placements {
+            timeline.tracks[target].clips.sort { $0.start < $1.start }
+        }
+    }
+
+    /// Lines a clip up with the clip it was derived from, such as captions
+    /// transcribed from a narration. The clip takes the target's start, and
+    /// when its length can change, the target's in point and duration too, so
+    /// cues timed against the target's source play in step with it. The clip
+    /// stays on its own track; it may not overlap anything else there.
+    public static func align(_ timeline: inout Timeline, clipID: UUID, with targetClipID: UUID) throws {
+        guard clipID != targetClipID else { throw TimelineEditError.unsupportedOperation }
+        guard let trackIndex = timeline.tracks.firstIndex(where: { $0.clips.contains { $0.id == clipID } }),
+              var clip = timeline.clip(id: clipID) else { throw TimelineEditError.unknownClip(clipID) }
+        guard let target = timeline.clip(id: targetClipID) else { throw TimelineEditError.unknownClip(targetClipID) }
+        guard clip.source.capabilities.contains(.drag) else { throw TimelineEditError.unsupportedOperation }
+
+        clip.start = target.start
+        if clip.source.capabilities.contains(.duration) {
+            clip.inPoint = target.inPoint
+            clip.duration = target.duration
+        }
+        guard clip.duration > 0 else { throw TimelineEditError.invalidDuration }
+        let others = timeline.tracks[trackIndex].clips.filter { $0.id != clipID }
+        guard !others.contains(where: { $0.overlaps(clip) }) else { throw TimelineEditError.overlap }
+
+        timeline.tracks[trackIndex].clips.removeAll { $0.id == clipID }
+        timeline.tracks[trackIndex].clips.append(clip)
+        timeline.tracks[trackIndex].clips.sort { $0.start < $1.start }
+    }
+
     /// Trims on the timeline clock while preserving the opposite source edge.
     /// `sourceDuration` lets older clips use a length resolved by the UI.
     public static func trimLeading(_ timeline: inout Timeline, clipID: UUID, by delta: TimeInterval, minimumDuration: TimeInterval? = nil, sourceDuration: TimeInterval? = nil) throws {
@@ -218,8 +310,12 @@ public enum TimelineEditor {
     }
 
     public static func remove(_ timeline: inout Timeline, clipID: UUID) {
+        remove(&timeline, clipIDs: [clipID])
+    }
+
+    public static func remove(_ timeline: inout Timeline, clipIDs: Set<UUID>) {
         for i in timeline.tracks.indices {
-            timeline.tracks[i].clips.removeAll { $0.id == clipID }
+            timeline.tracks[i].clips.removeAll { clipIDs.contains($0.id) }
         }
     }
 
@@ -235,6 +331,27 @@ public enum TimelineEditor {
         }
     }
 
+    /// Ripple deletes several clips. Later clips go first so each removal
+    /// closes its own gap without disturbing the clips still to be removed.
+    public static func rippleDelete(_ timeline: inout Timeline, clipIDs: Set<UUID>) throws {
+        let ordered = timeline.allClips.filter { clipIDs.contains($0.id) }.sorted { $0.start > $1.start }
+        for clip in ordered {
+            try rippleDelete(&timeline, clipID: clip.id)
+        }
+    }
+
+    /// The clips a selection rectangle touches: any clip on a track whose
+    /// index falls in `trackIndices` and whose span overlaps `range`.
+    public static func clipIDs(_ timeline: Timeline, intersecting range: ClosedRange<TimeInterval>, trackIndices: ClosedRange<Int>) -> Set<UUID> {
+        var ids: Set<UUID> = []
+        for (index, track) in timeline.tracks.enumerated() where trackIndices.contains(index) {
+            for clip in track.clips where clip.start < range.upperBound && clip.end > range.lowerBound {
+                ids.insert(clip.id)
+            }
+        }
+        return ids
+    }
+
     public static func update(_ timeline: inout Timeline, clipID: UUID, _ change: (inout Clip) -> Void) throws {
         guard let trackIndex = timeline.tracks.firstIndex(where: { $0.clips.contains { $0.id == clipID } }),
               let clipIndex = timeline.tracks[trackIndex].clips.firstIndex(where: { $0.id == clipID }) else {
@@ -245,8 +362,13 @@ public enum TimelineEditor {
 
     /// Snap candidates: clip edges on every track plus zero.
     public static func snapPoints(_ timeline: Timeline, excluding clipID: UUID? = nil) -> [TimeInterval] {
+        snapPoints(timeline, excluding: clipID.map { [$0] } ?? [])
+    }
+
+    /// Snap candidates without the edges of the clips being moved.
+    public static func snapPoints(_ timeline: Timeline, excluding clipIDs: Set<UUID>) -> [TimeInterval] {
         var points: Set<TimeInterval> = [0]
-        for clip in timeline.allClips where clip.id != clipID {
+        for clip in timeline.allClips where !clipIDs.contains(clip.id) {
             points.insert(clip.start)
             points.insert(clip.end)
         }

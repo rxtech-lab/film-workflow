@@ -29,6 +29,7 @@ struct RemotionPlayerWebView: NSViewRepresentable {
         coordinator.active = false
         coordinator.playback.ready = false
         view.configuration.userContentController.removeScriptMessageHandler(forName: "rxPreview")
+        view.navigationDelegate = nil
         view.stopLoading()
         view.loadHTMLString("", baseURL: nil)
     }
@@ -46,7 +47,8 @@ struct RemotionPlayerWebView: NSViewRepresentable {
                   let data = try? JSONEncoder().encode(command),
                   let object = try? JSONSerialization.jsonObject(with: data) else { return }
             lastSerial = command.serial
-            Task { @MainActor in
+            Task { @MainActor [weak self, weak webView] in
+                guard let self, self.active, let webView else { return }
                 _ = try? await webView.callAsyncJavaScript("window.rxPendingCommand = command; window.rxPreviewCommand?.(command);",
                                                          arguments: ["command": object], in: nil, contentWorld: .page)
             }

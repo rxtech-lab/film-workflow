@@ -1,20 +1,41 @@
+import AppKit
 import Foundation
 import SwiftUI
 import UniformTypeIdentifiers
 import VideoEditorCore
 
+/// A context-menu offer to line a clip up with the clip it came from.
+/// `targetClipID` is nil when the origin isn't on the timeline; the item then
+/// shows disabled so the relationship is still visible.
+nonisolated public struct ClipAlignment: Hashable, Sendable {
+    public var title: String
+    public var targetClipID: UUID?
+
+    public init(title: String, targetClipID: UUID?) {
+        self.title = title
+        self.targetClipID = targetClipID
+    }
+}
+
 /// The timeline panel: ruler, track lanes, clips, playhead, zoom, drag and
 /// drop, move and trim. All edits go through `TimelineEditor` so the
 /// timeline stays valid.
+///
+/// Selection holds any number of clips: click picks one, command- or
+/// shift-click toggles, and dragging across empty lane space sweeps a
+/// selection rectangle. A selected group moves and deletes together.
 public struct SequenceTimelineView: View {
     @Binding var timeline: Timeline
     @Binding var playhead: TimeInterval
-    @Binding var selectedClipID: UUID?
+    @Binding var selectedClipIDs: Set<UUID>
     let resolver: (any MediaResolver)?
     /// Called with the dropped item, the track and the snapped drop time.
     let onDrop: (FootageDragItem, UUID, TimeInterval) -> Void
-    let onDeleteClip: ((UUID) -> Void)?
+    /// Called with every clip to delete in one edit; nil removes them directly.
+    let onDeleteClips: ((Set<UUID>) -> Void)?
     let onDeselect: (() -> Void)?
+    /// Offers "Align with …" on clips derived from another clip. Nil hides the item.
+    let alignment: ((Clip, Timeline) -> ClipAlignment?)?
 
     @Binding private var pixelsPerSecond: Double
     @State private var dragState = ClipDragState()
@@ -39,6 +60,8 @@ public struct SequenceTimelineView: View {
     @State private var viewport = TimelineViewport()
     /// The zoom when a trackpad pinch began; the pinch scales from here.
     @State private var pinchBaseZoom: Double?
+    /// The selection rectangle being swept across the lanes, if any.
+    @State private var marquee: MarqueeSelection?
 
     private static let zoomRange: ClosedRange<Double> = 0.5...400
     private let headerWidth: CGFloat = 64
@@ -49,21 +72,23 @@ public struct SequenceTimelineView: View {
     public init(
         timeline: Binding<Timeline>,
         playhead: Binding<TimeInterval>,
-        selectedClipID: Binding<UUID?>,
+        selectedClipIDs: Binding<Set<UUID>>,
         pixelsPerSecond: Binding<Double>,
         resolver: (any MediaResolver)? = nil,
         onDrop: @escaping (FootageDragItem, UUID, TimeInterval) -> Void,
-        onDeleteClip: ((UUID) -> Void)? = nil,
-        onDeselect: (() -> Void)? = nil
+        onDeleteClips: ((Set<UUID>) -> Void)? = nil,
+        onDeselect: (() -> Void)? = nil,
+        alignment: ((Clip, Timeline) -> ClipAlignment?)? = nil
     ) {
         _timeline = timeline
         _playhead = playhead
-        _selectedClipID = selectedClipID
+        _selectedClipIDs = selectedClipIDs
         _pixelsPerSecond = pixelsPerSecond
         self.resolver = resolver
         self.onDrop = onDrop
-        self.onDeleteClip = onDeleteClip
+        self.onDeleteClips = onDeleteClips
         self.onDeselect = onDeselect
+        self.alignment = alignment
     }
 
     private var contentDuration: TimeInterval {
@@ -100,11 +125,12 @@ public struct SequenceTimelineView: View {
                                     Spacer(minLength: 0)
                                         .frame(maxWidth: .infinity)
                                         .contentShape(Rectangle())
-                                        .gesture(DragGesture(minimumDistance: 0).onChanged { _ in deselect() })
+                                        .gesture(marqueeGesture(scrubs: false))
                                 }
                                 .frame(width: canvasWidth, height: canvasHeight, alignment: .topLeading)
                                 hoverIndicator(height: canvasHeight)
                                 playheadLine(height: canvasHeight)
+                                marqueeOverlay
                             }
                             .onContinuousHover(coordinateSpace: .local) { phase in
                                 switch phase {
@@ -185,7 +211,7 @@ public struct SequenceTimelineView: View {
 
     private func deselect() {
         timelineFocused = true
-        selectedClipID = nil
+        selectedClipIDs = []
         onDeselect?()
     }
 
@@ -235,7 +261,11 @@ public struct SequenceTimelineView: View {
         .background(.bar)
     }
 
-    private var selectedClip: Clip? { selectedClipID.flatMap { timeline.clip(id: $0) } }
+    /// The one selected clip, for edits that only make sense on a single clip.
+    private var selectedClip: Clip? {
+        guard selectedClipIDs.count == 1, let id = selectedClipIDs.first else { return nil }
+        return timeline.clip(id: id)
+    }
 
     private var editingToolbar: some View {
         HStack(spacing: 8) {
@@ -252,7 +282,7 @@ public struct SequenceTimelineView: View {
             .help("Blade tool (B): click footage to split it")
             .accessibilityIdentifier("timeline.tool.cut")
             Divider().frame(height: 16)
-            Button { speedClipID = selectedClipID } label: {
+            Button { speedClipID = selectedClip?.id } label: {
                 Label("Speed", systemImage: "speedometer")
             }
             .disabled(selectedClip?.source.capabilities.contains(.speed) != true)
@@ -266,7 +296,11 @@ public struct SequenceTimelineView: View {
             .disabled(selectedClip?.source.capabilities.contains(.reverse) != true)
             .accessibilityIdentifier("timeline.reverse")
             Spacer()
-            if let selectedClip, selectedClip.source.capabilities.contains(.speed) {
+            if selectedClipIDs.count > 1 {
+                Text("\(selectedClipIDs.count) clips selected")
+                    .font(.caption.monospacedDigit()).foregroundStyle(.secondary)
+                    .accessibilityIdentifier("timeline.selection.count")
+            } else if let selectedClip, selectedClip.source.capabilities.contains(.speed) {
                 Text("\((selectedClip.playbackRate * 100).formatted(.number.precision(.fractionLength(0...3))))%\(selectedClip.isReversed ? " · Reversed" : "")")
                     .font(.caption.monospacedDigit()).foregroundStyle(.secondary)
             }
@@ -352,18 +386,14 @@ public struct SequenceTimelineView: View {
             Rectangle()
                 .fill(laneColor(track.kind))
                 .contentShape(Rectangle())
-                .gesture(
-                    DragGesture(minimumDistance: 0)
-                        .onChanged { value in
-                            deselect()
-                            playhead = timeline.quantized(max(0, value.location.x / pixelsPerSecond))
-                        }
-                )
+                .gesture(marqueeGesture(scrubs: true))
             ForEach(track.clips) { clip in
                 clipView(clip, on: track)
             }
         }
         .frame(width: width, height: laneHeight, alignment: .topLeading)
+        // Clips previewing a lane change draw over the lanes they cross.
+        .zIndex(dragState.laneOffset != 0 && track.clips.contains { dragState.movedStarts[$0.id] != nil } ? 1 : 0)
         .overlay(alignment: .topLeading) {
             if let dropTarget, dropTarget.trackID == track.id {
                 if let dragPreviewItem {
@@ -489,11 +519,14 @@ public struct SequenceTimelineView: View {
     // MARK: - Clips
 
     private func clipView(_ clip: Clip, on track: Track) -> some View {
-        let isSelected = selectedClipID == clip.id
+        let isSelected = selectedClipIDs.contains(clip.id)
         let isDragging = dragState.clipID == clip.id
-        let x = CGFloat((isDragging ? dragState.previewStart : clip.start) * pixelsPerSecond)
+        // A clip moving with the grabbed one previews at its shifted start.
+        let movedStart = dragState.movedStarts[clip.id]
+        let x = CGFloat((movedStart ?? (isDragging ? dragState.previewStart : clip.start)) * pixelsPerSecond)
         let width = max(4, CGFloat((isDragging ? dragState.previewDuration : clip.duration) * pixelsPerSecond))
         let inset: CGFloat = 3
+        let y = inset + (movedStart == nil ? 0 : CGFloat(dragState.laneOffset) * (laneHeight + 1))
         let displayedClip = isDragging ? (dragState.previewClip ?? clip) : clip
         let showsSpeed = TimelineClipInteraction.showsSpeedOverlay(for: clip) || (isDragging && dragState.mode.isRetiming)
 
@@ -573,8 +606,10 @@ public struct SequenceTimelineView: View {
             let time = timeline.quantized(min(max(0, clip.start + location.x / pixelsPerSecond), clip.end))
             if tool == .blade {
                 if clip.source.capabilities.contains(.cut) { split(clip, at: time) }
+            } else if Self.isAdditiveSelection {
+                if selectedClipIDs.contains(clip.id) { selectedClipIDs.remove(clip.id) } else { selectedClipIDs.insert(clip.id) }
             } else {
-                selectedClipID = clip.id
+                selectedClipIDs = [clip.id]
                 playhead = time
             }
         }
@@ -589,16 +624,28 @@ public struct SequenceTimelineView: View {
             }
         )
         .gesture(clipGesture(clip, on: track, width: width))
-        .offset(x: x, y: inset)
+        .offset(x: x, y: y)
         .contextMenu {
+            // Destructive items act on the whole selection when this clip is part of it.
+            let targets = selectedClipIDs.contains(clip.id) ? selectedClipIDs : [clip.id]
             Button("Split at Playhead") { split(clip, at: playhead) }
                 .disabled(!clip.source.capabilities.contains(.cut) || !(clip.start < playhead && playhead < clip.end))
-            Button("Change Speed…") { selectedClipID = clip.id; speedClipID = clip.id }
+            Button("Change Speed…") { selectedClipIDs = [clip.id]; speedClipID = clip.id }
                 .disabled(!clip.source.capabilities.contains(.speed))
             Button(clip.isReversed ? "Play Forward" : "Reverse") { performEdit { try TimelineEditor.reverse(&timeline, clipID: clip.id) } }
                 .disabled(!clip.source.capabilities.contains(.reverse))
-            Button("Delete", role: .destructive) { delete(clip.id) }
-            Button("Ripple Delete", role: .destructive) { try? TimelineEditor.rippleDelete(&timeline, clipID: clip.id) }
+            if let alignment = alignment?(clip, timeline) {
+                Button(alignment.title) {
+                    guard let target = alignment.targetClipID else { return }
+                    performEdit { try TimelineEditor.align(&timeline, clipID: clip.id, with: target) }
+                }
+                .disabled(alignment.targetClipID == nil)
+            }
+            Button(targets.count > 1 ? "Delete \(targets.count) Clips" : "Delete", role: .destructive) { delete(targets) }
+            Button(targets.count > 1 ? "Ripple Delete \(targets.count) Clips" : "Ripple Delete", role: .destructive) {
+                performEdit { try TimelineEditor.rippleDelete(&timeline, clipIDs: targets) }
+                selectedClipIDs.subtract(targets)
+            }
         }
         .task(id: clip.source.id) {
             await loadThumbnail(for: clip.source)
@@ -714,7 +761,15 @@ public struct SequenceTimelineView: View {
                                                                   showsSpeedOverlay: TimelineClipInteraction.showsSpeedOverlay(for: clip)) else { return }
                     dragState = ClipDragState(clipID: clip.id, mode: mode, originalStart: clip.start, originalDuration: clip.duration)
                     timelineFocused = true
-                    if mode == .move { selectedClipID = clip.id }
+                    if mode == .move {
+                        // Grabbing a selected clip drags the whole selection along;
+                        // clips that cannot be dragged stay where they are.
+                        let selection = selectedClipIDs.contains(clip.id) ? selectedClipIDs : [clip.id]
+                        selectedClipIDs = selection
+                        let moving = timeline.allClips.filter { selection.contains($0.id) && $0.source.capabilities.contains(.drag) }
+                        dragState.groupIDs = Set(moving.map(\.id))
+                        dragState.movedStarts = Dictionary(uniqueKeysWithValues: moving.map { ($0.id, $0.start) })
+                    }
                 }
                 guard dragState.clipID == clip.id else { return }
                 var preview = timeline
@@ -733,12 +788,16 @@ public struct SequenceTimelineView: View {
                         let end = max(clip.start + timeline.frameDuration, snap(clip.end + delta, excluding: clip.id))
                         try TimelineEditor.retime(&preview, clipID: clip.id, duration: end - clip.start)
                     case .move:
-                        let laneOffset = Int((value.translation.height / (laneHeight + 1)).rounded())
-                        let index = timeline.tracks.firstIndex { $0.id == track.id } ?? 0
-                        let target = min(max(0, index + laneOffset), timeline.tracks.count - 1)
-                        let targetID = timeline.tracks[target].kind.accepts(clip.source.kind) ? timeline.tracks[target].id : track.id
-                        try TimelineEditor.move(&preview, clipID: clip.id, to: snap(clip.start + delta, excluding: clip.id), onTrack: targetID)
-                        dragState.targetTrackID = targetID
+                        // The group changes lane only when every clip fits its new lane.
+                        let requested = Int((value.translation.height / (laneHeight + 1)).rounded())
+                        let laneOffset = TimelineEditor.canShiftLanes(timeline, clipIDs: dragState.groupIDs, by: requested) ? requested : 0
+                        let moveDelta = snap(clip.start + delta, excluding: dragState.groupIDs) - clip.start
+                        try TimelineEditor.move(&preview, clipIDs: dragState.groupIDs, by: moveDelta, laneOffset: laneOffset)
+                        dragState.laneOffset = laneOffset
+                        dragState.moveDelta = moveDelta
+                        for id in dragState.groupIDs {
+                            if let moved = preview.clip(id: id) { dragState.movedStarts[id] = moved.start }
+                        }
                     }
                     if let updated = preview.clip(id: clip.id) {
                         dragState.previewClip = updated
@@ -762,7 +821,7 @@ public struct SequenceTimelineView: View {
                     case .retimeTrailing:
                         try TimelineEditor.retime(&timeline, clipID: clip.id, duration: preview.duration)
                     case .move:
-                        try TimelineEditor.move(&timeline, clipID: clip.id, to: preview.start, onTrack: dragState.targetTrackID ?? track.id)
+                        try TimelineEditor.move(&timeline, clipIDs: dragState.groupIDs, by: dragState.moveDelta, laneOffset: dragState.laneOffset)
                     }
                 }
             }
@@ -780,29 +839,91 @@ public struct SequenceTimelineView: View {
     }
 
     private func snap(_ time: TimeInterval, excluding clipID: UUID) -> TimeInterval {
-        var points = TimelineEditor.snapPoints(timeline, excluding: clipID)
+        snap(time, excluding: [clipID])
+    }
+
+    private func snap(_ time: TimeInterval, excluding clipIDs: Set<UUID>) -> TimeInterval {
+        var points = TimelineEditor.snapPoints(timeline, excluding: clipIDs)
         points.append(playhead)
         return timeline.quantized(TimelineEditor.snapped(time, to: points, tolerance: snapTolerancePixels / pixelsPerSecond))
     }
 
     private func split(_ clip: Clip, at time: TimeInterval) {
         if let right = try? TimelineEditor.split(&timeline, clipID: clip.id, at: time) {
-            selectedClipID = right
+            selectedClipIDs = [right]
         }
     }
 
-    private func delete(_ id: UUID) {
-        if let onDeleteClip {
-            onDeleteClip(id)
+    /// Removes the clips in one edit so a single undo brings them all back.
+    private func delete(_ ids: Set<UUID>) {
+        guard !ids.isEmpty else { return }
+        if let onDeleteClips {
+            onDeleteClips(ids)
         } else {
-            TimelineEditor.remove(&timeline, clipID: id)
+            TimelineEditor.remove(&timeline, clipIDs: ids)
         }
-        if selectedClipID == id { selectedClipID = nil }
+        selectedClipIDs.subtract(ids)
     }
 
     private func deleteSelection() {
-        guard let selectedClipID else { return }
-        delete(selectedClipID)
+        delete(selectedClipIDs)
+    }
+
+    /// Command or shift held: clicks and marquees add to the selection.
+    private static var isAdditiveSelection: Bool {
+        !NSEvent.modifierFlags.intersection([.command, .shift]).isEmpty
+    }
+
+    // MARK: - Marquee selection
+
+    /// A press on empty lane space. A click sets the playhead (and scrubs
+    /// while the pointer stays put); once it travels past the threshold it
+    /// sweeps a selection rectangle instead and the playhead stops moving.
+    private func marqueeGesture(scrubs: Bool) -> some Gesture {
+        DragGesture(minimumDistance: 0, coordinateSpace: .named("timelineCanvas"))
+            .onChanged { value in
+                if marquee == nil {
+                    let additive = Self.isAdditiveSelection
+                    marquee = MarqueeSelection(origin: value.startLocation, current: value.location, base: additive ? selectedClipIDs : [])
+                    if additive { timelineFocused = true } else { deselect() }
+                }
+                guard var current = marquee else { return }
+                current.current = value.location
+                if !current.isActive,
+                   max(abs(value.translation.width), abs(value.translation.height)) >= TimelineClipInteraction.marqueeThreshold {
+                    current.isActive = true
+                }
+                if current.isActive {
+                    selectedClipIDs = current.base.union(clipIDs(in: current.rect))
+                } else if scrubs, current.base.isEmpty {
+                    playhead = timeline.quantized(max(0, value.location.x / pixelsPerSecond))
+                }
+                marquee = current
+            }
+            .onEnded { _ in marquee = nil }
+    }
+
+    /// The clips a rectangle in canvas coordinates touches.
+    private func clipIDs(in rect: CGRect) -> Set<UUID> {
+        guard let lanes = TimelineClipInteraction.laneRange(
+            minY: rect.minY, maxY: rect.maxY, rulerHeight: rulerHeight, laneHeight: laneHeight, laneCount: timeline.tracks.count
+        ) else { return [] }
+        let range = max(0, rect.minX / pixelsPerSecond)...max(0, rect.maxX / pixelsPerSecond)
+        return TimelineEditor.clipIDs(timeline, intersecting: range, trackIndices: lanes)
+    }
+
+    @ViewBuilder
+    private var marqueeOverlay: some View {
+        if let marquee, marquee.isActive {
+            let rect = marquee.rect
+            Rectangle()
+                .fill(Color.blue.opacity(0.18))
+                .overlay(Rectangle().strokeBorder(Color.blue.opacity(0.8), lineWidth: 1))
+                .frame(width: max(1, rect.width), height: max(1, rect.height))
+                .offset(x: rect.minX, y: rect.minY)
+                .allowsHitTesting(false)
+                .accessibilityIdentifier("timeline.marquee")
+        }
     }
 
     private func loadThumbnail(for source: ClipSource) async {
@@ -964,14 +1085,21 @@ private struct TrimHandleID: Hashable {
 
 private struct ClipDragState {
     typealias Mode = TimelineClipInteraction.Mode
+    /// The clip under the pointer.
     var clipID: UUID?
     var mode: Mode = .move
     var originalStart: TimeInterval = 0
     var originalDuration: TimeInterval = 0
     var previewStart: TimeInterval = 0
     var previewDuration: TimeInterval = 0
-    var targetTrackID: UUID?
     var previewClip: Clip?
+    /// Every clip moving with the grabbed one (the selection), for `.move`.
+    var groupIDs: Set<UUID> = []
+    /// Where each moving clip currently previews.
+    var movedStarts: [UUID: TimeInterval] = [:]
+    /// The last valid time shift and lane shift of the group.
+    var moveDelta: TimeInterval = 0
+    var laneOffset: Int = 0
 
     init() {}
 
@@ -982,6 +1110,23 @@ private struct ClipDragState {
         self.originalDuration = originalDuration
         self.previewStart = originalStart
         self.previewDuration = originalDuration
+    }
+}
+
+/// A selection rectangle swept from `origin` to `current` in canvas
+/// coordinates. `base` is the selection to keep when the sweep is additive.
+private struct MarqueeSelection {
+    var origin: CGPoint
+    var current: CGPoint
+    var base: Set<UUID>
+    /// False until the pointer has travelled past the click threshold.
+    var isActive = false
+
+    var rect: CGRect {
+        CGRect(
+            x: min(origin.x, current.x), y: min(origin.y, current.y),
+            width: abs(current.x - origin.x), height: abs(current.y - origin.y)
+        )
     }
 }
 

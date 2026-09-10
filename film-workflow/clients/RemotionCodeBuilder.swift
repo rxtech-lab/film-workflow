@@ -94,6 +94,8 @@ struct RemotionCodeBuilder {
 
     static func writeComposition(source: String, to srcDir: URL) throws {
         let path = srcDir.appendingPathComponent("Composition.tsx")
+        // Read-only cache checks and viewer refreshes must not trigger a compiler rebuild.
+        if (try? String(contentsOf: path, encoding: .utf8)) == source { return }
         do {
             try source.write(to: path, atomically: true, encoding: .utf8)
         } catch {
