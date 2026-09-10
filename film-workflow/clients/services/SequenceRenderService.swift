@@ -87,7 +87,9 @@ enum SequenceRenderService {
         preset: TimelineExporter.Preset,
         onProgress: @escaping @MainActor (SequenceRenderProgress) -> Void
     ) async throws -> SequenceRender {
-        let context = document.container.mainContext
+        // Work in the context that owns `sequence`: an MCP call's context holds
+        // edits the window's main context may not have merged yet.
+        let context = sequence.modelContext ?? document.container.mainContext
         try await renderRemotionClips(in: sequence, context: context, onProgress: onProgress)
 
         let storage = document.storage

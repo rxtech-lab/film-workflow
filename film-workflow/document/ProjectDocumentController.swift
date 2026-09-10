@@ -15,9 +15,15 @@ final class ProjectDocumentController {
 
     private(set) var openDocuments: [ProjectDocument] = []
 
-    /// The film whose editor window is key. Consulted by the agent window, the
-    /// MCP server and the CLI runners, which have no window of their own.
-    var activeDocument: ProjectDocument?
+    /// The film whose editor window is key, falling back to the most recently
+    /// opened one while no editor window is key (the app is in the background,
+    /// or only the Welcome or agent window is up). Consulted by the agent
+    /// window, the MCP server and the CLI runners, which have no window of their own.
+    var activeDocument: ProjectDocument? {
+        get { keyDocument ?? openDocuments.last }
+        set { keyDocument = newValue }
+    }
+    private var keyDocument: ProjectDocument?
 
     var recentDocumentURLs: [URL] {
         NSDocumentController.shared.recentDocumentURLs
@@ -64,6 +70,7 @@ final class ProjectDocumentController {
         if let existing = document(for: url) { return existing }
         let doc = try ProjectDocument.open(url)
         openDocuments.append(doc)
+        keyDocument = doc
         NSDocumentController.shared.noteNewRecentDocumentURL(url)
         return doc
     }
@@ -72,6 +79,7 @@ final class ProjectDocumentController {
     func createDocument(at url: URL) throws -> ProjectDocument {
         let doc = try ProjectDocument.create(at: url)
         openDocuments.append(doc)
+        keyDocument = doc
         NSDocumentController.shared.noteNewRecentDocumentURL(url)
         return doc
     }
@@ -79,8 +87,8 @@ final class ProjectDocumentController {
     func close(_ doc: ProjectDocument) async {
         await doc.close()
         openDocuments.removeAll { $0 === doc }
-        if activeDocument === doc {
-            activeDocument = openDocuments.last
+        if keyDocument === doc {
+            keyDocument = nil
         }
     }
 

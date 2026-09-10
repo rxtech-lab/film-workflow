@@ -150,7 +150,7 @@ enum MCPToolError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .invalidArguments(let m): return "invalid arguments: \(m)"
-        case .unknownProjectType(let t): return "unknown project type: \(t) (must be one of: narrative, music, image, remotion, caption)"
+        case .unknownProjectType(let t): return "unknown project type: \(t) (must be one of: narrative, music, image, video, remotion, caption; sequences use the sequence_* tools)"
         case .projectNotFound(let id): return "project not found: \(id)"
         case .macOSOnly: return "this tool is only available on macOS"
         case .underlying(let e): return e.localizedDescription

@@ -16,6 +16,7 @@ enum MCPToolRegistry {
         #if os(macOS)
         tools.append(contentsOf: RemotionMCPHandlers.descriptors)
         #endif
+        tools.append(contentsOf: MCPSequenceHandlers.descriptors)
         tools.append(listDocumentsDescriptor)
         // Every tool can be pointed at a film other than the active one. Added
         // here rather than in forty descriptors so the schema cannot drift.
@@ -116,6 +117,9 @@ enum MCPToolRegistry {
         }
         if MCPCaptionHandlers.canHandle(name) {
             return try await MCPCaptionHandlers.handle(name: name, arguments: arguments, context: context)
+        }
+        if MCPSequenceHandlers.canHandle(name) {
+            return try await MCPSequenceHandlers.handle(name: name, arguments: arguments, context: context)
         }
         #if os(macOS)
         if RemotionMCPHandlers.canHandle(name) {
