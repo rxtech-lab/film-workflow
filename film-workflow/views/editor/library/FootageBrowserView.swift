@@ -6,10 +6,12 @@ import VideoEditorUI
 /// The outputs of the selected project as a grid of draggable cells. Clicking
 /// a cell shows it in the viewer; dragging one places it on the timeline.
 struct FootageBrowserView: View {
+    let libraryItem: LibraryItemID?
     let title: String
     let cells: [FootageCell]
     let selectedID: UUID?
     let onSelect: (FootageCell) -> Void
+    let onDeselect: () -> Void
 
     private let columns = [GridItem(.adaptive(minimum: 96), spacing: 8)]
 
@@ -31,11 +33,13 @@ struct FootageBrowserView: View {
                 ScrollView {
                     LazyVGrid(columns: columns, spacing: 4) {
                         ForEach(cells) { cell in
-                            FootageCellView(cell: cell, isSelected: cell.id == selectedID, onSelect: { onSelect(cell) })
+                            FootageCellView(cell: cell, libraryItem: libraryItem, isSelected: cell.id == selectedID, onSelect: { onSelect(cell) })
                         }
                     }
                     .padding(4)
                 }
+                .contentShape(Rectangle())
+                .onTapGesture(perform: onDeselect)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -44,6 +48,7 @@ struct FootageBrowserView: View {
 
 struct FootageCellView: View {
     let cell: FootageCell
+    let libraryItem: LibraryItemID?
     var isSelected = false
     var onSelect: () -> Void = {}
 
@@ -64,11 +69,14 @@ struct FootageCellView: View {
             .padding(4)
             .background(isSelected ? Color.accentColor.opacity(0.12) : .clear, in: RoundedRectangle(cornerRadius: 8))
             .contentShape(Rectangle())
+            .onTapGesture(perform: onSelect)
             // Select on press, not on release: a drag source swallows taps
             // unless the mouse stays perfectly still, and a press is what a
             // drag begins with anyway.
             .simultaneousGesture(DragGesture(minimumDistance: 0).onChanged { _ in onSelect() })
-            .timelineDraggable(dragItem, thumbnailURL: cell.thumbnailURL)
+            .timelineDraggable(dragItem, thumbnailURL: cell.thumbnailURL) { provider in
+                if let libraryItem { provider.register(LibraryDragToken(item: libraryItem)) }
+            }
     }
 
     private var content: some View {
@@ -101,7 +109,7 @@ struct FootageCellView: View {
             Text(cell.title).font(.caption).lineLimit(1)
             Text(cell.subtitle).font(.caption2).foregroundStyle(.secondary).lineLimit(1)
         }
-        .help("Click to preview, drag onto the timeline")
+        .help("Click to preview, drag onto the timeline or into a library group")
         .task(id: cell.id) {
             guard cell.duration == nil, cell.kind == .audio || cell.kind == .video, let url = cell.mediaURL else { return }
             loadedDuration = await MediaDurationCache.duration(of: url)

@@ -29,10 +29,12 @@ struct TimelinePanel: View {
                 timeline: Binding(get: { sequence.timeline }, set: { sequence.timeline = $0 }),
                 playhead: Binding(get: { state.playhead }, set: { state.playhead = $0 }),
                 selectedClipID: $state.selectedClipID,
+                pixelsPerSecond: Binding(get: { sequence.timelinePixelsPerSecond }, set: { sequence.timelinePixelsPerSecond = $0 }),
                 resolver: DocumentMediaResolver(document: document, width: sequence.width, height: sequence.height, fps: sequence.fps),
                 onDrop: { item, trackID, time in
                     Task { await insert(item, on: trackID, at: time, into: sequence) }
-                }
+                },
+                onDeselect: { state.select(nil) }
             )
             .alert("Couldn’t add footage", isPresented: Binding(get: { dropError != nil }, set: { if !$0 { dropError = nil } })) {
                 Button("OK") { dropError = nil }
@@ -50,6 +52,8 @@ struct TimelinePanel: View {
             }
             .padding(20)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .contentShape(Rectangle())
+            .onTapGesture { state.select(nil) }
 
         }
     }

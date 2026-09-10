@@ -1,3 +1,4 @@
+import Foundation
 import SwiftUI
 import UniformTypeIdentifiers
 import VideoEditorCore
@@ -13,8 +14,9 @@ public struct SequenceTimelineView: View {
     /// Called with the dropped item, the track and the snapped drop time.
     let onDrop: (FootageDragItem, UUID, TimeInterval) -> Void
     let onDeleteClip: ((UUID) -> Void)?
+    let onDeselect: (() -> Void)?
 
-    @State private var pixelsPerSecond: Double = 40
+    @Binding private var pixelsPerSecond: Double
     @State private var dragState = ClipDragState()
     @State private var hoveredHandle: TrimHandleID?
     @State private var dropTarget: (trackID: UUID, time: TimeInterval)?
@@ -32,19 +34,29 @@ public struct SequenceTimelineView: View {
         timeline: Binding<Timeline>,
         playhead: Binding<TimeInterval>,
         selectedClipID: Binding<UUID?>,
+        pixelsPerSecond: Binding<Double>,
         resolver: (any MediaResolver)? = nil,
         onDrop: @escaping (FootageDragItem, UUID, TimeInterval) -> Void,
-        onDeleteClip: ((UUID) -> Void)? = nil
+        onDeleteClip: ((UUID) -> Void)? = nil,
+        onDeselect: (() -> Void)? = nil
     ) {
         _timeline = timeline
         _playhead = playhead
         _selectedClipID = selectedClipID
+        _pixelsPerSecond = pixelsPerSecond
         self.resolver = resolver
         self.onDrop = onDrop
         self.onDeleteClip = onDeleteClip
+        self.onDeselect = onDeselect
     }
 
-    private var contentDuration: TimeInterval { max(max(timeline.duration, playhead) + 10, 30) }
+    private var contentDuration: TimeInterval {
+        var extent = max(timeline.duration, playhead)
+        if let dropTarget, let dragPreviewItem {
+            extent = max(extent, dropTarget.time + dragPreviewItem.defaultClipDuration)
+        }
+        return max(extent + 10, 30)
+    }
     private var contentWidth: CGFloat { CGFloat(contentDuration * pixelsPerSecond) }
 
     public var body: some View {
@@ -69,6 +81,9 @@ public struct SequenceTimelineView: View {
                                         Divider()
                                     }
                                     Spacer(minLength: 0)
+                                        .frame(maxWidth: .infinity)
+                                        .contentShape(Rectangle())
+                                        .gesture(DragGesture(minimumDistance: 0).onChanged { _ in deselect() })
                                 }
                                 .frame(width: canvasWidth, height: canvasHeight, alignment: .topLeading)
                                 playheadLine(height: canvasHeight)
@@ -79,6 +94,8 @@ public struct SequenceTimelineView: View {
                         .frame(maxWidth: .infinity)
                     }
                     .frame(height: canvasHeight, alignment: .top)
+                    .contentShape(Rectangle())
+                    .onTapGesture { deselect() }
                 }
                 .defaultScrollAnchor(.topLeading)
             }
@@ -90,6 +107,11 @@ public struct SequenceTimelineView: View {
     }
 
     // MARK: - Toolbar
+
+    private func deselect() {
+        selectedClipID = nil
+        onDeselect?()
+    }
 
     private var toolbar: some View {
         HStack(spacing: 12) {
@@ -122,9 +144,14 @@ public struct SequenceTimelineView: View {
                 .font(.system(.callout, design: .monospaced))
             Spacer()
             Image(systemName: "minus.magnifyingglass").foregroundStyle(.secondary)
-            Slider(value: $pixelsPerSecond, in: 8...400)
+            // A logarithmic scale keeps the wider zoom-out range easy to adjust.
+            Slider(value: Binding(
+                get: { log2(min(400, max(0.5, pixelsPerSecond))) },
+                set: { pixelsPerSecond = pow(2, $0) }
+            ), in: log2(0.5)...log2(400))
                 .frame(width: 140)
                 .controlSize(.small)
+                .accessibilityLabel("Timeline zoom")
             Image(systemName: "plus.magnifyingglass").foregroundStyle(.secondary)
         }
         .padding(.horizontal, 10)
@@ -183,7 +210,10 @@ public struct SequenceTimelineView: View {
         .contentShape(Rectangle())
         .gesture(
             DragGesture(minimumDistance: 0)
-                .onChanged { value in playhead = timeline.quantized(max(0, value.location.x / pixelsPerSecond)) }
+                .onChanged { value in
+                    deselect()
+                    playhead = timeline.quantized(max(0, value.location.x / pixelsPerSecond))
+                }
         )
     }
 
@@ -199,16 +229,22 @@ public struct SequenceTimelineView: View {
             Rectangle()
                 .fill(laneColor(track.kind))
                 .contentShape(Rectangle())
-                .onTapGesture { location in
-                    selectedClipID = nil
-                    playhead = timeline.quantized(max(0, location.x / pixelsPerSecond))
-                }
+                .gesture(
+                    DragGesture(minimumDistance: 0)
+                        .onChanged { value in
+                            deselect()
+                            playhead = timeline.quantized(max(0, value.location.x / pixelsPerSecond))
+                        }
+                )
             ForEach(track.clips) { clip in
                 clipView(clip, on: track)
             }
+        }
+        .frame(width: width, height: laneHeight, alignment: .topLeading)
+        .overlay(alignment: .topLeading) {
             if let dropTarget, dropTarget.trackID == track.id {
                 if let dragPreviewItem {
-                    dropGhost(dragPreviewItem, start: dropTarget.time)
+                    dropGhost(dragPreviewItem, start: dropTarget.time, allowed: dragPreviewItem.canBePlaced(on: track.kind))
                 } else {
                     Rectangle()
                         .fill(Color.accentColor.opacity(0.6))
@@ -217,55 +253,49 @@ public struct SequenceTimelineView: View {
                 }
             }
         }
-        .frame(width: width, height: laneHeight)
         .onDrop(of: [.rxFootage], delegate: FootageLaneDropDelegate(
             entered: { item in
                 dragPreviewItem = item
                 Task { await loadThumbnail(for: item.source) }
             },
+            // The ghost always sits under the pointer on the hovered lane; a
+            // lane that cannot hold the kind shows it as not allowed.
             hover: { point in
-                if let point, let landing = landing(for: dragPreviewItem, at: point.x / pixelsPerSecond, hovered: track) {
-                    dropTarget = (landing.track.id, landing.time)
+                if let point {
+                    dropTarget = (track.id, landingTime(for: dragPreviewItem, at: point.x / pixelsPerSecond, on: track))
                 } else {
                     dropTarget = nil
                 }
             },
+            accepts: { item in item.canBePlaced(on: track.kind) },
             drop: { item, point in
                 dropTarget = nil
                 dragPreviewItem = nil
-                if let landing = landing(for: item, at: point.x / pixelsPerSecond, hovered: track) {
-                    onDrop(item, landing.track.id, landing.time)
-                }
+                guard item.canBePlaced(on: track.kind) else { return }
+                onDrop(item, track.id, landingTime(for: item, at: point.x / pixelsPerSecond, on: track))
             }
         ))
     }
 
-    /// Where footage would land from a pointer time: snapped, pushed past any
-    /// clip already there, and moved to the first lane that can hold the
-    /// kind when the hovered one cannot. Nil when no lane accepts it.
-    private func landing(for item: FootageDragItem?, at raw: TimeInterval, hovered: Track) -> (track: Track, time: TimeInterval)? {
+    /// Where footage would start from a pointer time: snapped to nearby clip
+    /// edges and pushed past any clip already there.
+    private func landingTime(for item: FootageDragItem?, at raw: TimeInterval, on track: Track) -> TimeInterval {
         let duration = item?.defaultClipDuration ?? FootageDragItem.defaultStillDuration
-        let track: Track
-        if let item, !hovered.kind.accepts(item.source.kind) {
-            guard let compatible = timeline.tracks.first(where: { $0.kind.accepts(item.source.kind) }) else { return nil }
-            track = compatible
-        } else {
-            track = hovered
-        }
-        return (track, snappedDropTime(max(0, raw), duration: duration, on: track))
+        return snappedDropTime(max(0, raw), duration: duration, on: track)
     }
 
     /// The clip as it will sit once dropped: its real length at the current
     /// zoom, its thumbnail, and the start and end timecodes it will get.
-    private func dropGhost(_ item: FootageDragItem, start: TimeInterval) -> some View {
+    private func dropGhost(_ item: FootageDragItem, start: TimeInterval, allowed: Bool) -> some View {
         let duration = item.defaultClipDuration
         let width = max(4, CGFloat(duration * pixelsPerSecond))
         let inset: CGFloat = 3
+        let tint: Color = allowed ? .accentColor : .red
         let startLabel = Timecode.string(seconds: start, fps: timeline.fps)
         let endLabel = Timecode.string(seconds: start + duration, fps: timeline.fps)
         return ZStack(alignment: .topLeading) {
             RoundedRectangle(cornerRadius: 5)
-                .fill(item.source.kind.clipColor.opacity(0.55))
+                .fill((allowed ? item.source.kind.clipColor : Color.red).opacity(allowed ? 0.55 : 0.3))
             if let image = thumbnails[item.source.id] {
                 Image(decorative: image, scale: 1)
                     .resizable()
@@ -276,7 +306,7 @@ public struct SequenceTimelineView: View {
                     .padding(.top, 2)
                     .opacity(0.8)
             }
-            Text(item.source.displayName)
+            Text(allowed ? item.source.displayName : placementHint(for: item.source.kind))
                 .font(.caption2.weight(.medium))
                 .foregroundStyle(.white)
                 .lineLimit(1)
@@ -299,7 +329,7 @@ public struct SequenceTimelineView: View {
             .padding(.bottom, 2)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
             RoundedRectangle(cornerRadius: 5)
-                .strokeBorder(Color.accentColor, style: StrokeStyle(lineWidth: 1.5, dash: [4, 3]))
+                .strokeBorder(tint, style: StrokeStyle(lineWidth: 1.5, dash: [4, 3]))
         }
         .frame(width: width, height: laneHeight - inset * 2)
         .clipped()
@@ -308,7 +338,7 @@ public struct SequenceTimelineView: View {
             if width <= 150 {
                 Text(endLabel)
                     .font(.system(size: 9, design: .monospaced))
-                    .foregroundStyle(Color.accentColor)
+                    .foregroundStyle(tint)
                     .padding(.horizontal, 4)
                     .background(.background.opacity(0.85), in: RoundedRectangle(cornerRadius: 3))
                     .offset(x: width + 4, y: laneHeight - inset * 2 - 14)
@@ -352,6 +382,19 @@ public struct SequenceTimelineView: View {
                     .frame(width: min(width - 8, 70), height: laneHeight - inset * 2 - 4)
                     .clipShape(RoundedRectangle(cornerRadius: 3))
                     .padding(.leading, 4)
+            }
+            if clip.source.kind.hasAudio, let resolver {
+                ClipWaveformView(
+                    source: clip.source,
+                    resolver: resolver,
+                    inPoint: clip.inPoint + (isDragging && dragState.mode == .trimLeading ? dragState.previewStart - clip.start : 0),
+                    duration: isDragging ? dragState.previewDuration : clip.duration,
+                    volume: track.isMuted ? 0 : clip.volume
+                )
+                .frame(height: clip.source.kind == .audio ? 28 : 14)
+                .frame(maxHeight: .infinity, alignment: .bottom)
+                .clipShape(RoundedRectangle(cornerRadius: 5))
+                .allowsHitTesting(false)
             }
             Text(clip.source.displayName)
                 .font(.caption2.weight(.medium))
@@ -408,6 +451,18 @@ public struct SequenceTimelineView: View {
             .padding(3)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: alignment)
             .allowsHitTesting(false)
+    }
+
+    /// Which lanes take a kind, for the not-allowed ghost.
+    private func placementHint(for kind: SourceKind) -> String {
+        let names = TrackKind.allCases.filter { $0.accepts(kind) }.map { kind -> String in
+            switch kind {
+            case .video: return "video"
+            case .audio: return "audio"
+            case .overlay: return "overlay"
+            }
+        }
+        return "Drop on \(names.joined(separator: " or ")) track"
     }
 
     /// A grab zone on each end of a clip. The pointer becomes a resize arrow
@@ -537,6 +592,7 @@ public struct SequenceTimelineView: View {
             .gesture(
                 DragGesture(minimumDistance: 0, coordinateSpace: .named("timelineCanvas"))
                     .onChanged { value in
+                        deselect()
                         playhead = timeline.quantized(max(0, value.location.x / pixelsPerSecond))
                     }
             )
@@ -550,6 +606,8 @@ private struct FootageLaneDropDelegate: DropDelegate {
     /// The payload, decoded as soon as the drag enters the lane.
     let entered: (FootageDragItem) -> Void
     let hover: (CGPoint?) -> Void
+    /// Whether the lane can hold the item; false shows the forbidden cursor.
+    let accepts: (FootageDragItem) -> Bool
     let drop: (FootageDragItem, CGPoint) -> Void
 
     func validateDrop(info: DropInfo) -> Bool {
@@ -571,6 +629,9 @@ private struct FootageLaneDropDelegate: DropDelegate {
 
     func dropUpdated(info: DropInfo) -> DropProposal? {
         hover(info.location)
+        if let item = FootageDragSession.shared.item, !accepts(item) {
+            return DropProposal(operation: .forbidden)
+        }
         return DropProposal(operation: .copy)
     }
 

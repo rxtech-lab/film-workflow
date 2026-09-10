@@ -69,12 +69,14 @@ struct LibraryPanel: View {
 
             let cells = state.selection.map { index.footage(for: $0) } ?? []
             FootageBrowserView(
+                libraryItem: state.selection,
                 title: state.selection.flatMap { index.name(of: $0) } ?? "Footage",
                 cells: cells,
                 selectedID: state.selection.flatMap { currentVersion(for: $0) } ?? cells.first?.id,
                 onSelect: { cell in
                     if let item = state.selection { state.setCurrentVersion(cell.id, for: item) }
-                }
+                },
+                onDeselect: { state.select(nil) }
             )
             .frame(maxWidth: .infinity, minHeight: 150, idealHeight: 200, maxHeight: .infinity)
         }

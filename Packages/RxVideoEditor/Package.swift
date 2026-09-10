@@ -26,6 +26,10 @@ let package = Package(
             ]
         ),
         .testTarget(
+            name: "VideoEditorUITests",
+            dependencies: ["VideoEditorUI", "VideoEditorCore"]
+        ),
+        .testTarget(
             name: "VideoEditorCoreTests",
             dependencies: ["VideoEditorCore"]
         ),

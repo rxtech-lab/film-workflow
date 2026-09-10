@@ -39,6 +39,27 @@ struct ProjectDocumentTests {
         await reopened.close()
     }
 
+    @Test("Sequence zoom is saved inside the document independently for each sequence")
+    func sequenceZoomPersists() async throws {
+        let url = temporaryPackage()
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        let created = try ProjectDocument.create(at: url)
+        let wide = SequenceProject(name: "Wide")
+        let standard = SequenceProject(name: "Standard")
+        created.container.mainContext.insert(wide)
+        created.container.mainContext.insert(standard)
+        wide.timelinePixelsPerSecond = 0.5
+        created.save()
+        await created.close()
+
+        let reopened = try ProjectDocument.open(url)
+        let sequences = try reopened.container.mainContext.fetch(FetchDescriptor<SequenceProject>())
+        #expect(sequences.first { $0.name == "Wide" }?.timelinePixelsPerSecond == 0.5)
+        #expect(sequences.first { $0.name == "Standard" }?.timelinePixelsPerSecond == 40)
+        await reopened.close()
+    }
+
     @Test("Opening a plain folder or a missing path fails cleanly")
     func openRejectsNonPackages() throws {
         let folder = FileManager.default.temporaryDirectory

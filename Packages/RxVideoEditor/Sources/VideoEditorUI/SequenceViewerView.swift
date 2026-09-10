@@ -20,7 +20,6 @@ public struct SequenceViewerView: View {
                 Color.black
                 PlayerLayerView(player: controller.player)
                     .opacity(controller.currentTime < controller.duration ? 1 : 0)
-
             }
             transport
         }
@@ -57,6 +56,8 @@ public struct SequenceViewerView: View {
             Text(Timecode.string(seconds: controller.currentTime, fps: fps))
                 .font(.system(.callout, design: .monospaced))
                 .frame(width: 104, alignment: .leading)
+
+            AudioLevelMeterView(player: controller.player)
 
             Spacer(minLength: 0)
 

@@ -4,9 +4,8 @@ import Observation
 
 /// Plays a timeline through the same composition the exporter uses.
 ///
-/// Rebuilding the composition on every edit is cheap (metadata only), so the
-/// owner simply calls `load` again when the timeline changes; playback
-/// position is preserved.
+/// Structural edits rebuild the composition. Volume and mute edits update
+/// the active mix without replacing the item or seeking during playback.
 @MainActor
 @Observable
 public final class TimelinePlayerController {
@@ -24,6 +23,8 @@ public final class TimelinePlayerController {
     private var endObserver: NSObjectProtocol?
     private var frameDuration: TimeInterval = 1 / 30
     private var loadTask: Task<Void, Never>?
+    private var loadedTimeline: Timeline?
+    private var audioTrackIDs: [UUID: CMPersistentTrackID] = [:]
 
     public init() {
         player.actionAtItemEnd = .pause
@@ -53,11 +54,29 @@ public final class TimelinePlayerController {
     /// Builds and installs the composition for `timeline`. Cancels a build in flight.
     public func load(_ timeline: Timeline, resolver: any MediaResolver) {
         loadTask?.cancel()
+        if let loadedTimeline, timeline != loadedTimeline,
+           Self.withoutAudioLevels(timeline) == Self.withoutAudioLevels(loadedTimeline),
+           let item = player.currentItem {
+            let mix = AVMutableAudioMix()
+            mix.inputParameters = timeline.tracks.flatMap { track in
+                track.clips.compactMap { clip -> AVMutableAudioMixInputParameters? in
+                    guard let trackID = audioTrackIDs[clip.id] else { return nil }
+                    let input = AVMutableAudioMixInputParameters()
+                    input.trackID = trackID
+                    input.setVolume(track.isMuted ? 0 : clip.volume, at: .zero)
+                    return input
+                }
+            }
+            item.audioMix = mix
+            self.loadedTimeline = timeline
+            lastError = nil
+            return
+        }
         frameDuration = timeline.frameDuration
         let wasPlaying = isPlaying
         loadTask = Task { @MainActor in
             do {
-                let built = try await TimelineCompositionBuilder(resolver: resolver).build(timeline, allowPlaceholders: true)
+                let built = try await TimelineCompositionBuilder(resolver: resolver).build(timeline, allowPlaceholders: true, includeSilentAudio: true)
                 guard !Task.isCancelled else { return }
                 let scale = min(1, previewMaxWidth / Double(max(1, timeline.width)))
                 built.videoComposition.renderScale = Float(scale)
@@ -65,6 +84,8 @@ public final class TimelinePlayerController {
                 item.videoComposition = built.videoComposition
                 item.audioMix = built.audioMix
                 player.replaceCurrentItem(with: item)
+                loadedTimeline = timeline
+                audioTrackIDs = built.audioTrackIDs
                 duration = CMTimeGetSeconds(built.duration)
                 placeholders = built.placeholders
                 lastError = nil
@@ -86,6 +107,8 @@ public final class TimelinePlayerController {
         currentTime = 0
         duration = 0
         placeholders = []
+        loadedTimeline = nil
+        audioTrackIDs = [:]
     }
 
     public func play() {
@@ -124,6 +147,17 @@ public final class TimelinePlayerController {
     public func step(frames: Int) {
         pause()
         seek(to: currentTime + Double(frames) * frameDuration)
+    }
+
+    private static func withoutAudioLevels(_ timeline: Timeline) -> Timeline {
+        var normalized = timeline
+        for track in normalized.tracks.indices {
+            normalized.tracks[track].isMuted = false
+            for clip in normalized.tracks[track].clips.indices {
+                normalized.tracks[track].clips[clip].volume = 1
+            }
+        }
+        return normalized
     }
 
     private func seekPlayer(to time: TimeInterval) async {

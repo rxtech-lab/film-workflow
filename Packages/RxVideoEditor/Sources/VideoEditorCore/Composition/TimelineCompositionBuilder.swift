@@ -7,6 +7,7 @@ public struct BuiltComposition {
     public let asset: AVMutableComposition
     public let videoComposition: AVMutableVideoComposition
     public let audioMix: AVMutableAudioMix?
+    public let audioTrackIDs: [UUID: CMPersistentTrackID]
     public let duration: CMTime
     /// Clips drawn as slates because their media does not exist yet.
     public let placeholders: [ClipSource]
@@ -35,12 +36,13 @@ public struct TimelineCompositionBuilder {
         self.resolver = resolver
     }
 
-    public func build(_ timeline: Timeline, allowPlaceholders: Bool) async throws -> BuiltComposition {
+    public func build(_ timeline: Timeline, allowPlaceholders: Bool, includeSilentAudio: Bool = false) async throws -> BuiltComposition {
         let composition = AVMutableComposition()
         let duration = max(timeline.duration, timeline.frameDuration)
         let totalTime = CMTime(seconds: duration, preferredTimescale: timescale)
         var placeholders: [ClipSource] = []
         var audioParameters: [AVMutableAudioMixInputParameters] = []
+        var audioTrackIDs: [UUID: CMPersistentTrackID] = [:]
 
         // Base track: looped black so the whole duration has a source frame.
         guard let baseTrackID = try insertBaseTrack(into: composition, duration: totalTime) else {
@@ -77,8 +79,8 @@ public struct TimelineCompositionBuilder {
                         let natural = try await sourceTrack?.load(.naturalSize) ?? .zero
                         clipLayers[clip.id] = .sourceTrack(compositionTrack, transform: clip.transform, opacity: clip.opacity, preferredTransform: preferred, naturalSize: natural)
                     }
-                    if !track.isMuted, clip.volume > 0 {
-                        try await insertAudio(asset: asset, clip: clip, into: composition, parameters: &audioParameters)
+                    if includeSilentAudio || (!track.isMuted && clip.volume > 0) {
+                        try await insertAudio(asset: asset, clip: clip, into: composition, parameters: &audioParameters, trackIDs: &audioTrackIDs, volume: track.isMuted ? 0 : clip.volume)
                     }
                 case .success(.file(let url, _, _))?:
                     clipLayers[clip.id] = .still(url, transform: clip.transform, opacity: clip.opacity)
@@ -114,10 +116,10 @@ public struct TimelineCompositionBuilder {
             }
         }
 
-        for track in audioTracks where !track.isMuted {
-            for clip in track.sortedClips where clip.volume > 0 {
+        for track in audioTracks where includeSilentAudio || !track.isMuted {
+            for clip in track.sortedClips where includeSilentAudio || clip.volume > 0 {
                 if case .success(.file(let url, _, _))? = resolved[clip.source.id] {
-                    try await insertAudio(asset: AVURLAsset(url: url), clip: clip, into: composition, parameters: &audioParameters)
+                    try await insertAudio(asset: AVURLAsset(url: url), clip: clip, into: composition, parameters: &audioParameters, trackIDs: &audioTrackIDs, volume: track.isMuted ? 0 : clip.volume)
                 }
             }
         }
@@ -175,6 +177,7 @@ public struct TimelineCompositionBuilder {
             asset: composition,
             videoComposition: videoComposition,
             audioMix: mix,
+            audioTrackIDs: audioTrackIDs,
             duration: totalTime,
             placeholders: placeholders
         )
@@ -237,7 +240,9 @@ public struct TimelineCompositionBuilder {
         asset: AVURLAsset,
         clip: Clip,
         into composition: AVMutableComposition,
-        parameters: inout [AVMutableAudioMixInputParameters]
+        parameters: inout [AVMutableAudioMixInputParameters],
+        trackIDs: inout [UUID: CMPersistentTrackID],
+        volume: Float
     ) async throws {
         guard let source = try await asset.loadTracks(withMediaType: .audio).first,
               let track = composition.addMutableTrack(withMediaType: .audio, preferredTrackID: kCMPersistentTrackID_Invalid) else {
@@ -251,7 +256,8 @@ public struct TimelineCompositionBuilder {
         let at = CMTime(seconds: clip.start, preferredTimescale: timescale)
         try track.insertTimeRange(CMTimeRange(start: inPoint, duration: length), of: source, at: at)
         let input = AVMutableAudioMixInputParameters(track: track)
-        input.setVolume(clip.volume, at: at)
+        input.setVolume(volume, at: at)
+        trackIDs[clip.id] = track.trackID
         parameters.append(input)
     }
 }

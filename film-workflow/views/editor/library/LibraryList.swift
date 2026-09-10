@@ -38,6 +38,7 @@ struct LibraryList: View {
         }
         .listStyle(.sidebar)
         .scrollContentBackground(.hidden)
+        .onTapGesture { selection = nil }
         .contextMenu {
             creationMenu(groupID: nil)
         }
@@ -51,6 +52,8 @@ struct LibraryList: View {
                     Text("Drop footage here")
                         .font(.caption)
                         .foregroundStyle(.tertiary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .modifier(LibraryGroupDropTarget(groupID: group?.id, onMove: move))
                 } else {
                     ForEach(rows) { row in
                         if let payload = dragPayload(row) {
@@ -87,6 +90,11 @@ struct LibraryList: View {
             }
         }
         .padding(.vertical, 1)
+        .modifier(LibraryGroupDropTarget(groupID: row.groupID, onMove: move))
+        // The row's drag/drop handlers can consume List's native click.
+        // Handle a click across the whole row while preserving drag gestures.
+        .onTapGesture { selection = row.id }
+        .accessibilityAction { selection = row.id }
         .contextMenu {
             versionsMenu(row)
             Button("Rename…") { onRename(row) }
@@ -155,10 +163,7 @@ struct LibraryList: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .dropDestination(for: LibraryDragToken.self) { tokens, _ in
-            for token in tokens { onMove(token.item, group?.id) }
-            return !tokens.isEmpty
-        }
+        .modifier(LibraryGroupDropTarget(groupID: group?.id, onMove: move))
         .contextMenu {
             creationMenu(groupID: group?.id)
             if let group {
@@ -186,6 +191,28 @@ struct LibraryList: View {
 
     private func isCollapsed(_ group: ProjectGroup?) -> Bool {
         group.map { collapsed.contains($0.id) } ?? ungroupedCollapsed
+    }
+
+    private func move(_ item: LibraryItemID, to groupID: UUID?) {
+        onMove(item, groupID)
+        if let groupID { collapsed.remove(groupID) } else { ungroupedCollapsed = false }
+    }
+}
+
+/// The same drop area works on a group header, its rows and its empty state.
+private struct LibraryGroupDropTarget: ViewModifier {
+    let groupID: UUID?
+    let onMove: (LibraryItemID, UUID?) -> Void
+    @State private var isTargeted = false
+
+    func body(content: Content) -> some View {
+        content
+            .contentShape(Rectangle())
+            .background(isTargeted ? Color.accentColor.opacity(0.16) : .clear, in: RoundedRectangle(cornerRadius: 5))
+            .dropDestination(for: LibraryDragToken.self) { tokens, _ in
+                for token in tokens { onMove(token.item, groupID) }
+                return !tokens.isEmpty
+            } isTargeted: { isTargeted = $0 }
     }
 }
 

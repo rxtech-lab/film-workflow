@@ -18,6 +18,7 @@ final class SequenceProject: GroupableProject {
     var height: Int = 1080
     var fps: Int = 30
     var timelineData: Data = Data()
+    var timelinePixelsPerSecond: Double = 40
 
     @Transient private var cachedTimeline: Timeline?
 
