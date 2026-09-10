@@ -64,6 +64,9 @@ final class ProjectDocument: Identifiable {
         CaptionSegment.self,
         ProjectGroup.self,
         RemotionRender.self,
+        SequenceProject.self,
+        SequenceRender.self,
+        ImportedAsset.self,
     ])
 
     private init(packageURL: URL, metadata: DocumentMetadata) throws {

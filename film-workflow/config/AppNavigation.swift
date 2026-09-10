@@ -29,10 +29,6 @@ final class AppNavigation {
         case whisperModels
     }
 
-    /// The selected top-level tab. Only settable to `.Settings` on iOS, where
-    /// Settings is a tab; on macOS it's a separate window with no tab to select.
-    var tab: Tabs = .Music
-
     var settingsSection: SettingsSection = .account
     var showAccountSheet = false
 
@@ -56,9 +52,6 @@ final class AppNavigation {
     func showCaptionSettings(focus: SettingsFocus? = nil) {
         settingsSection = .captions
         pendingSettingsFocus = focus
-        #if !os(macOS)
-            tab = .Settings
-        #endif
     }
 
     /// Opens the AI provider settings, where the endpoint and key live.
@@ -68,16 +61,10 @@ final class AppNavigation {
     func showAIProviderSettings() {
         settingsSection = .aiProvider
         pendingSettingsFocus = nil
-        #if !os(macOS)
-            tab = .Settings
-        #endif
     }
 
     func showAccountSettings() {
         settingsSection = .account
         pendingSettingsFocus = nil
-        #if !os(macOS)
-            tab = .Settings
-        #endif
     }
 }

@@ -732,16 +732,6 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
-		DFVE0002000000000000D002 /* VideoEditorCore */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = DFVE0003000000000000D003 /* XCLocalSwiftPackageReference "Packages/RxVideoEditor" */;
-			productName = VideoEditorCore;
-		};
-		DFVE0005000000000000D005 /* VideoEditorUI */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = DFVE0003000000000000D003 /* XCLocalSwiftPackageReference "Packages/RxVideoEditor" */;
-			productName = VideoEditorUI;
-		};
 		DF9D8F10302D630100CD3C3D /* RxAuthSwift */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = DF9D8F0F302D630100CD3C3D /* XCRemoteSwiftPackageReference "RxAuthSwift" */;
@@ -766,6 +756,16 @@
 			isa = XCSwiftPackageProductDependency;
 			package = DFSP0003000000000000C003 /* XCLocalSwiftPackageReference "Vendor/Sparkle" */;
 			productName = Sparkle;
+		};
+		DFVE0002000000000000D002 /* VideoEditorCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = DFVE0003000000000000D003 /* XCLocalSwiftPackageReference "Packages/RxVideoEditor" */;
+			productName = VideoEditorCore;
+		};
+		DFVE0005000000000000D005 /* VideoEditorUI */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = DFVE0003000000000000D003 /* XCLocalSwiftPackageReference "Packages/RxVideoEditor" */;
+			productName = VideoEditorUI;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

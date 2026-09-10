@@ -59,12 +59,10 @@ struct EditorWindowRoot: View {
     }
 }
 
-/// The editor itself. Phase 1 shows the existing tab UI inside the document
-/// window; the Final Cut–style shell replaces it in a later phase.
 private struct EditorWindowContent: View {
     let document: ProjectDocument
 
     var body: some View {
-        ContentView()
+        EditorWindowView(document: document)
     }
 }

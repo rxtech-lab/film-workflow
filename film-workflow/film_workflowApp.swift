@@ -36,7 +36,11 @@ struct film_workflowApp: App {
     private static func bootstrapServices() async {
         guard !didBootstrap, NSClassFromString("XCTestCase") == nil else { return }
         didBootstrap = true
-        await AuthManager.shared.checkExistingAuth()
+        // `-skipStartupAuth` lets a debug launch skip the keychain read, whose
+        // access prompt would otherwise block an unattended run.
+        if !ProcessInfo.processInfo.arguments.contains("-skipStartupAuth") {
+            await AuthManager.shared.checkExistingAuth()
+        }
         MCPServer.shared.bootstrap()
     }
 
