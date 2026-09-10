@@ -41,6 +41,35 @@ jobs:
           p12-file-base64: ${{ secrets.BUILD_CERTIFICATE_BASE64 }}
           p12-password: ${{ secrets.P12_PASSWORD }}
 
+      # The app's com.apple.developer.associated-domains entitlement (passkey
+      # sign-in) is a restricted entitlement: codesign only accepts it when a
+      # provisioning profile authorising it is embedded in the bundle. The
+      # secret holds a base64 Developer ID profile for rxlab.film-workflow,
+      # named "film-workflow" to match PROVISIONING_PROFILE_SPECIFIER in
+      # project.pbxproj.
+      - name: Install provisioning profile
+        env:
+          MACOS_PROVISIONING_PROFILE_BASE64: ${{ secrets.MACOS_PROVISIONING_PROFILE_BASE64 }}
+        run: |
+          if [ -z "$MACOS_PROVISIONING_PROFILE_BASE64" ]; then
+            echo "::error::MACOS_PROVISIONING_PROFILE_BASE64 is required."
+            exit 1
+          fi
+
+          PROFILE_PATH="$RUNNER_TEMP/film-workflow.provisionprofile"
+          PROFILE_PLIST="$RUNNER_TEMP/film-workflow-profile.plist"
+          PROFILE_DIR="$HOME/Library/MobileDevice/Provisioning Profiles"
+
+          mkdir -p "$PROFILE_DIR"
+          printf '%s' "$MACOS_PROVISIONING_PROFILE_BASE64" | base64 -D > "$PROFILE_PATH"
+          openssl cms -inform DER -verify -noverify -in "$PROFILE_PATH" -out "$PROFILE_PLIST"
+
+          PROFILE_UUID=$(/usr/libexec/PlistBuddy -c "Print UUID" "$PROFILE_PLIST")
+          PROFILE_NAME=$(/usr/libexec/PlistBuddy -c "Print Name" "$PROFILE_PLIST")
+
+          cp "$PROFILE_PATH" "$PROFILE_DIR/$PROFILE_UUID.provisionprofile"
+          echo "Installed provisioning profile: $PROFILE_NAME ($PROFILE_UUID)"
+
       - name: Bump version
         run: |
           # Strip the leading 'v' from the release tag (v1.2.3 -> 1.2.3) —
@@ -57,10 +86,14 @@ jobs:
           # a unique build number (github.run_number) without committing churn
           # to project.pbxproj. Sparkle uses it as the update ordering key.
           #
-          # Manual signing with a Developer ID identity and no provisioning
-          # profile: the app is distributed outside the App Store and its
-          # entitlements (JIT, library validation, network) are all hardened
-          # runtime exceptions, none of which require a profile.
+          # Manual signing with a Developer ID identity. The profile is pinned
+          # to the app target's Release build settings in project.pbxproj
+          # (PROVISIONING_PROFILE_SPECIFIER), NOT passed on the command line: a
+          # command-line PROVISIONING_PROFILE* applies to every target in the
+          # graph — including the SPM package targets, which don't support
+          # provisioning profiles — and fails the archive. CODE_SIGN_STYLE and
+          # CODE_SIGN_IDENTITY stay global: the package targets sign with the
+          # identity but need no profile.
           set -o pipefail
           xcodebuild -destination platform=macOS \
             -project film-workflow.xcodeproj \
