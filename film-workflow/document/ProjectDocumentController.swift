@@ -1,5 +1,6 @@
 import AppKit
 import Foundation
+import SwiftData
 import UniformTypeIdentifiers
 
 /// Tracks open films and drives New / Open / Recent.
@@ -40,6 +41,19 @@ final class ProjectDocumentController {
 
     func document(id: UUID) -> ProjectDocument? {
         openDocuments.first { $0.id == id }
+    }
+
+    func document(forContainer container: ModelContainer) -> ProjectDocument? {
+        openDocuments.first { $0.container === container }
+    }
+
+    /// The film an agent thread was started in, if it is still open, else the
+    /// active one. A thread that outlives its film keeps working on whatever
+    /// the user has in front of them.
+    func document(for thread: AgentThread) -> ProjectDocument? {
+        if let id = thread.documentID, let doc = document(id: id) { return doc }
+        if let path = thread.documentPath, let doc = document(for: URL(fileURLWithPath: path)) { return doc }
+        return activeDocument
     }
 
     // MARK: - Open / create / close

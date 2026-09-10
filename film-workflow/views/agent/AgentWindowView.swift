@@ -268,6 +268,10 @@ struct AgentWindowView: View {
         // A new thread inherits whatever the app is currently showing; existing
         // threads keep their own target.
         let thread = AgentThread(target: navigation.currentTarget)
+        if let doc = documentController.activeDocument {
+            thread.documentID = doc.id
+            thread.documentPath = doc.packageURL.path
+        }
         modelContext.insert(thread)
         selectedThreadID = thread.id
     }

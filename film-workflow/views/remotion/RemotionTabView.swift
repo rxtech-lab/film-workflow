@@ -27,12 +27,13 @@ struct RemotionTabView: View {
 
     @State private var showExportSheet: Bool = false
     @State private var exportOptions: RemotionExportOptions?
-    @State private var showConfirmExport: Bool = false
     @State private var pendingProjectId: UUID?
 
     @State private var renderTask: Task<Void, Never>?
     @State private var renderProgress: RenderProgress = .init(stage: .starting, fraction: nil, detail: nil)
     @State private var showProgressSheet: Bool = false
+    @State private var showRendersSheet: Bool = false
+    @State private var rendersRefreshToken: Int = 0
 
     var body: some View {
         splitView
@@ -49,9 +50,6 @@ struct RemotionTabView: View {
                 sourceWidth: selectedProject?.compositionWidth ?? 1920,
                 sourceHeight: selectedProject?.compositionHeight ?? 1080,
                 sourceFps: selectedProject?.compositionFps ?? 30,
-                showConfirmExport: $showConfirmExport,
-                confirmTitle: confirmTitle,
-                confirmMessage: confirmMessage,
                 onConfirmExport: confirmAndStartRender,
                 showProgressSheet: $showProgressSheet,
                 renderProgress: $renderProgress,
@@ -60,6 +58,20 @@ struct RemotionTabView: View {
                 showRenderError: $showRenderError
             ))
             .publishesAgentTarget(kind: .remotion, projectUUID: selectedProject?.id)
+            .sheet(isPresented: $showRendersSheet) {
+                if let project = selectedProject {
+                    NavigationStack {
+                        RemotionRenderListView(project: project, refreshToken: rendersRefreshToken)
+                            .navigationTitle("Renders")
+                            .toolbar {
+                                ToolbarItem(placement: .confirmationAction) {
+                                    Button("Done") { showRendersSheet = false }
+                                }
+                            }
+                    }
+                    .frame(minWidth: 760, minHeight: 460)
+                }
+            }
             .onChange(of: selectedProject?.id) { _, newId in
                 handleSelection(projectId: newId)
             }
@@ -159,6 +171,13 @@ struct RemotionTabView: View {
                     }
                 }
                 .disabled(showProgressSheet || project.compositionSource.isEmpty)
+            }
+            ToolbarItem(placement: .primaryAction) {
+                Button {
+                    showRendersSheet = true
+                } label: {
+                    Label("Renders", systemImage: "clock.arrow.circlepath")
+                }
             }
         }
     }
@@ -403,18 +422,6 @@ struct RemotionTabView: View {
         }
     }
 
-    private func defaultRenderFilename(for project: RemotionProject) -> String {
-        let base = project.name.trimmingCharacters(in: .whitespacesAndNewlines)
-        return base.isEmpty ? "video.mp4" : "\(base).mp4"
-    }
-
-    private func defaultDestinationURL(for project: RemotionProject) -> URL {
-        let movies = FileManager.default
-            .urls(for: .moviesDirectory, in: .userDomainMask).first
-            ?? FileManager.default.homeDirectoryForCurrentUser
-        return movies.appendingPathComponent(defaultRenderFilename(for: project))
-    }
-
     private func beginExport(project: RemotionProject) {
         guard !showProgressSheet else { return }
         pendingProjectId = project.id
@@ -423,22 +430,8 @@ struct RemotionTabView: View {
             $0.size.height == project.compositionHeight
         }) ?? .p1080
         let fps = ExportFrameRate(rawValue: project.compositionFps) ?? .fps30
-        exportOptions = RemotionExportOptions(
-            resolution: res,
-            frameRate: fps,
-            destination: defaultDestinationURL(for: project)
-        )
+        exportOptions = RemotionExportOptions(resolution: res, frameRate: fps)
         showExportSheet = true
-    }
-
-    private var confirmTitle: String {
-        guard let opts = exportOptions else { return "Render?" }
-        return "Render at \(opts.resolution.shortLabel) @ \(opts.frameRate.rawValue)fps?"
-    }
-
-    private var confirmMessage: String {
-        guard let opts = exportOptions else { return "" }
-        return "Saving to \(opts.destination.path). This may take several minutes."
     }
 
     private func startRender(project: RemotionProject, options: RemotionExportOptions) {
@@ -448,7 +441,6 @@ struct RemotionTabView: View {
 
         let projectId = project.id
         let projectDir = project.projectDir
-        let dest = options.destination
         let (w, h) = options.resolution.size
         let fps = options.frameRate.rawValue
 
@@ -460,19 +452,20 @@ struct RemotionTabView: View {
                 }
             }
             do {
-                try await RemotionRenderer.render(
-                    projectDir: projectDir,
-                    to: dest,
+                // Always a fresh version: an explicit Render is a request for a
+                // new take, even when nothing changed since the last one.
+                _ = try await RemotionRenderService.ensureRender(
+                    project: project,
                     width: w,
                     height: h,
-                    fps: fps
+                    fps: fps,
+                    context: modelContext,
+                    force: true
                 ) { p in
                     renderProgress = p
                 }
-
-                await MainActor.run {
-                    NSWorkspace.shared.activateFileViewerSelecting([dest])
-                }
+                rendersRefreshToken += 1
+                showRendersSheet = true
 
                 if selectedProject?.id == projectId {
                     do {
@@ -509,9 +502,6 @@ private struct SheetsModifier: ViewModifier {
     let sourceHeight: Int
     let sourceFps: Int
 
-    @Binding var showConfirmExport: Bool
-    let confirmTitle: String
-    let confirmMessage: String
     let onConfirmExport: () -> Void
 
     @Binding var showProgressSheet: Bool
@@ -545,16 +535,6 @@ private struct SheetsModifier: ViewModifier {
             .sheet(isPresented: $showExportSheet) {
                 exportSheet
             }
-            .confirmationDialog(
-                confirmTitle,
-                isPresented: $showConfirmExport,
-                titleVisibility: .visible
-            ) {
-                Button("Render Now") { onConfirmExport() }
-                Button("Cancel", role: .cancel) {}
-            } message: {
-                Text(confirmMessage)
-            }
             .sheet(isPresented: $showProgressSheet) {
                 RemotionRenderProgressSheet(
                     projectName: projectName,
@@ -578,13 +558,13 @@ private struct SheetsModifier: ViewModifier {
                 sourceHeight: sourceHeight,
                 sourceFps: sourceFps,
                 options: Binding(
-                    get: { exportOptions ?? RemotionExportOptions(destination: URL(fileURLWithPath: "/")) },
+                    get: { exportOptions ?? RemotionExportOptions() },
                     set: { exportOptions = $0 }
                 ),
                 onCancel: { showExportSheet = false },
                 onExport: {
                     showExportSheet = false
-                    showConfirmExport = true
+                    onConfirmExport()
                 }
             )
         }

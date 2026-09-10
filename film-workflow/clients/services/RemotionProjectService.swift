@@ -53,6 +53,7 @@ enum RemotionProjectService {
         _ project: RemotionProject,
         context: ModelContext
     ) {
+        RemotionRenderService.deleteAll(for: project, context: context)
         let storage = ProjectStorage.forContainer(context.container)
         for path in project.imagePaths {
             storage.deleteFile(at: path)

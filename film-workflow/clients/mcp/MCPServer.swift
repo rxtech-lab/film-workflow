@@ -175,12 +175,6 @@ final class MCPServer {
     }
 
     fileprivate func respond(conn: NWConnection, requestData: Data) async {
-        // Tools act on the film whose window is key. Until a document is
-        // open there is nothing to act on.
-        guard let modelContainer = ProjectDocumentController.shared.activeDocument?.container else {
-            send(conn: conn, response: MCPHTTP.makeResponse(status: 503, contentType: "text/plain", body: Data("no film is open".utf8)))
-            return
-        }
         let response: Data
         do {
             guard let (request, _) = try MCPHTTP.parseRequest(buffer: requestData) else {
@@ -189,7 +183,6 @@ final class MCPServer {
             }
             response = await MCPRouter.handle(
                 request: request,
-                container: modelContainer,
                 settings: MCPSettings.shared
             )
         } catch {

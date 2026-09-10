@@ -4,11 +4,23 @@ import SwiftData
 /// HTTP-level routing + auth + JSON-RPC dispatch.
 @MainActor
 enum MCPRouter {
+    /// The film a request acts on: `X-RxFilm-Document` (a document id) when a
+    /// client pins one, otherwise whichever window is active. Nil when no film
+    /// is open — `initialize` and `tools/list` still work, tool calls fail.
+    static func requestContainer(_ request: MCPHTTP.Request) -> ModelContainer? {
+        let controller = ProjectDocumentController.shared
+        if let raw = request.headers["x-rxfilm-document"], let id = UUID(uuidString: raw),
+           let doc = controller.document(id: id) {
+            return doc.container
+        }
+        return controller.activeDocument?.container
+    }
+
     static func handle(
         request: MCPHTTP.Request,
-        container: ModelContainer,
         settings: MCPSettings
     ) async -> Data {
+        let container = requestContainer(request)
         // Health/info GETs are always public.
         if request.method == "GET" && (request.path == "/" || request.path == "/health") {
             let body = #"{"name":"\#(MCPProtocol.serverName)","version":"\#(MCPProtocol.serverVersion)","mcp":"\#(MCPProtocol.mcpProtocolVersion)"}"#
@@ -71,7 +83,7 @@ enum MCPRouter {
         method: String,
         idLiteral: String,
         params: Any?,
-        container: ModelContainer
+        container: ModelContainer?
     ) async -> Data {
         switch method {
         case "initialize":

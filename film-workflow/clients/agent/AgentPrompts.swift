@@ -34,6 +34,12 @@ enum AgentPrompts {
             """)
 
         parts.append(AgentTargetResolver.promptBlock(for: target, context: context))
+        if let doc = ProjectDocumentController.shared.document(forContainer: context.container) {
+            parts.append("""
+                The open film is "\(doc.displayName)" (document id \(doc.id.uuidString)); \
+                tools act on it unless you pass `document` to address another open film.
+                """)
+        }
 
         if !toolNames.isEmpty {
             let listed = toolNames.map { "- \(toolNamePrefix)\($0)" }.joined(separator: "\n")

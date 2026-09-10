@@ -16,16 +16,93 @@ enum MCPToolRegistry {
         #if os(macOS)
         tools.append(contentsOf: RemotionMCPHandlers.descriptors)
         #endif
-        return tools
+        tools.append(listDocumentsDescriptor)
+        // Every tool can be pointed at a film other than the active one. Added
+        // here rather than in forty descriptors so the schema cannot drift.
+        return tools.map(withDocumentArgument)
+    }
+
+    static let documentArgument = "document"
+
+    private static func withDocumentArgument(_ tool: MCPToolDescriptor) -> MCPToolDescriptor {
+        guard tool.name != listDocumentsDescriptor.name else { return tool }
+        var schema = tool.inputSchema
+        var properties = (schema["properties"] as? [String: Any]) ?? [:]
+        properties[documentArgument] = [
+            "type": "string",
+            "description": "Which open film to act on: its document id, package path, or name. Defaults to the film whose window is active. `list_projects` also accepts \"*\" for every open film."
+        ] as [String: Any]
+        schema["properties"] = properties
+        return MCPToolDescriptor(name: tool.name, description: tool.description, inputSchema: schema)
+    }
+
+    private static let listDocumentsDescriptor = MCPToolDescriptor(
+        name: "list_documents",
+        description: "List the films (.rxfilmstudio packages) currently open in the app, with the active one flagged. Pass a film's id, path or name as `document` to other tools to work on it.",
+        inputSchema: ["type": "object", "properties": [String: Any](), "additionalProperties": false]
+    )
+
+    /// Resolves the `document` argument to a film, or throws when it names
+    /// nothing that is open.
+    static func resolveDocument(_ value: Any?) throws -> ProjectDocument? {
+        guard let raw = value as? String else { return nil }
+        let key = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !key.isEmpty, key != "*" else { return nil }
+        let controller = ProjectDocumentController.shared
+        if let uuid = UUID(uuidString: key), let doc = controller.document(id: uuid) { return doc }
+        if let doc = controller.document(for: URL(fileURLWithPath: key)) { return doc }
+        if let doc = controller.openDocuments.first(where: { $0.displayName.localizedCaseInsensitiveCompare(key) == .orderedSame }) {
+            return doc
+        }
+        throw MCPToolError.invalidArguments("no open film matches document \"\(key)\"; call list_documents")
+    }
+
+    static func documentSummary(_ doc: ProjectDocument) -> [String: Any] {
+        [
+            "id": doc.id.uuidString,
+            "name": doc.displayName,
+            "path": doc.packageURL.path,
+            "isActive": ProjectDocumentController.shared.activeDocument === doc
+        ]
     }
 
     /// Dispatch a tool call. Returns the MCP `tools/call` result envelope (with
     /// `content: [...]`, optionally `isError`).
     static func invoke(
         name: String,
-        arguments: [String: Any],
-        container: ModelContainer
+        arguments rawArguments: [String: Any],
+        container defaultContainer: ModelContainer?
     ) async throws -> [String: Any] {
+        if name == listDocumentsDescriptor.name {
+            return jsonResult(ProjectDocumentController.shared.openDocuments.map(documentSummary))
+        }
+
+        var arguments = rawArguments
+        let documentValue = arguments.removeValue(forKey: documentArgument)
+
+        // `list_projects` across every open film: run it per film and tag rows.
+        if name == "list_projects", (documentValue as? String) == "*" {
+            var items: [[String: Any]] = []
+            for doc in ProjectDocumentController.shared.openDocuments {
+                let result = try await invoke(name: name, arguments: arguments, container: doc.container)
+                let rows = ((result["structuredContent"] as? [String: Any])?["items"] as? [[String: Any]]) ?? []
+                for var row in rows {
+                    row["documentId"] = doc.id.uuidString
+                    row["documentName"] = doc.displayName
+                    items.append(row)
+                }
+            }
+            return jsonResult(items)
+        }
+
+        let container: ModelContainer
+        if let doc = try resolveDocument(documentValue) {
+            container = doc.container
+        } else if let defaultContainer {
+            container = defaultContainer
+        } else {
+            throw MCPToolError.invalidArguments("no film is open; open one in the app or pass `document`")
+        }
         let context = ModelContext(container)
 
         if MCPProjectHandlers.canHandle(name) {

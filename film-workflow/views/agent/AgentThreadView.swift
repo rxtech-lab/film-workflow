@@ -147,7 +147,7 @@ struct AgentThreadView: View {
         // the changes still belong to the project they were proposed against.
         if let proposal = row.proposal,
            let uuid = row.proposalProjectUUID ?? thread.target.projectUUID,
-           let documentContext = ProjectDocumentController.shared.activeDocument?.container.mainContext,
+           let documentContext = ProjectDocumentController.shared.document(for: thread)?.container.mainContext,
            let project = try? MCPCaptionHandlers.fetchCaption(
                id: uuid.uuidString,
                context: documentContext
@@ -202,7 +202,7 @@ struct AgentThreadView: View {
             instruction: run.input,
             thread: thread,
             context: modelContext,
-            container: ProjectDocumentController.shared.activeDocument?.container
+            container: ProjectDocumentController.shared.document(for: thread)?.container
         )
     }
 

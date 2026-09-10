@@ -319,7 +319,8 @@ final class AgentController {
                     backend: backend,
                     thread: thread,
                     config: config,
-                    context: context
+                    context: context,
+                    container: container
                 )
             #else
                 throw CaptionAIError.backendUnavailable(backend, "Command-line agents need macOS.")
@@ -343,7 +344,8 @@ final class AgentController {
         backend: AgentBackend,
         thread: AgentThread,
         config: AppConfig?,
-        context: ModelContext
+        context: ModelContext,
+        container: ModelContainer
     ) async throws {
         guard let executable = AgentBackendAvailability.shared.executablePath(for: backend) else {
             throw CaptionAIError.backendUnavailable(
@@ -352,7 +354,8 @@ final class AgentController {
             )
         }
 
-        let endpoint = try await AgentMCPBridge.acquire()
+        let document = ProjectDocumentController.shared.document(forContainer: container)
+        let endpoint = try await AgentMCPBridge.acquire(documentID: document?.id)
         defer { Task { await AgentMCPBridge.release() } }
 
         let resume = thread.providerSessionID(for: backend)
@@ -389,7 +392,7 @@ final class AgentController {
                 target: request.target,
                 toolNames: AgentToolPolicy.toolNames(policy: request.policy),
                 policy: request.policy,
-                context: context,
+                context: ModelContext(container),
                 toolNamePrefix: "mcp__\(AgentMCPBridge.serverKey)__"
             ),
             prompt: prompt,
