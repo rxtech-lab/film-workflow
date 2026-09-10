@@ -12,6 +12,7 @@ struct SequenceInspector: View {
     let onRender: () -> Void
 
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.undoManager) private var undoManager
     @State private var isRenderingRemotion = false
     @State private var remotionProgress: SequenceRenderProgress?
     @State private var remotionTask: Task<Void, Never>?
@@ -24,7 +25,9 @@ struct SequenceInspector: View {
     var body: some View {
         VStack(spacing: 0) {
             Form {
-                SequenceSettingsView(timeline: Binding(get: { sequence.timeline }, set: { sequence.timeline = $0 }))
+                SequenceSettingsView(timeline: Binding(get: { sequence.timeline }, set: {
+                    sequence.editTimeline($0, undoManager: undoManager, actionName: String(localized: "Change Sequence Settings"))
+                }))
                 Section("Name") {
                     TextField("Name", text: Binding(get: { sequence.name }, set: { sequence.name = $0; sequence.updatedAt = Date() }))
                 }

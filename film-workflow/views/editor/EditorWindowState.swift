@@ -83,18 +83,24 @@ final class EditorWindowState {
     var currentVersions: [LibraryItemID: UUID] = [:]
     var currentSequenceID: UUID?
     var selectedClipID: UUID? {
-        didSet { if selectedClipID != nil { inspectorTab = .clip } }
+        didSet { if selectedClipID != nil { inspectorTab = .clip; showSequenceViewer() } }
     }
     var inspectorTab: InspectorTab = .footage
     /// Sequence playback has one position; footage players own their own time.
     var playhead: TimeInterval {
         get { player.currentTime }
         set {
+            showSequenceViewer()
             player.pause()
             player.seek(to: newValue)
         }
     }
     let player = TimelinePlayerController()
+    @ObservationIgnored lazy var preview = TimelinePreviewController(transport: player)
+
+    func showSequenceViewer() {
+        if let id = currentSequenceID { viewerSelection = LibraryItemID(kind: .sequence, id: id) }
+    }
 
     var showImportSheet = false
     var pendingImportURLs: [URL] = []

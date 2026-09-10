@@ -59,12 +59,7 @@ fi
 
 echo "==> Bun: $("$BUN_PATH" --version)"
 
-# 2. Install template node_modules.
-if [[ ! -d "$TEMPLATE_DIR/node_modules" ]]; then
-  echo "==> Installing Remotion dependencies in template/"
-  (cd "$TEMPLATE_DIR" && "$BUN_PATH" install)
-else
-  echo "==> template/node_modules already present (skipping bun install — delete to refresh)"
-fi
+# 2. Reconcile the pinned dependency lock even when node_modules already exists.
+(cd "$TEMPLATE_DIR" && "$BUN_PATH" install --frozen-lockfile)
 
 echo "==> Remotion runtime ready at $RUNTIME_DIR"

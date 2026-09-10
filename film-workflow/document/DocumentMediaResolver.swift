@@ -69,7 +69,7 @@ struct DocumentMediaResolver: MediaResolver {
         case .remotion:
             let projects = try context.fetch(FetchDescriptor<RemotionProject>(predicate: #Predicate { $0.id == uuid }))
             guard let project = projects.first else { throw MediaResolverError.missing(source) }
-            guard let render = RemotionRenderService.cachedRender(project: project, width: renderWidth, height: renderHeight, fps: renderFps, context: context) else {
+            guard let render = RemotionRenderService.cachedRender(project: project, width: renderWidth, height: renderHeight, fps: project.compositionFps, context: context, preserveAlpha: true) else {
                 throw MediaResolverError.unrendered(source)
             }
             return .file(storage.absoluteURL(for: render.filePath), naturalDuration: render.durationSeconds, naturalSize: CGSize(width: render.width, height: render.height))

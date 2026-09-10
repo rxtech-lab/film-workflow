@@ -572,6 +572,9 @@
         }
       }
     },
+    "Add Clip" : {
+
+    },
     "Add Credits" : {
 
     },
@@ -1490,6 +1493,9 @@
           }
         }
       }
+    },
+    "Change Sequence Settings" : {
+
     },
     "Check for Updates..." : {
 
@@ -2593,6 +2599,9 @@
         }
       }
     },
+    "Edit Clip" : {
+
+    },
     "Edit shortcode parameters" : {
       "localizations" : {
         "zh-Hans" : {
@@ -2612,6 +2621,9 @@
           }
         }
       }
+    },
+    "Edit Timeline" : {
+
     },
     "Edit…" : {
       "localizations" : {

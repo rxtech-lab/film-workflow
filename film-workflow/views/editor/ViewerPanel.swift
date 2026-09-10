@@ -40,12 +40,21 @@ struct ViewerPanel: View {
                 } else { missing }
             case .remotion?:
                 if let p = state.viewerSelection.flatMap({ index.remotion($0.id) }) {
-                    RemotionViewer(project: p)
+                    RemotionViewer(project: p, document: document)
                         .id(p.id)
                 } else { missing }
             case .sequence?, .caption?, nil:
                 if let sequence {
-                    SequenceViewerView(controller: state.player, fps: sequence.fps)
+                    SequenceViewerView(controller: state.player, fps: sequence.fps, stage: sequence.timeline.allClips.contains(where: { $0.source.kind == .remotion }) ? AnyView(
+                        TimelineLayeredPreviewView(controller: state.preview) { AnyView(RemotionPlayerWebView(playback: $0)) }
+                            .overlay(alignment: .topTrailing) {
+                                if state.preview.lastError != nil || state.preview.layers.contains(where: { $0.error != nil || $0.live?.error != nil }) {
+                                    Button("Retry Preview") {
+                                        state.preview.load(sequence.timeline, resolver: DocumentPreviewMediaResolver(document: document, width: sequence.width, height: sequence.height, fps: sequence.fps))
+                                    }.padding()
+                                }
+                            }
+                    ) : nil)
                 } else {
                     StudioEmptyState(title: "Ready for your story", symbol: "play.rectangle",
                                      message: "Select footage to preview, or create a sequence to start editing.")
@@ -98,9 +107,9 @@ struct CaptionProjectViewer: View {
 
 /// Remotion Studio preview for the selected project. Boots Studio when the
 /// project has a composition and stops it when the viewer goes away.
-struct RemotionViewer: View {
+struct RemotionStudioViewer: View {
     let project: RemotionProject
-    @State private var runtime = RemotionRuntime.shared
+    @State private var runtime = RemotionRuntime()
     @State private var reloadToken = 0
     @State private var statusMessage: String?
     @State private var presentedError: String?

@@ -43,7 +43,7 @@ enum SequenceRenderService {
     /// Remotion projects on the timeline that have no render for the sequence's size.
     static func unrenderedRemotionProjects(in sequence: SequenceProject, context: ModelContext) -> [RemotionProject] {
         remotionProjects(in: sequence, context: context).filter {
-            RemotionRenderService.cachedRender(project: $0, width: sequence.width, height: sequence.height, fps: sequence.fps, context: context) == nil
+            RemotionRenderService.cachedRender(project: $0, width: sequence.width, height: sequence.height, fps: $0.compositionFps, context: context, preserveAlpha: true) == nil
         }
     }
 
@@ -72,8 +72,9 @@ enum SequenceRenderService {
                 project: project,
                 width: sequence.width,
                 height: sequence.height,
-                fps: sequence.fps,
-                context: context
+                fps: project.compositionFps,
+                context: context,
+                preserveAlpha: true
             ) { p in
                 onProgress(.preparingRemotion(clipIndex: index, total: stale.count, p))
             }

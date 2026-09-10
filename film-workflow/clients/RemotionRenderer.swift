@@ -181,17 +181,12 @@ enum RemotionRenderer {
         width: Int,
         height: Int,
         fps: Int,
+        preserveAlpha: Bool = false,
         onProgress: @escaping @MainActor (RenderProgress) -> Void
     ) async throws {
-        await RemotionRuntime.shared.stop()
-
         try await MainActor.run {
             try RemotionRuntime.shared.prepareProjectDirectory(projectDir)
         }
-
-        // Kill any orphan bun/remotion processes still pointed at this project from
-        // prior app sessions — they hold locks that can deadlock our new render.
-        ProcessTreeKiller.killOrphans(matching: projectDir.path)
 
         let bunURL = FileStorage.remotionRoot.appendingPathComponent("bun")
 
@@ -219,6 +214,11 @@ enum RemotionRenderer {
             // the software encoder, so don't add one and expect both.
             "--hardware-acceleration", "if-possible"
         ]
+        if preserveAlpha {
+            args.removeLast(2) // VideoToolbox H.264 cannot preserve the alpha channel.
+            args.append(contentsOf: ["--codec", "prores", "--prores-profile", "4444",
+                                     "--pixel-format", "yuva444p10le", "--image-format", "png"])
+        }
         // Prefer the user's installed Chromium-family browser to avoid the 143MB
         // chrome-headless-shell auto-download. Falls through to Remotion's default
         // when no system browser is found.

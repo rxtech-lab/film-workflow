@@ -1,5 +1,6 @@
 #if os(macOS)
 import Foundation
+import CryptoKit
 import Network
 import Observation
 
@@ -38,7 +39,7 @@ final class RemotionRuntime {
     private var stdoutPipe: Pipe?
     private var stderrPipe: Pipe?
 
-    private init() {}
+    init() {}
 
     // MARK: - First launch setup
 
@@ -64,7 +65,34 @@ final class RemotionRuntime {
 
         // Shared root: package.json, remotion.config.ts, tsconfig.json, node_modules, src (default)
         let srcTemplate = bundleRuntime.appendingPathComponent("template")
-        for item in ["package.json", "remotion.config.ts", "tsconfig.json", "node_modules", "src"] {
+        let manifest = try Data(contentsOf: srcTemplate.appendingPathComponent("package.json"))
+        let version = SHA256.hash(data: manifest).map { String(format: "%02x", $0) }.joined()
+        let stamp = dest.appendingPathComponent(".runtime-version")
+        if (try? String(contentsOf: stamp, encoding: .utf8)) != version {
+            let source = srcTemplate.appendingPathComponent("node_modules")
+            guard fm.fileExists(atPath: source.path) else { throw RemotionRuntimeError.bundleResourceMissing }
+            let staged = dest.appendingPathComponent(".node_modules-\(UUID().uuidString)")
+            try fm.copyItem(at: source, to: staged)
+            let installed = dest.appendingPathComponent("node_modules")
+            let previous = dest.appendingPathComponent(".node_modules-previous")
+            try? fm.removeItem(at: previous)
+            if fm.fileExists(atPath: installed.path) { try fm.moveItem(at: installed, to: previous) }
+            do { try fm.moveItem(at: staged, to: installed) }
+            catch { try? fm.moveItem(at: previous, to: installed); throw error }
+            try? fm.removeItem(at: previous)
+            try manifest.write(to: dest.appendingPathComponent("package.json"), options: .atomic)
+            try version.write(to: stamp, atomically: true, encoding: .utf8)
+        }
+        // Player code is app-owned and may change without changing npm dependencies.
+        let playerSource = srcTemplate.appendingPathComponent("player")
+        let playerDestination = dest.appendingPathComponent("player")
+        try fm.createDirectory(at: playerDestination, withIntermediateDirectories: true)
+        for name in ["server.cjs", "host.tsx"] {
+            let data = try Data(contentsOf: playerSource.appendingPathComponent(name))
+            let target = playerDestination.appendingPathComponent(name)
+            if (try? Data(contentsOf: target)) != data { try data.write(to: target, options: .atomic) }
+        }
+        for item in ["package.json", "remotion.config.ts", "tsconfig.json", "src"] {
             let src = srcTemplate.appendingPathComponent(item)
             let dst = dest.appendingPathComponent(item)
             if !fm.fileExists(atPath: dst.path), fm.fileExists(atPath: src.path) {

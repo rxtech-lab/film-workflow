@@ -13,6 +13,8 @@ struct InspectorPanel: View {
     let sequence: SequenceProject?
     let onRender: () -> Void
 
+    @Environment(\.undoManager) private var undoManager
+
     var body: some View {
         VStack(spacing: 0) {
             StudioPanelHeader(title: "Inspector", symbol: "slider.horizontal.3")
@@ -86,10 +88,12 @@ struct InspectorPanel: View {
 
     @ViewBuilder
     private func clipInspector(sequence: SequenceProject, clipID: UUID) -> some View {
-        let timeline = Binding(get: { sequence.timeline }, set: { sequence.timeline = $0 })
+        let timeline = Binding(get: { sequence.timeline }, set: {
+            sequence.editTimeline($0, undoManager: undoManager, actionName: String(localized: "Edit Clip"))
+        })
         let remotion = remotionProject(for: clipID, in: sequence)
         let status: String? = remotion.map { project in
-            RemotionRenderService.cachedRender(project: project, width: sequence.width, height: sequence.height, fps: sequence.fps, context: document.container.mainContext) == nil
+            RemotionRenderService.cachedRender(project: project, width: sequence.width, height: sequence.height, fps: project.compositionFps, context: document.container.mainContext, preserveAlpha: true) == nil
                 ? "Not rendered for this sequence" : ""
         }.flatMap { $0.isEmpty ? nil : $0 }
         ClipInspectorView(timeline: timeline, clipID: clipID, renderStatus: status, onRender: remotion == nil ? nil : onRender)

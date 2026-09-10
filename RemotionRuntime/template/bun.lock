@@ -5,6 +5,7 @@
       "name": "film-workflow-remotion-runtime",
       "dependencies": {
         "@remotion/cli": "4.0.459",
+        "@remotion/player": "4.0.459",
         "@tsparticles/engine": "3.9.1",
         "@tsparticles/react": "3.0.0",
         "@tsparticles/slim": "3.9.1",

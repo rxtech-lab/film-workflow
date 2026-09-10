@@ -12,6 +12,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         ProjectDocumentController.shared.saveAll()
         #if os(macOS)
         Task { @MainActor in
+            RemotionPreviewSessions.shared.stopAll()
             await RemotionRuntime.shared.stop()
             sender.reply(toApplicationShouldTerminate: true)
         }

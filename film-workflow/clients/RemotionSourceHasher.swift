@@ -35,7 +35,7 @@ nonisolated enum RemotionSourceHasher {
                 let attrs = try FileManager.default.attributesOfItem(atPath: projectDir.appendingPathComponent(relative).path)
                 let size = (attrs[.size] as? NSNumber)?.int64Value ?? 0
                 let mtime = (attrs[.modificationDate] as? Date)?.timeIntervalSince1970 ?? 0
-                hasher.update(data: Data("asset:\(relative):\(size):\(Int(mtime))\n".utf8))
+                hasher.update(data: Data("asset:\(relative):\(size):\(mtime)\n".utf8))
             }
         }
         return hasher.finalize().map { String(format: "%02x", $0) }.joined()

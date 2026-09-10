@@ -36,7 +36,7 @@ public struct TimelineCompositionBuilder {
         self.resolver = resolver
     }
 
-    public func build(_ timeline: Timeline, allowPlaceholders: Bool, includeSilentAudio: Bool = false) async throws -> BuiltComposition {
+    public func build(_ timeline: Timeline, allowPlaceholders: Bool, includeSilentAudio: Bool = false, audioOnly: Bool = false) async throws -> BuiltComposition {
         let composition = AVMutableComposition()
         let duration = max(timeline.duration, timeline.frameDuration)
         let totalTime = CMTime(seconds: duration, preferredTimescale: timescale)
@@ -70,6 +70,14 @@ public struct TimelineCompositionBuilder {
 
         for track in videoTracks {
             for clip in track.sortedClips {
+                if audioOnly {
+                    if clip.source.kind.hasAudio, case .success(.file(let url, _, _))? = resolved[clip.source.id] {
+                        try await insertAudio(asset: AVURLAsset(url: url), clip: clip, into: composition,
+                                              parameters: &audioParameters, trackIDs: &audioTrackIDs,
+                                              volume: track.isMuted ? 0 : clip.volume)
+                    }
+                    continue
+                }
                 switch resolved[clip.source.id] {
                 case .success(.file(let url, _, _))? where clip.source.kind.hasVideo:
                     let asset = AVURLAsset(url: url)
@@ -95,7 +103,7 @@ public struct TimelineCompositionBuilder {
             }
         }
 
-        for track in overlayTracks {
+        for track in overlayTracks where !audioOnly {
             for clip in track.sortedClips {
                 switch resolved[clip.source.id] {
                 case .success(.captions(let cues))?:
@@ -120,6 +128,10 @@ public struct TimelineCompositionBuilder {
             for clip in track.sortedClips where includeSilentAudio || clip.volume > 0 {
                 if case .success(.file(let url, _, _))? = resolved[clip.source.id] {
                     try await insertAudio(asset: AVURLAsset(url: url), clip: clip, into: composition, parameters: &audioParameters, trackIDs: &audioTrackIDs, volume: track.isMuted ? 0 : clip.volume)
+                } else if !audioOnly, case .failure(MediaResolverError.unrendered)? = resolved[clip.source.id] {
+                    placeholders.append(clip.source)
+                } else if !audioOnly, case .failure(let error)? = resolved[clip.source.id] {
+                    throw error
                 }
             }
         }

@@ -100,8 +100,11 @@ struct FootageViewer: View {
                 }
             } label: {
                 Text(cell.title)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
             }
-            .fixedSize()
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(maxWidth: 260, alignment: .leading)
             .disabled(versions.count < 2)
             .help("Choose footage version")
             .accessibilityLabel("Footage version")
@@ -110,6 +113,7 @@ struct FootageViewer: View {
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
                 .truncationMode(.middle)
+                .layoutPriority(1)
         }
         .buttonStyle(.borderless)
         .padding(.horizontal, 12)

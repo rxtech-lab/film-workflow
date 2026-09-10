@@ -19,6 +19,12 @@ Reverse are disabled without a compatible selection. Speed accepts a positive
 percentage, including `120%`, or a target duration in seconds. Edits that would
 overlap another clip are rejected without changing the timeline.
 
+Command-Z undoes an editor change; Shift-Command-Z redoes it. The same actions
+are available in the native Edit menu. History covers clip insertion, deletion,
+movement, trimming, cuts, speed and reverse, track changes, clip properties,
+and sequence settings. A drag or trim commits as one undo step. Each window
+uses its own native undo history, and text fields keep their normal shortcuts.
+
 Clip edges trim without selecting first. A retimed clip shows an orange strip
 at its top with the current percentage. Dragging the strip's left handle
 changes speed while holding the end fixed; the right handle holds the start

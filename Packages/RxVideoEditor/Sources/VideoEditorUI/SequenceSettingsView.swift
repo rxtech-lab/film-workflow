@@ -30,8 +30,10 @@ public struct SequenceSettingsView: View {
                 get: { "\(timeline.width)x\(timeline.height)" },
                 set: { id in
                     if let preset = SizePreset.all.first(where: { $0.id == id }) {
-                        timeline.width = preset.width
-                        timeline.height = preset.height
+                        var updated = timeline
+                        updated.width = preset.width
+                        updated.height = preset.height
+                        timeline = updated
                     }
                 }
             )) {

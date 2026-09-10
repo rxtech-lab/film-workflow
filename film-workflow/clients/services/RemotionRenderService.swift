@@ -17,16 +17,17 @@ enum RemotionRenderService {
     }
 
     /// The hash a render must carry to be current for `project` at the given size.
-    static func currentHash(project: RemotionProject, width: Int, height: Int, fps: Int) throws -> String {
+    static func currentHash(project: RemotionProject, width: Int, height: Int, fps: Int, preserveAlpha: Bool = false) throws -> String {
         if !project.compositionSource.isEmpty {
             try RemotionCodeBuilder.writeComposition(project: project, source: project.compositionSource)
         }
-        return try RemotionSourceHasher.hash(projectDir: project.projectDir, width: width, height: height, fps: fps)
+        let hash = try RemotionSourceHasher.hash(projectDir: project.projectDir, width: width, height: height, fps: fps)
+        return preserveAlpha ? "alpha-v1-" + hash : hash
     }
 
     /// An existing render that matches the project's current source, if any.
-    static func cachedRender(project: RemotionProject, width: Int, height: Int, fps: Int, context: ModelContext) -> RemotionRender? {
-        guard let hash = try? currentHash(project: project, width: width, height: height, fps: fps) else { return nil }
+    static func cachedRender(project: RemotionProject, width: Int, height: Int, fps: Int, context: ModelContext, preserveAlpha: Bool = false) -> RemotionRender? {
+        guard let hash = try? currentHash(project: project, width: width, height: height, fps: fps, preserveAlpha: preserveAlpha) else { return nil }
         return renders(for: project, context: context).first {
             $0.sourceHash == hash && FileManager.default.fileExists(atPath: $0.videoURL.path)
         }
@@ -40,10 +41,11 @@ enum RemotionRenderService {
         fps: Int,
         context: ModelContext,
         force: Bool = false,
+        preserveAlpha: Bool = false,
         onProgress: @escaping @MainActor (RenderProgress) -> Void
     ) async throws -> RemotionRender {
         let storage = ProjectStorage.forContainer(context.container)
-        let hash = try currentHash(project: project, width: width, height: height, fps: fps)
+        let hash = try currentHash(project: project, width: width, height: height, fps: fps, preserveAlpha: preserveAlpha)
         let existing = renders(for: project, context: context)
         if !force, let hit = existing.first(where: {
             $0.sourceHash == hash && FileManager.default.fileExists(atPath: $0.videoURL.path)
@@ -54,7 +56,7 @@ enum RemotionRenderService {
         let version = (existing.map(\.versionNumber).max() ?? 0) + 1
         let dir = storage.remotionRenderDir(projectID: project.id)
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        let filename = String(format: "v%03d-%@.mp4", version, String(hash.prefix(8)))
+        let filename = String(format: "v%03d-%@.%@", version, String(hash.suffix(8)), preserveAlpha ? "mov" : "mp4")
         let outputURL = dir.appendingPathComponent(filename)
 
         try await RemotionRenderer.render(
@@ -63,6 +65,7 @@ enum RemotionRenderService {
             width: width,
             height: height,
             fps: fps,
+            preserveAlpha: preserveAlpha,
             onProgress: onProgress
         )
 

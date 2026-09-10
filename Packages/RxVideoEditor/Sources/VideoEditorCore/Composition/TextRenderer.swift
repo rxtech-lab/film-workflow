@@ -4,8 +4,8 @@ import Foundation
 
 /// Rasterises caption text into images the compositor can place. Cached by
 /// text, style and frame size, because a cue is drawn on every frame it spans.
-final class TextRenderer: @unchecked Sendable {
-    static let shared = TextRenderer()
+public final class TextRenderer: @unchecked Sendable {
+    public static let shared = TextRenderer()
 
     private struct Key: Hashable {
         let text: String
@@ -19,7 +19,7 @@ final class TextRenderer: @unchecked Sendable {
 
     /// An image the width of the frame with the text box drawn where the
     /// style places it, transparent elsewhere.
-    func image(for text: String, style: TextStyle, frameSize: CGSize) -> CIImage? {
+    public func image(for text: String, style: TextStyle, frameSize: CGSize) -> CIImage? {
         let key = Key(text: text, style: style, width: Int(frameSize.width), height: Int(frameSize.height))
         lock.lock()
         if let cached = cache[key] { lock.unlock(); return cached }

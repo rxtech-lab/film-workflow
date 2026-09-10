@@ -15,6 +15,9 @@ public final class TimelinePlayerController {
     public private(set) var isPlaying = false
     public private(set) var placeholders: [ClipSource] = []
     public private(set) var lastError: String?
+    public private(set) var isBuffering = false
+    public private(set) var isLoading = false
+    @ObservationIgnored public var onTransportChange: (() -> Void)?
 
     /// Longest edge the preview renders at; export ignores this.
     public var previewMaxWidth: Double = 1280
@@ -24,6 +27,8 @@ public final class TimelinePlayerController {
     private var frameDuration: TimeInterval = 1 / 30
     private var loadTask: Task<Void, Never>?
     private var loadedTimeline: Timeline?
+    private var loadedAudioOnly = false
+    private var loadGeneration = 0
     private var audioTrackIDs: [UUID: CMPersistentTrackID] = [:]
 
     public init() {
@@ -35,6 +40,7 @@ public final class TimelinePlayerController {
             Task { @MainActor [weak self] in
                 guard let self, self.isPlaying else { return }
                 self.currentTime = max(0, CMTimeGetSeconds(time))
+                self.onTransportChange?()
             }
         }
         endObserver = NotificationCenter.default.addObserver(
@@ -47,14 +53,19 @@ public final class TimelinePlayerController {
             Task { @MainActor [weak self] in
                 guard let self, let current = self.player.currentItem, ended == ObjectIdentifier(current) else { return }
                 self.isPlaying = false
+                self.currentTime = self.duration
+                self.onTransportChange?()
             }
         }
     }
 
     /// Builds and installs the composition for `timeline`. Cancels a build in flight.
-    public func load(_ timeline: Timeline, resolver: any MediaResolver) {
+    public func load(_ timeline: Timeline, resolver: any MediaResolver, audioOnly: Bool = false) {
         loadTask?.cancel()
+        loadGeneration += 1
+        let generation = loadGeneration
         if let loadedTimeline, timeline != loadedTimeline,
+           loadedAudioOnly == audioOnly,
            Self.withoutAudioLevels(timeline) == Self.withoutAudioLevels(loadedTimeline),
            let item = player.currentItem {
             let mix = AVMutableAudioMix()
@@ -75,9 +86,13 @@ public final class TimelinePlayerController {
         }
         frameDuration = timeline.frameDuration
         let wasPlaying = isPlaying
+        isLoading = true
+        duration = timeline.duration
+        player.pause()
         loadTask = Task { @MainActor in
+            defer { if generation == loadGeneration { isLoading = false; onTransportChange?() } }
             do {
-                let built = try await TimelineCompositionBuilder(resolver: resolver).build(timeline, allowPlaceholders: true, includeSilentAudio: true)
+                let built = try await TimelineCompositionBuilder(resolver: resolver).build(timeline, allowPlaceholders: true, includeSilentAudio: true, audioOnly: audioOnly)
                 guard !Task.isCancelled else { return }
                 let scale = min(1, previewMaxWidth / Double(max(1, timeline.width)))
                 built.videoComposition.renderScale = Float(scale)
@@ -86,21 +101,23 @@ public final class TimelinePlayerController {
                 item.audioMix = built.audioMix
                 player.replaceCurrentItem(with: item)
                 loadedTimeline = timeline
+                loadedAudioOnly = audioOnly
                 audioTrackIDs = built.audioTrackIDs
                 duration = CMTimeGetSeconds(built.duration)
                 placeholders = built.placeholders
                 lastError = nil
-                let target = min(currentTime, max(0, duration - frameDuration))
+                let target = min(currentTime, max(0, duration))
                 await seekPlayer(to: target)
                 guard !Task.isCancelled else { return }
-                if wasPlaying, isPlaying { play() }
+                if wasPlaying, isPlaying, !isBuffering { player.play() }
             } catch {
-                lastError = error.localizedDescription
+                if generation == loadGeneration, !Task.isCancelled { lastError = error.localizedDescription }
             }
         }
     }
 
     public func unload() {
+        loadGeneration += 1
         loadTask?.cancel()
         player.pause()
         player.replaceCurrentItem(with: nil)
@@ -110,6 +127,9 @@ public final class TimelinePlayerController {
         placeholders = []
         loadedTimeline = nil
         audioTrackIDs = [:]
+        isBuffering = false
+        isLoading = false
+        onTransportChange?()
     }
 
     public func play() {
@@ -118,17 +138,19 @@ public final class TimelinePlayerController {
             currentTime = 0
             Task {
                 await seekPlayer(to: 0)
-                if isPlaying { player.play() }
+                if isPlaying, !isBuffering, !isLoading { player.play() }
             }
         } else {
-            player.play()
+            if !isBuffering, !isLoading { player.play() }
         }
         isPlaying = true
+        onTransportChange?()
     }
 
     public func pause() {
         player.pause()
         isPlaying = false
+        onTransportChange?()
     }
 
     public func togglePlay() {
@@ -140,6 +162,7 @@ public final class TimelinePlayerController {
         guard time.isFinite else { return }
         // The editing cursor can travel beyond media; only AVPlayer is bounded.
         currentTime = max(0, time)
+        onTransportChange?()
         let clamped = min(currentTime, max(0, duration))
         guard player.currentItem != nil else { return }
         Task { await seekPlayer(to: clamped) }
@@ -148,6 +171,14 @@ public final class TimelinePlayerController {
     public func step(frames: Int) {
         pause()
         seek(to: currentTime + Double(frames) * frameDuration)
+    }
+
+    /// Buffering suspends the clock without losing the user's play/pause intent.
+    public func setBuffering(_ value: Bool) {
+        guard isBuffering != value else { return }
+        isBuffering = value
+        if value { player.pause() }
+        else if isPlaying, !isLoading { player.play() }
     }
 
     private static func withoutAudioLevels(_ timeline: Timeline) -> Timeline {

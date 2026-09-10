@@ -51,4 +51,16 @@ final class SequenceProject: GroupableProject {
             }
         }
     }
+
+    /// Uses the window's native undo stack so Edit > Undo/Redo and their
+    /// keyboard shortcuts share history with the editor's text fields.
+    func editTimeline(_ newValue: Timeline, undoManager: UndoManager?, actionName: String = String(localized: "Edit Timeline")) {
+        let previous = timeline
+        guard previous != newValue else { return }
+        undoManager?.registerUndo(withTarget: self) { [weak undoManager] sequence in
+            sequence.editTimeline(previous, undoManager: undoManager, actionName: actionName)
+        }
+        undoManager?.setActionName(actionName)
+        timeline = newValue
+    }
 }

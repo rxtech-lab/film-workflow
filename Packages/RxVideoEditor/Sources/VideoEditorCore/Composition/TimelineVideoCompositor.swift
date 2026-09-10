@@ -92,20 +92,10 @@ public final class TimelineVideoCompositor: NSObject, AVVideoCompositing, @unche
     static func place(_ image: CIImage, in frame: CGRect, transform: ClipTransform, opacity: Float) -> CIImage {
         let extent = image.extent
         guard extent.width > 0, extent.height > 0 else { return image }
-        let sx = frame.width / extent.width
-        let sy = frame.height / extent.height
-        let scaleX: CGFloat, scaleY: CGFloat
-        switch transform.fit {
-        case .fit: scaleX = min(sx, sy); scaleY = scaleX
-        case .fill: scaleX = max(sx, sy); scaleY = scaleX
-        case .stretch: scaleX = sx; scaleY = sy
-        }
-        let s = CGFloat(transform.scale)
-        var result = image.transformed(by: CGAffineTransform(scaleX: scaleX * s, y: scaleY * s))
-        let placed = result.extent
-        let tx = (frame.width - placed.width) / 2 - placed.minX + CGFloat(transform.offsetX) * frame.width
-        let ty = (frame.height - placed.height) / 2 - placed.minY + CGFloat(transform.offsetY) * frame.height
-        result = result.transformed(by: CGAffineTransform(translationX: tx, y: ty))
+        let placed = PreviewGeometry.placement(source: extent.size, canvas: frame.size, transform: transform)
+        var result = image.transformed(by: CGAffineTransform(translationX: -extent.minX, y: -extent.minY))
+        result = result.transformed(by: CGAffineTransform(scaleX: placed.width / extent.width, y: placed.height / extent.height))
+        result = result.transformed(by: CGAffineTransform(translationX: placed.minX, y: placed.minY))
         if opacity < 1 {
             result = result.applyingFilter("CIColorMatrix", parameters: [
                 "inputAVector": CIVector(x: 0, y: 0, z: 0, w: CGFloat(max(0, opacity)))

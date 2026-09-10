@@ -11,6 +11,7 @@ struct TimelinePanel: View {
     let onCreateSequence: () -> Void
 
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.undoManager) private var undoManager
     @State private var dropError: String?
 
     var body: some View {
@@ -26,7 +27,7 @@ struct TimelinePanel: View {
     private var timelineContent: some View {
         if let sequence {
             SequenceTimelineView(
-                timeline: Binding(get: { sequence.timeline }, set: { sequence.timeline = $0 }),
+                timeline: Binding(get: { sequence.timeline }, set: { sequence.editTimeline($0, undoManager: undoManager) }),
                 playhead: Binding(get: { state.playhead }, set: { state.playhead = $0 }),
                 selectedClipID: $state.selectedClipID,
                 pixelsPerSecond: Binding(get: { sequence.timelinePixelsPerSecond }, set: { sequence.timelinePixelsPerSecond = $0 }),
@@ -76,14 +77,14 @@ struct TimelinePanel: View {
         let clip = Clip(source: item.source, start: time, duration: duration, sourceDuration: item.source.kind == .image ? nil : duration, text: item.source.kind == .captions ? .caption : nil)
         do {
             try TimelineEditor.insert(&timeline, clip: clip, on: trackID)
-            sequence.timeline = timeline
+            sequence.editTimeline(timeline, undoManager: undoManager, actionName: String(localized: "Add Clip"))
             state.selectedClipID = clip.id
         } catch TimelineEditError.overlap {
             if let free = TimelineEditor.nextFreeStart(timeline, on: trackID, at: time, duration: duration) {
                 var moved = clip
                 moved.start = free
                 if (try? TimelineEditor.insert(&timeline, clip: moved, on: trackID)) != nil {
-                    sequence.timeline = timeline
+                    sequence.editTimeline(timeline, undoManager: undoManager, actionName: String(localized: "Add Clip"))
                     state.selectedClipID = moved.id
                     return
                 }

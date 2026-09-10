@@ -170,6 +170,7 @@ final class ProjectDocument: Identifiable {
     func close() async {
         save()
         #if os(macOS)
+        RemotionPreviewSessions.shared.stopAll(in: packageURL)
         if let dir = RemotionRuntime.shared.currentProjectDir,
            dir.standardizedFileURL.path.hasPrefix(packageURL.path) {
             await RemotionRuntime.shared.stop()

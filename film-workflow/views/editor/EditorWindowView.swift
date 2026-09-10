@@ -10,6 +10,7 @@ struct EditorWindowView: View {
 
     @Environment(\.modelContext) private var modelContext
     @Environment(\.openWindow) private var openWindow
+    @Environment(\.undoManager) private var undoManager
     @Environment(AgentController.self) private var agentController
 
     @Query(sort: \MusicProject.updatedAt, order: .reverse) private var music: [MusicProject]
@@ -79,7 +80,22 @@ struct EditorWindowView: View {
             state.currentSequenceID = currentSequence?.id
             reloadPlayer()
         }
-        .onChange(of: currentSequence?.timelineData) { _, _ in reloadPlayer() }
+        .onChange(of: currentSequence?.timelineData) { _, _ in
+            if let clipID = state.selectedClipID, currentSequence?.timeline.clip(id: clipID) == nil {
+                state.selectedClipID = nil
+            }
+            reloadPlayer()
+        }
+        .onChange(of: remotions.map { "\($0.id):\($0.durationSeconds):\($0.compositionFps):\($0.compositionWidth):\($0.compositionHeight)" }) { _, _ in
+            if currentSequence?.timeline.allClips.contains(where: { $0.source.kind == .remotion }) == true { reloadPlayer() }
+        }
+        .onDisappear { state.preview.unload(); state.player.unload() }
+        .onReceive(NotificationCenter.default.publisher(for: .remotionPreviewChanged)) { notification in
+            guard let directory = notification.userInfo?["directory"] as? URL,
+                  directory.path.hasPrefix(document.packageURL.path + "/"),
+                  currentSequence?.timeline.allClips.contains(where: { $0.source.kind == .remotion }) == true else { return }
+            reloadPlayer()
+        }
         .sheet(isPresented: $state.showImportSheet) {
             MediaImportSheet(urls: state.pendingImportURLs, groupID: nil) {
                 state.pendingImportURLs = []
@@ -252,6 +268,9 @@ struct EditorWindowView: View {
     }
 
     private func delete(_ row: LibraryRow) {
+        if row.id.kind == .sequence, let sequence = index.sequence(row.id.id) {
+            undoManager?.removeAllActions(withTarget: sequence)
+        }
         if state.selection == row.id { state.select(nil, updateViewer: false) }
         if state.viewerSelection == row.id { state.viewerSelection = nil }
         if row.id.kind == .sequence, state.currentSequenceID == row.id.id {
@@ -293,11 +312,17 @@ struct EditorWindowView: View {
 
     private func reloadPlayer() {
         guard let sequence = currentSequence else {
+            state.preview.unload()
             state.player.unload()
             return
         }
-        let resolver = DocumentMediaResolver(document: document, width: sequence.width, height: sequence.height, fps: sequence.fps)
-        state.player.load(sequence.timeline, resolver: resolver)
+        if sequence.timeline.allClips.contains(where: { $0.source.kind == .remotion }) {
+            state.preview.load(sequence.timeline, resolver: DocumentPreviewMediaResolver(document: document, width: sequence.width, height: sequence.height, fps: sequence.fps))
+        } else {
+            state.preview.unload()
+            let resolver = DocumentMediaResolver(document: document, width: sequence.width, height: sequence.height, fps: sequence.fps)
+            state.player.load(sequence.timeline, resolver: resolver)
+        }
     }
 
     private func beginRender() {

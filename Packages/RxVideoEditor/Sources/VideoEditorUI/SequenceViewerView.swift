@@ -7,19 +7,24 @@ import VideoEditorCore
 public struct SequenceViewerView: View {
     @Bindable var controller: TimelinePlayerController
     let fps: Int
+    let stage: AnyView?
     @State private var presentedError: String?
 
-    public init(controller: TimelinePlayerController, fps: Int) {
+    public init(controller: TimelinePlayerController, fps: Int, stage: AnyView? = nil) {
         self.controller = controller
         self.fps = fps
+        self.stage = stage
     }
 
     public var body: some View {
         VStack(spacing: 0) {
             ZStack {
                 Color.black
-                PlayerLayerView(player: controller.player)
-                    .opacity(controller.currentTime < controller.duration ? 1 : 0)
+                if let stage { stage }
+                else {
+                    PlayerLayerView(player: controller.player)
+                        .opacity(controller.currentTime < controller.duration ? 1 : 0)
+                }
             }
             transport
         }
