@@ -14,6 +14,8 @@
 		DFC60EA52FAF81D200B99679 /* Textual in Frameworks */ = {isa = PBXBuildFile; productRef = DFC60EA42FAF81D200B99679 /* Textual */; };
 		DFCA0001000000000000B001 /* WhisperKit in Frameworks */ = {isa = PBXBuildFile; productRef = DFCA0002000000000000B002 /* WhisperKit */; };
 		DFSP0001000000000000C001 /* Sparkle in Frameworks */ = {isa = PBXBuildFile; platformFilters = (macos, ); productRef = DFSP0002000000000000C002 /* Sparkle */; };
+		DFVE0001000000000000D001 /* VideoEditorCore in Frameworks */ = {isa = PBXBuildFile; productRef = DFVE0002000000000000D002 /* VideoEditorCore */; };
+		DFVE0004000000000000D004 /* VideoEditorUI in Frameworks */ = {isa = PBXBuildFile; productRef = DFVE0005000000000000D005 /* VideoEditorUI */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -69,6 +71,8 @@
 				DFCA0001000000000000B001 /* WhisperKit in Frameworks */,
 				DF9D8F13302D630100CD3C3D /* RxAuthSwiftUI in Frameworks */,
 				DFSP0001000000000000C001 /* Sparkle in Frameworks */,
+				DFVE0001000000000000D001 /* VideoEditorCore in Frameworks */,
+				DFVE0004000000000000D004 /* VideoEditorUI in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -137,6 +141,8 @@
 				DFCA0002000000000000B002 /* WhisperKit */,
 				DF9D8F10302D630100CD3C3D /* RxAuthSwift */,
 				DF9D8F12302D630100CD3C3D /* RxAuthSwiftUI */,
+				DFVE0002000000000000D002 /* VideoEditorCore */,
+				DFVE0005000000000000D005 /* VideoEditorUI */,
 			);
 			productName = "film-workflow";
 			productReference = DF4F80FA2F9120D300DE82DA /* film-workflow.app */;
@@ -225,6 +231,7 @@
 				DFC60EA32FAF81D200B99679 /* XCRemoteSwiftPackageReference "textual" */,
 				DFCA0003000000000000B003 /* XCRemoteSwiftPackageReference "WhisperKit" */,
 				DFSP0003000000000000C003 /* XCLocalSwiftPackageReference "Vendor/Sparkle" */,
+				DFVE0003000000000000D003 /* XCLocalSwiftPackageReference "Packages/RxVideoEditor" */,
 				DF9D8F0F302D630100CD3C3D /* XCRemoteSwiftPackageReference "RxAuthSwift" */,
 			);
 			preferredProjectObjectVersion = 77;
@@ -691,6 +698,10 @@
 			isa = XCLocalSwiftPackageReference;
 			relativePath = Vendor/Sparkle;
 		};
+		DFVE0003000000000000D003 /* XCLocalSwiftPackageReference "Packages/RxVideoEditor" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = Packages/RxVideoEditor;
+		};
 /* End XCLocalSwiftPackageReference section */
 
 /* Begin XCRemoteSwiftPackageReference section */
@@ -721,6 +732,16 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
+		DFVE0002000000000000D002 /* VideoEditorCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = DFVE0003000000000000D003 /* XCLocalSwiftPackageReference "Packages/RxVideoEditor" */;
+			productName = VideoEditorCore;
+		};
+		DFVE0005000000000000D005 /* VideoEditorUI */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = DFVE0003000000000000D003 /* XCLocalSwiftPackageReference "Packages/RxVideoEditor" */;
+			productName = VideoEditorUI;
+		};
 		DF9D8F10302D630100CD3C3D /* RxAuthSwift */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = DF9D8F0F302D630100CD3C3D /* XCRemoteSwiftPackageReference "RxAuthSwift" */;

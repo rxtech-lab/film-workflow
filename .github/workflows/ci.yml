@@ -21,3 +21,12 @@ jobs:
             -destination 'generic/platform=macOS' \
             -configuration Debug \
             CODE_SIGNING_ALLOWED=NO
+
+  test-video-editor:
+    name: Test RxVideoEditor package
+    runs-on: self-hosted
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Run package tests
+        run: swift test --package-path Packages/RxVideoEditor

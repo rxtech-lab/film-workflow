@@ -77,3 +77,6 @@ xcodebuild-archive.log
 index-build
 # Coverage data from launching the debug app directly
 *.profraw
+
+# Swift package build output
+Packages/*/.build/
