@@ -11,15 +11,20 @@ public extension View {
     }
 
     /// The same, for a payload the caller has already assembled.
+    @ViewBuilder
     func timelineDraggable(_ item: FootageDragItem, thumbnailURL: URL? = nil, alsoRegistering extra: ((NSItemProvider) -> Void)? = nil) -> some View {
-        onDrag {
-            let provider = NSItemProvider()
-            provider.register(item)
-            extra?(provider)
-            MainActor.assumeIsolated { FootageDragSession.shared.begin(item) }
-            return provider
-        } preview: {
-            FootageDragCard(item: item, thumbnailURL: thumbnailURL)
+        if item.source.capabilities.contains(.drag) {
+            onDrag {
+                let provider = NSItemProvider()
+                provider.register(item)
+                extra?(provider)
+                MainActor.assumeIsolated { FootageDragSession.shared.begin(item) }
+                return provider
+            } preview: {
+                FootageDragCard(item: item, thumbnailURL: thumbnailURL)
+            }
+        } else {
+            self
         }
     }
 }

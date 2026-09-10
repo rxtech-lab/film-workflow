@@ -49,7 +49,7 @@ struct EditorWindowView: View {
         GeometryReader { geometry in
             VSplitView {
                 HSplitView {
-                    LibraryPanel(index: index, groups: groups, state: state,
+                    LibraryPanel(index: index, groups: groups, state: state, document: document,
                                  onCreate: create, onMove: move, onImport: chooseFilesToImport, onCreateGroup: beginCreatingGroup,
                                  onRenameGroup: beginRenamingGroup, onDeleteGroup: { pendingGroupDeletion = $0 },
                                  onRename: beginRenaming, onDelete: { pendingDeletion = $0 },
@@ -58,6 +58,7 @@ struct EditorWindowView: View {
                         .background(.regularMaterial)
                     ViewerPanel(index: index, state: state, document: document, sequence: currentSequence)
                         .frame(minWidth: 360, idealWidth: 800, maxWidth: .infinity, maxHeight: .infinity)
+                        .background(PersistedPanelSplit(document: document, panel: .editorColumns))
                     InspectorPanel(index: index, state: state, document: document, sequence: currentSequence, onRender: beginRender)
                         .frame(minWidth: 300, idealWidth: 320, maxWidth: 460, maxHeight: .infinity)
                         .background(Color(nsColor: .controlBackgroundColor))
@@ -65,6 +66,7 @@ struct EditorWindowView: View {
                 .frame(minHeight: 300, idealHeight: geometry.size.height * 0.68, maxHeight: .infinity)
                 TimelinePanel(state: state, document: document, sequence: currentSequence, onCreateSequence: { create(.sequence, nil) })
                     .frame(minHeight: 190, idealHeight: geometry.size.height * 0.32, maxHeight: .infinity)
+                    .background(PersistedPanelSplit(document: document, panel: .editorRows))
             }
             .frame(width: geometry.size.width, height: geometry.size.height)
         }
@@ -359,7 +361,7 @@ struct StudioPanelHeader: View {
         }
         .font(.system(size: 12))
         .padding(.horizontal, 14)
-        .frame(height: 30)
+        .frame(height: 24)
         .background(.bar)
         .overlay(alignment: .bottom) { Divider() }
     }

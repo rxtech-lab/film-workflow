@@ -19,12 +19,28 @@ public struct SequenceTimelineView: View {
     @Binding private var pixelsPerSecond: Double
     @State private var dragState = ClipDragState()
     @State private var hoveredHandle: TrimHandleID?
+    @State private var hoveredRetimeHandle: TrimHandleID?
     @State private var dropTarget: (trackID: UUID, time: TimeInterval)?
     /// The footage being dragged over the lanes, decoded on entry so the
     /// ghost clip can take its real length.
     @State private var dragPreviewItem: FootageDragItem?
     @State private var thumbnails: [String: CGImage] = [:]
+    /// Where the pointer is over the canvas, as a frame-quantized time. Drawn
+    /// as a gray skimmer line; a click turns it into the playhead.
+    @State private var hoverTime: TimeInterval?
+    @State private var tool: TimelineTool = .select
+    @State private var speedClipID: UUID?
+    @State private var editError: String?
+    @State private var sourceDurations: [String: TimeInterval] = [:]
+    @FocusState private var timelineFocused: Bool
+    /// The lanes' horizontal scroll, driven when the zoom changes so the
+    /// playhead (or the visible centre) keeps its screen position.
+    @State private var scrollPosition = ScrollPosition(x: 0)
+    @State private var viewport = TimelineViewport()
+    /// The zoom when a trackpad pinch began; the pinch scales from here.
+    @State private var pinchBaseZoom: Double?
 
+    private static let zoomRange: ClosedRange<Double> = 0.5...400
     private let headerWidth: CGFloat = 64
     private let rulerHeight: CGFloat = 24
     private let laneHeight: CGFloat = 52
@@ -62,6 +78,7 @@ public struct SequenceTimelineView: View {
     public var body: some View {
         VStack(spacing: 0) {
             toolbar
+            editingToolbar
             Divider()
             GeometryReader { geometry in
                 let canvasHeight = max(geometry.size.height, rulerHeight + CGFloat(timeline.tracks.count) * (laneHeight + 1))
@@ -86,11 +103,26 @@ public struct SequenceTimelineView: View {
                                         .gesture(DragGesture(minimumDistance: 0).onChanged { _ in deselect() })
                                 }
                                 .frame(width: canvasWidth, height: canvasHeight, alignment: .topLeading)
+                                hoverIndicator(height: canvasHeight)
                                 playheadLine(height: canvasHeight)
+                            }
+                            .onContinuousHover(coordinateSpace: .local) { phase in
+                                switch phase {
+                                case .active(let point):
+                                    hoverTime = timeline.quantized(min(max(0, point.x / pixelsPerSecond), contentDuration))
+                                case .ended:
+                                    hoverTime = nil
+                                }
                             }
                             .coordinateSpace(name: "timelineCanvas")
                         }
                         .defaultScrollAnchor(.topLeading)
+                        .scrollPosition($scrollPosition)
+                        .onScrollGeometryChange(for: TimelineViewport.self) { geometry in
+                            TimelineViewport(offsetX: geometry.contentOffset.x, width: geometry.containerSize.width)
+                        } action: { _, latest in
+                            viewport = latest
+                        }
                         .frame(maxWidth: .infinity)
                     }
                     .frame(height: canvasHeight, alignment: .top)
@@ -98,17 +130,61 @@ public struct SequenceTimelineView: View {
                     .onTapGesture { deselect() }
                 }
                 .defaultScrollAnchor(.topLeading)
+                .simultaneousGesture(pinchToZoom)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
 
+        .focusable()
+        .focusEffectDisabled()
+        .focused($timelineFocused)
         .onDeleteCommand { deleteSelection() }
         .onKeyPress(.delete) { deleteSelection(); return .handled }
+        .onKeyPress(characters: CharacterSet(charactersIn: "bB")) { _ in tool = .blade; return .handled }
+        .onKeyPress(characters: CharacterSet(charactersIn: "aA")) { _ in tool = .select; return .handled }
+        .onKeyPress(.escape) { tool = .select; return .handled }
+        .popover(isPresented: Binding(get: { speedClipID != nil }, set: { if !$0 { speedClipID = nil } })) {
+            if let speedClipID { ClipSpeedEditor(timeline: $timeline, clipID: speedClipID) }
+        }
+        .alert("Couldn’t edit footage", isPresented: Binding(get: { editError != nil }, set: { if !$0 { editError = nil } })) {
+            Button("OK") { editError = nil }
+        } message: { Text(editError ?? "") }
+        .onChange(of: pixelsPerSecond) { previous, current in
+            keepAnchorInPlace(from: previous, to: current)
+        }
+    }
+
+    private static func clampedZoom(_ zoom: Double) -> Double {
+        min(zoomRange.upperBound, max(zoomRange.lowerBound, zoom))
+    }
+
+    /// Trackpad pinch over the lanes: spreading zooms in, pinching zooms out,
+    /// scaled from the zoom at the start of the gesture.
+    private var pinchToZoom: some Gesture {
+        MagnifyGesture()
+            .onChanged { value in
+                let base = pinchBaseZoom ?? pixelsPerSecond
+                pinchBaseZoom = base
+                pixelsPerSecond = Self.clampedZoom(base * value.magnification)
+            }
+            .onEnded { _ in pinchBaseZoom = nil }
+    }
+
+    /// Re-scrolls the lanes after a zoom so the playhead stays under the same
+    /// screen x; when the playhead is out of view the visible centre holds
+    /// still instead, so the user never loses their place.
+    private func keepAnchorInPlace(from previous: Double, to current: Double) {
+        guard viewport.width > 0, previous > 0, current > 0, previous != current else { return }
+        let offset = TimelineViewport.scrollOffset(
+            keeping: playhead, from: previous, to: current, offsetX: viewport.offsetX, viewportWidth: viewport.width
+        )
+        scrollPosition.scrollTo(x: offset)
     }
 
     // MARK: - Toolbar
 
     private func deselect() {
+        timelineFocused = true
         selectedClipID = nil
         onDeselect?()
     }
@@ -146,9 +222,9 @@ public struct SequenceTimelineView: View {
             Image(systemName: "minus.magnifyingglass").foregroundStyle(.secondary)
             // A logarithmic scale keeps the wider zoom-out range easy to adjust.
             Slider(value: Binding(
-                get: { log2(min(400, max(0.5, pixelsPerSecond))) },
+                get: { log2(Self.clampedZoom(pixelsPerSecond)) },
                 set: { pixelsPerSecond = pow(2, $0) }
-            ), in: log2(0.5)...log2(400))
+            ), in: log2(Self.zoomRange.lowerBound)...log2(Self.zoomRange.upperBound))
                 .frame(width: 140)
                 .controlSize(.small)
                 .accessibilityLabel("Timeline zoom")
@@ -157,6 +233,53 @@ public struct SequenceTimelineView: View {
         .padding(.horizontal, 10)
         .padding(.vertical, 6)
         .background(.bar)
+    }
+
+    private var selectedClip: Clip? { selectedClipID.flatMap { timeline.clip(id: $0) } }
+
+    private var editingToolbar: some View {
+        HStack(spacing: 8) {
+            Button { tool = .select; timelineFocused = true } label: {
+                Label("Select", systemImage: "cursorarrow")
+            }
+            .tint(tool == .select ? .accentColor : .secondary)
+            .help("Selection tool (A)")
+            .accessibilityIdentifier("timeline.tool.select")
+            Button { tool = .blade; timelineFocused = true } label: {
+                Label("Cut", systemImage: "scissors")
+            }
+            .tint(tool == .blade ? .accentColor : .secondary)
+            .help("Blade tool (B): click footage to split it")
+            .accessibilityIdentifier("timeline.tool.cut")
+            Divider().frame(height: 16)
+            Button { speedClipID = selectedClipID } label: {
+                Label("Speed", systemImage: "speedometer")
+            }
+            .disabled(selectedClip?.source.capabilities.contains(.speed) != true)
+            .accessibilityIdentifier("timeline.speed")
+            Button {
+                if let selectedClip { performEdit { try TimelineEditor.reverse(&timeline, clipID: selectedClip.id) } }
+            } label: {
+                Label("Reverse", systemImage: "backward.end")
+            }
+            .tint(selectedClip?.isReversed == true ? .accentColor : .secondary)
+            .disabled(selectedClip?.source.capabilities.contains(.reverse) != true)
+            .accessibilityIdentifier("timeline.reverse")
+            Spacer()
+            if let selectedClip, selectedClip.source.capabilities.contains(.speed) {
+                Text("\((selectedClip.playbackRate * 100).formatted(.number.precision(.fractionLength(0...3))))%\(selectedClip.isReversed ? " · Reversed" : "")")
+                    .font(.caption.monospacedDigit()).foregroundStyle(.secondary)
+            }
+        }
+        .buttonStyle(.bordered)
+        .controlSize(.small)
+        .padding(.horizontal, 10)
+        .padding(.bottom, 6)
+        .background(.bar)
+    }
+
+    private func performEdit(_ edit: () throws -> Void) {
+        do { try edit() } catch { editError = error.localizedDescription }
     }
 
     // MARK: - Headers
@@ -300,7 +423,7 @@ public struct SequenceTimelineView: View {
                 Image(decorative: image, scale: 1)
                     .resizable()
                     .aspectRatio(contentMode: .fill)
-                    .frame(width: min(width - 8, 70), height: laneHeight - inset * 2 - 4)
+                    .frame(width: max(0, min(width - 8, 70)), height: laneHeight - inset * 2 - 4)
                     .clipShape(RoundedRectangle(cornerRadius: 3))
                     .padding(.leading, 4)
                     .padding(.top, 2)
@@ -371,6 +494,8 @@ public struct SequenceTimelineView: View {
         let x = CGFloat((isDragging ? dragState.previewStart : clip.start) * pixelsPerSecond)
         let width = max(4, CGFloat((isDragging ? dragState.previewDuration : clip.duration) * pixelsPerSecond))
         let inset: CGFloat = 3
+        let displayedClip = isDragging ? (dragState.previewClip ?? clip) : clip
+        let showsSpeed = TimelineClipInteraction.showsSpeedOverlay(for: clip) || (isDragging && dragState.mode.isRetiming)
 
         return ZStack(alignment: .leading) {
             RoundedRectangle(cornerRadius: 5)
@@ -379,7 +504,7 @@ public struct SequenceTimelineView: View {
                 Image(decorative: image, scale: 1)
                     .resizable()
                     .aspectRatio(contentMode: .fill)
-                    .frame(width: min(width - 8, 70), height: laneHeight - inset * 2 - 4)
+                    .frame(width: max(0, min(width - 8, 70)), height: laneHeight - inset * 2 - 4)
                     .clipShape(RoundedRectangle(cornerRadius: 3))
                     .padding(.leading, 4)
             }
@@ -387,8 +512,10 @@ public struct SequenceTimelineView: View {
                 ClipWaveformView(
                     source: clip.source,
                     resolver: resolver,
-                    inPoint: clip.inPoint + (isDragging && dragState.mode == .trimLeading ? dragState.previewStart - clip.start : 0),
-                    duration: isDragging ? dragState.previewDuration : clip.duration,
+                    inPoint: displayedClip.inPoint,
+                    duration: displayedClip.duration,
+                    playbackRate: displayedClip.playbackRate,
+                    isReversed: clip.isReversed,
                     volume: track.isMuted ? 0 : clip.volume
                 )
                 .frame(height: clip.source.kind == .audio ? 28 : 14)
@@ -396,43 +523,119 @@ public struct SequenceTimelineView: View {
                 .clipShape(RoundedRectangle(cornerRadius: 5))
                 .allowsHitTesting(false)
             }
-            Text(clip.source.displayName)
-                .font(.caption2.weight(.medium))
-                .foregroundStyle(.white)
-                .lineLimit(1)
-                .padding(.horizontal, 6)
-                .padding(.top, 3)
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-                .background(alignment: .topLeading) {
-                    Rectangle().fill(.black.opacity(0.35)).frame(height: 14)
-                }
-                .clipShape(RoundedRectangle(cornerRadius: 5))
+            VStack(spacing: 0) {
+                if showsSpeed { speedOverlay(displayedClip, width: width) }
+                Text(clip.source.displayName)
+                    .font(.caption2.weight(.medium))
+                    .foregroundStyle(.white)
+                    .lineLimit(1)
+                    .padding(.horizontal, 6)
+                    .padding(.top, 2)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(.black.opacity(0.35))
+                Spacer(minLength: 0)
+            }
+            .clipShape(RoundedRectangle(cornerRadius: 5))
             RoundedRectangle(cornerRadius: 5)
                 .strokeBorder(isSelected ? Color.white : Color.black.opacity(0.25), lineWidth: isSelected ? 2 : 1)
-            // Trim handles.
-            HStack {
-                trimHandle(clip, leading: true)
-                Spacer(minLength: 0)
-                trimHandle(clip, leading: false)
-            }
             if isDragging {
-                dragReadout(alignment: dragState.mode == .trimLeading ? .bottomLeading : .bottomTrailing)
+                dragReadout(alignment: dragState.mode.isLeading ? .bottomLeading : .bottomTrailing)
             }
         }
         .frame(width: width, height: laneHeight - inset * 2)
-        .offset(x: x, y: inset)
         .contentShape(Rectangle())
-        .pointerStyle(isDragging && dragState.mode == .move ? .grabActive : .grabIdle)
-        .onTapGesture { selectedClipID = clip.id }
-        .gesture(moveGesture(clip, on: track))
+        .overlay {
+            if tool == .select, clip.source.capabilities.contains(.duration) {
+                HStack(spacing: 0) {
+                    trimHandle(clip, leading: true, width: width)
+                    Spacer(minLength: 0)
+                    trimHandle(clip, leading: false, width: width)
+                }
+                .allowsHitTesting(false)
+            }
+        }
+        .pointerStyle(clipPointer(clip))
+        .onContinuousHover { phase in
+            switch phase {
+            case .active(let location):
+                let mode = TimelineClipInteraction.mode(at: location.x, y: location.y, width: width, capabilities: clip.source.capabilities, tool: tool, showsSpeedOverlay: showsSpeed)
+                hoveredRetimeHandle = mode?.isRetiming == true
+                    ? TrimHandleID(clipID: clip.id, leading: mode == .retimeLeading) : nil
+                hoveredHandle = mode == .trimLeading || mode == .trimTrailing
+                    ? TrimHandleID(clipID: clip.id, leading: mode == .trimLeading) : nil
+            case .ended:
+                if hoveredHandle?.clipID == clip.id { hoveredHandle = nil }
+                if hoveredRetimeHandle?.clipID == clip.id { hoveredRetimeHandle = nil }
+            }
+        }
+        .onTapGesture { location in
+            timelineFocused = true
+            let time = timeline.quantized(min(max(0, clip.start + location.x / pixelsPerSecond), clip.end))
+            if tool == .blade {
+                if clip.source.capabilities.contains(.cut) { split(clip, at: time) }
+            } else {
+                selectedClipID = clip.id
+                playhead = time
+            }
+        }
+        .simultaneousGesture(
+            SpatialTapGesture(count: 2).onEnded { value in
+                let mode = TimelineClipInteraction.mode(
+                    at: value.location.x, y: value.location.y, width: width,
+                    capabilities: clip.source.capabilities, tool: tool, showsSpeedOverlay: showsSpeed
+                )
+                guard mode == .retimeTrailing else { return }
+                performEdit { try TimelineEditor.changeSpeed(&timeline, clipID: clip.id, rate: 1) }
+            }
+        )
+        .gesture(clipGesture(clip, on: track, width: width))
+        .offset(x: x, y: inset)
         .contextMenu {
-            Button("Split at Playhead") { split(clip) }
-                .disabled(!(clip.start < playhead && playhead < clip.end))
+            Button("Split at Playhead") { split(clip, at: playhead) }
+                .disabled(!clip.source.capabilities.contains(.cut) || !(clip.start < playhead && playhead < clip.end))
+            Button("Change Speed…") { selectedClipID = clip.id; speedClipID = clip.id }
+                .disabled(!clip.source.capabilities.contains(.speed))
+            Button(clip.isReversed ? "Play Forward" : "Reverse") { performEdit { try TimelineEditor.reverse(&timeline, clipID: clip.id) } }
+                .disabled(!clip.source.capabilities.contains(.reverse))
             Button("Delete", role: .destructive) { delete(clip.id) }
             Button("Ripple Delete", role: .destructive) { try? TimelineEditor.rippleDelete(&timeline, clipID: clip.id) }
         }
-        .task(id: clip.source.id) { await loadThumbnail(for: clip.source) }
+        .task(id: clip.source.id) {
+            await loadThumbnail(for: clip.source)
+            await loadSourceDuration(for: clip)
+        }
         .help("\(clip.source.displayName) · \(Timecode.string(seconds: clip.duration, fps: timeline.fps))")
+    }
+
+    /// The amber strip represents the same source range, stretched to its
+    /// current timeline duration. Only its ends retime; lower edges still trim.
+    private func speedOverlay(_ clip: Clip, width: CGFloat) -> some View {
+        HStack(spacing: 0) {
+            speedHandle(clip, leading: true, width: width)
+            Text("\((clip.playbackRate * 100).formatted(.number.precision(.fractionLength(0...2))))%")
+                .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                .lineLimit(1)
+                .frame(maxWidth: .infinity)
+                .clipped()
+            speedHandle(clip, leading: false, width: width)
+        }
+        .foregroundStyle(.black.opacity(0.9))
+        .frame(width: width, height: TimelineClipInteraction.speedOverlayHeight)
+        .background(Color.orange.opacity(0.95))
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Speed \((clip.playbackRate * 100).formatted()) percent")
+        .accessibilityIdentifier("timeline.clip.speed.\(clip.id)")
+        .help("Drag either end to change speed. Double-click the right end to restore 100%.")
+    }
+
+    private func speedHandle(_ clip: Clip, leading: Bool, width: CGFloat) -> some View {
+        let hovered = hoveredRetimeHandle == TrimHandleID(clipID: clip.id, leading: leading)
+        let active = dragState.clipID == clip.id && dragState.mode == (leading ? .retimeLeading : .retimeTrailing)
+        return RoundedRectangle(cornerRadius: 1)
+            .fill(.black.opacity(0.6))
+            .frame(width: 2, height: 10)
+            .frame(width: TimelineClipInteraction.handleWidth(for: width), height: TimelineClipInteraction.speedOverlayHeight)
+            .background(.white.opacity(hovered || active ? 0.4 : 0.15))
     }
 
     /// The length and edge times of the clip being moved or trimmed.
@@ -441,7 +644,7 @@ public struct SequenceTimelineView: View {
         let end = start + dragState.previewDuration
         let text = dragState.mode == .move
             ? "\(Timecode.string(seconds: start, fps: timeline.fps)) – \(Timecode.string(seconds: end, fps: timeline.fps))"
-            : "\(Timecode.string(seconds: dragState.previewDuration, fps: timeline.fps)) · \(Timecode.string(seconds: dragState.mode == .trimLeading ? start : end, fps: timeline.fps))"
+            : "\(Timecode.string(seconds: dragState.previewDuration, fps: timeline.fps)) · \(Timecode.string(seconds: dragState.mode.isLeading ? start : end, fps: timeline.fps))"
         return Text(text)
             .font(.system(size: 9, weight: .semibold, design: .monospaced))
             .foregroundStyle(.white)
@@ -467,80 +670,113 @@ public struct SequenceTimelineView: View {
 
     /// A grab zone on each end of a clip. The pointer becomes a resize arrow
     /// as it nears the edge, and the edge lights up so the zone is visible.
-    private func trimHandle(_ clip: Clip, leading: Bool) -> some View {
+    private func trimHandle(_ clip: Clip, leading: Bool, width: CGFloat) -> some View {
         let id = TrimHandleID(clipID: clip.id, leading: leading)
         let active = dragState.clipID == clip.id && dragState.mode == (leading ? .trimLeading : .trimTrailing)
         let lit = active || hoveredHandle == id
         return Rectangle()
             .fill(Color.white.opacity(lit ? 0.22 : 0.001))
-            .frame(width: 10)
+            .frame(width: TimelineClipInteraction.handleWidth(for: width))
             .overlay(alignment: leading ? .leading : .trailing) {
                 RoundedRectangle(cornerRadius: 1)
                     .fill(.white)
-                    .frame(width: 3, height: laneHeight * 0.45)
-                    .padding(.horizontal, 2)
+                    .frame(width: 2, height: laneHeight * 0.45)
+                    .padding(.horizontal, 1)
                     .opacity(lit ? 1 : 0)
             }
-            .contentShape(Rectangle())
-            .pointerStyle(.frameResize(position: leading ? .leading : .trailing))
-            .onHover { inside in
-                if inside {
-                    hoveredHandle = id
-                } else if hoveredHandle == id {
-                    hoveredHandle = nil
-                }
-            }
-            .gesture(
-                DragGesture(minimumDistance: 2)
-                    .onChanged { value in
-                        if dragState.clipID != clip.id {
-                            dragState = ClipDragState(clipID: clip.id, mode: leading ? .trimLeading : .trimTrailing, originalStart: clip.start, originalDuration: clip.duration)
-                        }
-                        let delta = value.translation.width / pixelsPerSecond
-                        if leading {
-                            let start = snap(clip.start + delta, excluding: clip.id)
-                            let bounded = min(max(0, start), clip.end - timeline.frameDuration)
-                            dragState.previewStart = bounded
-                            dragState.previewDuration = clip.end - bounded
-                        } else {
-                            let end = snap(clip.end + delta, excluding: clip.id)
-                            dragState.previewDuration = max(timeline.frameDuration, end - clip.start)
-                        }
-                    }
-                    .onEnded { _ in
-                        defer { dragState = ClipDragState() }
-                        selectedClipID = clip.id
-                        if leading {
-                            try? TimelineEditor.trimLeading(&timeline, clipID: clip.id, by: dragState.previewStart - clip.start)
-                        } else {
-                            try? TimelineEditor.trimTrailing(&timeline, clipID: clip.id, by: dragState.previewDuration - clip.duration)
-                        }
-                    }
-            )
     }
 
-    private func moveGesture(_ clip: Clip, on track: Track) -> some Gesture {
-        DragGesture(minimumDistance: 3)
+    private func clipPointer(_ clip: Clip) -> PointerStyle {
+        if tool == .blade {
+            return clip.source.capabilities.contains(.cut)
+                ? .image(Image(systemName: "scissors"), hotSpot: .center) : .image(Image(systemName: "nosign"), hotSpot: .center)
+        }
+        if let handle = hoveredRetimeHandle, handle.clipID == clip.id {
+            return .frameResize(position: handle.leading ? .leading : .trailing)
+        }
+        if let handle = hoveredHandle, handle.clipID == clip.id {
+            return .frameResize(position: handle.leading ? .leading : .trailing)
+        }
+        return clip.source.capabilities.contains(.drag)
+            ? (dragState.clipID == clip.id ? .grabActive : .grabIdle) : .default
+    }
+
+    /// A single gesture chooses an edge or body at mouse-down. A fixed canvas
+    /// coordinate space keeps the trailing edge from drifting as its width changes.
+    private func clipGesture(_ clip: Clip, on track: Track, width: CGFloat) -> some Gesture {
+        DragGesture(minimumDistance: 2, coordinateSpace: .named("timelineCanvas"))
             .onChanged { value in
-                if dragState.clipID != clip.id {
-                    dragState = ClipDragState(clipID: clip.id, mode: .move, originalStart: clip.start, originalDuration: clip.duration)
-                    selectedClipID = clip.id
+                if dragState.clipID == nil {
+                    let localX = value.startLocation.x - clip.start * pixelsPerSecond
+                    let trackIndex = timeline.tracks.firstIndex { $0.id == track.id } ?? 0
+                    let localY = value.startLocation.y - rulerHeight - CGFloat(trackIndex) * (laneHeight + 1) - 3
+                    guard let mode = TimelineClipInteraction.mode(at: localX, y: localY, width: width, capabilities: clip.source.capabilities, tool: tool,
+                                                                  showsSpeedOverlay: TimelineClipInteraction.showsSpeedOverlay(for: clip)) else { return }
+                    dragState = ClipDragState(clipID: clip.id, mode: mode, originalStart: clip.start, originalDuration: clip.duration)
+                    timelineFocused = true
+                    if mode == .move { selectedClipID = clip.id }
                 }
-                let raw = clip.start + value.translation.width / pixelsPerSecond
-                dragState.previewStart = max(0, snap(raw, excluding: clip.id))
-                dragState.previewDuration = clip.duration
-                // Vertical travel picks another lane of a compatible kind.
-                let laneOffset = Int((value.translation.height / laneHeight).rounded())
-                if let index = timeline.tracks.firstIndex(where: { $0.id == track.id }) {
-                    let target = min(max(0, index + laneOffset), timeline.tracks.count - 1)
-                    dragState.targetTrackID = timeline.tracks[target].kind.accepts(clip.source.kind) ? timeline.tracks[target].id : track.id
-                }
+                guard dragState.clipID == clip.id else { return }
+                var preview = timeline
+                let delta = value.translation.width / pixelsPerSecond
+                let natural = sourceDurations[clip.source.id] ?? clip.sourceDuration
+                do {
+                    switch dragState.mode {
+                    case .trimLeading:
+                        try TimelineEditor.trimLeading(&preview, clipID: clip.id, by: snap(clip.start + delta, excluding: clip.id) - clip.start, sourceDuration: natural)
+                    case .trimTrailing:
+                        try TimelineEditor.trimTrailing(&preview, clipID: clip.id, by: snap(clip.end + delta, excluding: clip.id) - clip.end, sourceDuration: natural)
+                    case .retimeLeading:
+                        let start = min(clip.end - timeline.frameDuration, max(0, snap(clip.start + delta, excluding: clip.id)))
+                        try TimelineEditor.retime(&preview, clipID: clip.id, duration: clip.end - start, anchor: .end)
+                    case .retimeTrailing:
+                        let end = max(clip.start + timeline.frameDuration, snap(clip.end + delta, excluding: clip.id))
+                        try TimelineEditor.retime(&preview, clipID: clip.id, duration: end - clip.start)
+                    case .move:
+                        let laneOffset = Int((value.translation.height / (laneHeight + 1)).rounded())
+                        let index = timeline.tracks.firstIndex { $0.id == track.id } ?? 0
+                        let target = min(max(0, index + laneOffset), timeline.tracks.count - 1)
+                        let targetID = timeline.tracks[target].kind.accepts(clip.source.kind) ? timeline.tracks[target].id : track.id
+                        try TimelineEditor.move(&preview, clipID: clip.id, to: snap(clip.start + delta, excluding: clip.id), onTrack: targetID)
+                        dragState.targetTrackID = targetID
+                    }
+                    if let updated = preview.clip(id: clip.id) {
+                        dragState.previewClip = updated
+                        dragState.previewStart = updated.start
+                        dragState.previewDuration = updated.duration
+                    }
+                } catch { /* Keep the last valid preview at source bounds or neighbours. */ }
             }
             .onEnded { _ in
                 defer { dragState = ClipDragState() }
-                let target = dragState.targetTrackID ?? track.id
-                try? TimelineEditor.move(&timeline, clipID: clip.id, to: dragState.previewStart, onTrack: target)
+                guard dragState.clipID == clip.id, let preview = dragState.previewClip else { return }
+                let natural = sourceDurations[clip.source.id] ?? clip.sourceDuration
+                performEdit {
+                    switch dragState.mode {
+                    case .trimLeading:
+                        try TimelineEditor.trimLeading(&timeline, clipID: clip.id, by: preview.start - clip.start, sourceDuration: natural)
+                    case .trimTrailing:
+                        try TimelineEditor.trimTrailing(&timeline, clipID: clip.id, by: preview.duration - clip.duration, sourceDuration: natural)
+                    case .retimeLeading:
+                        try TimelineEditor.retime(&timeline, clipID: clip.id, duration: preview.duration, anchor: .end)
+                    case .retimeTrailing:
+                        try TimelineEditor.retime(&timeline, clipID: clip.id, duration: preview.duration)
+                    case .move:
+                        try TimelineEditor.move(&timeline, clipID: clip.id, to: preview.start, onTrack: dragState.targetTrackID ?? track.id)
+                    }
+                }
             }
+    }
+
+    private func loadSourceDuration(for clip: Clip) async {
+        guard clip.source.kind != .image, sourceDurations[clip.source.id] == nil, let resolver else { return }
+        guard let media = try? await resolver.resolve(clip.source), !Task.isCancelled else { return }
+        switch media {
+        case .file(let url, let duration, _):
+            if let duration, duration > 0 { sourceDurations[clip.source.id] = duration }
+            else { sourceDurations[clip.source.id] = await MediaDurationCache.duration(of: url) }
+        case .captions(let cues): sourceDurations[clip.source.id] = cues.map(\.end).max()
+        }
     }
 
     private func snap(_ time: TimeInterval, excluding clipID: UUID) -> TimeInterval {
@@ -549,8 +785,8 @@ public struct SequenceTimelineView: View {
         return timeline.quantized(TimelineEditor.snapped(time, to: points, tolerance: snapTolerancePixels / pixelsPerSecond))
     }
 
-    private func split(_ clip: Clip) {
-        if let right = try? TimelineEditor.split(&timeline, clipID: clip.id, at: playhead) {
+    private func split(_ clip: Clip, at time: TimeInterval) {
+        if let right = try? TimelineEditor.split(&timeline, clipID: clip.id, at: time) {
             selectedClipID = right
         }
     }
@@ -578,12 +814,33 @@ public struct SequenceTimelineView: View {
 
     // MARK: - Playhead
 
+    /// The gray skimmer that follows the pointer, with its timecode in the ruler.
+    @ViewBuilder
+    private func hoverIndicator(height: CGFloat) -> some View {
+        if let hoverTime, hoverTime != playhead {
+            let x = CGFloat(hoverTime * pixelsPerSecond)
+            Rectangle()
+                .fill(Color.gray.opacity(0.7))
+                .frame(width: 1, height: height)
+                .offset(x: x)
+                .allowsHitTesting(false)
+            Text(Timecode.string(seconds: hoverTime, fps: timeline.fps))
+                .font(.system(size: 9, design: .monospaced))
+                .foregroundStyle(.white)
+                .padding(.horizontal, 4)
+                .padding(.vertical, 1)
+                .background(Color.gray, in: RoundedRectangle(cornerRadius: 3))
+                .offset(x: x + 4, y: 2)
+                .allowsHitTesting(false)
+        }
+    }
+
     private func playheadLine(height: CGFloat) -> some View {
         Color.clear
-            .frame(width: 14, height: height)
+            .frame(width: 14, height: rulerHeight)
             .contentShape(Rectangle())
-            .overlay {
-                Rectangle().fill(Color.red).frame(width: 1.5)
+            .overlay(alignment: .top) {
+                Rectangle().fill(Color.red).frame(width: 1.5, height: height).allowsHitTesting(false)
             }
             .overlay(alignment: .top) {
                 Triangle().fill(Color.red).frame(width: 10, height: 7).offset(y: -1)
@@ -596,6 +853,37 @@ public struct SequenceTimelineView: View {
                         playhead = timeline.quantized(max(0, value.location.x / pixelsPerSecond))
                     }
             )
+    }
+}
+
+/// The visible slice of the lanes: how far they are scrolled and how wide
+/// the scroll view is.
+struct TimelineViewport: Equatable {
+    var offsetX: CGFloat = 0
+    var width: CGFloat = 0
+
+    /// The horizontal scroll offset that keeps `playhead` at the same screen
+    /// x after the zoom changes from `previous` to `current` pixels per
+    /// second. If the playhead is not visible the viewport centre is the
+    /// anchor instead. Never negative; the scroll view clamps the far end.
+    static func scrollOffset(
+        keeping playhead: TimeInterval,
+        from previous: Double,
+        to current: Double,
+        offsetX: CGFloat,
+        viewportWidth: CGFloat
+    ) -> CGFloat {
+        let playheadX = CGFloat(playhead * previous) - offsetX
+        let anchorX: CGFloat
+        let anchorTime: TimeInterval
+        if playheadX >= 0, playheadX <= viewportWidth {
+            anchorX = playheadX
+            anchorTime = playhead
+        } else {
+            anchorX = viewportWidth / 2
+            anchorTime = Double(offsetX + anchorX) / previous
+        }
+        return max(0, CGFloat(anchorTime * current) - anchorX)
     }
 }
 
@@ -675,7 +963,7 @@ private struct TrimHandleID: Hashable {
 }
 
 private struct ClipDragState {
-    enum Mode { case move, trimLeading, trimTrailing }
+    typealias Mode = TimelineClipInteraction.Mode
     var clipID: UUID?
     var mode: Mode = .move
     var originalStart: TimeInterval = 0
@@ -683,6 +971,7 @@ private struct ClipDragState {
     var previewStart: TimeInterval = 0
     var previewDuration: TimeInterval = 0
     var targetTrackID: UUID?
+    var previewClip: Clip?
 
     init() {}
 

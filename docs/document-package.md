@@ -9,6 +9,7 @@ files, and writing media into such a package corrupts the store.
 ```
 My Film.rxfilmstudio/
 ├── Document.json                 { id, formatVersion, createdAt, appVersion }
+├── Workspace.json                optional per-film panel sizes
 ├── Library.store (+ -wal/-shm)   SwiftData: projects, outputs, groups, sequences, renders, imports
 ├── Media/
 │   ├── Music/       generated music
@@ -35,6 +36,16 @@ My Film.rxfilmstudio/
 | `AppModelContainer` | App-level store (`Agent.store` in Application Support) for agent threads, which span films. |
 | `DocumentMediaResolver` | Maps timeline source ids (`video:<uuid>`, `remotion:<uuid>`, …) to files and caption cues. |
 | `SequenceRenderService` | Renders stale Remotion clips, then exports the timeline through the `RxVideoEditor` package. |
+
+## Panel layout
+
+Editor panel sizes travel with the film in `Workspace.json`: library and
+inspector widths, the viewer/timeline split, and the library/footage split.
+Divider changes save automatically (debounced during dragging) and flush on
+close or quit. Reopening restores the layout within the current window's size
+constraints; sidebars keep their widths and vertical splits keep their proportions.
+Older films and missing or unreadable workspace files use the default layout.
+This optional file does not change the document format version.
 
 ## What stays global
 

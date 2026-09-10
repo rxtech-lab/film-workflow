@@ -7,6 +7,8 @@ public struct AudioWaveformView: View {
     let url: URL
     let inPoint: TimeInterval
     let duration: TimeInterval?
+    var playbackRate: Double = 1
+    var isReversed: Bool = false
     let volume: Float
     let currentTime: TimeInterval?
     @State private var waveform: AudioWaveform?
@@ -14,11 +16,13 @@ public struct AudioWaveformView: View {
     @State private var waveformPath = Path()
     @State private var drawingSize = CGSize.zero
 
-    public init(url: URL, inPoint: TimeInterval = 0, duration: TimeInterval? = nil, volume: Float = 1, currentTime: TimeInterval? = nil) {
+    public init(url: URL, inPoint: TimeInterval = 0, duration: TimeInterval? = nil, volume: Float = 1, currentTime: TimeInterval? = nil, playbackRate: Double = 1, isReversed: Bool = false) {
         self.url = url
         self.inPoint = inPoint
         self.duration = duration
         self.volume = volume
+        self.playbackRate = playbackRate
+        self.isReversed = isReversed
         self.currentTime = currentTime
     }
 
@@ -52,6 +56,8 @@ public struct AudioWaveformView: View {
         .onChange(of: inPoint) { rebuildPath() }
         .onChange(of: duration) { rebuildPath() }
         .onChange(of: volume) { rebuildPath() }
+        .onChange(of: playbackRate) { rebuildPath() }
+        .onChange(of: isReversed) { rebuildPath() }
         .background(waveform == nil ? .clear : Color.black.opacity(0.25))
         .overlay {
             if isLoading { ProgressView().controlSize(.mini).scaleEffect(0.6) }
@@ -77,14 +83,15 @@ public struct AudioWaveformView: View {
         var path = Path()
         defer { waveformPath = path }
         guard let waveform else { return }
-        let seconds = duration ?? waveform.duration
+        let seconds = duration.map { $0 * playbackRate } ?? waveform.duration
         let size = drawingSize
         guard seconds > 0, size.width > 0 else { return }
         let columns = max(1, Int(ceil(size.width)))
         path.move(to: CGPoint(x: 0, y: size.height))
         for column in 0..<columns {
-            let start = inPoint + Double(column) / Double(columns) * seconds
-            let end = inPoint + Double(column + 1) / Double(columns) * seconds
+            let sourceColumn = isReversed ? columns - column - 1 : column
+            let start = inPoint + Double(sourceColumn) / Double(columns) * seconds
+            let end = inPoint + Double(sourceColumn + 1) / Double(columns) * seconds
             let peak = waveform.displayPeak(from: start, to: end) * max(0, volume)
             let height = max(1, size.height * min(1, CGFloat(peak)))
             path.addLine(to: CGPoint(x: CGFloat(column), y: size.height - height))
@@ -111,6 +118,8 @@ struct ClipWaveformView: View {
     let resolver: any MediaResolver
     let inPoint: TimeInterval
     let duration: TimeInterval
+    var playbackRate: Double = 1
+    var isReversed: Bool = false
     let volume: Float
     @State private var url: URL?
 
@@ -120,7 +129,7 @@ struct ClipWaveformView: View {
         ZStack {
             Color.clear
             if let url {
-                AudioWaveformView(url: url, inPoint: inPoint, duration: duration, volume: volume)
+                AudioWaveformView(url: url, inPoint: inPoint, duration: duration, volume: volume, playbackRate: playbackRate, isReversed: isReversed)
             }
         }
         .task(id: source) {

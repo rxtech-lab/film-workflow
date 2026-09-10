@@ -6,11 +6,15 @@ public enum TimelineEditError: Error, Equatable, Sendable {
     case kindNotAllowed(SourceKind, on: TrackKind)
     case overlap
     case invalidDuration
+    case invalidSpeed
+    case unsupportedOperation
 }
 
 /// Pure editing operations on a `Timeline`. Every operation validates the
 /// result so the timeline can never hold overlapping clips on one track.
 public enum TimelineEditor {
+    /// The edge held in place while the same source range changes length.
+    public enum RetimeAnchor: Sendable { case start, end }
     /// Inserts a clip on a track. When `ripple` is set, later clips on that
     /// track shift right to make room; otherwise an overlap is an error.
     public static func insert(
@@ -22,7 +26,9 @@ public enum TimelineEditor {
         guard let index = timeline.tracks.firstIndex(where: { $0.id == trackID }) else {
             throw TimelineEditError.unknownTrack(trackID)
         }
-        guard clip.duration > 0 else { throw TimelineEditError.invalidDuration }
+        guard clip.duration.isFinite, clip.duration > 0, clip.start.isFinite,
+              clip.inPoint.isFinite, clip.inPoint >= 0 else { throw TimelineEditError.invalidDuration }
+        guard clip.playbackRate.isFinite, clip.playbackRate > 0, clip.sourceRangeDuration.isFinite else { throw TimelineEditError.invalidSpeed }
         guard timeline.tracks[index].kind.accepts(clip.source.kind) else {
             throw TimelineEditError.kindNotAllowed(clip.source.kind, on: timeline.tracks[index].kind)
         }
@@ -76,6 +82,8 @@ public enum TimelineEditor {
               var clip = timeline.clip(id: clipID) else {
             throw TimelineEditError.unknownClip(clipID)
         }
+        guard clip.source.capabilities.contains(.drag) else { throw TimelineEditError.unsupportedOperation }
+        guard start.isFinite else { throw TimelineEditError.invalidDuration }
         let destinationID = trackID ?? fromTrack.id
         guard let destinationIndex = timeline.tracks.firstIndex(where: { $0.id == destinationID }) else {
             throw TimelineEditError.unknownTrack(destinationID)
@@ -92,42 +100,92 @@ public enum TimelineEditor {
         timeline.tracks[destinationIndex].clips.sort { $0.start < $1.start }
     }
 
-    /// Changes where a clip begins, keeping its end fixed. Positive `delta`
-    /// shortens the clip from the front. Clamped to the source's in point.
-    public static func trimLeading(_ timeline: inout Timeline, clipID: UUID, by delta: TimeInterval, minimumDuration: TimeInterval? = nil) throws {
-        guard let trackIndex = timeline.tracks.firstIndex(where: { $0.clips.contains { $0.id == clipID } }),
-              let clipIndex = timeline.tracks[trackIndex].clips.firstIndex(where: { $0.id == clipID }) else {
-            throw TimelineEditError.unknownClip(clipID)
-        }
-        var clip = timeline.tracks[trackIndex].clips[clipIndex]
+    /// Trims on the timeline clock while preserving the opposite source edge.
+    /// `sourceDuration` lets older clips use a length resolved by the UI.
+    public static func trimLeading(_ timeline: inout Timeline, clipID: UUID, by delta: TimeInterval, minimumDuration: TimeInterval? = nil, sourceDuration: TimeInterval? = nil) throws {
+        guard var clip = timeline.clip(id: clipID) else { throw TimelineEditError.unknownClip(clipID) }
+        guard clip.source.capabilities.contains(.duration) else { throw TimelineEditError.unsupportedOperation }
+        guard delta.isFinite else { throw TimelineEditError.invalidDuration }
         let minimum = minimumDuration ?? timeline.frameDuration
         var delta = timeline.quantized(abs(delta)) * (delta < 0 ? -1 : 1)
         delta = min(delta, clip.duration - minimum)
-        delta = max(delta, -clip.inPoint)
+        let natural = sourceDuration ?? clip.sourceDuration
+        if clip.source.kind != .image {
+            if clip.isReversed {
+                if let natural { delta = max(delta, -(max(0, natural - clip.sourceEnd) / clip.playbackRate)) }
+            } else {
+                delta = max(delta, -clip.inPoint / clip.playbackRate)
+            }
+        }
         delta = max(delta, -clip.start)
         clip.start += delta
-        clip.inPoint += delta
+        if !clip.isReversed && clip.source.kind != .image { clip.inPoint = max(0, clip.inPoint + delta * clip.playbackRate) }
         clip.duration -= delta
-        let others = timeline.tracks[trackIndex].clips.filter { $0.id != clipID }
-        guard !others.contains(where: { $0.overlaps(clip) }) else { throw TimelineEditError.overlap }
-        timeline.tracks[trackIndex].clips[clipIndex] = clip
+        try replaceTiming(&timeline, clip: clip)
     }
 
-    /// Changes where a clip ends. Positive `delta` lengthens it; `maximumDuration`
-    /// caps it at the source's remaining length when known.
-    public static func trimTrailing(_ timeline: inout Timeline, clipID: UUID, by delta: TimeInterval, maximumDuration: TimeInterval? = nil, minimumDuration: TimeInterval? = nil) throws {
-        guard let trackIndex = timeline.tracks.firstIndex(where: { $0.clips.contains { $0.id == clipID } }),
-              let clipIndex = timeline.tracks[trackIndex].clips.firstIndex(where: { $0.id == clipID }) else {
-            throw TimelineEditError.unknownClip(clipID)
-        }
-        var clip = timeline.tracks[trackIndex].clips[clipIndex]
+    /// Changes the end, limited by available source media and adjacent clips.
+    /// `maximumDuration` is measured in timeline seconds.
+    public static func trimTrailing(_ timeline: inout Timeline, clipID: UUID, by delta: TimeInterval, maximumDuration: TimeInterval? = nil, minimumDuration: TimeInterval? = nil, sourceDuration: TimeInterval? = nil) throws {
+        guard var clip = timeline.clip(id: clipID) else { throw TimelineEditError.unknownClip(clipID) }
+        guard clip.source.capabilities.contains(.duration) else { throw TimelineEditError.unsupportedOperation }
+        guard delta.isFinite else { throw TimelineEditError.invalidDuration }
         let minimum = minimumDuration ?? timeline.frameDuration
-        var duration = timeline.quantized(clip.duration + delta)
-        duration = max(duration, minimum)
+        var duration = max(minimum, timeline.quantized(clip.duration + delta))
         if let maximumDuration { duration = min(duration, maximumDuration) }
+        if clip.isReversed {
+            duration = min(duration, clip.duration + clip.inPoint / clip.playbackRate)
+            clip.inPoint = max(0, clip.inPoint + (clip.duration - duration) * clip.playbackRate)
+        } else if clip.source.kind != .image, let natural = sourceDuration ?? clip.sourceDuration {
+            duration = min(duration, max(0, natural - clip.inPoint) / clip.playbackRate)
+        }
+        guard duration >= minimum - 0.0000001 else { throw TimelineEditError.invalidDuration }
         clip.duration = duration
-        let others = timeline.tracks[trackIndex].clips.filter { $0.id != clipID }
-        guard !others.contains(where: { $0.overlaps(clip) }) else { throw TimelineEditError.overlap }
+        try replaceTiming(&timeline, clip: clip)
+    }
+
+    /// Positive multiplier (1.2 = 120%), retaining the same source range.
+    public static func changeSpeed(_ timeline: inout Timeline, clipID: UUID, rate: Double) throws {
+        guard var clip = timeline.clip(id: clipID) else { throw TimelineEditError.unknownClip(clipID) }
+        guard clip.source.capabilities.contains(.speed) else { throw TimelineEditError.unsupportedOperation }
+        guard rate.isFinite, rate > 0 else { throw TimelineEditError.invalidSpeed }
+        let duration = clip.sourceRangeDuration / rate
+        guard duration.isFinite, duration >= timeline.frameDuration else { throw TimelineEditError.invalidDuration }
+        clip.duration = duration
+        clip.playbackRate = rate
+        try replaceTiming(&timeline, clip: clip)
+    }
+
+    public static func retime(_ timeline: inout Timeline, clipID: UUID, duration: TimeInterval, anchor: RetimeAnchor = .start) throws {
+        guard var clip = timeline.clip(id: clipID) else { throw TimelineEditError.unknownClip(clipID) }
+        guard clip.source.capabilities.contains(.speed) else { throw TimelineEditError.unsupportedOperation }
+        guard duration.isFinite, duration >= timeline.frameDuration else { throw TimelineEditError.invalidDuration }
+        let rate = clip.sourceRangeDuration / duration
+        guard rate.isFinite, rate > 0 else { throw TimelineEditError.invalidSpeed }
+        if anchor == .end {
+            let start = clip.end - duration
+            guard start >= 0 else { throw TimelineEditError.invalidDuration }
+            clip.start = start
+        }
+        clip.duration = duration
+        clip.playbackRate = rate
+        try replaceTiming(&timeline, clip: clip)
+    }
+
+    public static func reverse(_ timeline: inout Timeline, clipID: UUID) throws {
+        guard var clip = timeline.clip(id: clipID) else { throw TimelineEditError.unknownClip(clipID) }
+        guard clip.source.capabilities.contains(.reverse) else { throw TimelineEditError.unsupportedOperation }
+        clip.isReversed.toggle()
+        try replaceTiming(&timeline, clip: clip)
+    }
+
+    /// Commit atomically only after checking overlap, including speed edits.
+    private static func replaceTiming(_ timeline: inout Timeline, clip: Clip) throws {
+        guard let trackIndex = timeline.tracks.firstIndex(where: { $0.clips.contains { $0.id == clip.id } }),
+              let clipIndex = timeline.tracks[trackIndex].clips.firstIndex(where: { $0.id == clip.id }) else {
+            throw TimelineEditError.unknownClip(clip.id)
+        }
+        guard !timeline.tracks[trackIndex].clips.contains(where: { $0.overlaps(clip) }) else { throw TimelineEditError.overlap }
         timeline.tracks[trackIndex].clips[clipIndex] = clip
     }
 
@@ -139,6 +197,8 @@ public enum TimelineEditor {
             throw TimelineEditError.unknownClip(clipID)
         }
         let clip = timeline.tracks[trackIndex].clips[clipIndex]
+        guard clip.source.capabilities.contains(.cut) else { throw TimelineEditError.unsupportedOperation }
+        guard time.isFinite else { throw TimelineEditError.invalidDuration }
         let cut = timeline.quantized(time)
         guard cut > clip.start + timeline.frameDuration / 2, cut < clip.end - timeline.frameDuration / 2 else { return nil }
         var left = clip
@@ -146,8 +206,12 @@ public enum TimelineEditor {
         var right = clip
         right.id = UUID()
         right.start = cut
-        right.inPoint = clip.inPoint + left.duration
         right.duration = clip.end - cut
+        if clip.isReversed {
+            left.inPoint = clip.inPoint + right.sourceRangeDuration
+        } else if clip.source.kind != .image {
+            right.inPoint = clip.inPoint + left.sourceRangeDuration
+        }
         timeline.tracks[trackIndex].clips[clipIndex] = left
         timeline.tracks[trackIndex].clips.insert(right, at: clipIndex + 1)
         return right.id
@@ -217,5 +281,19 @@ public enum TimelineEditor {
             timeline.tracks.append(track)
         }
         return track.id
+    }
+}
+
+extension TimelineEditError: LocalizedError {
+    public var errorDescription: String? {
+        switch self {
+        case .overlap: return "This edit would overlap another clip. Move it or make room on the track first."
+        case .invalidDuration: return "Enter a duration of at least one frame within the available source media."
+        case .invalidSpeed: return "Enter a finite speed greater than 0%."
+        case .unsupportedOperation: return "This footage does not support that edit."
+        case .unknownTrack: return "The track is no longer available."
+        case .unknownClip: return "The clip is no longer available."
+        case .kindNotAllowed: return "This footage cannot be placed on that track."
+        }
     }
 }

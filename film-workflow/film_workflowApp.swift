@@ -60,7 +60,6 @@ struct film_workflowApp: App {
                 .task { await Self.bootstrapServices() }
         }
         .windowStyle(.hiddenTitleBar)
-        .windowToolbarStyle(.unifiedCompact)
         .defaultLaunchBehavior(.suppressed)
         .defaultSize(width: 1400, height: 900)
         .commands {

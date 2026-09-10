@@ -224,7 +224,7 @@ public struct TimelineCompositionBuilder {
         }
         let sourceDuration = try await asset.load(.duration)
         let inPoint = CMTime(seconds: clip.inPoint, preferredTimescale: timescale)
-        let wanted = CMTime(seconds: clip.duration, preferredTimescale: timescale)
+        let wanted = CMTime(seconds: clip.sourceRangeDuration, preferredTimescale: timescale)
         let available = CMTimeMaximum(.zero, sourceDuration - inPoint)
         let length = CMTimeMinimum(wanted, available)
         guard length > .zero else { return compositionTrack.trackID }
@@ -233,6 +233,9 @@ public struct TimelineCompositionBuilder {
             of: source,
             at: CMTime(seconds: clip.start, preferredTimescale: timescale)
         )
+        let at = CMTime(seconds: clip.start, preferredTimescale: timescale)
+        compositionTrack.scaleTimeRange(CMTimeRange(start: at, duration: length),
+                                       toDuration: CMTime(seconds: CMTimeGetSeconds(length) / clip.playbackRate, preferredTimescale: timescale))
         return compositionTrack.trackID
     }
 
@@ -244,18 +247,29 @@ public struct TimelineCompositionBuilder {
         trackIDs: inout [UUID: CMPersistentTrackID],
         volume: Float
     ) async throws {
+        var asset = asset
+        var sourceStart = clip.inPoint
+        if clip.isReversed {
+            let url = try await ReversedAudioCache.shared.file(for: asset.url)
+            asset = AVURLAsset(url: url)
+            let natural = CMTimeGetSeconds(try await asset.load(.duration))
+            sourceStart = max(0, natural - clip.sourceEnd)
+        }
         guard let source = try await asset.loadTracks(withMediaType: .audio).first,
               let track = composition.addMutableTrack(withMediaType: .audio, preferredTrackID: kCMPersistentTrackID_Invalid) else {
             return
         }
         let sourceDuration = try await asset.load(.duration)
-        let inPoint = CMTime(seconds: clip.inPoint, preferredTimescale: timescale)
-        let wanted = CMTime(seconds: clip.duration, preferredTimescale: timescale)
+        let inPoint = CMTime(seconds: sourceStart, preferredTimescale: timescale)
+        let wanted = CMTime(seconds: clip.sourceRangeDuration, preferredTimescale: timescale)
         let length = CMTimeMinimum(wanted, CMTimeMaximum(.zero, sourceDuration - inPoint))
         guard length > .zero else { return }
         let at = CMTime(seconds: clip.start, preferredTimescale: timescale)
         try track.insertTimeRange(CMTimeRange(start: inPoint, duration: length), of: source, at: at)
+        track.scaleTimeRange(CMTimeRange(start: at, duration: length),
+                             toDuration: CMTime(seconds: CMTimeGetSeconds(length) / clip.playbackRate, preferredTimescale: timescale))
         let input = AVMutableAudioMixInputParameters(track: track)
+        input.audioTimePitchAlgorithm = .spectral
         input.setVolume(volume, at: at)
         trackIDs[clip.id] = track.trackID
         parameters.append(input)

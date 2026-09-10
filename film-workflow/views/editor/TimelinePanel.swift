@@ -73,7 +73,7 @@ struct TimelinePanel: View {
         if duration <= 0 { duration = FootageDragItem.defaultStillDuration }
 
         var timeline = sequence.timeline
-        let clip = Clip(source: item.source, start: time, duration: duration, text: item.source.kind == .captions ? .caption : nil)
+        let clip = Clip(source: item.source, start: time, duration: duration, sourceDuration: item.source.kind == .image ? nil : duration, text: item.source.kind == .captions ? .caption : nil)
         do {
             try TimelineEditor.insert(&timeline, clip: clip, on: trackID)
             sequence.timeline = timeline

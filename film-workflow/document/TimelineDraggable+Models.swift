@@ -6,7 +6,7 @@ import VideoEditorCore
 // The clip source ids follow `DocumentMediaResolver`'s grammar so the
 // resolver can find the file again when the sequence plays or exports.
 
-extension GeneratedMusic: TimelineDraggable {
+extension GeneratedMusic: TimelineDurationChangeable, TimelineCuttable, TimelineReversible, TimelineSpeedChangeable {
     var clipSource: ClipSource {
         ClipSource(id: DocumentMediaResolver.sourceID(.music, id), kind: .audio,
                    displayName: versionedName(project?.name ?? String(localized: "Music"), version: versionNumber))
@@ -15,7 +15,7 @@ extension GeneratedMusic: TimelineDraggable {
     private var versionNumber: Int? { project.flatMap { takeNumber(of: id, in: $0.generatedFiles.map { ($0.id, $0.createdAt) }) } }
 }
 
-extension GeneratedNarrative: TimelineDraggable {
+extension GeneratedNarrative: TimelineDurationChangeable, TimelineCuttable, TimelineReversible, TimelineSpeedChangeable {
     var clipSource: ClipSource {
         ClipSource(id: DocumentMediaResolver.sourceID(.narration, id), kind: .audio,
                    displayName: versionedName(project?.name ?? String(localized: "Narration"), version: versionNumber))
@@ -24,7 +24,7 @@ extension GeneratedNarrative: TimelineDraggable {
     private var versionNumber: Int? { project.flatMap { takeNumber(of: id, in: $0.generatedFiles.map { ($0.id, $0.createdAt) }) } }
 }
 
-extension GeneratedImage: TimelineDraggable {
+extension GeneratedImage: TimelineDurationChangeable, TimelineCuttable {
     var clipSource: ClipSource {
         ClipSource(id: DocumentMediaResolver.sourceID(.image, id), kind: .image,
                    displayName: versionedName(project?.name ?? String(localized: "Image"), version: versionNumber))
@@ -34,7 +34,7 @@ extension GeneratedImage: TimelineDraggable {
     private var versionNumber: Int? { project.flatMap { takeNumber(of: id, in: $0.generatedFiles.map { ($0.id, $0.createdAt) }) } }
 }
 
-extension GeneratedVideo: TimelineDraggable {
+extension GeneratedVideo: TimelineDurationChangeable, TimelineCuttable, TimelineSpeedChangeable {
     var clipSource: ClipSource {
         ClipSource(id: DocumentMediaResolver.sourceID(.video, id), kind: .video,
                    displayName: versionedName(project?.name ?? String(localized: "Video"), version: versionNumber))
@@ -45,7 +45,9 @@ extension GeneratedVideo: TimelineDraggable {
     private var versionNumber: Int? { project.flatMap { takeNumber(of: id, in: $0.generatedFiles.map { ($0.id, $0.createdAt) }) } }
 }
 
-extension ImportedAsset: TimelineDraggable {
+extension ImportedAsset: TimelineDurationChangeable, TimelineCuttable, TimelineReversible, TimelineSpeedChangeable {
+    var canReverse: Bool { kindEnum == .audio }
+    var canChangeSpeed: Bool { kindEnum != .image }
     var clipSource: ClipSource {
         let kind: SourceKind = kindEnum == .image ? .image : (kindEnum == .audio ? .audio : .video)
         return ClipSource(id: DocumentMediaResolver.sourceID(.imported, id), kind: kind, displayName: name)
@@ -58,7 +60,7 @@ extension ImportedAsset: TimelineDraggable {
 }
 
 /// Renders on demand for the sequence's size, so it has a length but no file yet.
-extension RemotionProject: TimelineDraggable {
+extension RemotionProject: TimelineDurationChangeable, TimelineCuttable, TimelineSpeedChangeable {
     var clipSource: ClipSource {
         ClipSource(id: DocumentMediaResolver.sourceID(.remotion, id), kind: .remotion, displayName: name)
     }
@@ -68,7 +70,7 @@ extension RemotionProject: TimelineDraggable {
 }
 
 /// Timed cues; the audio they were transcribed from sets the length.
-extension CaptionProject: TimelineDraggable {
+extension CaptionProject: TimelineDurationChangeable, TimelineCuttable {
     var clipSource: ClipSource {
         ClipSource(id: DocumentMediaResolver.sourceID(.caption, projectUUID), kind: .captions, displayName: name)
     }

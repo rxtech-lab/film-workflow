@@ -63,6 +63,7 @@ public final class TimelinePlayerController {
                     guard let trackID = audioTrackIDs[clip.id] else { return nil }
                     let input = AVMutableAudioMixInputParameters()
                     input.trackID = trackID
+                    input.audioTimePitchAlgorithm = .spectral
                     input.setVolume(track.isMuted ? 0 : clip.volume, at: .zero)
                     return input
                 }

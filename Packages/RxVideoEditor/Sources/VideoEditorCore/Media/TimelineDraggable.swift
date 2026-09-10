@@ -11,6 +11,7 @@ import Foundation
 /// payload (`dragItem`) carries whatever is known at that moment.
 @MainActor
 public protocol TimelineDraggable {
+    var canDrag: Bool { get }
     /// Identity and kind on the timeline; the host app's resolver maps it to a file.
     var clipSource: ClipSource { get }
     /// The playable or showable file. Nil for captions and unrendered Remotion.
@@ -24,6 +25,7 @@ public protocol TimelineDraggable {
 }
 
 public extension TimelineDraggable {
+    var canDrag: Bool { true }
     var storedDuration: TimeInterval? { nil }
     var naturalSize: CGSize? { nil }
     var thumbnailURL: URL? { nil }
@@ -31,7 +33,7 @@ public extension TimelineDraggable {
     var timelineKind: SourceKind { clipSource.kind }
 
     /// Whether a track of this kind can hold the footage.
-    func canBePlaced(on track: TrackKind) -> Bool { track.accepts(timelineKind) }
+    func canBePlaced(on track: TrackKind) -> Bool { canDrag && track.accepts(timelineKind) }
 
     /// The track kinds that can hold the footage, in layout order.
     var placeableTracks: [TrackKind] { TrackKind.allCases.filter(canBePlaced(on:)) }
@@ -55,8 +57,10 @@ public extension TimelineDraggable {
 
     /// The drag payload: source, known length and size.
     var dragItem: FootageDragItem {
-        FootageDragItem(
-            source: clipSource,
+        var source = clipSource
+        source.capabilities = timelineEditingCapabilities
+        return FootageDragItem(
+            source: source,
             duration: knownDuration,
             naturalWidth: naturalSize.map { Int($0.width) },
             naturalHeight: naturalSize.map { Int($0.height) }
@@ -66,7 +70,7 @@ public extension TimelineDraggable {
 
 public extension FootageDragItem {
     /// Whether a track of this kind can hold the dragged footage.
-    func canBePlaced(on track: TrackKind) -> Bool { track.accepts(source.kind) }
+    func canBePlaced(on track: TrackKind) -> Bool { source.capabilities.contains(.drag) && track.accepts(source.kind) }
 }
 
 /// Lengths of media files, read once per file.

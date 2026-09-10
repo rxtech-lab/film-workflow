@@ -23,10 +23,23 @@ public struct ClipSource: Codable, Sendable, Hashable {
     public var kind: SourceKind
     public var displayName: String
 
-    public init(id: String, kind: SourceKind, displayName: String) {
+    public var capabilities: TimelineEditingCapabilities
+
+    public init(id: String, kind: SourceKind, displayName: String, capabilities: TimelineEditingCapabilities? = nil) {
         self.id = id
         self.kind = kind
         self.displayName = displayName
+        self.capabilities = capabilities ?? .defaults(for: kind)
+    }
+
+    private enum CodingKeys: String, CodingKey { case id, kind, displayName, capabilities }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(String.self, forKey: .id)
+        kind = try c.decode(SourceKind.self, forKey: .kind)
+        displayName = try c.decode(String.self, forKey: .displayName)
+        capabilities = try c.decodeIfPresent(TimelineEditingCapabilities.self, forKey: .capabilities) ?? .defaults(for: kind)
     }
 }
 
@@ -92,13 +105,18 @@ public struct TextStyle: Codable, Sendable, Hashable {
 }
 
 /// One item on a track. Times are seconds on the timeline; `inPoint` is the
-/// offset into the source where playback starts.
+/// lower bound of the source range, including during reverse playback.
 public struct Clip: Codable, Sendable, Hashable, Identifiable {
     public var id: UUID
     public var source: ClipSource
     public var start: TimeInterval
     public var duration: TimeInterval
     public var inPoint: TimeInterval
+    /// Source seconds consumed per timeline second; always finite and positive.
+    public var playbackRate: Double
+    public var isReversed: Bool
+    /// Full source length, when known, for trimming bounds.
+    public var sourceDuration: TimeInterval?
     public var volume: Float
     public var opacity: Float
     public var transform: ClipTransform
@@ -110,6 +128,9 @@ public struct Clip: Codable, Sendable, Hashable, Identifiable {
         start: TimeInterval,
         duration: TimeInterval,
         inPoint: TimeInterval = 0,
+        playbackRate: Double = 1,
+        isReversed: Bool = false,
+        sourceDuration: TimeInterval? = nil,
         volume: Float = 1,
         opacity: Float = 1,
         transform: ClipTransform = .identity,
@@ -120,6 +141,9 @@ public struct Clip: Codable, Sendable, Hashable, Identifiable {
         self.start = start
         self.duration = duration
         self.inPoint = inPoint
+        self.playbackRate = playbackRate
+        self.isReversed = isReversed
+        self.sourceDuration = sourceDuration
         self.volume = volume
         self.opacity = opacity
         self.transform = transform
@@ -127,7 +151,7 @@ public struct Clip: Codable, Sendable, Hashable, Identifiable {
     }
 
     private enum CodingKeys: String, CodingKey {
-        case id, source, start, duration, inPoint, volume, opacity, transform, text
+        case id, source, start, duration, inPoint, playbackRate, isReversed, sourceDuration, volume, opacity, transform, text
     }
 
     /// Tolerant of fields added later: anything missing takes its default.
@@ -138,6 +162,12 @@ public struct Clip: Codable, Sendable, Hashable, Identifiable {
         start = try c.decodeIfPresent(TimeInterval.self, forKey: .start) ?? 0
         duration = try c.decodeIfPresent(TimeInterval.self, forKey: .duration) ?? 0
         inPoint = try c.decodeIfPresent(TimeInterval.self, forKey: .inPoint) ?? 0
+        playbackRate = try c.decodeIfPresent(Double.self, forKey: .playbackRate) ?? 1
+        guard playbackRate.isFinite, playbackRate > 0 else {
+            throw DecodingError.dataCorruptedError(forKey: .playbackRate, in: c, debugDescription: "Playback rate must be positive and finite")
+        }
+        isReversed = try c.decodeIfPresent(Bool.self, forKey: .isReversed) ?? false
+        sourceDuration = try c.decodeIfPresent(TimeInterval.self, forKey: .sourceDuration)
         volume = try c.decodeIfPresent(Float.self, forKey: .volume) ?? 1
         opacity = try c.decodeIfPresent(Float.self, forKey: .opacity) ?? 1
         transform = try c.decodeIfPresent(ClipTransform.self, forKey: .transform) ?? .identity
@@ -151,10 +181,21 @@ public struct Clip: Codable, Sendable, Hashable, Identifiable {
         try c.encode(start, forKey: .start)
         try c.encode(duration, forKey: .duration)
         try c.encode(inPoint, forKey: .inPoint)
+        try c.encode(playbackRate, forKey: .playbackRate)
+        try c.encode(isReversed, forKey: .isReversed)
+        try c.encodeIfPresent(sourceDuration, forKey: .sourceDuration)
         try c.encode(volume, forKey: .volume)
         try c.encode(opacity, forKey: .opacity)
         try c.encode(transform, forKey: .transform)
         try c.encodeIfPresent(text, forKey: .text)
+    }
+
+    public var sourceRangeDuration: TimeInterval { duration * playbackRate }
+    public var sourceEnd: TimeInterval { inPoint + sourceRangeDuration }
+
+    public func sourceTime(at timelineTime: TimeInterval) -> TimeInterval {
+        let elapsed = min(duration, max(0, timelineTime - start)) * playbackRate
+        return isReversed ? sourceEnd - elapsed : inPoint + elapsed
     }
 
     public var end: TimeInterval { start + duration }

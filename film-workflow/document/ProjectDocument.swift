@@ -43,6 +43,9 @@ final class ProjectDocument: Identifiable {
     let container: ModelContainer
     let storage: ProjectStorage
     let metadata: DocumentMetadata
+    @ObservationIgnored private(set) var panelLayout: DocumentPanelLayout
+    @ObservationIgnored private var panelLayoutSaveTask: Task<Void, Never>?
+    @ObservationIgnored private var panelLayoutNeedsSave = false
 
     var displayName: String {
         packageURL.deletingPathExtension().lastPathComponent
@@ -81,6 +84,10 @@ final class ProjectDocument: Identifiable {
         self.container = container
         self.storage = storage
         self.metadata = metadata
+        self.panelLayout = (try? JSONDecoder().decode(
+            DocumentPanelLayout.self,
+            from: Data(contentsOf: storage.packageURL.appendingPathComponent("Workspace.json"))
+        )) ?? DocumentPanelLayout()
     }
 
     /// Creates a new, empty film at `url` (which must end in `.rxfilmstudio`).
@@ -122,9 +129,39 @@ final class ProjectDocument: Identifiable {
     }
 
     func save() {
+        savePanelLayout()
         let context = container.mainContext
         if context.hasChanges {
             try? context.save()
+        }
+    }
+
+    func setPanelSizes(_ sizes: [Double], for panel: DocumentPanelLayout.Panel) {
+        guard sizes.count >= 2, sizes.allSatisfy({ $0.isFinite && $0 > 0 }),
+              panelLayout.splits[panel.rawValue] != sizes else { return }
+        panelLayout.splits[panel.rawValue] = sizes
+        panelLayoutNeedsSave = true
+        panelLayoutSaveTask?.cancel()
+        panelLayoutSaveTask = Task { [weak self] in
+            do { try await Task.sleep(for: .milliseconds(300)) } catch { return }
+            self?.savePanelLayout()
+        }
+    }
+
+    private func savePanelLayout() {
+        panelLayoutSaveTask?.cancel()
+        panelLayoutSaveTask = nil
+        guard panelLayoutNeedsSave else { return }
+        do {
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+            try encoder.encode(panelLayout).write(
+                to: packageURL.appendingPathComponent("Workspace.json"), options: .atomic
+            )
+            panelLayoutNeedsSave = false
+        } catch {
+            // Retain the dirty flag so the next resize or document save retries.
+            NSLog("Could not save panel layout: %@", error.localizedDescription)
         }
     }
 

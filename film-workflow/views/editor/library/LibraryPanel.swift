@@ -8,6 +8,7 @@ struct LibraryPanel: View {
     let index: LibraryIndex
     let groups: [ProjectGroup]
     @Bindable var state: EditorWindowState
+    let document: ProjectDocument
     let onCreate: (FootageKind, UUID?) -> Void
     let onMove: (LibraryItemID, UUID?) -> Void
     let onImport: () -> Void
@@ -66,6 +67,7 @@ struct LibraryPanel: View {
                 )
             }
             .frame(maxWidth: .infinity, minHeight: 180, maxHeight: .infinity)
+            .background(PersistedPanelSplit(document: document, panel: .libraryRows))
 
             let cells = state.selection.map { index.footage(for: $0) } ?? []
             FootageBrowserView(

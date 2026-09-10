@@ -74,6 +74,45 @@ struct ProjectDocumentTests {
         #expect(throws: ProjectDocumentError.self) { try ProjectDocument.create(at: folder) }
     }
 
+    @Test("Panel sizes persist per package and close flushes a pending resize")
+    func panelSizesPersist() async throws {
+        let url = temporaryPackage()
+        let otherURL = temporaryPackage()
+        defer {
+            try? FileManager.default.removeItem(at: url)
+            try? FileManager.default.removeItem(at: otherURL)
+        }
+        let document = try ProjectDocument.create(at: url)
+        let other = try ProjectDocument.create(at: otherURL)
+        #expect(document.panelLayout.sizes(for: .editorColumns) == nil)
+        document.setPanelSizes([275, 650, 350], for: .editorColumns)
+        document.setPanelSizes([520, 280], for: .editorRows)
+        document.setPanelSizes([310, 209], for: .libraryRows)
+        await document.close()
+
+        let reopened = try ProjectDocument.open(url)
+        #expect(reopened.panelLayout.sizes(for: .editorColumns) == [275, 650, 350])
+        #expect(reopened.panelLayout.sizes(for: .editorRows) == [520, 280])
+        #expect(reopened.panelLayout.sizes(for: .libraryRows) == [310, 209])
+        #expect(other.panelLayout.sizes(for: .editorColumns) == nil)
+        await reopened.close()
+        await other.close()
+    }
+
+    @Test("An unreadable workspace does not prevent opening the film")
+    func invalidPanelLayoutFallsBack() async throws {
+        let url = temporaryPackage()
+        defer { try? FileManager.default.removeItem(at: url) }
+        let document = try ProjectDocument.create(at: url)
+        await document.close()
+        try Data("invalid json".utf8).write(to: url.appendingPathComponent("Workspace.json"))
+        let reopened = try ProjectDocument.open(url)
+        #expect(reopened.panelLayout.sizes(for: .editorColumns) == nil)
+        reopened.setPanelSizes([0, .nan], for: .editorRows)
+        #expect(reopened.panelLayout.sizes(for: .editorRows) == nil)
+        await reopened.close()
+    }
+
     @Test("Package names are sanitised and always carry the extension")
     func sanitisedNames() {
         let base = URL(fileURLWithPath: "/tmp")

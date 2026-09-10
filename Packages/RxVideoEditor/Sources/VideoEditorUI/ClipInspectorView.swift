@@ -8,6 +8,8 @@ public struct ClipInspectorView: View {
     /// Shown for Remotion clips whose media is stale or missing.
     let renderStatus: String?
     let onRender: (() -> Void)?
+    @State private var showSpeed = false
+    @State private var editError: String?
 
     public init(timeline: Binding<Timeline>, clipID: UUID, renderStatus: String? = nil, onRender: (() -> Void)? = nil) {
         _timeline = timeline
@@ -37,15 +39,27 @@ public struct ClipInspectorView: View {
                 }
                 Section("Timing") {
                     timecodeField("Start", value: clip.start) { newStart in
-                        try? TimelineEditor.move(&timeline, clipID: clipID, to: newStart)
+                        performEdit { try TimelineEditor.move(&timeline, clipID: clipID, to: newStart) }
                     }
+                    .disabled(!clip.source.capabilities.contains(.drag))
                     timecodeField("Duration", value: clip.duration) { newDuration in
-                        try? TimelineEditor.trimTrailing(&timeline, clipID: clipID, by: newDuration - clip.duration)
+                        performEdit { try TimelineEditor.trimTrailing(&timeline, clipID: clipID, by: newDuration - clip.duration) }
                     }
+                    .disabled(!clip.source.capabilities.contains(.duration))
                     if clip.source.kind != .image {
                         timecodeField("In Point", value: clip.inPoint) { newIn in
                             try? TimelineEditor.update(&timeline, clipID: clipID) { $0.inPoint = max(0, newIn) }
                         }
+                    }
+                    if clip.source.capabilities.contains(.speed) {
+                        LabeledContent("Speed") {
+                            Button("\((clip.playbackRate * 100).formatted(.number.precision(.fractionLength(0...3))))%…") { showSpeed = true }
+                        }
+                    }
+                    if clip.source.capabilities.contains(.reverse) {
+                        Toggle("Reverse", isOn: Binding(get: { clip.isReversed }, set: { _ in
+                            performEdit { try TimelineEditor.reverse(&timeline, clipID: clipID) }
+                        }))
                     }
                     LabeledContent("End", value: Timecode.string(seconds: clip.end, fps: timeline.fps))
                 }
@@ -80,9 +94,17 @@ public struct ClipInspectorView: View {
                 }
             }
             .formStyle(.grouped)
+            .popover(isPresented: $showSpeed) { ClipSpeedEditor(timeline: $timeline, clipID: clipID) }
+            .alert("Couldn’t edit footage", isPresented: Binding(get: { editError != nil }, set: { if !$0 { editError = nil } })) {
+                Button("OK") { editError = nil }
+            } message: { Text(editError ?? "") }
         } else {
             ContentUnavailableView("No Clip Selected", systemImage: "rectangle.dashed")
         }
+    }
+
+    private func performEdit(_ edit: () throws -> Void) {
+        do { try edit() } catch { editError = error.localizedDescription }
     }
 
     private func update(_ change: (inout Clip) -> Void) {
