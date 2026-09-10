@@ -11,6 +11,16 @@ struct LibraryRow: Identifiable, Hashable {
     let groupID: UUID?
     /// Drag payload for the row itself: the newest output, if any.
     let dragItem: FootageDragItem?
+    /// Every generated output, render or transcript of this item, newest first.
+    let versions: [LibraryVersion]
+}
+
+/// One version of a library item as the library shows it: a label and a line
+/// of detail, plus the id the versions sheet uses to pick it out.
+struct LibraryVersion: Identifiable, Hashable {
+    let id: UUID
+    let label: String
+    let detail: String
 }
 
 /// Everything the library needs from the store, refetched by SwiftUI queries
@@ -24,44 +34,46 @@ struct LibraryIndex {
     var remotions: [RemotionProject] = []
     var imported: [ImportedAsset] = []
     var sequences: [SequenceProject] = []
+    var sequenceRenders: [SequenceRender] = []
+    var remotionRenders: [RemotionRender] = []
 
     func rows() -> [LibraryRow] {
         var rows: [LibraryRow] = []
         rows += sequences.map {
-            LibraryRow(id: LibraryItemID(kind: .sequence, id: $0.id), name: $0.name, subtitle: "\($0.width)×\($0.height) · \($0.fps) fps", updatedAt: $0.updatedAt, groupID: $0.groupID, dragItem: nil)
+            LibraryRow(id: LibraryItemID(kind: .sequence, id: $0.id), name: $0.name, subtitle: "\($0.width)×\($0.height) · \($0.fps) fps", updatedAt: $0.updatedAt, groupID: $0.groupID,
+                       dragItem: nil, versions: sequenceVersions($0))
         }
         rows += music.map { p in
             let newest = p.generatedFiles.max { $0.createdAt < $1.createdAt }
-            return LibraryRow(id: LibraryItemID(kind: .music, id: p.id), name: p.name, subtitle: "\(p.generatedFiles.count) versions", updatedAt: p.updatedAt, groupID: p.groupID,
-                              dragItem: newest.map { FootageDragItem(source: ClipSource(id: DocumentMediaResolver.sourceID(.music, $0.id), kind: .audio, displayName: p.name)) })
+            return LibraryRow(id: LibraryItemID(kind: .music, id: p.id), name: p.name, subtitle: outputSubtitle(newest: newest?.createdAt), updatedAt: p.updatedAt, groupID: p.groupID,
+                              dragItem: newest?.dragItem, versions: generatedVersions(p.generatedFiles, id: \.id, createdAt: \.createdAt))
         }
         rows += narrations.map { p in
             let newest = p.generatedFiles.max { $0.createdAt < $1.createdAt }
-            return LibraryRow(id: LibraryItemID(kind: .narration, id: p.id), name: p.name, subtitle: "\(p.generatedFiles.count) versions", updatedAt: p.updatedAt, groupID: p.groupID,
-                              dragItem: newest.map { FootageDragItem(source: ClipSource(id: DocumentMediaResolver.sourceID(.narration, $0.id), kind: .audio, displayName: p.name)) })
+            return LibraryRow(id: LibraryItemID(kind: .narration, id: p.id), name: p.name, subtitle: outputSubtitle(newest: newest?.createdAt), updatedAt: p.updatedAt, groupID: p.groupID,
+                              dragItem: newest?.dragItem, versions: generatedVersions(p.generatedFiles, id: \.id, createdAt: \.createdAt))
         }
         rows += captions.map { p in
             LibraryRow(id: LibraryItemID(kind: .caption, id: p.projectUUID), name: p.name, subtitle: p.activeSegmentCount == 0 ? "No captions" : "\(p.activeSegmentCount) captions", updatedAt: p.updatedAt, groupID: p.groupID,
-                       dragItem: p.activeSegmentCount > 0 ? FootageDragItem(source: ClipSource(id: DocumentMediaResolver.sourceID(.caption, p.projectUUID), kind: .captions, displayName: p.name), duration: Double(p.audioDurationMs) / 1000) : nil)
+                       dragItem: p.activeSegmentCount > 0 ? p.dragItem : nil, versions: captionVersions(p))
         }
         rows += images.map { p in
             let newest = p.generatedFiles.max { $0.createdAt < $1.createdAt }
-            return LibraryRow(id: LibraryItemID(kind: .image, id: p.id), name: p.name, subtitle: "\(p.generatedFiles.count) images", updatedAt: p.updatedAt, groupID: p.groupID,
-                              dragItem: newest.map { FootageDragItem(source: ClipSource(id: DocumentMediaResolver.sourceID(.image, $0.id), kind: .image, displayName: p.name)) })
+            return LibraryRow(id: LibraryItemID(kind: .image, id: p.id), name: p.name, subtitle: outputSubtitle(newest: newest?.createdAt), updatedAt: p.updatedAt, groupID: p.groupID,
+                              dragItem: newest?.dragItem, versions: generatedVersions(p.generatedFiles, id: \.id, createdAt: \.createdAt))
         }
         rows += videos.map { p in
             let newest = p.generatedFiles.max { $0.createdAt < $1.createdAt }
-            return LibraryRow(id: LibraryItemID(kind: .video, id: p.id), name: p.name, subtitle: "\(p.generatedFiles.count) clips", updatedAt: p.updatedAt, groupID: p.groupID,
-                              dragItem: newest.map { FootageDragItem(source: ClipSource(id: DocumentMediaResolver.sourceID(.video, $0.id), kind: .video, displayName: p.name), duration: $0.durationSeconds, naturalWidth: $0.width, naturalHeight: $0.height) })
+            return LibraryRow(id: LibraryItemID(kind: .video, id: p.id), name: p.name, subtitle: outputSubtitle(newest: newest?.createdAt), updatedAt: p.updatedAt, groupID: p.groupID,
+                              dragItem: newest?.dragItem, versions: generatedVersions(p.generatedFiles, id: \.id, createdAt: \.createdAt, detail: { $0.dimensionsLabel }))
         }
         rows += remotions.map { p in
             LibraryRow(id: LibraryItemID(kind: .remotion, id: p.id), name: p.name, subtitle: "\(Int(p.durationSeconds))s · \(p.compositionWidth)×\(p.compositionHeight)", updatedAt: p.updatedAt, groupID: p.groupID,
-                       dragItem: FootageDragItem(source: ClipSource(id: DocumentMediaResolver.sourceID(.remotion, p.id), kind: .remotion, displayName: p.name), duration: p.durationSeconds, naturalWidth: p.compositionWidth, naturalHeight: p.compositionHeight))
+                       dragItem: p.dragItem, versions: remotionVersions(p))
         }
         rows += imported.map { a in
-            let kind: SourceKind = a.kindEnum == .image ? .image : (a.kindEnum == .audio ? .audio : .video)
-            return LibraryRow(id: LibraryItemID(kind: .imported, id: a.id), name: a.name, subtitle: a.dimensionsLabel, updatedAt: a.updatedAt, groupID: a.groupID,
-                              dragItem: FootageDragItem(source: ClipSource(id: DocumentMediaResolver.sourceID(.imported, a.id), kind: kind, displayName: a.name), duration: a.durationSeconds > 0 ? a.durationSeconds : nil, naturalWidth: a.width, naturalHeight: a.height))
+            LibraryRow(id: LibraryItemID(kind: .imported, id: a.id), name: a.name, subtitle: a.dimensionsLabel, updatedAt: a.updatedAt, groupID: a.groupID,
+                       dragItem: a.dragItem, versions: [])
         }
         return rows.sorted { $0.updatedAt > $1.updatedAt }
     }
@@ -79,57 +91,120 @@ struct LibraryIndex {
         rows().first { $0.id == item }?.name
     }
 
+    // MARK: - Versions
+
+    /// The versions of one item, newest first. Empty for imported files.
+    func versions(for item: LibraryItemID) -> [LibraryVersion] {
+        switch item.kind {
+        case .sequence: return sequence(item.id).map(sequenceVersions) ?? []
+        case .music: return music(item.id).map { generatedVersions($0.generatedFiles, id: \.id, createdAt: \.createdAt) } ?? []
+        case .narration: return narration(item.id).map { generatedVersions($0.generatedFiles, id: \.id, createdAt: \.createdAt) } ?? []
+        case .caption: return caption(item.id).map(captionVersions) ?? []
+        case .image: return image(item.id).map { generatedVersions($0.generatedFiles, id: \.id, createdAt: \.createdAt) } ?? []
+        case .video: return video(item.id).map { generatedVersions($0.generatedFiles, id: \.id, createdAt: \.createdAt, detail: { $0.dimensionsLabel }) } ?? []
+        case .remotion: return remotion(item.id).map(remotionVersions) ?? []
+        case .imported: return []
+        }
+    }
+
+    /// Generated outputs carry no version number of their own; they are
+    /// numbered by age, the way the footage browser labels them.
+    private func generatedVersions<T>(_ files: [T], id: KeyPath<T, UUID>, createdAt: KeyPath<T, Date>, detail: ((T) -> String)? = nil) -> [LibraryVersion] {
+        let sorted = files.sorted { $0[keyPath: createdAt] > $1[keyPath: createdAt] }
+        return sorted.enumerated().map { i, file in
+            let date = file[keyPath: createdAt].formatted(date: .abbreviated, time: .shortened)
+            return LibraryVersion(id: file[keyPath: id], label: "v\(sorted.count - i)", detail: detail.map { "\($0(file)) · \(date)" } ?? date)
+        }
+    }
+
+    private func sequenceVersions(_ sequence: SequenceProject) -> [LibraryVersion] {
+        sequenceRenders.filter { $0.sequenceID == sequence.id }
+            .sorted { $0.versionNumber > $1.versionNumber }
+            .map { LibraryVersion(id: $0.id, label: $0.versionLabel, detail: "\($0.dimensionsLabel) · \($0.createdAt.formatted(date: .abbreviated, time: .shortened))") }
+    }
+
+    private func remotionVersions(_ project: RemotionProject) -> [LibraryVersion] {
+        remotionRenders.filter { $0.projectID == project.id }
+            .sorted { $0.versionNumber > $1.versionNumber }
+            .map { LibraryVersion(id: $0.id, label: $0.versionLabel, detail: "\($0.dimensionsLabel) · \($0.createdAt.formatted(date: .abbreviated, time: .shortened))") }
+    }
+
+    private func captionVersions(_ project: CaptionProject) -> [LibraryVersion] {
+        project.orderedVersions.map { version in
+            var parts = ["\(version.segmentCount) captions"]
+            if let provider = version.providerEnum { parts.append(provider.displayName) }
+            parts.append(version.createdAt.formatted(date: .abbreviated, time: .shortened))
+            return LibraryVersion(id: version.id, label: "v\(version.number)", detail: parts.joined(separator: " · "))
+        }
+    }
+
+    private func outputSubtitle(newest: Date?) -> String {
+        guard let newest else { return String(localized: "Not generated yet") }
+        return newest.formatted(date: .abbreviated, time: .shortened)
+    }
+
     /// The outputs of one project as draggable footage, newest first.
     func footage(for item: LibraryItemID) -> [FootageCell] {
+        let date: (Date) -> String = { $0.formatted(date: .abbreviated, time: .shortened) }
         switch item.kind {
         case .music:
             guard let p = music(item.id) else { return [] }
             return p.generatedFiles.sorted { $0.createdAt > $1.createdAt }.enumerated().map { i, f in
-                FootageCell(id: f.id, title: "v\(p.generatedFiles.count - i)", subtitle: f.createdAt.formatted(date: .abbreviated, time: .shortened), kind: .audio, thumbnailURL: nil,
-                            drag: FootageDragItem(source: ClipSource(id: DocumentMediaResolver.sourceID(.music, f.id), kind: .audio, displayName: "\(p.name) v\(p.generatedFiles.count - i)")))
+                FootageCell(id: f.id, title: "v\(p.generatedFiles.count - i)", subtitle: date(f.createdAt), footage: f)
             }
         case .narration:
             guard let p = narration(item.id) else { return [] }
             return p.generatedFiles.sorted { $0.createdAt > $1.createdAt }.enumerated().map { i, f in
-                FootageCell(id: f.id, title: "v\(p.generatedFiles.count - i)", subtitle: f.createdAt.formatted(date: .abbreviated, time: .shortened), kind: .audio, thumbnailURL: nil,
-                            drag: FootageDragItem(source: ClipSource(id: DocumentMediaResolver.sourceID(.narration, f.id), kind: .audio, displayName: "\(p.name) v\(p.generatedFiles.count - i)")))
+                FootageCell(id: f.id, title: "v\(p.generatedFiles.count - i)", subtitle: date(f.createdAt), footage: f)
             }
         case .caption:
             guard let p = caption(item.id), p.activeSegmentCount > 0 else { return [] }
-            return [FootageCell(id: p.projectUUID, title: p.name, subtitle: "\(p.activeSegmentCount) captions", kind: .captions, thumbnailURL: nil,
-                                drag: FootageDragItem(source: ClipSource(id: DocumentMediaResolver.sourceID(.caption, p.projectUUID), kind: .captions, displayName: p.name), duration: Double(p.audioDurationMs) / 1000))]
+            return [FootageCell(id: p.projectUUID, title: p.name, subtitle: "\(p.activeSegmentCount) captions", footage: p)]
         case .image:
             guard let p = image(item.id) else { return [] }
             return p.generatedFiles.sorted { $0.createdAt > $1.createdAt }.enumerated().map { i, f in
-                FootageCell(id: f.id, title: "v\(p.generatedFiles.count - i)", subtitle: f.createdAt.formatted(date: .abbreviated, time: .shortened), kind: .image, thumbnailURL: f.imageURL,
-                            drag: FootageDragItem(source: ClipSource(id: DocumentMediaResolver.sourceID(.image, f.id), kind: .image, displayName: "\(p.name) v\(p.generatedFiles.count - i)")))
+                FootageCell(id: f.id, title: "v\(p.generatedFiles.count - i)", subtitle: date(f.createdAt), footage: f)
             }
         case .video:
             guard let p = video(item.id) else { return [] }
             return p.generatedFiles.sorted { $0.createdAt > $1.createdAt }.enumerated().map { i, f in
-                FootageCell(id: f.id, title: "v\(p.generatedFiles.count - i)", subtitle: f.dimensionsLabel, kind: .video, thumbnailURL: f.thumbnailURL,
-                            drag: FootageDragItem(source: ClipSource(id: DocumentMediaResolver.sourceID(.video, f.id), kind: .video, displayName: "\(p.name) v\(p.generatedFiles.count - i)"), duration: f.durationSeconds, naturalWidth: f.width, naturalHeight: f.height))
+                FootageCell(id: f.id, title: "v\(p.generatedFiles.count - i)", subtitle: f.dimensionsLabel, footage: f)
             }
         case .remotion:
             guard let p = remotion(item.id) else { return [] }
-            return [FootageCell(id: p.id, title: p.name, subtitle: "\(Int(p.durationSeconds))s · renders on demand", kind: .remotion, thumbnailURL: nil,
-                                drag: FootageDragItem(source: ClipSource(id: DocumentMediaResolver.sourceID(.remotion, p.id), kind: .remotion, displayName: p.name), duration: p.durationSeconds, naturalWidth: p.compositionWidth, naturalHeight: p.compositionHeight))]
+            return [FootageCell(id: p.id, title: p.name, subtitle: "\(Int(p.durationSeconds))s · renders on demand", footage: p)]
         case .imported:
             guard let a = imported(item.id) else { return [] }
-            let kind: SourceKind = a.kindEnum == .image ? .image : (a.kindEnum == .audio ? .audio : .video)
-            return [FootageCell(id: a.id, title: a.name, subtitle: a.dimensionsLabel, kind: kind, thumbnailURL: a.thumbnailURL ?? (a.kindEnum == .image ? a.resolveURL() : nil),
-                                drag: FootageDragItem(source: ClipSource(id: DocumentMediaResolver.sourceID(.imported, a.id), kind: kind, displayName: a.name), duration: a.durationSeconds > 0 ? a.durationSeconds : nil, naturalWidth: a.width, naturalHeight: a.height))]
+            return [FootageCell(id: a.id, title: a.name, subtitle: a.dimensionsLabel, footage: a, thumbnailURL: a.dragThumbnailURL)]
         case .sequence:
             return []
         }
     }
 }
 
+/// One output as the footage browser and the viewer see it: a plain value
+/// snapshot of a `TimelineDraggable`, so the views need no model access.
 struct FootageCell: Identifiable, Hashable {
     let id: UUID
     let title: String
     let subtitle: String
     let kind: SourceKind
     let thumbnailURL: URL?
+    /// The file to play or show. Nil for captions and unrendered Remotion.
+    let mediaURL: URL?
+    /// Known length; nil when only the file knows (generated audio).
+    let duration: TimeInterval?
     let drag: FootageDragItem
+
+    @MainActor
+    init(id: UUID, title: String, subtitle: String, footage: some TimelineDraggable, thumbnailURL: URL? = nil) {
+        self.id = id
+        self.title = title
+        self.subtitle = subtitle
+        self.kind = footage.timelineKind
+        self.thumbnailURL = thumbnailURL ?? footage.thumbnailURL
+        self.mediaURL = footage.mediaURL
+        self.duration = footage.knownDuration
+        self.drag = footage.dragItem
+    }
 }

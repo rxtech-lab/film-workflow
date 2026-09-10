@@ -16,7 +16,11 @@ struct CaptionInspector: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            CaptionProjectParametersView(project: project, isTranscribing: isTranscribing)
+            InspectorEditingTabs(editorTitle: "Captions") {
+                    CaptionProjectParametersView(project: project, isTranscribing: isTranscribing)
+                } editor: {
+                    CaptionProjectViewer(project: project).id(project.projectUUID)
+                }
             Divider()
             GenerateButton(title: project.activeSegmentCount > 0 ? "Re-transcribe" : "Transcribe",
                            isBusy: isTranscribing, isEnabled: project.hasAudio,

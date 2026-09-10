@@ -4,7 +4,6 @@ import SwiftUI
 struct VideoInspector: View {
     let project: VideoGenProject
     @Environment(\.modelContext) private var modelContext
-    @Environment(\.projectStorage) private var storage
 
     @State private var generateTask: Task<Void, Never>?
     @State private var progress: VideoGenProgress = .submitting
@@ -21,30 +20,21 @@ struct VideoInspector: View {
     }
 
     var body: some View {
-        InspectorLayout(versionsTitle: "Clips", versionCount: project.generatedFiles.count) {
-            VStack(spacing: 0) {
-                if project.hasPendingJob, !isGenerating {
-                    HStack {
-                        Label("A generation is still running at the provider.", systemImage: "clock.arrow.2.circlepath")
-                            .font(.caption)
-                        Spacer()
-                        Button("Resume") { startResume() }.controlSize(.small)
-                    }
-                    .padding(8)
-                    .background(.yellow.opacity(0.15))
+        VStack(spacing: 0) {
+            if project.hasPendingJob, !isGenerating {
+                HStack {
+                    Label("A generation is still running at the provider.", systemImage: "clock.arrow.2.circlepath")
+                        .font(.caption)
+                    Spacer()
+                    Button("Resume") { startResume() }.controlSize(.small)
                 }
-                VideoGenProjectParametersView(project: project)
-                Divider()
-                GenerateButton(title: "Generate", isBusy: isGenerating, isEnabled: canGenerate) { startGenerate() }
-                    .padding(10)
+                .padding(8)
+                .background(.yellow.opacity(0.15))
             }
-        } versions: {
-            GeneratedVideoListView(files: project.generatedFiles) { file in
-                storage.deleteFile(at: file.videoFilePath)
-                if let t = file.thumbnailFilePath { storage.deleteFile(at: t) }
-                modelContext.delete(file)
-                project.updatedAt = Date()
-            }
+            VideoGenProjectParametersView(project: project)
+            Divider()
+            GenerateButton(title: "Generate", isBusy: isGenerating, isEnabled: canGenerate) { startGenerate() }
+                .padding(10)
         }
         .alert("Error", isPresented: $showError) { Button("OK") {} } message: { Text(errorMessage ?? "An unknown error occurred.") }
         .confirmationDialog("This project already has a generation running.", isPresented: $showResumeChoice, titleVisibility: .visible) {

@@ -4,6 +4,8 @@ import UniformTypeIdentifiers
 
 struct GeneratedMusicListView: View {
     let files: [GeneratedMusic]
+    /// Selected when the list first appears, e.g. from the library's Versions menu.
+    var initialSelectionID: UUID? = nil
     @Environment(\.modelContext) private var modelContext
     @Environment(\.projectStorage) private var storage
     #if os(iOS)
@@ -34,6 +36,7 @@ struct GeneratedMusicListView: View {
                 cardListContent
             }
         }
+        .onAppear { selectInitial() }
         .confirmationDialog(
             "Delete this generated track?",
             isPresented: Binding(
@@ -121,6 +124,11 @@ struct GeneratedMusicListView: View {
             }
             .padding()
         }
+    }
+
+    private func selectInitial() {
+        guard selectedFile == nil, let id = initialSelectionID else { return }
+        selectedFile = files.first { $0.id == id }
     }
 
     private func delete(file: GeneratedMusic) {

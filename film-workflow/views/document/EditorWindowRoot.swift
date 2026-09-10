@@ -8,6 +8,7 @@ struct EditorWindowRoot: View {
     let documentURL: URL?
 
     @Environment(\.controlActiveState) private var controlActiveState
+    @Environment(\.openWindow) private var openWindow
     @Environment(\.dismissWindow) private var dismissWindow
     @Environment(\.dismiss) private var dismiss
     @State private var controller = ProjectDocumentController.shared
@@ -30,23 +31,27 @@ struct EditorWindowRoot: View {
                     .onDisappear {
                         Task { await controller.close(document) }
                     }
-            } else if let openError {
-                ContentUnavailableView {
-                    Label("Couldn’t Open Film", systemImage: "exclamationmark.triangle")
-                } description: {
-                    Text(openError)
-                } actions: {
-                    Button("Close") { dismiss() }
-                }
-                .frame(minWidth: 480, minHeight: 320)
+            } else if openError != nil {
+                Color.clear.frame(minWidth: 480, minHeight: 320)
             } else {
                 ProgressView()
                     .frame(minWidth: 480, minHeight: 320)
             }
         }
+        .alert("Couldn’t Open Film", isPresented: Binding(
+            get: { openError != nil },
+            set: { if !$0 { openError = nil; dismiss() } }
+        )) {
+            Button("OK") { openError = nil; dismiss() }
+        } message: {
+            Text(openError ?? "")
+        }
         .task(id: documentURL) {
             guard let documentURL else {
-                openError = "No film was selected."
+                // Launch/restoration can create a value-less editor window.
+                // There is no document to open, so return to the welcome screen.
+                openWindow(id: WelcomeWindowID.value)
+                dismiss()
                 return
             }
             do {

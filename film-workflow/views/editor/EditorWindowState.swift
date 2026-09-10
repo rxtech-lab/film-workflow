@@ -77,13 +77,22 @@ enum InspectorTab: String, CaseIterable, Identifiable {
 @Observable
 final class EditorWindowState {
     var selection: LibraryItemID?
+    var viewerSelection: LibraryItemID?
+    /// The version of each item the viewer previews and the library drags.
+    /// Items without an entry use their newest output.
+    var currentVersions: [LibraryItemID: UUID] = [:]
     var currentSequenceID: UUID?
     var selectedClipID: UUID? {
         didSet { if selectedClipID != nil { inspectorTab = .clip } }
     }
     var inspectorTab: InspectorTab = .footage
-    var playhead: TimeInterval = 0 {
-        didSet { if !player.isPlaying { player.seek(to: playhead) } }
+    /// Sequence playback has one position; footage players own their own time.
+    var playhead: TimeInterval {
+        get { player.currentTime }
+        set {
+            player.pause()
+            player.seek(to: newValue)
+        }
     }
     let player = TimelinePlayerController()
 
@@ -95,14 +104,23 @@ final class EditorWindowState {
     var renderError: String?
     var showRenderError = false
 
-    func select(_ item: LibraryItemID?) {
+    func select(_ item: LibraryItemID?, updateViewer: Bool = true) {
         selection = item
+        if updateViewer { viewerSelection = item }
         if let item, item.kind == .sequence {
             currentSequenceID = item.id
             inspectorTab = .sequence
         } else {
+            if item != nil { player.pause() }
             inspectorTab = .footage
         }
         selectedClipID = nil
+    }
+
+    func currentVersion(for item: LibraryItemID) -> UUID? { currentVersions[item] }
+
+    func setCurrentVersion(_ versionID: UUID, for item: LibraryItemID) {
+        guard currentVersions[item] != versionID else { return }
+        currentVersions[item] = versionID
     }
 }

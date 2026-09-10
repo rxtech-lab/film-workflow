@@ -4,6 +4,8 @@ import UniformTypeIdentifiers
 
 struct GeneratedNarrativeListView: View {
     let files: [GeneratedNarrative]
+    /// Selected when the list first appears, e.g. from the library's Versions menu.
+    var initialSelectionID: UUID? = nil
     @Environment(\.modelContext) private var modelContext
     @Environment(\.projectStorage) private var storage
     #if os(iOS)
@@ -67,6 +69,7 @@ struct GeneratedNarrativeListView: View {
         } message: {
             Text(captionNotice ?? "")
         }
+        .onAppear { selectInitial() }
         .confirmationDialog(
             "Delete this generated narrative?",
             isPresented: Binding(
@@ -155,6 +158,11 @@ struct GeneratedNarrativeListView: View {
             }
             .padding()
         }
+    }
+
+    private func selectInitial() {
+        guard selectedFile == nil, let id = initialSelectionID else { return }
+        selectedFile = files.first { $0.id == id }
     }
 
     private func delete(file: GeneratedNarrative) {

@@ -53,6 +53,16 @@
 	<array>
 		<dict>
 			<key>UTTypeIdentifier</key>
+			<string>rxlab.film-workflow.library-item</string>
+			<key>UTTypeDescription</key>
+			<string>RxFilmStudio Library Item</string>
+			<key>UTTypeConformsTo</key>
+			<array>
+				<string>public.data</string>
+			</array>
+		</dict>
+		<dict>
+			<key>UTTypeIdentifier</key>
 			<string>rxlab.film-workflow.project</string>
 			<key>UTTypeDescription</key>
 			<string>RxFilmStudio Film</string>

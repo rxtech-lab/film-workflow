@@ -14,10 +14,20 @@ struct TimelinePanel: View {
     @State private var dropError: String?
 
     var body: some View {
+        VStack(spacing: 0) {
+            StudioPanelHeader(title: "Timeline", symbol: "timeline.selection")
+            timelineContent
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+        .background(Color(nsColor: .textBackgroundColor))
+    }
+
+    @ViewBuilder
+    private var timelineContent: some View {
         if let sequence {
             SequenceTimelineView(
                 timeline: Binding(get: { sequence.timeline }, set: { sequence.timeline = $0 }),
-                playhead: Binding(get: { state.playhead }, set: { state.playhead = $0; state.player.pause() }),
+                playhead: Binding(get: { state.playhead }, set: { state.playhead = $0 }),
                 selectedClipID: $state.selectedClipID,
                 resolver: DocumentMediaResolver(document: document, width: sequence.width, height: sequence.height, fps: sequence.fps),
                 onDrop: { item, trackID, time in
@@ -30,13 +40,17 @@ struct TimelinePanel: View {
                 Text(dropError ?? "")
             }
         } else {
-            ContentUnavailableView {
-                Label("No Sequence", systemImage: "film.stack")
-            } description: {
-                Text("Create a sequence, then drag footage from the library onto its timeline.")
-            } actions: {
+            VStack(spacing: 0) {
+                StudioEmptyState(title: "Build your first sequence", symbol: "film.stack",
+                                 message: "Arrange footage, sound and captions on your timeline.")
+                    .frame(maxHeight: 130)
                 Button("New Sequence", action: onCreateSequence)
+                    .buttonStyle(.glassProminent)
+                    .controlSize(.large)
             }
+            .padding(20)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+
         }
     }
 

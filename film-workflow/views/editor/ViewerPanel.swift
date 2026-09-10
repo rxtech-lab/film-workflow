@@ -12,45 +12,43 @@ struct ViewerPanel: View {
     let sequence: SequenceProject?
 
     var body: some View {
+        VStack(spacing: 0) {
+            StudioPanelHeader(title: "Viewer", symbol: "play.rectangle")
+            viewerContent
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+        .background(Color(nsColor: .underPageBackgroundColor))
+    }
+
+    private var viewerContent: some View {
         Group {
-            switch state.selection?.kind {
-            case .music?:
-                if let p = state.selection.flatMap({ index.music($0.id) }) {
-                    MusicProjectEditorView(project: p)
-                } else { missing }
-            case .narration?:
-                if let p = state.selection.flatMap({ index.narration($0.id) }) {
-                    TranscriptEditorView(project: p)
-                } else { missing }
-            case .caption?:
-                if let p = state.selection.flatMap({ index.caption($0.id) }) {
-                    CaptionProjectViewer(project: p)
-                        .id(p.projectUUID)
-                } else { missing }
-            case .image?:
-                if let p = state.selection.flatMap({ index.image($0.id) }) {
-                    ImageProjectViewer(project: p)
-                } else { missing }
-            case .video?:
-                if let p = state.selection.flatMap({ index.video($0.id) }) {
-                    VideoProjectViewer(project: p)
+            switch state.viewerSelection?.kind {
+            case .image?, .video?, .music?, .narration?, .imported?:
+                if let item = state.viewerSelection {
+                    let cells = index.footage(for: item)
+                    if let cell = cells.first(where: { $0.id == state.currentVersion(for: item) }) ?? cells.first {
+                        FootageViewer(
+                            cell: cell,
+                            name: index.name(of: item) ?? cell.title,
+                            versions: cells,
+                            onSelectVersion: { state.setCurrentVersion($0, for: item) }
+                        )
+                    } else {
+                        StudioEmptyState(title: "Nothing to preview yet", symbol: item.kind.systemImage,
+                                         message: "Generate footage from the inspector, then play it here.")
+                    }
                 } else { missing }
             case .remotion?:
-                if let p = state.selection.flatMap({ index.remotion($0.id) }) {
+                if let p = state.viewerSelection.flatMap({ index.remotion($0.id) }) {
                     RemotionViewer(project: p)
                         .id(p.id)
                 } else { missing }
-            case .imported?:
-                if let a = state.selection.flatMap({ index.imported($0.id) }) {
-                    ImportedAssetViewer(asset: a)
-                        .id(a.id)
-                } else { missing }
-            case .sequence?, nil:
+            case .sequence?, .caption?, nil:
                 if let sequence {
                     SequenceViewerView(controller: state.player, fps: sequence.fps)
                 } else {
-                    ContentUnavailableView("Nothing Selected", systemImage: "rectangle.on.rectangle",
-                                           description: Text("Select footage in the library, or create a sequence."))
+                    StudioEmptyState(title: "Ready for your story", symbol: "play.rectangle",
+                                     message: "Select footage to preview, or create a sequence to start editing.")
                 }
             }
         }
@@ -63,64 +61,6 @@ struct ViewerPanel: View {
 }
 
 // MARK: - Per-kind viewers
-
-/// Image project: the newest image large, the rest as a strip.
-struct ImageProjectViewer: View {
-    let project: ImageGenProject
-    @Environment(\.modelContext) private var modelContext
-    @Environment(\.projectStorage) private var storage
-
-    var body: some View {
-        GeneratedImageListView(files: project.generatedFiles) { file in
-            storage.deleteFile(at: file.imageFilePath)
-            modelContext.delete(file)
-            project.updatedAt = Date()
-        }
-    }
-}
-
-struct VideoProjectViewer: View {
-    let project: VideoGenProject
-    @Environment(\.modelContext) private var modelContext
-    @Environment(\.projectStorage) private var storage
-
-    var body: some View {
-        GeneratedVideoListView(files: project.generatedFiles) { file in
-            storage.deleteFile(at: file.videoFilePath)
-            if let t = file.thumbnailFilePath { storage.deleteFile(at: t) }
-            modelContext.delete(file)
-            project.updatedAt = Date()
-        }
-    }
-}
-
-struct ImportedAssetViewer: View {
-    let asset: ImportedAsset
-    @State private var player = AVPlayer()
-
-    var body: some View {
-        Group {
-            if let url = asset.resolveURL() {
-                switch asset.kindEnum {
-                case .image:
-                    if let image = NSImage(contentsOf: url) {
-                        Image(nsImage: image).resizable().aspectRatio(contentMode: .fit).padding()
-                    } else {
-                        ContentUnavailableView("Image Unavailable", systemImage: "photo")
-                    }
-                case .video, .audio:
-                    VideoPlayer(player: player)
-                        .onAppear { player.replaceCurrentItem(with: AVPlayerItem(url: url)) }
-                        .onDisappear { player.pause(); player.replaceCurrentItem(with: nil) }
-                }
-            } else {
-                ContentUnavailableView("File Missing", systemImage: "questionmark.folder",
-                                       description: Text(asset.originalPath))
-            }
-        }
-        .background(Color.black.opacity(asset.kindEnum == .image ? 0 : 1))
-    }
-}
 
 /// Caption project: the segment list, loaded after validation like the old
 /// tab did, so a large transcript never blocks the selection change.
@@ -163,6 +103,7 @@ struct RemotionViewer: View {
     @State private var runtime = RemotionRuntime.shared
     @State private var reloadToken = 0
     @State private var statusMessage: String?
+    @State private var presentedError: String?
 
     var body: some View {
         ZStack {
@@ -174,15 +115,12 @@ struct RemotionViewer: View {
                 }
             } else if runtime.currentURL != nil, runtime.currentProjectId == project.id {
                 RemotionPreviewWebView(url: runtime.currentURL, reloadToken: reloadToken)
-            } else if let err = runtime.lastError ?? statusMessage {
-                VStack(spacing: 8) {
-                    Image(systemName: "exclamationmark.triangle").font(.largeTitle).foregroundStyle(.orange)
-                    Text(err).multilineTextAlignment(.center).padding(.horizontal)
-                }
             } else {
                 VStack(spacing: 8) {
                     Image(systemName: "play.rectangle").font(.largeTitle).foregroundStyle(.secondary)
-                    Text(project.compositionSource.isEmpty
+                    Text((runtime.lastError ?? statusMessage) != nil
+                         ? "Preview unavailable."
+                         : project.compositionSource.isEmpty
                          ? "Create a composition from the inspector to start the preview."
                          : "Loading the Studio preview…")
                         .multilineTextAlignment(.center)
@@ -190,6 +128,18 @@ struct RemotionViewer: View {
                         .padding(.horizontal)
                 }
             }
+        }
+
+        .onChange(of: runtime.lastError ?? statusMessage, initial: true) { _, error in
+            presentedError = error
+        }
+        .alert("Couldn’t Start Preview", isPresented: Binding(
+            get: { presentedError != nil },
+            set: { if !$0 { presentedError = nil } }
+        )) {
+            Button("OK") { presentedError = nil }
+        } message: {
+            Text(presentedError ?? "")
         }
         .task(id: project.id) { await startStudio() }
         .onReceive(NotificationCenter.default.publisher(for: .agentDidMutateProject)) { note in

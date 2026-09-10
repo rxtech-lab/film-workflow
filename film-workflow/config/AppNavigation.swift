@@ -30,7 +30,6 @@ final class AppNavigation {
     }
 
     var settingsSection: SettingsSection = .account
-    var showAccountSheet = false
 
     /// What the app is currently showing, so the agent window can follow along.
     ///

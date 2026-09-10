@@ -2,6 +2,7 @@ import SwiftData
 import SwiftUI
 import UniformTypeIdentifiers
 import VideoEditorCore
+import VideoEditorUI
 
 /// Groups and their projects of every kind, with drag-to-regroup.
 struct LibraryList: View {
@@ -10,11 +11,20 @@ struct LibraryList: View {
     @Binding var selection: LibraryItemID?
     let onMove: (LibraryItemID, UUID?) -> Void
     let onCreate: (FootageKind, UUID?) -> Void
+    let onImport: () -> Void
     let onCreateGroup: () -> Void
     let onRenameGroup: (ProjectGroup) -> Void
     let onDeleteGroup: (ProjectGroup) -> Void
     let onRename: (LibraryRow) -> Void
     let onDelete: (LibraryRow) -> Void
+    /// Opens the versions sheet for a row, on one version or the whole list.
+    let onShowVersions: (LibraryRow, UUID?) -> Void
+    /// The version a row currently previews and drags, if it has one.
+    let currentVersion: (LibraryItemID) -> UUID?
+    /// Makes a version the current one.
+    let onSelectVersion: (LibraryRow, UUID) -> Void
+    /// What a row drags: its current version as footage, with a thumbnail for the drag card.
+    let dragPayload: (LibraryRow) -> FootageDragPayload?
 
     @State private var collapsed: Set<UUID> = []
     @State private var ungroupedCollapsed = false
@@ -27,6 +37,7 @@ struct LibraryList: View {
             }
         }
         .listStyle(.sidebar)
+        .scrollContentBackground(.hidden)
         .contextMenu {
             creationMenu(groupID: nil)
         }
@@ -42,9 +53,17 @@ struct LibraryList: View {
                         .foregroundStyle(.tertiary)
                 } else {
                     ForEach(rows) { row in
-                        rowView(row)
-                            .tag(row.id)
-                            .draggable(LibraryDragToken(item: row.id))
+                        if let payload = dragPayload(row) {
+                            rowView(row)
+                                .tag(row.id)
+                                .timelineDraggable(payload.item, thumbnailURL: payload.thumbnailURL) { provider in
+                                    provider.register(LibraryDragToken(item: row.id))
+                                }
+                        } else {
+                            rowView(row)
+                                .tag(row.id)
+                                .draggable(LibraryDragToken(item: row.id))
+                        }
                     }
                 }
             }
@@ -62,15 +81,55 @@ struct LibraryList: View {
                 Text(row.name).lineLimit(1)
                 Text(row.subtitle).font(.caption).foregroundStyle(.secondary).lineLimit(1)
             }
+            Spacer(minLength: 4)
+            if row.versions.count > 1 {
+                versionBadge(count: row.versions.count)
+            }
         }
         .padding(.vertical, 1)
         .contextMenu {
-            creationMenu(groupID: row.groupID)
-            Divider()
+            versionsMenu(row)
             Button("Rename…") { onRename(row) }
             MoveToProjectGroupMenu(groups: groups, currentGroupID: row.groupID) { onMove(row.id, $0) }
             Divider()
             Button("Delete…", role: .destructive) { onDelete(row) }
+        }
+    }
+
+    /// Shown only when there is something to choose between.
+    private func versionBadge(count: Int) -> some View {
+        HStack(spacing: 3) {
+            Image(systemName: "square.stack")
+            Text("\(count)")
+        }
+        .font(.caption2.weight(.semibold))
+        .foregroundStyle(.secondary)
+        .padding(.horizontal, 6)
+        .padding(.vertical, 2)
+        .background(.quaternary, in: Capsule())
+        .help("\(count) versions")
+    }
+
+    /// Each version is a checkable item; the checked one is current.
+    @ViewBuilder
+    private func versionsMenu(_ row: LibraryRow) -> some View {
+        if !row.versions.isEmpty {
+            let current = currentVersion(row.id)
+            Menu {
+                ForEach(row.versions) { version in
+                    Toggle(isOn: Binding(
+                        get: { version.id == current },
+                        set: { if $0 { onSelectVersion(row, version.id) } }
+                    )) {
+                        Text("\(version.label) · \(version.detail)")
+                    }
+                }
+                Divider()
+                Button("Show All Versions…") { onShowVersions(row, nil) }
+            } label: {
+                Label("Versions (\(row.versions.count))", systemImage: "square.stack")
+            }
+            Divider()
         }
     }
 
@@ -113,6 +172,10 @@ struct LibraryList: View {
 
     @ViewBuilder
     private func creationMenu(groupID: UUID?) -> some View {
+        Button(action: onImport) {
+            Label("Import Media…", systemImage: "square.and.arrow.down")
+        }
+        Divider()
         Menu("New") {
             ForEach(FootageKind.creatable) { kind in
                 Button { onCreate(kind, groupID) } label: { Label(kind.displayName, systemImage: kind.systemImage) }
@@ -126,7 +189,14 @@ struct LibraryList: View {
     }
 }
 
-/// Drag payload for moving a library item between groups.
+/// A row's current output as footage, plus the picture for the drag card.
+struct FootageDragPayload {
+    let item: FootageDragItem
+    let thumbnailURL: URL?
+}
+
+/// Drag payload for moving a library item between groups. Footage rides
+/// along the same drag through `timelineDraggable`.
 struct LibraryDragToken: Codable, Transferable {
     let item: LibraryItemID
 

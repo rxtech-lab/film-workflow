@@ -1,3 +1,5 @@
+> **Superseded.** The editor now assembles footage on a timeline and exports through AVFoundation (see `docs/document-package.md` and `Packages/RxVideoEditor`). This ffmpeg-based Convert tab was never implemented.
+
 # Video Conversion (FFmpeg) — Design Plan
 
 ## Context

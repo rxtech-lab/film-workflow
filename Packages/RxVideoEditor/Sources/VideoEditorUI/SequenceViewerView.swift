@@ -7,6 +7,7 @@ import VideoEditorCore
 public struct SequenceViewerView: View {
     @Bindable var controller: TimelinePlayerController
     let fps: Int
+    @State private var presentedError: String?
 
     public init(controller: TimelinePlayerController, fps: Int) {
         self.controller = controller
@@ -18,17 +19,21 @@ public struct SequenceViewerView: View {
             ZStack {
                 Color.black
                 PlayerLayerView(player: controller.player)
-                if let error = controller.lastError {
-                    Text(error)
-                        .font(.caption)
-                        .foregroundStyle(.white)
-                        .padding(8)
-                        .background(.red.opacity(0.8), in: RoundedRectangle(cornerRadius: 6))
-                        .padding()
-                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
-                }
+                    .opacity(controller.currentTime < controller.duration ? 1 : 0)
+
             }
             transport
+        }
+        .onChange(of: controller.lastError, initial: true) { _, error in
+            presentedError = error
+        }
+        .alert("Couldn’t Preview Sequence", isPresented: Binding(
+            get: { presentedError != nil },
+            set: { if !$0 { presentedError = nil } }
+        )) {
+            Button("OK") { presentedError = nil }
+        } message: {
+            Text(presentedError ?? "")
         }
     }
 
@@ -53,14 +58,7 @@ public struct SequenceViewerView: View {
                 .font(.system(.callout, design: .monospaced))
                 .frame(width: 104, alignment: .leading)
 
-            Slider(
-                value: Binding(
-                    get: { controller.currentTime },
-                    set: { controller.pause(); controller.seek(to: $0) }
-                ),
-                in: 0...max(controller.duration, 0.001)
-            )
-            .controlSize(.small)
+            Spacer(minLength: 0)
 
             Text(Timecode.string(seconds: controller.duration, fps: fps))
                 .font(.system(.callout, design: .monospaced))

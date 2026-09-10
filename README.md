@@ -1,58 +1,63 @@
 # film-workflow
 
-`film-workflow` is a SwiftUI app for organizing and generating music for film projects using Google AI (Lyria).
+`film-workflow` (RxFilmStudio) is a macOS app for making short films from
+generated footage. It generates music, narration, captions, images, video
+clips and Remotion compositions, and assembles them on a timeline that renders
+to mp4 — laid out like Final Cut Pro: a footage library on the left, a viewer
+in the centre, an inspector with each workflow's parameters, Generate button
+and versions on the right, and the sequence timeline along the bottom.
+
+Each film is a `.rxfilmstudio` package holding its own SwiftData store and all
+generated media. See `docs/document-package.md`.
 
 ## Features
 
-- Create and manage multiple music projects
-- Configure musical parameters (genre, mood, BPM, key, duration, instruments)
-- Choose generation mode:
-  - **Editor**: define song structure and optional timestamped lyrics
-  - **Prompt**: provide free-form prompt instructions
-- Attach up to 10 reference images per project
-- Preview the full generated prompt before sending
-- Generate audio (and optional lyrics) through Google AI Lyria
-- Play, review, export, and delete generated tracks from history
-- Secure API key storage in Keychain
+- One document per film: New/Open/Recent, Finder double-click, several films open at once
+- Footage kinds: Music (Lyria), Narration (Gemini/Azure TTS), Captions
+  (Whisper/Azure/OpenAI), Images, Video (Veo), Remotion compositions, imported files
+- Every generation is kept as a version; Remotion renders are cached by source hash
+- Timeline: drag footage from the library, trim, move, split; captions burn in
+- Render: Remotion clips are rendered first, then the sequence exports as a new version
+- An embedded MCP server and agent window that can build and render films
+  (`footage_list`, `sequence_add_clip`, `sequence_render`, …)
 
 ## Project Structure
 
-- `film-workflow/` – main app source (SwiftUI views, models, clients, utils)
-- `film-workflowTests/` – unit tests
-- `film-workflowUITests/` – UI tests
+- `film-workflow/` – app source (SwiftUI views, models, clients, document layer)
+- `Packages/RxVideoEditor/` – the video editor package: `VideoEditorCore`
+  (timeline model, AVFoundation composition and export) and `VideoEditorUI`
+  (timeline, viewer, inspectors)
+- `film-workflowTests/` – app unit tests; `Packages/RxVideoEditor/Tests` – package tests
 - `film-workflow.xcodeproj/` – Xcode project
 - `scripts/ci/` – release scripts (signing, notarization, Sparkle appcast)
-- `Info.plist` – extra keys merged into the generated Info.plist (Sparkle feed + public key)
+- `Info.plist` – extra keys merged into the generated Info.plist (Sparkle feed, document types)
 
 ## Requirements
 
-- macOS with Xcode (latest stable recommended)
-- iOS simulator/device or macOS target supported by the project
-- Google AI API key with access to Lyria
+- macOS 26.2 or later with Xcode 26
+- Provider keys in Settings, or an RxLab subscription
 
 ## Getting Started
 
-1. Open `film-workflow.xcodeproj` in Xcode.
-2. Select your target (iOS or macOS) and run the app.
-3. Open **Settings** and save your Google AI API key.
-4. Create a new music project from the **Music** tab.
-5. Configure parameters and click **Generate**.
+1. Open `film-workflow.xcodeproj` in Xcode and run the macOS target.
+2. Create a film from the Welcome window (**New Film…**).
+3. Add footage with the **New** menu, set parameters in the inspector and click **Generate**.
+4. Create a **Sequence**, drag footage onto its timeline, and click **Render**.
+
+Launch argument `-skipStartupAuth` skips the keychain read at startup, which
+is useful for unattended debug launches.
 
 ## Data & Storage
 
-- App data is stored using SwiftData.
-- Generated audio and imported reference images are saved under app support directories:
-  - `com.rxlab.film-workflow/generated`
-  - `com.rxlab.film-workflow/images`
+- Film data and media live inside each `.rxfilmstudio` package.
+- The Remotion runtime, Whisper models, scratch files and the agent store live
+  under `~/Library/Application Support/com.rxlab.film-workflow`.
 
 ## Testing
 
-Run tests in Xcode (`Product > Test`) or via command line on a machine with Xcode tools installed.
-
-Example:
-
 ```bash
-xcodebuild test -project film-workflow.xcodeproj -scheme film-workflow -destination 'platform=iOS Simulator,name=iPhone 15'
+xcodebuild test -project film-workflow.xcodeproj -scheme film-workflow -destination 'platform=macOS' -only-testing:film-workflowTests
+swift test --package-path Packages/RxVideoEditor
 ```
 
 ## Releases & Auto-Update

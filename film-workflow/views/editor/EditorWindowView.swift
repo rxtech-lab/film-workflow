@@ -21,6 +21,8 @@ struct EditorWindowView: View {
     @Query(sort: \ImportedAsset.updatedAt, order: .reverse) private var imported: [ImportedAsset]
     @Query(sort: \SequenceProject.updatedAt, order: .reverse) private var sequences: [SequenceProject]
     @Query(sort: \ProjectGroup.name) private var groups: [ProjectGroup]
+    @Query(sort: \SequenceRender.versionNumber, order: .reverse) private var sequenceRenders: [SequenceRender]
+    @Query(sort: \RemotionRender.versionNumber, order: .reverse) private var remotionRenders: [RemotionRender]
 
     @State private var state = EditorWindowState()
     @State private var groupEditor: ProjectGroupEditorTarget?
@@ -30,10 +32,12 @@ struct EditorWindowView: View {
     @State private var renamingRow: LibraryRow?
     @State private var renameText = ""
     @State private var pendingDeletion: LibraryRow?
+    @State private var versionsTarget: LibraryVersionsTarget?
 
     private var index: LibraryIndex {
         LibraryIndex(music: music, narrations: narrations, captions: captions, images: images, videos: videos,
-                     remotions: remotions, imported: imported, sequences: sequences)
+                     remotions: remotions, imported: imported, sequences: sequences,
+                     sequenceRenders: sequenceRenders, remotionRenders: remotionRenders)
     }
 
     private var currentSequence: SequenceProject? {
@@ -42,32 +46,38 @@ struct EditorWindowView: View {
     }
 
     var body: some View {
-        VSplitView {
-            HSplitView {
-                LibraryPanel(index: index, groups: groups, state: state,
-                             onCreate: create, onMove: move, onCreateGroup: beginCreatingGroup,
-                             onRenameGroup: beginRenamingGroup, onDeleteGroup: { pendingGroupDeletion = $0 },
-                             onRename: beginRenaming, onDelete: { pendingDeletion = $0 })
-                    .frame(minWidth: 240, idealWidth: 280, maxWidth: 420)
-                ViewerPanel(index: index, state: state, document: document, sequence: currentSequence)
-                    .frame(minWidth: 480, idealWidth: 800)
-                InspectorPanel(index: index, state: state, document: document, sequence: currentSequence, onRender: beginRender)
-                    .frame(minWidth: 320, idealWidth: 380, maxWidth: 520)
+        GeometryReader { geometry in
+            VSplitView {
+                HSplitView {
+                    LibraryPanel(index: index, groups: groups, state: state,
+                                 onCreate: create, onMove: move, onImport: chooseFilesToImport, onCreateGroup: beginCreatingGroup,
+                                 onRenameGroup: beginRenamingGroup, onDeleteGroup: { pendingGroupDeletion = $0 },
+                                 onRename: beginRenaming, onDelete: { pendingDeletion = $0 },
+                                 onShowVersions: { versionsTarget = LibraryVersionsTarget(item: $0.id, versionID: $1) })
+                        .frame(minWidth: 240, idealWidth: 280, maxWidth: 420, maxHeight: .infinity)
+                        .background(.regularMaterial)
+                    ViewerPanel(index: index, state: state, document: document, sequence: currentSequence)
+                        .frame(minWidth: 360, idealWidth: 800, maxWidth: .infinity, maxHeight: .infinity)
+                    InspectorPanel(index: index, state: state, document: document, sequence: currentSequence, onRender: beginRender)
+                        .frame(minWidth: 300, idealWidth: 320, maxWidth: 460, maxHeight: .infinity)
+                        .background(Color(nsColor: .controlBackgroundColor))
+                }
+                .frame(minHeight: 300, idealHeight: geometry.size.height * 0.68, maxHeight: .infinity)
+                TimelinePanel(state: state, document: document, sequence: currentSequence, onCreateSequence: { create(.sequence, nil) })
+                    .frame(minHeight: 190, idealHeight: geometry.size.height * 0.32, maxHeight: .infinity)
             }
-            .frame(minHeight: 320)
-            TimelinePanel(state: state, document: document, sequence: currentSequence, onCreateSequence: { create(.sequence, nil) })
-                .frame(minHeight: 180, idealHeight: 260)
+            .frame(width: geometry.size.width, height: geometry.size.height)
         }
+        .frame(minWidth: 920, minHeight: 560)
+        .background(Color(nsColor: .windowBackgroundColor))
         .toolbar { toolbar }
+        .focusedSceneValue(\.importMedia, chooseFilesToImport)
         .publishesAgentTarget(agentTarget)
         .onChange(of: currentSequence?.id, initial: true) { _, _ in
             state.currentSequenceID = currentSequence?.id
             reloadPlayer()
         }
         .onChange(of: currentSequence?.timelineData) { _, _ in reloadPlayer() }
-        .onChange(of: state.player.currentTime) { _, time in
-            if state.player.isPlaying { state.playhead = time }
-        }
         .sheet(isPresented: $state.showImportSheet) {
             MediaImportSheet(urls: state.pendingImportURLs, groupID: nil) {
                 state.pendingImportURLs = []
@@ -95,6 +105,9 @@ struct EditorWindowView: View {
             Button("OK") {}
         } message: {
             Text(state.renderError ?? "An unknown error occurred.")
+        }
+        .sheet(item: $versionsTarget) { target in
+            LibraryVersionsSheet(index: index, target: target) { versionsTarget = nil }
         }
         .sheet(item: $renamingRow) { row in
             RenameSheet(name: $renameText) {
@@ -143,10 +156,11 @@ struct EditorWindowView: View {
             } label: {
                 Label("Import…", systemImage: "square.and.arrow.down")
             }
-            .keyboardShortcut("i", modifiers: .command)
             .help("Import video, audio or images from disk")
+            AccountControl(placement: .toolbar)
         }
-        ToolbarItemGroup(placement: .primaryAction) {
+        ToolbarSpacer(.flexible, placement: .automatic)
+        ToolbarItemGroup(placement: .automatic) {
             Button {
                 beginRender()
             } label: {
@@ -183,7 +197,7 @@ struct EditorWindowView: View {
     private func create(_ kind: FootageKind, _ groupID: UUID?) {
         if let item = ProjectLifecycleService.create(kind: kind, groupID: groupID, context: modelContext) {
             try? modelContext.save()
-            state.select(item)
+            state.select(item, updateViewer: kind == .sequence)
         }
     }
 
@@ -236,7 +250,8 @@ struct EditorWindowView: View {
     }
 
     private func delete(_ row: LibraryRow) {
-        if state.selection == row.id { state.select(nil) }
+        if state.selection == row.id { state.select(nil, updateViewer: false) }
+        if state.viewerSelection == row.id { state.viewerSelection = nil }
         if row.id.kind == .sequence, state.currentSequenceID == row.id.id {
             state.currentSequenceID = nil
             state.player.unload()
@@ -327,6 +342,71 @@ extension NSItemProvider {
                     continuation.resume(returning: nil)
                 }
             }
+        }
+    }
+}
+
+/// Quiet content surfaces keep glass reserved for navigation and actions.
+struct StudioPanelHeader: View {
+    let title: LocalizedStringKey
+    let symbol: String
+
+    var body: some View {
+        HStack(spacing: 7) {
+            Image(systemName: symbol).foregroundStyle(.secondary)
+            Text(title).fontWeight(.semibold)
+            Spacer()
+        }
+        .font(.system(size: 12))
+        .padding(.horizontal, 14)
+        .frame(height: 30)
+        .background(.bar)
+        .overlay(alignment: .bottom) { Divider() }
+    }
+}
+
+struct StudioEmptyState: View {
+    let title: LocalizedStringKey
+    let symbol: String
+    let message: LocalizedStringKey
+
+    var body: some View {
+        VStack(spacing: 10) {
+            Image(systemName: symbol)
+                .font(.system(size: 28, weight: .light))
+                .foregroundStyle(.tertiary)
+                .accessibilityHidden(true)
+            Text(title).font(.system(size: 14, weight: .semibold))
+            Text(message)
+                .font(.system(size: 12))
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(20)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
+
+private struct ImportMediaFocusKey: FocusedValueKey {
+    typealias Value = () -> Void
+}
+
+extension FocusedValues {
+    var importMedia: (() -> Void)? {
+        get { self[ImportMediaFocusKey.self] }
+        set { self[ImportMediaFocusKey.self] = newValue }
+    }
+}
+
+struct MediaImportCommands: Commands {
+    @FocusedValue(\.importMedia) private var importMedia
+
+    var body: some Commands {
+        CommandGroup(after: .newItem) {
+            Button("Import Media…") { importMedia?() }
+                .keyboardShortcut("i", modifiers: .command)
+                .disabled(importMedia == nil)
         }
     }
 }

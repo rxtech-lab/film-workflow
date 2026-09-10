@@ -4,7 +4,8 @@ import VideoEditorCore
 import VideoEditorUI
 
 /// Right column: parameters and Generate for the selected footage, the
-/// sequence settings and renders, or the selected timeline clip.
+/// sequence settings, or the selected timeline clip. Versions live in the
+/// library.
 struct InspectorPanel: View {
     let index: LibraryIndex
     @Bindable var state: EditorWindowState
@@ -14,31 +15,42 @@ struct InspectorPanel: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            Picker("", selection: $state.inspectorTab) {
+            StudioPanelHeader(title: "Inspector", symbol: "slider.horizontal.3")
+            Picker("Inspector", selection: $state.inspectorTab) {
                 Text("Footage").tag(InspectorTab.footage)
                 Text("Sequence").tag(InspectorTab.sequence)
                 Text("Clip").tag(InspectorTab.clip)
             }
             .pickerStyle(.segmented)
             .labelsHidden()
-            .padding(8)
+            .padding(6)
+            .glassEffect(.regular, in: .rect(cornerRadius: 12))
+            .padding(10)
             Divider()
-            switch state.inspectorTab {
-            case .footage:
-                footageInspector
-            case .sequence:
-                if let sequence {
-                    SequenceInspector(sequence: sequence, document: document, onRender: onRender)
-                } else {
-                    ContentUnavailableView("No Sequence", systemImage: "film.stack")
-                }
-            case .clip:
-                if let sequence, let clipID = state.selectedClipID {
-                    clipInspector(sequence: sequence, clipID: clipID)
-                } else {
-                    ContentUnavailableView("No Clip Selected", systemImage: "rectangle.dashed",
-                                           description: Text("Select a clip on the timeline."))
-                }
+            inspectorContent
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    }
+
+    @ViewBuilder
+    private var inspectorContent: some View {
+        switch state.inspectorTab {
+        case .footage:
+            footageInspector
+        case .sequence:
+            if let sequence {
+                SequenceInspector(sequence: sequence, document: document, onRender: onRender)
+            } else {
+                StudioEmptyState(title: "No Sequence", symbol: "film.stack",
+                                 message: "Create a sequence to adjust its settings.")
+            }
+        case .clip:
+            if let sequence, let clipID = state.selectedClipID {
+                clipInspector(sequence: sequence, clipID: clipID)
+            } else {
+                StudioEmptyState(title: "No Clip Selected", symbol: "rectangle.dashed",
+                                 message: "Select a clip on the timeline.")
             }
         }
     }
@@ -68,8 +80,8 @@ struct InspectorPanel: View {
     }
 
     private var empty: some View {
-        ContentUnavailableView("Nothing Selected", systemImage: "slider.horizontal.3",
-                               description: Text("Select footage in the library to see its parameters."))
+        StudioEmptyState(title: "Nothing selected", symbol: "slider.horizontal.3",
+                         message: "Select footage to adjust its settings.")
     }
 
     @ViewBuilder
@@ -133,32 +145,28 @@ extension GenerateButton where Tip == FilmWorkflowTips.GenerateMusicTip {
     }
 }
 
-/// Inspector layout: parameters and Generate above, versions below.
-struct InspectorLayout<Parameters: View, Versions: View>: View {
-    let versionsTitle: LocalizedStringKey
-    let versionCount: Int
-    @ViewBuilder let parameters: () -> Parameters
-    @ViewBuilder let versions: () -> Versions
+import TipKit
+
+/// Keeps detailed authoring tools in the inspector without stacking scroll views.
+struct InspectorEditingTabs<Settings: View, Editor: View>: View {
+    let editorTitle: LocalizedStringKey
+    @ViewBuilder let settings: () -> Settings
+    @ViewBuilder let editor: () -> Editor
+    @State private var showEditor = false
 
     var body: some View {
-        VSplitView {
-            parameters()
-                .frame(minHeight: 200)
-            VStack(spacing: 0) {
-                HStack {
-                    Text(versionsTitle).font(.caption.weight(.semibold)).foregroundStyle(.secondary)
-                    Spacer()
-                    Text("\(versionCount)").font(.caption).foregroundStyle(.tertiary)
-                }
-                .padding(.horizontal, 10)
-                .padding(.vertical, 6)
-                .background(.bar)
-                Divider()
-                versions()
+        VStack(spacing: 0) {
+            Picker("Editing", selection: $showEditor) {
+                Text("Settings").tag(false)
+                Text(editorTitle).tag(true)
             }
-            .frame(minHeight: 140, idealHeight: 260)
+            .pickerStyle(.segmented)
+            .padding(10)
+            Group {
+                if showEditor { editor() } else { settings() }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
-
-import TipKit

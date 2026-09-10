@@ -13,17 +13,17 @@ struct MusicInspector: View {
     @State private var insufficientCredits: InsufficientCreditsNotice?
 
     var body: some View {
-        InspectorLayout(versionsTitle: "Versions", versionCount: project.generatedFiles.count) {
-            VStack(spacing: 0) {
+        VStack(spacing: 0) {
+            InspectorEditingTabs(editorTitle: "Composition") {
                 MusicProjectParametersView(project: project)
-                Divider()
-                GenerateButton(title: "Generate", isBusy: isGenerating, isEnabled: true, tip: FilmWorkflowTips.GenerateMusicTip()) {
-                    showPromptSheet = true
-                }
-                .padding(10)
+            } editor: {
+                MusicProjectEditorView(project: project)
             }
-        } versions: {
-            GeneratedMusicListView(files: project.generatedFiles)
+            Divider()
+            GenerateButton(title: "Generate", isBusy: isGenerating, isEnabled: true, tip: FilmWorkflowTips.GenerateMusicTip()) {
+                showPromptSheet = true
+            }
+            .padding(10)
         }
         .alert("Error", isPresented: $showError) { Button("OK") {} } message: { Text(errorMessage ?? "An unknown error occurred.") }
         .insufficientCreditsAlert($insufficientCredits)

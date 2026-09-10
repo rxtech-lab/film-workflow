@@ -55,7 +55,6 @@ public final class TimelinePlayerController {
         loadTask?.cancel()
         frameDuration = timeline.frameDuration
         let wasPlaying = isPlaying
-        let position = currentTime
         loadTask = Task { @MainActor in
             do {
                 let built = try await TimelineCompositionBuilder(resolver: resolver).build(timeline, allowPlaceholders: true)
@@ -69,9 +68,10 @@ public final class TimelinePlayerController {
                 duration = CMTimeGetSeconds(built.duration)
                 placeholders = built.placeholders
                 lastError = nil
-                let target = min(position, max(0, duration - frameDuration))
+                let target = min(currentTime, max(0, duration - frameDuration))
                 await seekPlayer(to: target)
-                if wasPlaying { player.play(); isPlaying = true }
+                guard !Task.isCancelled else { return }
+                if wasPlaying, isPlaying { play() }
             } catch {
                 lastError = error.localizedDescription
             }
@@ -91,7 +91,11 @@ public final class TimelinePlayerController {
     public func play() {
         guard player.currentItem != nil else { return }
         if currentTime >= duration - frameDuration / 2 {
-            Task { await seekPlayer(to: 0) ; player.play() }
+            currentTime = 0
+            Task {
+                await seekPlayer(to: 0)
+                if isPlaying { player.play() }
+            }
         } else {
             player.play()
         }
@@ -109,8 +113,11 @@ public final class TimelinePlayerController {
 
     /// Frame-accurate seek used by scrubbing and the playhead.
     public func seek(to time: TimeInterval) {
-        let clamped = min(max(0, time), max(0, duration))
-        currentTime = clamped
+        guard time.isFinite else { return }
+        // The editing cursor can travel beyond media; only AVPlayer is bounded.
+        currentTime = max(0, time)
+        let clamped = min(currentTime, max(0, duration))
+        guard player.currentItem != nil else { return }
         Task { await seekPlayer(to: clamped) }
     }
 
@@ -122,6 +129,5 @@ public final class TimelinePlayerController {
     private func seekPlayer(to time: TimeInterval) async {
         let target = CMTime(seconds: time, preferredTimescale: 600)
         await player.seek(to: target, toleranceBefore: .zero, toleranceAfter: .zero)
-        currentTime = time
     }
 }

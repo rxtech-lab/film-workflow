@@ -709,8 +709,8 @@
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/rxtech-lab/RxAuthSwift";
 			requirement = {
-				branch = main;
-				kind = branch;
+				kind = exactVersion;
+				version = 1.2.1;
 			};
 		};
 		DFC60EA32FAF81D200B99679 /* XCRemoteSwiftPackageReference "textual" */ = {

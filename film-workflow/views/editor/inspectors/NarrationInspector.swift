@@ -19,15 +19,15 @@ struct NarrationInspector: View {
     }
 
     var body: some View {
-        InspectorLayout(versionsTitle: "Versions", versionCount: project.generatedFiles.count) {
-            VStack(spacing: 0) {
+        VStack(spacing: 0) {
+            InspectorEditingTabs(editorTitle: "Transcript") {
                 NarrativeProjectParametersView(project: project)
-                Divider()
-                GenerateButton(title: "Generate", isBusy: isGenerating, isEnabled: canGenerate) { showPromptSheet = true }
-                    .padding(10)
+            } editor: {
+                TranscriptEditorView(project: project)
             }
-        } versions: {
-            GeneratedNarrativeListView(files: project.generatedFiles)
+            Divider()
+            GenerateButton(title: "Generate", isBusy: isGenerating, isEnabled: canGenerate) { showPromptSheet = true }
+                .padding(10)
         }
         .alert("Error", isPresented: $showError) { Button("OK") {} } message: { Text(errorMessage ?? "An unknown error occurred.") }
         .insufficientCreditsAlert($insufficientCredits)

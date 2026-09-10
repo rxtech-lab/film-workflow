@@ -1,31 +1,28 @@
-#if os(macOS)
 import AppKit
 import AVKit
 import SwiftData
 import SwiftUI
 import UniformTypeIdentifiers
 
-/// Versions of a Remotion project's renders: play, reveal, export, delete.
-struct RemotionRenderListView: View {
+/// Versions of a sequence's renders: play, reveal, export, delete.
+struct SequenceRenderListView: View {
     @Environment(\.modelContext) private var modelContext
-    let project: RemotionProject
-    /// Bumped by the owner after a render so the list refetches.
-    var refreshToken: Int = 0
+    let sequence: SequenceProject
     /// Selected when the list first appears, e.g. from the library's Versions menu.
     var initialSelectionID: UUID? = nil
 
-    @State private var renders: [RemotionRender] = []
-    @State private var selected: RemotionRender?
+    @State private var renders: [SequenceRender] = []
+    @State private var selected: SequenceRender?
     @State private var player = AVPlayer()
-    @State private var pendingDeletion: RemotionRender?
+    @State private var pendingDeletion: SequenceRender?
 
     var body: some View {
         Group {
             if renders.isEmpty {
                 ContentUnavailableView(
-                    "No Renders Yet",
-                    systemImage: "film",
-                    description: Text("Render the composition to create the first version.")
+                    "No Renders",
+                    systemImage: "film.stack",
+                    description: Text("Render the sequence to create version 1.")
                 )
             } else {
                 HSplitView {
@@ -46,7 +43,8 @@ struct RemotionRenderListView: View {
                 }
             }
         }
-        .task(id: refreshToken) { reload() }
+        .task { reload() }
+        .onChange(of: sequence.updatedAt) { _, _ in reload() }
         .onChange(of: selected?.id) { _, _ in
             if let selected {
                 player.replaceCurrentItem(with: AVPlayerItem(url: selected.videoURL))
@@ -62,7 +60,7 @@ struct RemotionRenderListView: View {
             presenting: pendingDeletion
         ) { render in
             Button("Delete \(render.versionLabel)", role: .destructive) {
-                RemotionRenderService.delete(render, context: modelContext)
+                SequenceRenderService.delete(render, context: modelContext)
                 pendingDeletion = nil
                 reload()
             }
@@ -72,7 +70,7 @@ struct RemotionRenderListView: View {
         }
     }
 
-    private func row(_ render: RemotionRender) -> some View {
+    private func row(_ render: SequenceRender) -> some View {
         HStack(spacing: 10) {
             thumbnail(render)
                 .frame(width: 64, height: 36)
@@ -89,15 +87,15 @@ struct RemotionRenderListView: View {
     }
 
     @ViewBuilder
-    private func thumbnail(_ render: RemotionRender) -> some View {
+    private func thumbnail(_ render: SequenceRender) -> some View {
         if let url = render.thumbnailURL, let image = NSImage(contentsOf: url) {
             Image(nsImage: image).resizable().aspectRatio(contentMode: .fill)
         } else {
-            Rectangle().fill(.quaternary).overlay(Image(systemName: "film").foregroundStyle(.secondary))
+            Rectangle().fill(.quaternary).overlay(Image(systemName: "film.stack").foregroundStyle(.secondary))
         }
     }
 
-    private func detailBar(_ render: RemotionRender) -> some View {
+    private func detailBar(_ render: SequenceRender) -> some View {
         HStack {
             Text("\(render.versionLabel) · \(render.dimensionsLabel)")
                 .font(.callout)
@@ -109,7 +107,10 @@ struct RemotionRenderListView: View {
     }
 
     @ViewBuilder
-    private func actions(_ render: RemotionRender) -> some View {
+    private func actions(_ render: SequenceRender) -> some View {
+        Button {
+            NSWorkspace.shared.open(render.videoURL)
+        } label: { Label("Open in Player", systemImage: "play.rectangle") }
         Button {
             NSWorkspace.shared.activateFileViewerSelecting([render.videoURL])
         } label: { Label("Reveal in Finder", systemImage: "folder") }
@@ -122,7 +123,7 @@ struct RemotionRenderListView: View {
     }
 
     private func reload() {
-        renders = RemotionRenderService.renders(for: project, context: modelContext)
+        renders = SequenceRenderService.renders(for: sequence, context: modelContext)
         if selected == nil, let id = initialSelectionID, let initial = renders.first(where: { $0.id == id }) {
             selected = initial
         } else if selected == nil || !renders.contains(where: { $0.id == selected?.id }) {
@@ -130,18 +131,17 @@ struct RemotionRenderListView: View {
         }
     }
 
-    private func exportRender(_ render: RemotionRender) {
+    private func exportRender(_ render: SequenceRender) {
         let panel = NSSavePanel()
         panel.allowedContentTypes = [.mpeg4Movie]
         panel.canCreateDirectories = true
-        panel.nameFieldStringValue = "\(project.name)-\(render.versionLabel).mp4"
+        panel.nameFieldStringValue = "\(sequence.name)-\(render.versionLabel).mp4"
         panel.directoryURL = FileManager.default.urls(for: .moviesDirectory, in: .userDomainMask).first
         guard panel.runModal() == .OK, let url = panel.url else { return }
         do {
-            try RemotionRenderService.export(render, to: url)
+            try SequenceRenderService.export(render, to: url)
         } catch {
             NSAlert(error: error).runModal()
         }
     }
 }
-#endif

@@ -27,6 +27,7 @@ struct AccountDetailContent: View {
     @State private var balance = CreditBalanceStore.shared
     @State private var usage = UsageHistoryStore.shared
     @State private var confirmSignOut = false
+    @State private var refreshError: String?
 
     var body: some View {
         Group {
@@ -61,6 +62,14 @@ struct AccountDetailContent: View {
                         .buttonStyle(.borderedProminent)
                 }
             }
+        }
+        .alert("Couldn’t Refresh Account", isPresented: Binding(
+            get: { refreshError != nil },
+            set: { if !$0 { refreshError = nil } }
+        )) {
+            Button("OK") { refreshError = nil }
+        } message: {
+            Text(refreshError ?? "")
         }
         .alert("Sign out?", isPresented: $confirmSignOut) {
             Button("Cancel", role: .cancel) {}
@@ -153,6 +162,7 @@ struct AccountDetailContent: View {
         async let balanceRefresh: Void = balance.refresh()
         async let usageRefresh: Void = usage.refresh()
         _ = await (balanceRefresh, usageRefresh)
+        refreshError = balance.error ?? usage.error
     }
 
     private func icon(_ capability: String) -> String {

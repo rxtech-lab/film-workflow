@@ -1,13 +1,13 @@
 {
-  "originHash" : "61b124a472131d610e78e4569e06592222bacf2eca3f8a4aebfb33bd784971fa",
+  "originHash" : "c610acb80634d3ce1f2ec8b2358120ea64dc5a0daa958b3b4dab787e553bc225",
   "pins" : [
     {
       "identity" : "rxauthswift",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/rxtech-lab/RxAuthSwift",
       "state" : {
-        "branch" : "main",
-        "revision" : "af111a0fa7bdce6f9b53f4525df73a98d94e764e"
+        "revision" : "5a24957b801f1860dde9e80179b9c2058bd22eb9",
+        "version" : "1.2.1"
       }
     },
     {
@@ -35,6 +35,15 @@
       "state" : {
         "revision" : "3ffafb9722d5d918c614feb496c8789a3b59d222",
         "version" : "1.15.0"
+      }
+    },
+    {
+      "identity" : "swiftdraw",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/swhitty/SwiftDraw.git",
+      "state" : {
+        "revision" : "82699f4bdf2f075793cfa0d392eb27c59b41a3fe",
+        "version" : "0.29.0"
       }
     },
     {

@@ -4,7 +4,6 @@ import SwiftUI
 struct ImageInspector: View {
     let project: ImageGenProject
     @Environment(\.modelContext) private var modelContext
-    @Environment(\.projectStorage) private var storage
 
     @State private var isGenerating = false
     @State private var errorMessage: String?
@@ -25,19 +24,11 @@ struct ImageInspector: View {
     }
 
     var body: some View {
-        InspectorLayout(versionsTitle: "Images", versionCount: project.generatedFiles.count) {
-            VStack(spacing: 0) {
-                ImageGenProjectParametersView(project: project)
-                Divider()
-                GenerateButton(title: "Generate", isBusy: isGenerating, isEnabled: canGenerate) { Task { await generate() } }
-                    .padding(10)
-            }
-        } versions: {
-            GeneratedImageListView(files: project.generatedFiles) { file in
-                storage.deleteFile(at: file.imageFilePath)
-                modelContext.delete(file)
-                project.updatedAt = Date()
-            }
+        VStack(spacing: 0) {
+            ImageGenProjectParametersView(project: project)
+            Divider()
+            GenerateButton(title: "Generate", isBusy: isGenerating, isEnabled: canGenerate) { Task { await generate() } }
+                .padding(10)
         }
         .onAppear {
             let config = try? AppConfig.loadFromKeychain()

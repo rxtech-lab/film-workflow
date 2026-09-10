@@ -40,6 +40,14 @@ struct film_workflowApp: App {
         // access prompt would otherwise block an unattended run.
         if !ProcessInfo.processInfo.arguments.contains("-skipStartupAuth") {
             await AuthManager.shared.checkExistingAuth()
+            if let error = CreditBalanceStore.shared.error {
+                let alert = NSAlert()
+                alert.messageText = String(localized: "Couldn’t Connect to Server")
+                alert.informativeText = error
+                alert.alertStyle = .warning
+                alert.addButton(withTitle: String(localized: "OK"))
+                alert.runModal()
+            }
         }
         MCPServer.shared.bootstrap()
     }
@@ -51,6 +59,8 @@ struct film_workflowApp: App {
             EditorWindowRoot(documentURL: url)
                 .task { await Self.bootstrapServices() }
         }
+        .windowStyle(.hiddenTitleBar)
+        .windowToolbarStyle(.unifiedCompact)
         .defaultLaunchBehavior(.suppressed)
         .defaultSize(width: 1400, height: 900)
         .commands {
@@ -101,6 +111,7 @@ struct film_workflowApp: App {
                 }
                 .keyboardShortcut("0", modifiers: [.command, .option])
             }
+            MediaImportCommands()
             AccountCommands()
         }
 
@@ -108,6 +119,7 @@ struct film_workflowApp: App {
             WelcomeWindowView()
                 .task { await Self.bootstrapServices() }
         }
+        .windowStyle(.hiddenTitleBar)
         .windowResizability(.contentSize)
         .defaultLaunchBehavior(.presented)
 

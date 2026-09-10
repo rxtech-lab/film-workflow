@@ -34,22 +34,7 @@
         }
       }
     },
-    "\"%@\" and its generated audio and reference files will be permanently deleted." : {
-
-    },
-    "\"%@\" and its generated audio will be permanently deleted." : {
-
-    },
-    "\"%@\" and its generated images will be permanently deleted." : {
-
-    },
-    "\"%@\" and its generated videos will be permanently deleted." : {
-
-    },
     "\"%@\" and its known spelling variants will be permanently deleted." : {
-
-    },
-    "\"%@\" and its Remotion source, assets, and chat history will be permanently deleted." : {
 
     },
     "\"%@\" isn't a glossary term — it will show as written." : {
@@ -59,9 +44,6 @@
 
     },
     "\"%@\" will be deleted. Their paragraphs will be reassigned to the first remaining speaker." : {
-
-    },
-    "\"%@\", its transcript versions, and any audio it owns will be permanently deleted." : {
 
     },
     "“merge captions 12 and 13”, “fix every RxLab spelling”, “split #4 so the second line isn't so long”." : {
@@ -131,11 +113,22 @@
       }
     },
     "%@ — up to date" : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "%@ — 已是最新"
+          }
+        }
+      }
+    },
+    "%@ · %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ · %2$@"
           }
         }
       }
@@ -232,6 +225,9 @@
         }
       }
     },
+    "%@ Versions" : {
+
+    },
     "%@ will be removed from this device. You can download it again later." : {
       "localizations" : {
         "zh-Hans" : {
@@ -262,6 +258,16 @@
         }
       },
       "shouldTranslate" : false
+    },
+    "%lld × %lld @ %lld fps, %@. Saved into the film as version %lld." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$lld × %2$lld @ %3$lld fps, %4$@. Saved into the film as version %5$lld."
+          }
+        }
+      }
     },
     "%lld captions" : {
       "localizations" : {
@@ -296,6 +302,16 @@
         }
       }
     },
+    "%lld of %lld need rendering" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$lld of %2$lld need rendering"
+          }
+        }
+      }
+    },
     "%lld of %lld selected" : {
       "localizations" : {
         "en" : {
@@ -314,6 +330,16 @@
     },
     "%lld placeholders aren't glossary terms — they will show as written." : {
 
+    },
+    "%lld Remotion clip%@ will be rendered first: %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$lld Remotion clip%2$@ will be rendered first: %3$@"
+          }
+        }
+      }
     },
     "%lld selected" : {
       "localizations" : {
@@ -334,6 +360,9 @@
           }
         }
       }
+    },
+    "%lld versions" : {
+
     },
     "%lld word timings" : {
       "localizations" : {
@@ -448,10 +477,10 @@
         }
       }
     },
-    "A generation is still running" : {
+    "A fresh start" : {
 
     },
-    "A generation is still running with the provider." : {
+    "A generation is still running at the provider." : {
 
     },
     "A Major" : {
@@ -489,6 +518,9 @@
           }
         }
       }
+    },
+    "Active" : {
+
     },
     "Add" : {
       "localizations" : {
@@ -722,6 +754,12 @@
         }
       }
     },
+    "All" : {
+
+    },
+    "All %lld rendered for this size" : {
+
+    },
     "All interfaces (0.0.0.0)" : {
       "localizations" : {
         "zh-Hans" : {
@@ -883,6 +921,9 @@
           }
         }
       }
+    },
+    "Arrange footage, sound and captions on your timeline." : {
+
     },
     "Ask for a change…" : {
       "localizations" : {
@@ -1197,6 +1238,9 @@
         }
       }
     },
+    "Build your first sequence" : {
+
+    },
     "Building captions…" : {
       "localizations" : {
         "zh-Hans" : {
@@ -1367,6 +1411,7 @@
       }
     },
     "Caption text stays exactly as you wrote it." : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -1470,6 +1515,7 @@
       }
     },
     "Choose a caption project from the sidebar or create a new one." : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -1480,6 +1526,7 @@
       }
     },
     "Choose a caption project from the sidebar." : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -1490,6 +1537,7 @@
       }
     },
     "Choose a chat model in Settings › AI Provider, or pick one from the engine menu below the composer." : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -1510,6 +1558,7 @@
       }
     },
     "Choose a narrative from the sidebar or create a new one." : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -1520,6 +1569,7 @@
       }
     },
     "Choose a narrative from the sidebar." : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -1530,6 +1580,7 @@
       }
     },
     "Choose a project from the sidebar or create a new one." : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -1540,6 +1591,7 @@
       }
     },
     "Choose a project from the sidebar." : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -1568,6 +1620,9 @@
           }
         }
       }
+    },
+    "Choose footage version" : {
+
     },
     "Choose where AI work runs" : {
       "localizations" : {
@@ -1704,6 +1759,9 @@
         }
       }
     },
+    "Clear Menu" : {
+
+    },
     "Clear this conversation" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -1725,7 +1783,10 @@
         }
       }
     },
-    "Click \"Create Composition & Start Studio\" to start the preview." : {
+    "Click to preview, drag onto the timeline" : {
+
+    },
+    "Clip" : {
 
     },
     "Clips: %lld" : {
@@ -1754,6 +1815,9 @@
         }
       }
     },
+    "Codec" : {
+
+    },
     "Codex" : {
       "localizations" : {
         "zh-Hans" : {
@@ -1771,6 +1835,7 @@
 
     },
     "Combining the chunks into one file…" : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -1783,7 +1848,21 @@
     "Command-line agents" : {
 
     },
+    "Composition" : {
+
+    },
+    "Composition is %lld × %lld @ %lldfps. Output will be %lld × %lld @ %lldfps, saved into the film as a new version." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Composition is %1$lld × %2$lld @ %3$lldfps. Output will be %4$lld × %5$lld @ %6$lldfps, saved into the film as a new version."
+          }
+        }
+      }
+    },
     "Composition is %lld × %lld @ %lldfps. Output will be %lld × %lld @ %lldfps." : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -1800,6 +1879,7 @@
       }
     },
     "Composition.tsx" : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -1879,6 +1959,9 @@
         }
       }
     },
+    "Copy into the film" : {
+
+    },
     "Copy Path" : {
       "localizations" : {
         "zh-Hans" : {
@@ -1899,6 +1982,21 @@
         }
       }
     },
+    "Couldn’t add footage" : {
+
+    },
+    "Couldn’t Connect to Server" : {
+
+    },
+    "Couldn’t Open Film" : {
+
+    },
+    "Couldn’t Refresh Account" : {
+
+    },
+    "Couldn’t Start Preview" : {
+
+    },
     "Couldn’t Update Project Groups" : {
 
     },
@@ -1913,6 +2011,15 @@
       }
     },
     "Create" : {
+
+    },
+    "Create a composition from the inspector to start the preview." : {
+
+    },
+    "Create a film or open an existing one.\nYour recent films will appear here." : {
+
+    },
+    "Create a sequence to adjust its settings." : {
 
     },
     "Create Composition & Start Studio" : {
@@ -2037,6 +2144,9 @@
         }
       }
     },
+    "Delete %@" : {
+
+    },
     "Delete Caption" : {
 
     },
@@ -2058,9 +2168,6 @@
     "Delete Paragraph" : {
 
     },
-    "Delete Project" : {
-
-    },
     "Delete Section" : {
 
     },
@@ -2074,9 +2181,6 @@
 
     },
     "Delete this agent thread?" : {
-
-    },
-    "Delete this caption project?" : {
 
     },
     "Delete this caption?" : {
@@ -2097,7 +2201,7 @@
     "Delete this glossary term?" : {
 
     },
-    "Delete this image project?" : {
+    "Delete this item?" : {
 
     },
     "Delete this lyric section?" : {
@@ -2123,10 +2227,8 @@
         }
       }
     },
-    "Delete this music project?" : {
-
-    },
     "Delete this music?" : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -2137,6 +2239,7 @@
       }
     },
     "Delete this narration?" : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -2145,9 +2248,6 @@
           }
         }
       }
-    },
-    "Delete this narrative project?" : {
-
     },
     "Delete this paragraph?" : {
 
@@ -2158,7 +2258,7 @@
     "Delete this reference image?" : {
 
     },
-    "Delete this Remotion project?" : {
+    "Delete this render?" : {
 
     },
     "Delete this shortcode?" : {
@@ -2182,9 +2282,6 @@
           }
         }
       }
-    },
-    "Delete this video project?" : {
-
     },
     "Delete Thread" : {
 
@@ -2231,6 +2328,7 @@
       }
     },
     "Describe what you want in plain language; the agent operates the projects for you." : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -2376,7 +2474,7 @@
         }
       }
     },
-    "Drop projects here" : {
+    "Drop footage here" : {
 
     },
     "Drums" : {
@@ -2390,6 +2488,7 @@
       }
     },
     "Duplicate" : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -2464,6 +2563,7 @@
       }
     },
     "Edit" : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -2522,6 +2622,9 @@
           }
         }
       }
+    },
+    "Editing" : {
+
     },
     "Editor" : {
       "localizations" : {
@@ -2594,6 +2697,7 @@
       }
     },
     "End time" : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -2847,6 +2951,7 @@
       }
     },
     "Export Video" : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -2916,7 +3021,11 @@
         }
       }
     },
+    "File unavailable" : {
+
+    },
     "Files" : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -2925,6 +3034,9 @@
           }
         }
       }
+    },
+    "Filter" : {
+
     },
     "Firm" : {
       "localizations" : {
@@ -2971,6 +3083,12 @@
           }
         }
       }
+    },
+    "Footage" : {
+
+    },
+    "Footage version" : {
+
     },
     "Form" : {
       "extractionState" : "stale",
@@ -3067,6 +3185,7 @@
       }
     },
     "Gemini" : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -3169,6 +3288,9 @@
         }
       }
     },
+    "Generate footage from the inspector, then play it here." : {
+
+    },
     "Generate with AI…" : {
 
     },
@@ -3203,6 +3325,7 @@
       }
     },
     "Generated Music" : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -3233,6 +3356,7 @@
       }
     },
     "Generated Narrative" : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -3243,6 +3367,7 @@
       }
     },
     "Generated Narratives" : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -3255,13 +3380,11 @@
     "Generated Video" : {
 
     },
-    "Generated Videos" : {
-
-    },
     "Generated videos will appear here." : {
 
     },
     "Generating Audio" : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -3272,6 +3395,7 @@
       }
     },
     "Generating Captions" : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -3285,6 +3409,9 @@
 
     },
     "Generating video…" : {
+
+    },
+    "Generating…" : {
 
     },
     "Genre" : {
@@ -3347,6 +3474,12 @@
         }
       }
     },
+    "Go to end" : {
+
+    },
+    "Go to start" : {
+
+    },
     "Google" : {
       "localizations" : {
         "zh-Hans" : {
@@ -3400,7 +3533,7 @@
     "Group name" : {
 
     },
-    "Groups are shared by Music, Narrative, Captions, Image, and Remotion projects." : {
+    "Groups hold every kind of footage and sequences." : {
 
     },
     "happy" : {
@@ -3484,6 +3617,7 @@
       }
     },
     "History" : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -3492,6 +3626,9 @@
           }
         }
       }
+    },
+    "Holds %lld s on the timeline" : {
+
     },
     "How many times the agent may call tools before it has to answer. Raise it for long jobs; lower it to cut a looping model short sooner." : {
 
@@ -3559,6 +3696,19 @@
     "Images the agent generates for this project appear here." : {
 
     },
+    "Import" : {
+
+    },
+    "Import %lld file%@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Import %1$lld file%2$@"
+          }
+        }
+      }
+    },
     "Import Audio…" : {
       "localizations" : {
         "zh-Hans" : {
@@ -3579,7 +3729,23 @@
         }
       }
     },
+    "Import media or generate footage, then drag it to the timeline." : {
+
+    },
+    "Import Media…" : {
+
+    },
+    "Import video, audio or images from disk" : {
+
+    },
+    "Import…" : {
+
+    },
+    "Imported" : {
+
+    },
     "Imported file" : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -3588,6 +3754,15 @@
           }
         }
       }
+    },
+    "Imported File" : {
+
+    },
+    "Imported files have a single version." : {
+
+    },
+    "Importing…" : {
+
     },
     "Include timestamps" : {
       "localizations" : {
@@ -3638,6 +3813,9 @@
           }
         }
       }
+    },
+    "Inspector" : {
+
     },
     "Instrumental" : {
       "localizations" : {
@@ -3710,6 +3888,7 @@
       }
     },
     "JSON" : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -3764,6 +3943,9 @@
           }
         }
       }
+    },
+    "Kind" : {
+
     },
     "Knowledgeable" : {
       "localizations" : {
@@ -3908,6 +4090,9 @@
         }
       }
     },
+    "Leave in place (reference)" : {
+
+    },
     "Leave the language blank to auto-detect. Speaker detection needs Azure or Gemini." : {
       "localizations" : {
         "zh-Hans" : {
@@ -3927,6 +4112,9 @@
           }
         }
       }
+    },
+    "Library" : {
+
     },
     "Limits" : {
 
@@ -3960,9 +4148,6 @@
           }
         }
       }
-    },
-    "Loading caption project" : {
-
     },
     "Loading Captions…" : {
 
@@ -4231,6 +4416,7 @@
       }
     },
     "Move Down" : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -4254,6 +4440,7 @@
       }
     },
     "Move Up" : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -4338,6 +4525,9 @@
     "Names and jargon this recording uses. Speech recognition often gets them wrong; listing them here lets the AI review find and fix those mistakes, and keeps a term from being split across two captions. Give a term a translation and every translated caption that uses it follows along." : {
 
     },
+    "Narration" : {
+
+    },
     "Narrative" : {
       "localizations" : {
         "zh-Hans" : {
@@ -4379,6 +4569,7 @@
       }
     },
     "Narrative project" : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -4389,6 +4580,7 @@
       }
     },
     "Narratives" : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -4411,7 +4603,11 @@
         }
       }
     },
+    "New" : {
+
+    },
     "New Caption Project" : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -4421,13 +4617,14 @@
         }
       }
     },
+    "New Film…" : {
+
+    },
     "New Folder…" : {
 
     },
-    "New Group" : {
-
-    },
     "New Narrative" : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -4438,6 +4635,7 @@
       }
     },
     "New Project" : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -4448,6 +4646,9 @@
       }
     },
     "New Project Group" : {
+
+    },
+    "New Sequence" : {
 
     },
     "New thread" : {
@@ -4478,6 +4679,7 @@
       }
     },
     "No captions" : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -4498,6 +4700,12 @@
       }
     },
     "No changes applied." : {
+
+    },
+    "No Clip Selected" : {
+
+    },
+    "No footage yet" : {
 
     },
     "No Generated Music" : {
@@ -4604,10 +4812,19 @@
         }
       }
     },
+    "No Preview" : {
+
+    },
     "No project" : {
 
     },
     "No reference images." : {
+
+    },
+    "No Renders" : {
+
+    },
+    "No Renders Yet" : {
 
     },
     "No Sections" : {
@@ -4620,6 +4837,9 @@
         }
       }
     },
+    "No Sequence" : {
+
+    },
     "No speaker assigned." : {
       "localizations" : {
         "zh-Hans" : {
@@ -4631,6 +4851,9 @@
       }
     },
     "No Threads" : {
+
+    },
+    "No Versions" : {
 
     },
     "No videos yet" : {
@@ -4687,6 +4910,9 @@
         }
       }
     },
+    "None on the timeline" : {
+
+    },
     "Nostalgic" : {
       "localizations" : {
         "zh-Hans" : {
@@ -4698,6 +4924,7 @@
       }
     },
     "Not aligned" : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -4708,6 +4935,12 @@
       }
     },
     "Not enough credits" : {
+
+    },
+    "Not Found" : {
+
+    },
+    "Not generated yet" : {
 
     },
     "Not selected" : {
@@ -4751,6 +4984,7 @@
       }
     },
     "Nothing needed translating into %@." : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -4759,6 +4993,9 @@
           }
         }
       }
+    },
+    "Nothing selected" : {
+
     },
     "Nothing to Change" : {
       "localizations" : {
@@ -4769,6 +5006,9 @@
           }
         }
       }
+    },
+    "Nothing to preview yet" : {
+
     },
     "Offline" : {
       "localizations" : {
@@ -4871,6 +5111,15 @@
         }
       }
     },
+    "Open Film…" : {
+
+    },
+    "Open in Player" : {
+
+    },
+    "Open Recent" : {
+
+    },
     "Open Retimer" : {
       "localizations" : {
         "zh-Hans" : {
@@ -4908,6 +5157,9 @@
         }
       }
     },
+    "Open…" : {
+
+    },
     "OpenAI" : {
       "localizations" : {
         "zh-Hans" : {
@@ -4919,6 +5171,7 @@
       }
     },
     "OpenAI-compatible" : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -5055,6 +5308,7 @@
       }
     },
     "Pane" : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -5065,6 +5319,7 @@
       }
     },
     "Parameters" : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -5134,6 +5389,7 @@
 
     },
     "Photo Library" : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -5173,6 +5429,9 @@
         }
       }
     },
+    "Pick up where you left off." : {
+
+    },
     "Pin this thread" : {
 
     },
@@ -5205,6 +5464,9 @@
           }
         }
       }
+    },
+    "Play" : {
+
     },
     "Play / Pause" : {
       "localizations" : {
@@ -5330,6 +5592,9 @@
         }
       }
     },
+    "Preview unavailable." : {
+
+    },
     "Preview voice" : {
       "localizations" : {
         "zh-Hans" : {
@@ -5371,6 +5636,7 @@
       }
     },
     "Projects" : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -5401,6 +5667,7 @@
       }
     },
     "Proposed changes" : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -5526,6 +5793,12 @@
           }
         }
       }
+    },
+    "Ready for your story" : {
+
+    },
+    "Recent Films" : {
+
     },
     "Recent usage" : {
 
@@ -5666,7 +5939,11 @@
         }
       }
     },
+    "Remotion Clips" : {
+
+    },
     "Remotion Projects" : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -5737,6 +6014,7 @@
       }
     },
     "Rename Caption Project" : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -5750,6 +6028,7 @@
 
     },
     "Rename Project" : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -5772,6 +6051,9 @@
         }
       }
     },
+    "Rename…" : {
+
+    },
     "Render" : {
       "localizations" : {
         "zh-Hans" : {
@@ -5793,6 +6075,7 @@
       }
     },
     "Render Now" : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -5801,6 +6084,27 @@
           }
         }
       }
+    },
+    "Render Remotion Clips" : {
+
+    },
+    "Render Sequence" : {
+
+    },
+    "Render the composition to create the first version." : {
+
+    },
+    "Render the current sequence as a new version" : {
+
+    },
+    "Render the sequence to create version 1." : {
+
+    },
+    "Render Version" : {
+
+    },
+    "Rendering Sequence" : {
+
     },
     "Rendering Video" : {
       "localizations" : {
@@ -5813,7 +6117,6 @@
       }
     },
     "Rendering…" : {
-      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -5824,6 +6127,7 @@
       }
     },
     "Reorder" : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -6097,6 +6401,9 @@
         }
       }
     },
+    "RxFilmStudio" : {
+
+    },
     "sad" : {
       "localizations" : {
         "zh-Hans" : {
@@ -6158,6 +6465,7 @@
       }
     },
     "Save To" : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -6261,6 +6569,7 @@
       }
     },
     "Section Time" : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -6274,6 +6583,7 @@
 
     },
     "Select a Caption Project" : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -6282,6 +6592,9 @@
           }
         }
       }
+    },
+    "Select a clip on the timeline." : {
+
     },
     "Select a model" : {
       "localizations" : {
@@ -6294,6 +6607,7 @@
       }
     },
     "Select a Narrative" : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -6304,6 +6618,7 @@
       }
     },
     "Select a Project" : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -6322,6 +6637,12 @@
           }
         }
       }
+    },
+    "Select footage to adjust its settings." : {
+
+    },
+    "Select footage to preview, or create a sequence to start editing." : {
+
     },
     "Select None" : {
       "localizations" : {
@@ -6407,6 +6728,7 @@
       }
     },
     "Sentence" : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -6417,6 +6739,7 @@
       }
     },
     "Sentence aligned" : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -6425,6 +6748,9 @@
           }
         }
       }
+    },
+    "Sequence" : {
+
     },
     "Set" : {
       "localizations" : {
@@ -6519,6 +6845,7 @@
       }
     },
     "Setup" : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -6567,6 +6894,12 @@
           }
         }
       }
+    },
+    "Show All Versions…" : {
+
+    },
+    "Show in Finder" : {
+
     },
     "Show Lyrics" : {
       "localizations" : {
@@ -6866,6 +7199,9 @@
         }
       }
     },
+    "SSML Preview" : {
+
+    },
     "Start" : {
       "localizations" : {
         "zh-Hans" : {
@@ -6906,6 +7242,7 @@
       }
     },
     "Start time" : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -6934,9 +7271,6 @@
           }
         }
       }
-    },
-    "Started %@ ago" : {
-
     },
     "Starting a new generation abandons the running one — the provider may still bill it." : {
 
@@ -6971,7 +7305,11 @@
         }
       }
     },
+    "Still" : {
+
+    },
     "Stitching Audio" : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -7031,6 +7369,9 @@
     "Stop waiting for this video?" : {
 
     },
+    "Storage" : {
+
+    },
     "Strings" : {
       "localizations" : {
         "zh-Hans" : {
@@ -7042,6 +7383,7 @@
       }
     },
     "Structure" : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -7052,6 +7394,7 @@
       }
     },
     "Studio preview is paused while rendering." : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -7075,6 +7418,7 @@
 
     },
     "SubRip" : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -7187,6 +7531,7 @@
       }
     },
     "The audio duration could not be determined." : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -7267,6 +7612,15 @@
         }
       }
     },
+    "The file could not be found." : {
+
+    },
+    "The film stays self-contained and portable. Large footage takes space twice." : {
+
+    },
+    "The film stays small, but breaks if the original file moves." : {
+
+    },
     "The generated audio file will be permanently deleted." : {
 
     },
@@ -7323,6 +7677,7 @@
 
     },
     "The provider returned no phrases." : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -7333,6 +7688,9 @@
       }
     },
     "The provider will keep working on it and may still bill this job. You can resume it from the project later." : {
+
+    },
+    "The rendered video file will be permanently deleted." : {
 
     },
     "The shortcode will be permanently removed from this paragraph." : {
@@ -7388,7 +7746,11 @@
     "This caption and its translations will be permanently deleted from the current version." : {
 
     },
+    "This creates version %lld. The current version and its translations are kept, and translations carry over for captions that come out unchanged." : {
+
+    },
     "This creates version %lld. The current version and its translations are kept, and translations carry over for captions that come out unchanged. You can switch back in Caption Setup at any time." : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -7397,9 +7759,6 @@
           }
         }
       }
-    },
-    "This generation is over a day old and probably expired." : {
-
     },
     "This lyric section will be permanently deleted." : {
 
@@ -7451,6 +7810,7 @@
       }
     },
     "This will permanently remove the audio file." : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -7570,6 +7930,9 @@
         }
       }
     },
+    "Transcribe the audio to create version 1." : {
+
+    },
     "Transcribe this audio into captions" : {
       "localizations" : {
         "zh-Hans" : {
@@ -7609,6 +7972,9 @@
           }
         }
       }
+    },
+    "Transcript Preview" : {
+
     },
     "Transcription" : {
       "localizations" : {
@@ -7915,6 +8281,7 @@
       }
     },
     "Update %@ (%lld to do)" : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -8026,6 +8393,9 @@
         }
       }
     },
+    "Use This Version" : {
+
+    },
     "Use your account to manage credits and subscription usage." : {
 
     },
@@ -8104,7 +8474,11 @@
     "Version" : {
 
     },
+    "Version %@" : {
+
+    },
     "Version %1$lld and its %2$lld captions will be removed. This cannot be undone." : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -8144,6 +8518,9 @@
         }
       }
     },
+    "Versions (%lld)" : {
+
+    },
     "Video" : {
 
     },
@@ -8167,6 +8544,7 @@
 
     },
     "View Source" : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -8175,6 +8553,9 @@
           }
         }
       }
+    },
+    "Viewer" : {
+
     },
     "Violin" : {
       "localizations" : {
@@ -8237,6 +8618,7 @@
       }
     },
     "WebVTT" : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -8245,6 +8627,9 @@
           }
         }
       }
+    },
+    "Welcome to RxFilmStudio" : {
+
     },
     "What to keep out of the shot. Optional." : {
 
@@ -8270,6 +8655,7 @@
       }
     },
     "Whisper (on device)" : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -8360,6 +8746,7 @@
       }
     },
     "Word (karaoke)" : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -8370,6 +8757,7 @@
       }
     },
     "Word aligned" : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -8551,6 +8939,9 @@
           }
         }
       }
+    },
+    "Your next story starts here." : {
+
     },
     "Your projects are not affected." : {
 

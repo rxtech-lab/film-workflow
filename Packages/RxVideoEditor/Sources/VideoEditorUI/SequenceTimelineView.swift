@@ -16,7 +16,11 @@ public struct SequenceTimelineView: View {
 
     @State private var pixelsPerSecond: Double = 40
     @State private var dragState = ClipDragState()
+    @State private var hoveredHandle: TrimHandleID?
     @State private var dropTarget: (trackID: UUID, time: TimeInterval)?
+    /// The footage being dragged over the lanes, decoded on entry so the
+    /// ghost clip can take its real length.
+    @State private var dragPreviewItem: FootageDragItem?
     @State private var thumbnails: [String: CGImage] = [:]
 
     private let headerWidth: CGFloat = 64
@@ -40,31 +44,47 @@ public struct SequenceTimelineView: View {
         self.onDeleteClip = onDeleteClip
     }
 
-    private var contentDuration: TimeInterval { max(timeline.duration + 10, 30) }
+    private var contentDuration: TimeInterval { max(max(timeline.duration, playhead) + 10, 30) }
     private var contentWidth: CGFloat { CGFloat(contentDuration * pixelsPerSecond) }
 
     public var body: some View {
         VStack(spacing: 0) {
             toolbar
             Divider()
-            HStack(spacing: 0) {
-                trackHeaders
-                Divider()
-                ScrollView([.horizontal, .vertical]) {
-                    ZStack(alignment: .topLeading) {
-                        VStack(spacing: 0) {
-                            ruler
-                            ForEach(timeline.tracks) { track in
-                                lane(track)
-                                Divider()
+            GeometryReader { geometry in
+                let canvasHeight = max(geometry.size.height, rulerHeight + CGFloat(timeline.tracks.count) * (laneHeight + 1))
+                let canvasWidth = max(contentWidth, geometry.size.width - headerWidth - 1)
+
+                // Headers and lanes share vertical scrolling so they never drift apart.
+                ScrollView(.vertical) {
+                    HStack(alignment: .top, spacing: 0) {
+                        trackHeaders
+                        Divider()
+                        ScrollView(.horizontal) {
+                            ZStack(alignment: .topLeading) {
+                                VStack(spacing: 0) {
+                                    ruler
+                                    ForEach(timeline.tracks) { track in
+                                        lane(track, width: canvasWidth)
+                                        Divider()
+                                    }
+                                    Spacer(minLength: 0)
+                                }
+                                .frame(width: canvasWidth, height: canvasHeight, alignment: .topLeading)
+                                playheadLine(height: canvasHeight)
                             }
+                            .coordinateSpace(name: "timelineCanvas")
                         }
-                        .frame(width: contentWidth)
-                        playheadLine
+                        .defaultScrollAnchor(.topLeading)
+                        .frame(maxWidth: .infinity)
                     }
+                    .frame(height: canvasHeight, alignment: .top)
                 }
+                .defaultScrollAnchor(.topLeading)
             }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+
         .onDeleteCommand { deleteSelection() }
         .onKeyPress(.delete) { deleteSelection(); return .handled }
     }
@@ -73,6 +93,27 @@ public struct SequenceTimelineView: View {
 
     private var toolbar: some View {
         HStack(spacing: 12) {
+            Menu {
+                Button {
+                    TimelineEditor.addTrack(&timeline, kind: .video)
+                } label: {
+                    Label("Video Track", systemImage: "film")
+                }
+                Button {
+                    TimelineEditor.addTrack(&timeline, kind: .audio)
+                } label: {
+                    Label("Audio Track", systemImage: "waveform")
+                }
+                Button {
+                    TimelineEditor.addTrack(&timeline, kind: .overlay)
+                } label: {
+                    Label("Overlay Track", systemImage: "square.3.layers.3d")
+                }
+            } label: {
+                Label("Add Track", systemImage: "plus")
+            }
+            .fixedSize()
+            .help("Add a video, audio or overlay track")
             Text("\(timeline.width)×\(timeline.height) · \(timeline.fps) fps")
                 .font(.caption)
                 .foregroundStyle(.secondary)
@@ -153,7 +194,7 @@ public struct SequenceTimelineView: View {
 
     // MARK: - Lanes
 
-    private func lane(_ track: Track) -> some View {
+    private func lane(_ track: Track, width: CGFloat) -> some View {
         ZStack(alignment: .topLeading) {
             Rectangle()
                 .fill(laneColor(track.kind))
@@ -166,29 +207,116 @@ public struct SequenceTimelineView: View {
                 clipView(clip, on: track)
             }
             if let dropTarget, dropTarget.trackID == track.id {
-                Rectangle()
-                    .fill(Color.accentColor.opacity(0.6))
-                    .frame(width: 2, height: laneHeight)
-                    .offset(x: CGFloat(dropTarget.time * pixelsPerSecond))
+                if let dragPreviewItem {
+                    dropGhost(dragPreviewItem, start: dropTarget.time)
+                } else {
+                    Rectangle()
+                        .fill(Color.accentColor.opacity(0.6))
+                        .frame(width: 2, height: laneHeight)
+                        .offset(x: CGFloat(dropTarget.time * pixelsPerSecond))
+                }
             }
         }
-        .frame(width: contentWidth, height: laneHeight)
-        .dropDestination(for: FootageDragItem.self) { items, location in
-            dropTarget = nil
-            guard let item = items.first, track.kind.accepts(item.source.kind) else { return false }
-            let time = snappedDropTime(location.x / pixelsPerSecond, duration: item.defaultClipDuration, on: track)
-            onDrop(item, track.id, time)
-            return true
-        } isTargeted: { targeted in
-            if !targeted, dropTarget?.trackID == track.id { dropTarget = nil }
+        .frame(width: width, height: laneHeight)
+        .onDrop(of: [.rxFootage], delegate: FootageLaneDropDelegate(
+            entered: { item in
+                dragPreviewItem = item
+                Task { await loadThumbnail(for: item.source) }
+            },
+            hover: { point in
+                if let point, let landing = landing(for: dragPreviewItem, at: point.x / pixelsPerSecond, hovered: track) {
+                    dropTarget = (landing.track.id, landing.time)
+                } else {
+                    dropTarget = nil
+                }
+            },
+            drop: { item, point in
+                dropTarget = nil
+                dragPreviewItem = nil
+                if let landing = landing(for: item, at: point.x / pixelsPerSecond, hovered: track) {
+                    onDrop(item, landing.track.id, landing.time)
+                }
+            }
+        ))
+    }
+
+    /// Where footage would land from a pointer time: snapped, pushed past any
+    /// clip already there, and moved to the first lane that can hold the
+    /// kind when the hovered one cannot. Nil when no lane accepts it.
+    private func landing(for item: FootageDragItem?, at raw: TimeInterval, hovered: Track) -> (track: Track, time: TimeInterval)? {
+        let duration = item?.defaultClipDuration ?? FootageDragItem.defaultStillDuration
+        let track: Track
+        if let item, !hovered.kind.accepts(item.source.kind) {
+            guard let compatible = timeline.tracks.first(where: { $0.kind.accepts(item.source.kind) }) else { return nil }
+            track = compatible
+        } else {
+            track = hovered
         }
-        .onContinuousHover { phase in
-            // Hover feedback for the drop position happens through isTargeted;
-            // continuous hover keeps the indicator following the pointer.
-            if case .active(let point) = phase, dropTarget?.trackID == track.id {
-                dropTarget = (track.id, timeline.quantized(max(0, point.x / pixelsPerSecond)))
+        return (track, snappedDropTime(max(0, raw), duration: duration, on: track))
+    }
+
+    /// The clip as it will sit once dropped: its real length at the current
+    /// zoom, its thumbnail, and the start and end timecodes it will get.
+    private func dropGhost(_ item: FootageDragItem, start: TimeInterval) -> some View {
+        let duration = item.defaultClipDuration
+        let width = max(4, CGFloat(duration * pixelsPerSecond))
+        let inset: CGFloat = 3
+        let startLabel = Timecode.string(seconds: start, fps: timeline.fps)
+        let endLabel = Timecode.string(seconds: start + duration, fps: timeline.fps)
+        return ZStack(alignment: .topLeading) {
+            RoundedRectangle(cornerRadius: 5)
+                .fill(item.source.kind.clipColor.opacity(0.55))
+            if let image = thumbnails[item.source.id] {
+                Image(decorative: image, scale: 1)
+                    .resizable()
+                    .aspectRatio(contentMode: .fill)
+                    .frame(width: min(width - 8, 70), height: laneHeight - inset * 2 - 4)
+                    .clipShape(RoundedRectangle(cornerRadius: 3))
+                    .padding(.leading, 4)
+                    .padding(.top, 2)
+                    .opacity(0.8)
+            }
+            Text(item.source.displayName)
+                .font(.caption2.weight(.medium))
+                .foregroundStyle(.white)
+                .lineLimit(1)
+                .padding(.horizontal, 6)
+                .padding(.top, 3)
+                .frame(maxWidth: .infinity, alignment: .topLeading)
+                .background(alignment: .topLeading) {
+                    Rectangle().fill(.black.opacity(0.35)).frame(height: 14)
+                }
+            HStack(spacing: 4) {
+                Text(startLabel)
+                if width > 150 {
+                    Spacer(minLength: 0)
+                    Text(endLabel)
+                }
+            }
+            .font(.system(size: 9, weight: .semibold, design: .monospaced))
+            .foregroundStyle(.white)
+            .padding(.horizontal, 5)
+            .padding(.bottom, 2)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
+            RoundedRectangle(cornerRadius: 5)
+                .strokeBorder(Color.accentColor, style: StrokeStyle(lineWidth: 1.5, dash: [4, 3]))
+        }
+        .frame(width: width, height: laneHeight - inset * 2)
+        .clipped()
+        .overlay(alignment: .topLeading) {
+            // The end time sits past the clip when there is no room inside it.
+            if width <= 150 {
+                Text(endLabel)
+                    .font(.system(size: 9, design: .monospaced))
+                    .foregroundStyle(Color.accentColor)
+                    .padding(.horizontal, 4)
+                    .background(.background.opacity(0.85), in: RoundedRectangle(cornerRadius: 3))
+                    .offset(x: width + 4, y: laneHeight - inset * 2 - 14)
+                    .fixedSize()
             }
         }
+        .offset(x: CGFloat(start * pixelsPerSecond), y: inset)
+        .allowsHitTesting(false)
     }
 
     private func snappedDropTime(_ raw: TimeInterval, duration: TimeInterval, on track: Track) -> TimeInterval {
@@ -216,7 +344,7 @@ public struct SequenceTimelineView: View {
 
         return ZStack(alignment: .leading) {
             RoundedRectangle(cornerRadius: 5)
-                .fill(clipColor(clip.source.kind).opacity(isSelected ? 1 : 0.85))
+                .fill(clip.source.kind.clipColor.opacity(isSelected ? 1 : 0.85))
             if let image = thumbnails[clip.source.id] {
                 Image(decorative: image, scale: 1)
                     .resizable()
@@ -244,10 +372,14 @@ public struct SequenceTimelineView: View {
                 Spacer(minLength: 0)
                 trimHandle(clip, leading: false)
             }
+            if isDragging {
+                dragReadout(alignment: dragState.mode == .trimLeading ? .bottomLeading : .bottomTrailing)
+            }
         }
         .frame(width: width, height: laneHeight - inset * 2)
         .offset(x: x, y: inset)
         .contentShape(Rectangle())
+        .pointerStyle(isDragging && dragState.mode == .move ? .grabActive : .grabIdle)
         .onTapGesture { selectedClipID = clip.id }
         .gesture(moveGesture(clip, on: track))
         .contextMenu {
@@ -260,23 +392,48 @@ public struct SequenceTimelineView: View {
         .help("\(clip.source.displayName) · \(Timecode.string(seconds: clip.duration, fps: timeline.fps))")
     }
 
-    private func clipColor(_ kind: SourceKind) -> Color {
-        switch kind {
-        case .video: return Color(red: 0.30, green: 0.45, blue: 0.72)
-        case .remotion: return Color(red: 0.52, green: 0.36, blue: 0.75)
-        case .image: return Color(red: 0.35, green: 0.62, blue: 0.55)
-        case .audio: return Color(red: 0.25, green: 0.60, blue: 0.35)
-        case .captions: return Color(red: 0.80, green: 0.55, blue: 0.20)
-        }
+    /// The length and edge times of the clip being moved or trimmed.
+    private func dragReadout(alignment: Alignment) -> some View {
+        let start = dragState.previewStart
+        let end = start + dragState.previewDuration
+        let text = dragState.mode == .move
+            ? "\(Timecode.string(seconds: start, fps: timeline.fps)) – \(Timecode.string(seconds: end, fps: timeline.fps))"
+            : "\(Timecode.string(seconds: dragState.previewDuration, fps: timeline.fps)) · \(Timecode.string(seconds: dragState.mode == .trimLeading ? start : end, fps: timeline.fps))"
+        return Text(text)
+            .font(.system(size: 9, weight: .semibold, design: .monospaced))
+            .foregroundStyle(.white)
+            .padding(.horizontal, 5)
+            .padding(.vertical, 2)
+            .background(.black.opacity(0.7), in: RoundedRectangle(cornerRadius: 3))
+            .padding(3)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: alignment)
+            .allowsHitTesting(false)
     }
 
+    /// A grab zone on each end of a clip. The pointer becomes a resize arrow
+    /// as it nears the edge, and the edge lights up so the zone is visible.
     private func trimHandle(_ clip: Clip, leading: Bool) -> some View {
-        Rectangle()
-            .fill(Color.white.opacity(0.001))
-            .frame(width: 8)
+        let id = TrimHandleID(clipID: clip.id, leading: leading)
+        let active = dragState.clipID == clip.id && dragState.mode == (leading ? .trimLeading : .trimTrailing)
+        let lit = active || hoveredHandle == id
+        return Rectangle()
+            .fill(Color.white.opacity(lit ? 0.22 : 0.001))
+            .frame(width: 10)
+            .overlay(alignment: leading ? .leading : .trailing) {
+                RoundedRectangle(cornerRadius: 1)
+                    .fill(.white)
+                    .frame(width: 3, height: laneHeight * 0.45)
+                    .padding(.horizontal, 2)
+                    .opacity(lit ? 1 : 0)
+            }
             .contentShape(Rectangle())
+            .pointerStyle(.frameResize(position: leading ? .leading : .trailing))
             .onHover { inside in
-                if inside { NSCursor.resizeLeftRight.push() } else { NSCursor.pop() }
+                if inside {
+                    hoveredHandle = id
+                } else if hoveredHandle == id {
+                    hoveredHandle = nil
+                }
             }
             .gesture(
                 DragGesture(minimumDistance: 2)
@@ -366,17 +523,94 @@ public struct SequenceTimelineView: View {
 
     // MARK: - Playhead
 
-    private var playheadLine: some View {
-        let height = rulerHeight + CGFloat(timeline.tracks.count) * (laneHeight + 1)
-        return Rectangle()
-            .fill(Color.red)
-            .frame(width: 1.5, height: height)
+    private func playheadLine(height: CGFloat) -> some View {
+        Color.clear
+            .frame(width: 14, height: height)
+            .contentShape(Rectangle())
+            .overlay {
+                Rectangle().fill(Color.red).frame(width: 1.5)
+            }
             .overlay(alignment: .top) {
                 Triangle().fill(Color.red).frame(width: 10, height: 7).offset(y: -1)
             }
-            .offset(x: CGFloat(playhead * pixelsPerSecond))
-            .allowsHitTesting(false)
+            .offset(x: CGFloat(playhead * pixelsPerSecond) - 7)
+            .gesture(
+                DragGesture(minimumDistance: 0, coordinateSpace: .named("timelineCanvas"))
+                    .onChanged { value in
+                        playhead = timeline.quantized(max(0, value.location.x / pixelsPerSecond))
+                    }
+            )
     }
+}
+
+/// Reports the pointer while footage hovers a lane and decodes the payload
+/// on release. `DropInfo.location` is in the lane's own coordinates, so the
+/// drop time is simply x over the zoom.
+private struct FootageLaneDropDelegate: DropDelegate {
+    /// The payload, decoded as soon as the drag enters the lane.
+    let entered: (FootageDragItem) -> Void
+    let hover: (CGPoint?) -> Void
+    let drop: (FootageDragItem, CGPoint) -> Void
+
+    func validateDrop(info: DropInfo) -> Bool {
+        info.hasItemsConforming(to: [.rxFootage])
+    }
+
+    func dropEntered(info: DropInfo) {
+        hover(info.location)
+        if let item = FootageDragSession.shared.item {
+            entered(item)
+            return
+        }
+        guard let provider = info.itemProviders(for: [.rxFootage]).first else { return }
+        let entered = entered
+        Task { @MainActor in
+            if let item = await provider.footageItem() { entered(item) }
+        }
+    }
+
+    func dropUpdated(info: DropInfo) -> DropProposal? {
+        hover(info.location)
+        return DropProposal(operation: .copy)
+    }
+
+    func dropExited(info: DropInfo) {
+        hover(nil)
+    }
+
+    func performDrop(info: DropInfo) -> Bool {
+        let location = info.location
+        if let item = FootageDragSession.shared.item {
+            FootageDragSession.shared.end()
+            drop(item, location)
+            return true
+        }
+        guard let provider = info.itemProviders(for: [.rxFootage]).first else {
+            hover(nil)
+            return false
+        }
+        let drop = drop
+        Task { @MainActor in
+            guard let item = await provider.footageItem() else { return }
+            drop(item, location)
+        }
+        return true
+    }
+}
+
+private extension NSItemProvider {
+    func footageItem() async -> FootageDragItem? {
+        await withCheckedContinuation { continuation in
+            _ = loadTransferable(type: FootageDragItem.self) { result in
+                continuation.resume(returning: try? result.get())
+            }
+        }
+    }
+}
+
+private struct TrimHandleID: Hashable {
+    let clipID: UUID
+    let leading: Bool
 }
 
 private struct ClipDragState {
