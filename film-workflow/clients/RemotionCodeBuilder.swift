@@ -32,7 +32,8 @@ struct RemotionCodeBuilder {
     /// - public/generated/ — images created by the agent's generate_image tool
     /// - public/audio/     — attached audio files (project.audioFilePaths)
     static func prepareAssets(project: RemotionProject) throws -> SeededAssets {
-        let dir = FileStorage.remotionProjectDir(id: project.id)
+        let storage = ProjectStorage.for(model: project)
+        let dir = project.projectDir
         let publicDir = dir.appendingPathComponent("public", isDirectory: true)
         let srcDir = dir.appendingPathComponent("src", isDirectory: true)
         try FileManager.default.createDirectory(at: publicDir, withIntermediateDirectories: true)
@@ -40,17 +41,17 @@ struct RemotionCodeBuilder {
 
         var imageNames: [String] = []
         for relativePath in project.imagePaths {
-            if let name = copyAsset(relativePath: relativePath, intoPublic: publicDir, subfolder: "upload") {
+            if let name = copyAsset(relativePath: relativePath, storage: storage, intoPublic: publicDir, subfolder: "upload") {
                 imageNames.append(name)
             }
         }
         var referenceImageName: String?
         if let ref = project.referenceImagePath {
-            referenceImageName = copyAsset(relativePath: ref, intoPublic: publicDir, subfolder: "reference")
+            referenceImageName = copyAsset(relativePath: ref, storage: storage, intoPublic: publicDir, subfolder: "reference")
         }
         var audioNames: [String] = []
         for audio in project.audioFilePaths {
-            if let name = copyAsset(relativePath: audio, intoPublic: publicDir, subfolder: "audio") {
+            if let name = copyAsset(relativePath: audio, storage: storage, intoPublic: publicDir, subfolder: "audio") {
                 audioNames.append(name)
             }
         }
@@ -101,7 +102,7 @@ struct RemotionCodeBuilder {
     }
 
     static func writeComposition(project: RemotionProject, source: String) throws {
-        let dir = FileStorage.remotionProjectDir(id: project.id)
+        let dir = project.projectDir
         let srcDir = dir.appendingPathComponent("src", isDirectory: true)
         try FileManager.default.createDirectory(at: srcDir, withIntermediateDirectories: true)
         try writeComposition(source: source, to: srcDir)
@@ -136,8 +137,8 @@ struct RemotionCodeBuilder {
     // MARK: - Asset copying
 
     @discardableResult
-    private static func copyAsset(relativePath: String, intoPublic publicDir: URL, subfolder: String?) -> String? {
-        let src = FileStorage.absoluteURL(for: relativePath)
+    private static func copyAsset(relativePath: String, storage: ProjectStorage, intoPublic publicDir: URL, subfolder: String?) -> String? {
+        let src = storage.absoluteURL(for: relativePath)
         guard FileManager.default.fileExists(atPath: src.path) else { return nil }
         let fileName = src.lastPathComponent
 

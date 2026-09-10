@@ -75,3 +75,5 @@ release_notes.html
 xcodebuild-archive.log
 *.mdb
 index-build
+# Coverage data from launching the debug app directly
+*.profraw

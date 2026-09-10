@@ -41,7 +41,7 @@ struct RemotionTabView: View {
                 renamingProject: $renamingProject,
                 renameText: $renameText,
                 showSourceSheet: $showSourceSheet,
-                sourceProjectId: selectedProject?.id,
+                sourceProjectDir: selectedProject?.projectDir,
                 sourceRefreshToken: reloadToken,
                 showExportSheet: $showExportSheet,
                 exportOptions: $exportOptions,
@@ -369,7 +369,7 @@ struct RemotionTabView: View {
         // disk, trust it and bring the model back in sync rather than showing the
         // "Generate Initial Composition" placeholder.
         if project.compositionSource.isEmpty {
-            let onDisk = FileStorage.remotionProjectDir(id: id)
+            let onDisk = project.projectDir
                 .appendingPathComponent("src", isDirectory: true)
                 .appendingPathComponent("Composition.tsx")
             if let recovered = try? String(contentsOf: onDisk, encoding: .utf8),
@@ -395,7 +395,7 @@ struct RemotionTabView: View {
 
         Task {
             do {
-                try await runtime.start(projectId: id)
+                try await runtime.start(projectId: id, projectDir: project.projectDir)
                 reloadToken += 1
             } catch {
                 statusMessage = error.localizedDescription
@@ -447,6 +447,7 @@ struct RemotionTabView: View {
         showProgressSheet = true
 
         let projectId = project.id
+        let projectDir = project.projectDir
         let dest = options.destination
         let (w, h) = options.resolution.size
         let fps = options.frameRate.rawValue
@@ -460,7 +461,7 @@ struct RemotionTabView: View {
             }
             do {
                 try await RemotionRenderer.render(
-                    projectId: projectId,
+                    projectDir: projectDir,
                     to: dest,
                     width: w,
                     height: h,
@@ -475,7 +476,7 @@ struct RemotionTabView: View {
 
                 if selectedProject?.id == projectId {
                     do {
-                        try await runtime.start(projectId: projectId)
+                        try await runtime.start(projectId: projectId, projectDir: projectDir)
                         reloadToken += 1
                     } catch {
                         statusMessage = error.localizedDescription
@@ -498,7 +499,7 @@ private struct SheetsModifier: ViewModifier {
     @Binding var renameText: String
 
     @Binding var showSourceSheet: Bool
-    let sourceProjectId: UUID?
+    let sourceProjectDir: URL?
     let sourceRefreshToken: Int
 
     @Binding var showExportSheet: Bool
@@ -532,9 +533,9 @@ private struct SheetsModifier: ViewModifier {
                 }
             }
             .sheet(isPresented: $showSourceSheet) {
-                if let id = sourceProjectId {
+                if let dir = sourceProjectDir {
                     RemotionSourceSheetView(
-                        projectId: id,
+                        projectDir: dir,
                         refreshToken: sourceRefreshToken
                     ) {
                         showSourceSheet = false

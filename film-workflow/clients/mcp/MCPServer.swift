@@ -43,15 +43,12 @@ final class MCPServer {
     )
 
     private var listener: NWListener?
-    private var modelContainer: ModelContainer?
     private var lastObservedRevision: Int = -1
     private var pollTask: Task<Void, Never>?
 
     private init() {}
 
-    func bootstrap(container: ModelContainer) {
-        self.modelContainer = container
-
+    func bootstrap() {
         pollTask?.cancel()
         let settings = MCPSettings.shared
         lastObservedRevision = settings.revision
@@ -77,11 +74,6 @@ final class MCPServer {
 
     func start() async {
         await stop()
-        guard modelContainer != nil else {
-            lastError = MCPServerError.notConfigured.localizedDescription
-            MCPSettings.shared.setActualPort(nil, status: lastError ?? "Not configured")
-            return
-        }
         let settings = MCPSettings.shared
         do {
             let port = try findFreePort(starting: settings.basePort)
@@ -183,8 +175,10 @@ final class MCPServer {
     }
 
     fileprivate func respond(conn: NWConnection, requestData: Data) async {
-        guard let modelContainer else {
-            send(conn: conn, response: MCPHTTP.makeResponse(status: 500, contentType: "text/plain", body: Data("not configured".utf8)))
+        // Tools act on the film whose window is key. Until a document is
+        // open there is nothing to act on.
+        guard let modelContainer = ProjectDocumentController.shared.activeDocument?.container else {
+            send(conn: conn, response: MCPHTTP.makeResponse(status: 503, contentType: "text/plain", body: Data("no film is open".utf8)))
             return
         }
         let response: Data

@@ -117,8 +117,8 @@ nonisolated struct VideoInputImage: Sendable {
 
     /// Reads a relative `images/…` path. Returns nil when the file is gone —
     /// a deleted reference should not abort a generation the user asked for.
-    init?(relativePath: String) {
-        let url = FileStorage.absoluteURL(for: relativePath)
+    init?(relativePath: String, storage: ProjectStorage) {
+        let url = storage.absoluteURL(for: relativePath)
         guard let data = try? Data(contentsOf: url) else { return nil }
         self.data = data
         self.mimeType = VideoInputImage.mimeType(forExtension: url.pathExtension)

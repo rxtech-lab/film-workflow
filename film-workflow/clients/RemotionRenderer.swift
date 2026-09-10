@@ -135,7 +135,7 @@ nonisolated enum ProcessTreeKiller {
 /// other. The SIGKILL escalation also has to live here rather than after the `await`:
 /// that await only resumes once the process has already exited, which is precisely
 /// what does not happen when SIGTERM is ignored.
-private final class CancellableProcess: @unchecked Sendable {
+final class CancellableProcess: @unchecked Sendable {
     private let lock = NSLock()
     private var rootPID: pid_t?
     private var cancelled = false
@@ -176,7 +176,7 @@ private final class CancellableProcess: @unchecked Sendable {
 
 enum RemotionRenderer {
     static func render(
-        projectId: UUID,
+        projectDir: URL,
         to outputURL: URL,
         width: Int,
         height: Int,
@@ -185,8 +185,8 @@ enum RemotionRenderer {
     ) async throws {
         await RemotionRuntime.shared.stop()
 
-        let projectDir = try await MainActor.run {
-            try RemotionRuntime.shared.prepareProjectDirectory(id: projectId)
+        try await MainActor.run {
+            try RemotionRuntime.shared.prepareProjectDirectory(projectDir)
         }
 
         // Kill any orphan bun/remotion processes still pointed at this project from
@@ -310,7 +310,7 @@ enum RemotionRenderer {
     }
 }
 
-private final class LineBuffer: @unchecked Sendable {
+final class LineBuffer: @unchecked Sendable {
     nonisolated(unsafe) private var buffer = Data()
 
     nonisolated func append(_ data: Data) -> [String] {

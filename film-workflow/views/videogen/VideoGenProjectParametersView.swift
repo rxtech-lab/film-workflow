@@ -2,6 +2,7 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 struct VideoGenProjectParametersView: View {
+    @Environment(\.projectStorage) private var storage
     @Bindable var project: VideoGenProject
 
     @State private var veoModels: [GoogleModelInfo] = []
@@ -286,7 +287,7 @@ struct VideoGenProjectParametersView: View {
 
     @ViewBuilder
     private func thumbnail(path: String?) -> some View {
-        if let path, let image = Image(contentsOfFile: FileStorage.absoluteURL(for: path)) {
+        if let path, let image = Image(contentsOfFile: storage.absoluteURL(for: path)) {
             image
                 .resizable()
                 .aspectRatio(contentMode: .fill)
@@ -340,14 +341,14 @@ struct VideoGenProjectParametersView: View {
 
     private func handleFirstFrame(_ result: Result<[URL], Error>) {
         importSingle(result) { path in
-            if let old = project.googleFirstFrameImagePath { FileStorage.deleteFile(at: old) }
+            if let old = project.googleFirstFrameImagePath { storage.deleteFile(at: old) }
             project.googleFirstFrameImagePath = path
         }
     }
 
     private func handleLastFrame(_ result: Result<[URL], Error>) {
         importSingle(result) { path in
-            if let old = project.googleLastFrameImagePath { FileStorage.deleteFile(at: old) }
+            if let old = project.googleLastFrameImagePath { storage.deleteFile(at: old) }
             project.googleLastFrameImagePath = path
         }
     }
@@ -356,7 +357,7 @@ struct VideoGenProjectParametersView: View {
         guard case .success(let urls) = result, let url = urls.first else { return }
         guard url.startAccessingSecurityScopedResource() else { return }
         defer { url.stopAccessingSecurityScopedResource() }
-        guard let path = try? FileStorage.copyImage(from: url) else { return }
+        guard let path = try? storage.copyImage(from: url) else { return }
         apply(path)
         project.updatedAt = Date()
     }
@@ -366,7 +367,7 @@ struct VideoGenProjectParametersView: View {
         for url in urls {
             guard url.startAccessingSecurityScopedResource() else { continue }
             defer { url.stopAccessingSecurityScopedResource() }
-            if let path = try? FileStorage.copyImage(from: url) {
+            if let path = try? storage.copyImage(from: url) {
                 project.googleReferenceImagePaths.append(path)
             }
         }
@@ -376,7 +377,7 @@ struct VideoGenProjectParametersView: View {
     }
 
     private func removeReferenceImage(_ path: String) {
-        FileStorage.deleteFile(at: path)
+        storage.deleteFile(at: path)
         project.googleReferenceImagePaths.removeAll { $0 == path }
         VeoModelFamily.clamp(project)
         project.updatedAt = Date()

@@ -16,7 +16,7 @@ import UIKit
 nonisolated enum VideoThumbnailer {
     /// Extracts a frame shortly after the start and saves it into `images/`.
     /// Returns its relative path, or `nil` if the frame could not be produced.
-    static func generate(for url: URL) async -> String? {
+    static func generate(for url: URL, storage: ProjectStorage) async -> String? {
         let asset = AVURLAsset(url: url)
         let generator = AVAssetImageGenerator(asset: asset)
         generator.appliesPreferredTrackTransform = true
@@ -28,7 +28,7 @@ nonisolated enum VideoThumbnailer {
         let time = CMTime(seconds: 0.5, preferredTimescale: 600)
         guard let cgImage = try? await generator.image(at: time).image else { return nil }
         guard let data = jpegData(from: cgImage) else { return nil }
-        return try? FileStorage.saveImage(data, fileExtension: "jpg")
+        return try? storage.saveImage(data, fileExtension: "jpg")
     }
 
     /// Natural size and duration, for labelling the history card.

@@ -3,6 +3,7 @@ import SwiftUI
 
 struct ImageGenTabView: View {
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.projectStorage) private var storage
     #if os(iOS)
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     #endif
@@ -264,13 +265,13 @@ struct ImageGenTabView: View {
             selectedProject = nil
         }
         for file in project.generatedFiles {
-            FileStorage.deleteFile(at: file.imageFilePath)
+            storage.deleteFile(at: file.imageFilePath)
         }
         modelContext.delete(project)
     }
 
     private func deleteImage(_ file: GeneratedImage, project: ImageGenProject) {
-        FileStorage.deleteFile(at: file.imageFilePath)
+        storage.deleteFile(at: file.imageFilePath)
         modelContext.delete(file)
         project.updatedAt = Date()
     }

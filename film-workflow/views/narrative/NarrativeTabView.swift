@@ -3,6 +3,7 @@ import SwiftUI
 
 struct NarrativeTabView: View {
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.projectStorage) private var storage
     #if os(iOS)
         @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     #endif
@@ -337,7 +338,7 @@ struct NarrativeTabView: View {
             selectedProject = nil
         }
         for file in project.generatedFiles {
-            FileStorage.deleteFile(at: file.audioFilePath)
+            storage.deleteFile(at: file.audioFilePath)
         }
         modelContext.delete(project)
     }

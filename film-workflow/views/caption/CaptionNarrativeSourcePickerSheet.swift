@@ -7,6 +7,7 @@ import SwiftUI
 /// narrative's paragraph text as the reference, so alignment can supply timings
 /// while the caption body stays exactly what the author wrote.
 struct CaptionNarrativeSourcePickerSheet: View {
+    @Environment(\.projectStorage) private var storage
     @Bindable var project: CaptionProject
 
     @Environment(\.dismiss) private var dismiss
@@ -173,7 +174,7 @@ struct CaptionNarrativeSourcePickerSheet: View {
         preview.stop()
 
         if project.ownsAudioFile, !project.audioFilePath.isEmpty {
-            FileStorage.deleteFile(at: project.audioFilePath)
+            storage.deleteFile(at: project.audioFilePath)
         }
 
         project.audioFilePath = file.audioFilePath

@@ -30,6 +30,7 @@ final class RemotionRuntime {
 
     private(set) var currentURL: URL?
     private(set) var currentProjectId: UUID?
+    private(set) var currentProjectDir: URL?
     private(set) var lastError: String?
     private(set) var isStarting: Bool = false
 
@@ -75,20 +76,18 @@ final class RemotionRuntime {
             }
         }
 
-        try fm.createDirectory(at: FileStorage.remotionProjectsDir, withIntermediateDirectories: true)
     }
 
     // MARK: - Lifecycle
 
-    func start(projectId: UUID) async throws {
-        if currentProjectId == projectId, process?.isRunning == true {
+    func start(projectId: UUID, projectDir: URL) async throws {
+        if currentProjectId == projectId, currentProjectDir == projectDir, process?.isRunning == true {
             return
         }
         await stop()
 
         try ensureRuntimeInstalled()
 
-        let projectDir = FileStorage.remotionProjectDir(id: projectId)
         try ensureProjectDirectory(projectDir)
 
         let bunURL = FileStorage.remotionRoot.appendingPathComponent("bun")
@@ -142,6 +141,7 @@ final class RemotionRuntime {
         self.stdoutPipe = outPipe
         self.stderrPipe = errPipe
         self.currentProjectId = projectId
+        self.currentProjectDir = projectDir
 
         let url = URL(string: "http://localhost:\(port)")!
         let ok = await Self.waitUntilReachable(url: url, timeout: 30)
@@ -173,13 +173,14 @@ final class RemotionRuntime {
         stderrPipe = nil
         currentURL = nil
         currentProjectId = nil
+        currentProjectDir = nil
     }
 
     // MARK: - Project directory setup
 
-    func prepareProjectDirectory(id: UUID) throws -> URL {
+    @discardableResult
+    func prepareProjectDirectory(_ dir: URL) throws -> URL {
         try ensureRuntimeInstalled()
-        let dir = FileStorage.remotionProjectDir(id: id)
         try ensureProjectDirectory(dir)
         return dir
     }

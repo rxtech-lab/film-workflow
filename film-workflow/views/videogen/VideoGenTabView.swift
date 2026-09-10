@@ -3,6 +3,7 @@ import SwiftUI
 
 struct VideoGenTabView: View {
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.projectStorage) private var storage
     #if os(iOS)
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     #endif
@@ -338,18 +339,18 @@ struct VideoGenTabView: View {
             selectedProject = nil
         }
         for file in project.generatedFiles {
-            FileStorage.deleteFile(at: file.videoFilePath)
+            storage.deleteFile(at: file.videoFilePath)
             if let thumbnail = file.thumbnailFilePath {
-                FileStorage.deleteFile(at: thumbnail)
+                storage.deleteFile(at: thumbnail)
             }
         }
         modelContext.delete(project)
     }
 
     private func deleteVideo(_ file: GeneratedVideo, project: VideoGenProject) {
-        FileStorage.deleteFile(at: file.videoFilePath)
+        storage.deleteFile(at: file.videoFilePath)
         if let thumbnail = file.thumbnailFilePath {
-            FileStorage.deleteFile(at: thumbnail)
+            storage.deleteFile(at: thumbnail)
         }
         modelContext.delete(file)
         project.updatedAt = Date()

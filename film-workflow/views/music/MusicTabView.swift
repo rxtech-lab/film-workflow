@@ -4,6 +4,7 @@ import TipKit
 
 struct MusicTabView: View {
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.projectStorage) private var storage
     #if os(iOS)
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     #endif
@@ -272,7 +273,7 @@ struct MusicTabView: View {
                         ScrollView(.horizontal, showsIndicators: false) {
                             HStack(spacing: 6) {
                                 ForEach(Array(project.referenceImagePaths.enumerated()), id: \.offset) { _, path in
-                                    let url = FileStorage.absoluteURL(for: path)
+                                    let url = storage.absoluteURL(for: path)
                                     if let image = Image(contentsOfFile: url) {
                                         image
                                             .resizable()
@@ -342,10 +343,10 @@ struct MusicTabView: View {
             selectedProject = nil
         }
         for file in project.generatedFiles {
-            FileStorage.deleteFile(at: file.audioFilePath)
+            storage.deleteFile(at: file.audioFilePath)
         }
         for path in project.referenceImagePaths {
-            FileStorage.deleteFile(at: path)
+            storage.deleteFile(at: path)
         }
         modelContext.delete(project)
     }

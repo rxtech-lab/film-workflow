@@ -166,11 +166,16 @@ final class AgentController {
         instruction: String,
         thread: AgentThread,
         context: ModelContext,
-        container: ModelContainer
+        container: ModelContainer?
     ) {
         let threadID = thread.id
         let trimmed = instruction.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
+        // Tools act on a film; without one open there is nothing to point them at.
+        guard let container else {
+            setError("Open a film before sending to the agent.", for: threadID)
+            return
+        }
 
         // Typing while a turn runs queues rather than interrupting it.
         guard !isRunning(threadID) else {

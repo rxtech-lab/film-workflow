@@ -16,7 +16,7 @@ final class CaptionProject: GroupableProject {
 
     var sourceKind: String = CaptionSourceKind.importedFile.rawValue
 
-    /// Relative to `FileStorage.appSupportURL`, per repo convention.
+    /// Relative to the film package, per repo convention.
     /// `captions/<uuid>.<ext>` when imported, `generated/<uuid>.<ext>` when it
     /// points at a narrative's audio.
     var audioFilePath: String = ""
@@ -154,7 +154,7 @@ final class CaptionProject: GroupableProject {
 
     // MARK: - Derived
 
-    var audioURL: URL { FileStorage.absoluteURL(for: audioFilePath) }
+    var audioURL: URL { ProjectStorage.for(model: self).absoluteURL(for: audioFilePath) }
 
     var hasAudio: Bool { !audioFilePath.isEmpty }
 

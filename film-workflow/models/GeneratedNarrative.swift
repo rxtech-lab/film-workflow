@@ -3,6 +3,11 @@ import SwiftData
 
 @Model
 final class GeneratedNarrative {
+    /// Stable identity for MCP, agent targets and timeline references.
+    /// A `PersistentIdentifier` is neither stable across launches nor
+    /// representable in a scene payload.
+    var id: UUID = UUID()
+
     var audioFilePath: String
     var transcriptText: String
     var createdAt: Date
@@ -32,7 +37,7 @@ final class GeneratedNarrative {
     }
 
     var audioURL: URL {
-        FileStorage.absoluteURL(for: audioFilePath)
+        ProjectStorage.for(model: self).absoluteURL(for: audioFilePath)
     }
 
     var fileExtension: String {

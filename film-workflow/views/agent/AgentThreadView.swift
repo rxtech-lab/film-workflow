@@ -147,9 +147,10 @@ struct AgentThreadView: View {
         // the changes still belong to the project they were proposed against.
         if let proposal = row.proposal,
            let uuid = row.proposalProjectUUID ?? thread.target.projectUUID,
+           let documentContext = ProjectDocumentController.shared.activeDocument?.container.mainContext,
            let project = try? MCPCaptionHandlers.fetchCaption(
                id: uuid.uuidString,
-               context: modelContext
+               context: documentContext
            )
         {
             CaptionAIReviewSheet(project: project, proposal: proposal) { applied in
@@ -201,7 +202,7 @@ struct AgentThreadView: View {
             instruction: run.input,
             thread: thread,
             context: modelContext,
-            container: modelContext.container
+            container: ProjectDocumentController.shared.activeDocument?.container
         )
     }
 

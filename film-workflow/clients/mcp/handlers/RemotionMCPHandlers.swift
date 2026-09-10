@@ -218,8 +218,9 @@ enum RemotionMCPHandlers {
             throw MCPToolError.invalidArguments("missing project_id")
         }
         let project = try MCPProjectHandlers.fetchRemotion(id: projectId, context: context)
-        let projectDir = (try? RemotionRuntime.shared.prepareProjectDirectory(id: project.id))
-            ?? FileStorage.remotionProjectDir(id: project.id)
+        let storage = ProjectStorage.forContainer(context.container)
+        let projectDir = project.projectDir
+        _ = try? RemotionRuntime.shared.prepareProjectDirectory(projectDir)
 
         switch name {
         case "remotion_list_files":
@@ -275,9 +276,9 @@ enum RemotionMCPHandlers {
             let durationFrames = max(1, Int((project.durationSeconds * Double(fps)).rounded()))
             let frame = max(0, min(Int((t * Double(fps)).rounded()), durationFrames - 1))
             let runId = UUID().uuidString.prefix(8).lowercased()
-            defer { RemotionStillCapture.cleanup(projectId: project.id, runId: String(runId)) }
+            defer { RemotionStillCapture.cleanup(projectDir: projectDir, runId: String(runId)) }
             let url = try await RemotionStillCapture.still(
-                projectId: project.id, frame: frame, runId: String(runId)
+                projectDir: projectDir, frame: frame, runId: String(runId)
             )
             let data = try Data(contentsOf: url)
             return [
@@ -303,9 +304,9 @@ enum RemotionMCPHandlers {
             let fps = max(1, project.compositionFps)
             let durationFrames = max(1, Int((project.durationSeconds * Double(fps)).rounded()))
             let runId = UUID().uuidString.prefix(8).lowercased()
-            defer { RemotionStillCapture.cleanup(projectId: project.id, runId: String(runId)) }
+            defer { RemotionStillCapture.cleanup(projectDir: projectDir, runId: String(runId)) }
             let results = try await RemotionStillCapture.stills(
-                projectId: project.id, count: count, durationFrames: durationFrames, runId: String(runId)
+                projectDir: projectDir, count: count, durationFrames: durationFrames, runId: String(runId)
             )
             var contentParts: [[String: Any]] = []
             var structured: [[String: Any]] = []
@@ -338,7 +339,7 @@ enum RemotionMCPHandlers {
             let sourceURL = try resolveLocalSourcePath(arguments)
             let imageData = try Data(contentsOf: sourceURL)
             let ext = sourceURL.pathExtension.isEmpty ? "png" : sourceURL.pathExtension.lowercased()
-            let stored = try FileStorage.saveImage(imageData, fileExtension: ext)
+            let stored = try storage.saveImage(imageData, fileExtension: ext)
             project.imagePaths.append(stored)
             project.updatedAt = Date()
             try context.save()
@@ -363,7 +364,7 @@ enum RemotionMCPHandlers {
                 throw MCPToolError.invalidArguments("provide a valid `index` or `path` matching an entry in imagePaths")
             }
             let removedPath = project.imagePaths.remove(at: idx)
-            FileStorage.deleteFile(at: removedPath)
+            storage.deleteFile(at: removedPath)
             let uploadCopy = projectDir
                 .appendingPathComponent("public", isDirectory: true)
                 .appendingPathComponent("upload", isDirectory: true)
@@ -381,11 +382,8 @@ enum RemotionMCPHandlers {
             let sourceURL = try resolveLocalSourcePath(arguments)
             let audioData = try Data(contentsOf: sourceURL)
             let ext = sourceURL.pathExtension.isEmpty ? "mp3" : sourceURL.pathExtension.lowercased()
-            let filename = UUID().uuidString + "." + ext
-            let dest = FileStorage.imagesDir.appendingPathComponent(filename)
-            try FileManager.default.createDirectory(at: FileStorage.imagesDir, withIntermediateDirectories: true)
-            try audioData.write(to: dest)
-            let stored = "images/" + filename
+            let stored = try storage.saveAudio(audioData, extension: ext, kind: .imported)
+            let filename = (stored as NSString).lastPathComponent
             project.audioFilePaths.append(stored)
             project.updatedAt = Date()
             try context.save()
@@ -409,7 +407,7 @@ enum RemotionMCPHandlers {
                 throw MCPToolError.invalidArguments("provide a valid `index` or `path` matching an entry in audioFilePaths")
             }
             let removedPath = project.audioFilePaths.remove(at: idx)
-            FileStorage.deleteFile(at: removedPath)
+            storage.deleteFile(at: removedPath)
             let publicCopy = projectDir
                 .appendingPathComponent("public", isDirectory: true)
                 .appendingPathComponent("audio", isDirectory: true)

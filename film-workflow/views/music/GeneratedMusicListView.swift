@@ -5,6 +5,7 @@ import UniformTypeIdentifiers
 struct GeneratedMusicListView: View {
     let files: [GeneratedMusic]
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.projectStorage) private var storage
     #if os(iOS)
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     #endif
@@ -124,7 +125,7 @@ struct GeneratedMusicListView: View {
 
     private func delete(file: GeneratedMusic) {
         withAnimation(.easeInOut(duration: 0.25)) {
-            FileStorage.deleteFile(at: file.audioFilePath)
+            storage.deleteFile(at: file.audioFilePath)
             modelContext.delete(file)
             if selectedFile?.id == file.id {
                 selectedFile = nil

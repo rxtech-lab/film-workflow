@@ -14,9 +14,10 @@ enum MusicGenerationService {
             ? basePrompt + "\n\nAdditional instructions:\n" + project.promptText
             : basePrompt
 
+        let storage = ProjectStorage.forContainer(context.container)
         var imageDataPairs: [(mimeType: String, base64: String)] = []
         for path in project.referenceImagePaths {
-            let url = FileStorage.absoluteURL(for: path)
+            let url = storage.absoluteURL(for: path)
             guard let data = try? Data(contentsOf: url) else { continue }
             let ext = url.pathExtension.lowercased()
             let mimeType = ext == "png" ? "image/png" : "image/jpeg"
@@ -47,7 +48,7 @@ enum MusicGenerationService {
         default: ext = "wav"
         }
 
-        let relativePath = try FileStorage.saveAudio(response.audioData, extension: ext)
+        let relativePath = try storage.saveAudio(response.audioData, extension: ext, kind: .music)
         let generated = GeneratedMusic(
             audioFilePath: relativePath,
             lyricsText: response.lyricsText,

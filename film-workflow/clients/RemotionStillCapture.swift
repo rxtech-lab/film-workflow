@@ -23,16 +23,16 @@ enum RemotionStillCapture {
     /// disrupting it (Studio's dev-server and `remotion still` use distinct webpack
     /// outputs). Returns the on-disk PNG URL.
     static func still(
-        projectId: UUID,
+        projectDir: URL,
         frame: Int,
         width: Int = 480,
         height: Int = 270,
         runId: String
     ) async throws -> URL {
-        let projectDir = await MainActor.run {
-            try? RemotionRuntime.shared.prepareProjectDirectory(id: projectId)
+        let prepared = await MainActor.run {
+            try? RemotionRuntime.shared.prepareProjectDirectory(projectDir)
         }
-        guard let projectDir else {
+        guard prepared != nil else {
             throw RemotionStillCaptureError.stillFailed(detail: "project directory not ready")
         }
 
@@ -126,7 +126,7 @@ enum RemotionStillCapture {
     /// the webpack bundle cache between calls — running them in parallel would force
     /// duplicate bundling.
     static func stills(
-        projectId: UUID,
+        projectDir: URL,
         count: Int,
         durationFrames: Int,
         width: Int = 480,
@@ -148,7 +148,7 @@ enum RemotionStillCapture {
         var results: [StillCaptureResult] = []
         for frame in frames {
             let url = try await still(
-                projectId: projectId,
+                projectDir: projectDir,
                 frame: frame,
                 width: width,
                 height: height,
@@ -160,8 +160,8 @@ enum RemotionStillCapture {
     }
 
     /// Best-effort cleanup of stills for a finished agent run.
-    static func cleanup(projectId: UUID, runId: String) {
-        let dir = FileStorage.remotionProjectDir(id: projectId)
+    static func cleanup(projectDir: URL, runId: String) {
+        let dir = projectDir
             .appendingPathComponent(".agent-stills", isDirectory: true)
             .appendingPathComponent(runId, isDirectory: true)
         try? FileManager.default.removeItem(at: dir)

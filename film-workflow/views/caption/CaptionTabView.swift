@@ -16,6 +16,7 @@ private struct CaptionPreparedDetail {
 
 struct CaptionTabView: View {
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.projectStorage) private var storage
     #if os(iOS)
         @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     #endif
@@ -436,7 +437,7 @@ struct CaptionTabView: View {
         // Only delete audio this project owns — a narrative-sourced project
         // points at a GeneratedNarrative's file, which must survive.
         if project.ownsAudioFile, !project.audioFilePath.isEmpty {
-            FileStorage.deleteFile(at: project.audioFilePath)
+            storage.deleteFile(at: project.audioFilePath)
         }
         modelContext.delete(project)
     }
