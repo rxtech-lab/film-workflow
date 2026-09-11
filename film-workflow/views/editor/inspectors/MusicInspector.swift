@@ -1,7 +1,9 @@
 import SwiftData
 import SwiftUI
 
-struct MusicInspector: View {
+/// Generate button and prompt preview for a music project, shown under every
+/// one of its inspector tabs.
+struct MusicInspectorFooter: View {
     let project: MusicProject
     @Environment(\.modelContext) private var modelContext
     @Environment(\.projectStorage) private var storage
@@ -13,18 +15,10 @@ struct MusicInspector: View {
     @State private var insufficientCredits: InsufficientCreditsNotice?
 
     var body: some View {
-        VStack(spacing: 0) {
-            InspectorEditingTabs(editorTitle: "Composition") {
-                MusicProjectParametersView(project: project)
-            } editor: {
-                MusicProjectEditorView(project: project)
-            }
-            Divider()
-            GenerateButton(title: "Generate", isBusy: isGenerating, isEnabled: true, tip: FilmWorkflowTips.GenerateMusicTip()) {
-                showPromptSheet = true
-            }
-            .padding(10)
+        GenerateButton(title: "Generate", isBusy: isGenerating, isEnabled: true, tip: FilmWorkflowTips.GenerateMusicTip()) {
+            showPromptSheet = true
         }
+        .padding(10)
         .alert("Error", isPresented: $showError) { Button("OK") {} } message: { Text(errorMessage ?? "An unknown error occurred.") }
         .insufficientCreditsAlert($insufficientCredits)
         .sheet(isPresented: $showPromptSheet) { promptPreviewSheet }

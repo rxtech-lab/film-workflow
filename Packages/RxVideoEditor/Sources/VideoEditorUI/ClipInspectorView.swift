@@ -83,13 +83,7 @@ public struct ClipInspectorView: View {
                 }
                 if clip.source.kind == .captions {
                     Section("Text") {
-                        let style = Binding(get: { clip.text ?? .caption }, set: { v in update { $0.text = v } })
-                        TextField("Font", text: style.fontName)
-                        slider("Size", style.fontSize, in: 0.02...0.12, percent: true)
-                        slider("Position", style.verticalPosition, in: 0...1, percent: true)
-                        slider("Background", style.backgroundOpacity, in: 0...1, percent: true)
-                        Toggle("Bold", isOn: style.bold)
-                        TextField("Color", text: style.colorHex)
+                        TextStyleEditor(style: Binding(get: { clip.text ?? .caption }, set: { v in update { $0.text = v } }))
                     }
                 }
             }

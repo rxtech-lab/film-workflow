@@ -1,12 +1,13 @@
 import CryptoKit
 import Foundation
 import Observation
+import RxRemotion
 
 extension Notification.Name {
     static let remotionPreviewChanged = Notification.Name("RemotionPreviewChanged")
 }
 
-/// Compiler processes are shared by document/project directory, never by playback position.
+/// Compiled resources are shared by document/project directory, never by playback position.
 @MainActor
 final class RemotionPreviewSessions {
     static let shared = RemotionPreviewSessions()
@@ -15,6 +16,22 @@ final class RemotionPreviewSessions {
         var owners: Set<UUID>
     }
     private var entries: [URL: Entry] = [:]
+    private var toolLeases: [URL: RemotionPreviewLease] = [:]
+    func keepRunning(project: RemotionProject) async throws -> URL {
+        let directory = project.projectDir.standardizedFileURL
+        if let lease = toolLeases[directory] { return lease.url }
+        let lease = try await acquire(project: project)
+        toolLeases[directory] = lease
+        return lease.url
+    }
+    func configurationChanged() {
+        let directories = Array(entries.keys)
+        stopAll()
+        for directory in directories {
+            NotificationCenter.default.post(name: .remotionPreviewChanged, object: nil, userInfo: ["directory": directory])
+        }
+    }
+
 
     func acquire(project: RemotionProject) async throws -> RemotionPreviewLease {
         let directory = project.projectDir.standardizedFileURL
@@ -24,7 +41,7 @@ final class RemotionPreviewSessions {
             try RemotionCodeBuilder.writeComposition(project: project, source: project.compositionSource)
         }
         guard FileManager.default.fileExists(atPath: source.path) else {
-            throw RemotionRuntimeError.studioFailedToStart("Create a composition to start the preview.")
+            throw RemotionError.resource("Create a composition to start the preview.")
         }
         let owner = UUID()
         if entries[directory] == nil {
@@ -52,6 +69,9 @@ final class RemotionPreviewSessions {
     }
 
     func stopAll(in package: URL? = nil) {
+        for directory in Array(toolLeases.keys) where package == nil || directory.path.hasPrefix(package!.path + "/") {
+            toolLeases.removeValue(forKey: directory)?.release()
+        }
         for directory in Array(entries.keys) where package == nil || directory.path.hasPrefix(package!.path + "/") {
             entries.removeValue(forKey: directory)?.session.stop()
         }
@@ -84,148 +104,49 @@ final class RemotionPreviewLease {
 @MainActor
 private final class RemotionPreviewSession {
     let directory: URL
-    private var process: Process?
-    private var pipe: Pipe?
-    private var url: URL?
-    private var detail = ""
-    private var starting: Task<URL, Error>?
-    private let cache: URL
-
-    init(directory: URL) {
-        self.directory = directory
-        cache = FileManager.default.temporaryDirectory.appendingPathComponent("rx-remotion-preview-\(UUID().uuidString)", isDirectory: true)
-    }
-
+    private let engine = RemotionEngine(configuration: RemotionMapSettings.configuration)
+    init(directory: URL) { self.directory = directory }
     func start() async throws -> URL {
-        if let starting {
-            if let process, !process.isRunning { stop() }
-            else { return try await starting.value }
+        let project = try await engine.prepare(projectURL: directory)
+        project.onRevisionChange = { [directory] in
+            NotificationCenter.default.post(name: .remotionPreviewChanged, object: nil, userInfo: ["directory": directory])
         }
-        let task = Task { @MainActor in
-            try Task.checkCancellation()
-            let proc = Process()
-            proc.executableURL = FileStorage.remotionRoot.appendingPathComponent("bun")
-            proc.arguments = [FileStorage.remotionRoot.appendingPathComponent("player/server.cjs").path, directory.path, cache.path]
-            proc.currentDirectoryURL = FileStorage.remotionRoot
-            proc.environment = RemotionRuntime.enrichedEnvironment()
-            let output = Pipe()
-            proc.standardOutput = output
-            proc.standardError = output
-            let buffer = LineBuffer()
-            output.fileHandleForReading.readabilityHandler = { [weak self] handle in
-                let lines = buffer.append(handle.availableData)
-                Task { @MainActor [weak self] in
-                    guard let self else { return }
-                    for line in lines {
-                        if line.hasPrefix("RX_PREVIEW_URL=") { self.url = URL(string: String(line.dropFirst(15))) }
-                        else if line == "RX_PREVIEW_CHANGED" {
-                            NotificationCenter.default.post(name: .remotionPreviewChanged, object: nil,
-                                                            userInfo: ["directory": self.directory])
-                        }
-                        else { self.detail = String((self.detail + "\n" + line).suffix(8_000)) }
-                    }
-                }
-            }
-            process = proc; pipe = output
-            try Task.checkCancellation()
-            try proc.run()
-            for _ in 0..<300 {
-                try Task.checkCancellation()
-                if let url { return url }
-                if !proc.isRunning { break }
-                try await Task.sleep(for: .milliseconds(100))
-            }
-            throw RemotionRuntimeError.studioFailedToStart(detail.isEmpty ? "The player server did not start." : detail)
-        }
-        starting = task
-        return try await task.value
+        return project.previewURL()
     }
-
-    func stop() {
-        starting?.cancel()
-        pipe?.fileHandleForReading.readabilityHandler = nil
-        if let process, process.isRunning {
-            let pids = ProcessTreeKiller.snapshot(rootPID: process.processIdentifier)
-            ProcessTreeKiller.signalAll(pids, SIGTERM)
-            let cache = cache
-            Task.detached {
-                try? await Task.sleep(for: .seconds(1))
-                ProcessTreeKiller.signalAll(pids.filter { kill($0, 0) == 0 }, SIGKILL)
-                try? FileManager.default.removeItem(at: cache)
-            }
-        } else { try? FileManager.default.removeItem(at: cache) }
-        process = nil; pipe = nil; starting = nil; url = nil
-    }
+    func stop() { engine.closeAll() }
 }
 
 /// Disposable alpha-preserving media. It never inserts a RemotionRender version.
 @MainActor
 enum RemotionPreviewRenderCache {
-    private struct Job {
-        let id: UUID
-        let task: Task<URL, Error>
-        var consumers: [UUID: @MainActor (RenderProgress) -> Void]
+    private static let jobs = RemotionPreviewRenderJobs()
+    static func captureScale(width: Int, height: Int) -> Double {
+        min(1, 960 / Double(max(1, width, height)))
     }
-    private static var jobs: [String: Job] = [:]
 
     static func render(project: RemotionProject, width: Int, height: Int,
                        progress: @escaping @MainActor (RenderProgress) -> Void) async throws -> URL {
         let projectDir = project.projectDir
         let fps = max(1, project.compositionFps)
+        let scale = captureScale(width: width, height: height)
         let sourceHash = try RemotionSourceHasher.hash(projectDir: projectDir, width: width, height: height, fps: fps)
-        let key = SHA256.hash(data: Data("alpha-v1:\(projectDir.path):\(sourceHash)".utf8)).map { String(format: "%02x", $0) }.joined()
+        let key = SHA256.hash(data: Data("native-alpha-preview-v2-960:\(RemotionMapSettings.fingerprint):\(projectDir.path):\(sourceHash)".utf8)).map { String(format: "%02x", $0) }.joined()
         let root = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("com.rxlab.film-workflow/RemotionPreview/\(key)", isDirectory: true)
         let output = root.appendingPathComponent("source.mov")
         if FileManager.default.fileExists(atPath: output.path) { return output }
-        let consumer = UUID()
-        if jobs[key] == nil {
-            let jobID = UUID()
-            let task = Task { @MainActor in
+        return try await jobs.value(for: key, progress: progress) { update in
             let fm = FileManager.default
-            let work = root.appendingPathComponent(jobID.uuidString, isDirectory: true)
-            let snapshot = work.appendingPathComponent("project", isDirectory: true)
-            try fm.createDirectory(at: snapshot, withIntermediateDirectories: true)
+            let work = root.appendingPathComponent(UUID().uuidString, isDirectory: true)
+            try fm.createDirectory(at: work, withIntermediateDirectories: true)
             defer { try? fm.removeItem(at: work) }
-            for name in ["src", "public", "remotion.config.ts", "tsconfig.json", "package.json"] {
-                let source = projectDir.appendingPathComponent(name)
-                if fm.fileExists(atPath: source.path) { try fm.copyItem(at: source, to: snapshot.appendingPathComponent(name)) }
-            }
             try Task.checkCancellation()
-            guard try RemotionSourceHasher.hash(projectDir: projectDir, width: width, height: height, fps: fps) == sourceHash else {
-                throw CancellationError()
-            }
             let temporary = work.appendingPathComponent("rendering.mov")
-            try await RemotionRenderer.render(projectDir: snapshot, to: temporary, width: width, height: height,
-                                              fps: fps, preserveAlpha: true) { update in
-                guard let job = jobs[key], job.id == jobID else { return }
-                for callback in job.consumers.values { callback(update) }
-            }
+            try await RemotionRenderer.render(projectDir: projectDir, to: temporary, width: width, height: height,
+                                              fps: fps, preserveAlpha: true, captureScale: scale, onProgress: update)
             try Task.checkCancellation()
             if !fm.fileExists(atPath: output.path) { try fm.moveItem(at: temporary, to: output) }
             return output
-            }
-            jobs[key] = Job(id: jobID, task: task, consumers: [:])
         }
-        jobs[key]!.consumers[consumer] = progress
-        let task = jobs[key]!.task
-        defer { release(key: key, consumer: consumer) }
-        return try await withTaskCancellationHandler {
-            try Task.checkCancellation()
-            let result = try await task.value
-            try Task.checkCancellation()
-            return result
-        } onCancel: {
-            Task { @MainActor in release(key: key, consumer: consumer) }
-        }
-    }
-
-    private static func release(key: String, consumer: UUID) {
-        guard var job = jobs[key] else { return }
-        job.consumers.removeValue(forKey: consumer)
-        if job.consumers.isEmpty {
-            jobs.removeValue(forKey: key)
-            job.task.cancel()
-        } else { jobs[key] = job }
     }
 }

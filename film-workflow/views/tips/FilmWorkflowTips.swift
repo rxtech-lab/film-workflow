@@ -69,10 +69,10 @@ enum FilmWorkflowTips {
         var options: [any TipOption] { Tips.MaxDisplayCount(1) }
     }
 
-    struct RemotionStudioTip: Tip {
+    struct RemotionPreviewTip: Tip {
         var title: Text { Text("Preview your composition") }
         var message: Text? {
-            Text("Remotion Studio runs inside the app; the runtime installs itself the first time you open it.")
+            Text("Remotion previews run in the native WebView. Source edits refresh the preview automatically.")
         }
         var image: Image? { Image(systemName: "play.rectangle") }
         var options: [any TipOption] { Tips.MaxDisplayCount(1) }

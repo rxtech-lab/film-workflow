@@ -29,4 +29,7 @@ jobs:
       - uses: actions/checkout@v7
 
       - name: Run package tests
-        run: swift test --package-path Packages/RxVideoEditor
+        run: swift test --package-path Packages/RxVideoEditor --no-parallel
+
+      - name: Test effects package
+        run: swift test --package-path Packages/RxVideoEffects --no-parallel

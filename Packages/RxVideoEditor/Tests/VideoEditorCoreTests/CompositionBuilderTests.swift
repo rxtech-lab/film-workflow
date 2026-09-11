@@ -41,7 +41,7 @@ enum Fixtures {
     }
 
     /// A short solid-colour H.264 clip with no audio.
-    static func video(color: NSColor, seconds: Double, fps: Int32 = 30, size: (Int, Int) = (320, 180), at url: URL) throws {
+    static func video(color: NSColor, seconds: Double, fps: Int32 = 30, size: (Int, Int) = (320, 180), image: CGImage? = nil, at url: URL) throws {
         let writer = try AVAssetWriter(outputURL: url, fileType: .mp4)
         let input = AVAssetWriterInput(mediaType: .video, outputSettings: [
             AVVideoCodecKey: AVVideoCodecType.h264,
@@ -65,6 +65,13 @@ enum Fixtures {
         let (r, g, b) = (UInt8(rgb.redComponent * 255), UInt8(rgb.greenComponent * 255), UInt8(rgb.blueComponent * 255))
         let count = CVPixelBufferGetDataSize(pixelBuffer) / 4
         for i in 0..<count { base[i * 4] = b; base[i * 4 + 1] = g; base[i * 4 + 2] = r; base[i * 4 + 3] = 255 }
+        if let image {
+            let context = try #require(CGContext(data: base, width: size.0, height: size.1, bitsPerComponent: 8,
+                                                 bytesPerRow: CVPixelBufferGetBytesPerRow(pixelBuffer),
+                                                 space: CGColorSpace(name: CGColorSpace.sRGB)!,
+                                                 bitmapInfo: CGBitmapInfo.byteOrder32Little.rawValue | CGImageAlphaInfo.premultipliedFirst.rawValue))
+            context.draw(image, in: CGRect(x: 0, y: 0, width: size.0, height: size.1))
+        }
         CVPixelBufferUnlockBaseAddress(pixelBuffer, [])
         let frames = Int(seconds * Double(fps))
         for frame in 0..<frames {
@@ -188,5 +195,24 @@ struct CompositionBuilderTests {
         // White text over blue lifts red and green at the cue.
         let captioned = try await Fixtures.averageColor(of: output, at: 2.6)
         #expect(captioned.r > blue.r + 0.05 && captioned.g > blue.g + 0.05)
+    }
+
+    @Test("Leaving captions out of the picture drops their layers and edges")
+    func excludesCaptions() async throws {
+        var t = Timeline(width: 320, height: 180, fps: 30)
+        let o = t.tracks.first { $0.kind == .overlay }!.id
+        try TimelineEditor.insert(&t, clip: Clip(source: ClipSource(id: "caption:c", kind: .captions, displayName: "C"), start: 1, duration: 2, inPoint: 0.5), on: o)
+        let resolver = FixtureResolver(files: ["caption:c": .captions([TextCue(start: 0, end: 1, text: "HELLO"), TextCue(start: 1, end: 3, text: "WORLD")])])
+
+        let drawn = try await TimelineCompositionBuilder(resolver: resolver).build(t, allowPlaceholders: false)
+        let layers = drawn.videoComposition.instructions.compactMap { $0 as? TimelineCompositionInstruction }.flatMap(\.layers)
+        let texts = layers.compactMap { layer -> [TextCue]? in if case .text(let cues, _) = layer { return cues } else { return nil } }
+        #expect(texts.count == 1)
+        #expect(texts.first == [TextCue(start: 1, end: 1.5, text: "HELLO"), TextCue(start: 1.5, end: 3, text: "WORLD")])
+
+        let stripped = try await TimelineCompositionBuilder(resolver: resolver).build(t, allowPlaceholders: false, includeCaptions: false)
+        let strippedLayers = stripped.videoComposition.instructions.compactMap { $0 as? TimelineCompositionInstruction }.flatMap(\.layers)
+        #expect(strippedLayers.isEmpty)
+        #expect(stripped.videoComposition.instructions.count == 1)
     }
 }

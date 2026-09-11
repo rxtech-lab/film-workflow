@@ -2,7 +2,7 @@ import SwiftData
 import SwiftUI
 import VideoEditorCore
 
-/// Left column: the grouped project list on top, the selected project's
+/// Left column: folders of footage cards on top, the selected project's
 /// footage underneath.
 struct LibraryPanel: View {
     let index: LibraryIndex
@@ -17,6 +17,7 @@ struct LibraryPanel: View {
     let onDeleteGroup: (ProjectGroup) -> Void
     let onRename: (LibraryRow) -> Void
     let onDelete: (LibraryRow) -> Void
+    let onExport: (LibraryRow) -> Void
     let onShowVersions: (LibraryRow, UUID?) -> Void
 
     @State private var filter: FootageKind?
@@ -48,7 +49,7 @@ struct LibraryPanel: View {
                     .frame(width: 100)
                 }
                 .padding(8)
-                LibraryList(
+                LibraryGrid(
                     rows: rows,
                     groups: groups,
                     selection: Binding(get: { state.selection }, set: { state.select($0) }),
@@ -60,10 +61,12 @@ struct LibraryPanel: View {
                     onDeleteGroup: onDeleteGroup,
                     onRename: onRename,
                     onDelete: onDelete,
+                    onExport: onExport,
                     onShowVersions: onShowVersions,
                     currentVersion: { currentVersion(for: $0) },
                     onSelectVersion: selectVersion,
-                    dragPayload: dragPayload
+                    dragPayload: dragPayload,
+                    footage: currentFootage
                 )
             }
             .frame(maxWidth: .infinity, minHeight: 180, maxHeight: .infinity)
@@ -78,7 +81,14 @@ struct LibraryPanel: View {
                 onSelect: { cell in
                     if let item = state.selection { state.setCurrentVersion(cell.id, for: item) }
                 },
-                onDeselect: { state.select(nil) }
+                onDeselect: { state.select(nil) },
+                onSkim: { cell, fraction in
+                    if let fraction, let item = state.selection {
+                        state.skimFootage(item, cellID: cell.id, fraction: fraction)
+                    } else {
+                        state.endFootageSkim()
+                    }
+                }
             )
             .frame(maxWidth: .infinity, minHeight: 150, idealHeight: 200, maxHeight: .infinity)
         }
@@ -112,8 +122,7 @@ struct LibraryPanel: View {
     }
 
     private func dragPayload(for row: LibraryRow) -> FootageDragPayload? {
-        let cells = index.footage(for: row.id)
-        let cell = state.currentVersion(for: row.id).flatMap { id in cells.first { $0.id == id } } ?? cells.first
+        let cell = currentFootage(for: row.id)
         guard let cell else { return row.dragItem.map { FootageDragPayload(item: $0, thumbnailURL: nil) } }
         var item = cell.drag
         if item.duration == nil, let url = cell.mediaURL, let cached = MediaDurationCache.cached(url) {
@@ -122,8 +131,13 @@ struct LibraryPanel: View {
         return FootageDragPayload(item: item, thumbnailURL: cell.thumbnailURL)
     }
 
+    private func currentFootage(for item: LibraryItemID) -> FootageCell? {
+        let cells = index.footage(for: item)
+        return currentVersion(for: item).flatMap { id in cells.first { $0.id == id } } ?? cells.first
+    }
+
     /// Reads the length of every generated audio take once, so a row dragged
-    /// straight from the list already knows how long it is.
+    /// straight from the grid already knows how long it is.
     private func warmDurations() async {
         for row in rows where row.id.kind == .music || row.id.kind == .narration {
             for cell in index.footage(for: row.id) where cell.duration == nil {

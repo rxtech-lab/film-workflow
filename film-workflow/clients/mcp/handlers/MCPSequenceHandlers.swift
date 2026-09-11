@@ -108,6 +108,10 @@ enum MCPSequenceHandlers {
                     "resolution": ["type": "string", "enum": TimelineExporter.Resolution.allCases.map(\.rawValue), "description": "Longest edge of the picture, aspect kept. Default source."] as [String: Any],
                     "format": ["type": "string", "enum": TimelineExporter.Container.allCases.map(\.rawValue), "description": "Container. Audio-only always writes m4a. Default mp4."] as [String: Any],
                     "output_dir": ["type": "string", "description": "Absolute folder path. When given the file is written there as `<sequence name>.<ext>` and is not kept as a film version."] as [String: Any],
+                    "captions": ["type": "string", "enum": ["burn_in", "embedded", "sidecar", "none"], "description": "How caption clips on the timeline are delivered: drawn into the picture, as subtitle tracks inside the movie, as .srt/.vtt files beside it, or left out. Default burn_in. Ignored for audio-only renders and when no caption clip is on the timeline."] as [String: Any],
+                    "caption_languages": ["type": "array", "items": ["type": "string"] as [String: Any], "description": "BCP-47 codes; an empty string is the original transcript. For embedded and sidecar, one track or file per entry. For burn_in, the first entry is the language drawn. Default [\"\"]. Each must be the original or a translation present on the caption clips."] as [String: Any],
+                    "caption_bilingual": ["type": "boolean", "description": "burn_in only: draw the original above the chosen translation. Default false."] as [String: Any],
+                    "caption_sidecar_format": ["type": "string", "enum": ["srt", "vtt"], "description": "sidecar only: file type. Default srt."] as [String: Any],
                 ],
                 "required": ["sequence_id"]
             ]
@@ -437,6 +441,7 @@ enum MCPSequenceHandlers {
             }
             options.container = container
         }
+        let captions = try captionRequest(arguments, options: &options, sequence: sequence, context: context)
         var destination = SequenceRenderDestination.film
         if let dir = arguments["output_dir"] as? String, !dir.isEmpty {
             var isDirectory: ObjCBool = false
@@ -447,14 +452,54 @@ enum MCPSequenceHandlers {
         }
         let output: SequenceRenderOutput
         do {
-            output = try await SequenceRenderService.render(sequence: sequence, document: document, options: options, destination: destination) { _ in }
+            output = try await SequenceRenderService.render(sequence: sequence, document: document, options: options, captions: captions, destination: destination) { _ in }
         } catch {
             throw MCPToolError.underlying(error)
         }
         switch output {
-        case .version(let render): return MCPToolRegistry.jsonResult(renderJSON(render))
-        case .file(let url): return MCPToolRegistry.jsonResult(["path": url.path, "codec": options.video?.rawValue ?? "audio"] as [String: Any])
+        case .version(let render):
+            var json = renderJSON(render)
+            json["captions"] = options.captions.rawValue
+            return MCPToolRegistry.jsonResult(json)
+        case .file(let url, let captionFiles):
+            return MCPToolRegistry.jsonResult([
+                "path": url.path,
+                "codec": options.video?.rawValue ?? "audio",
+                "captions": options.captions.rawValue,
+                "caption_files": captionFiles.map(\.path),
+            ] as [String: Any])
         }
+    }
+
+    /// Reads the caption arguments of `sequence_render` into `options.captions`
+    /// and a `CaptionRenderRequest`, rejecting deliveries and languages the
+    /// sequence cannot supply.
+    static func captionRequest(_ arguments: [String: Any], options: inout TimelineExporter.Options, sequence: SequenceProject, context: ModelContext) throws -> CaptionRenderRequest {
+        if let raw = arguments["captions"] as? String {
+            let deliveries: [String: TimelineExporter.CaptionDelivery] = ["burn_in": .burnIn, "embedded": .embedded, "sidecar": .sidecar, "none": .none]
+            guard let delivery = deliveries[raw] else {
+                throw MCPToolError.invalidArguments("captions must be burn_in, embedded, sidecar or none")
+            }
+            options.captions = delivery
+        }
+        var request = CaptionRenderRequest()
+        if let languages = arguments["caption_languages"] as? [String], !languages.isEmpty {
+            let available = SequenceCaptionSources.availableLanguages(in: sequence, context: context)
+            if let missing = languages.first(where: { !available.contains($0) }) {
+                let choices = available.map { $0.isEmpty ? "\"\" (original)" : $0 }.joined(separator: ", ")
+                throw MCPToolError.invalidArguments("caption language \(missing) is not on the timeline's caption clips; choose from \(choices)")
+            }
+            request.trackLanguages = languages
+            request.burnInLanguage = languages[0]
+        }
+        if let bilingual = arguments["caption_bilingual"] as? Bool { request.burnInBilingual = bilingual }
+        if let raw = arguments["caption_sidecar_format"] as? String {
+            guard let format = CaptionExportFormat(rawValue: raw), format.isSidecar else {
+                throw MCPToolError.invalidArguments("caption_sidecar_format must be srt or vtt")
+            }
+            request.sidecarFormat = format
+        }
+        return request
     }
 
     private static func sequenceRenders(_ arguments: [String: Any], context: ModelContext) throws -> [String: Any] {
@@ -473,6 +518,7 @@ enum MCPSequenceHandlers {
             "duration": r.durationSeconds,
             "codec": r.preset,
             "createdAt": ISO8601DateFormatter().string(from: r.createdAt),
+            "caption_files": r.captionFileURLs.map(\.path),
         ]
     }
 

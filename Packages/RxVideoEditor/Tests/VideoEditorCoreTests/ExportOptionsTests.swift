@@ -40,9 +40,25 @@ struct ExportOptionsTests {
 
     @Test("Options survive a round trip through JSON")
     func codable() throws {
-        let options = TimelineExporter.Options(video: .hevc, audio: nil, resolution: .p1440, container: .mov)
+        let options = TimelineExporter.Options(video: .hevc, audio: nil, resolution: .p1440, container: .mov, captions: .sidecar)
         let data = try JSONEncoder().encode(options)
         #expect(try JSONDecoder().decode(TimelineExporter.Options.self, from: data) == options)
+    }
+
+    @Test("Options saved before caption delivery existed burn captions in, and audio files carry none")
+    func captionDelivery() throws {
+        let legacy = Data(#"{"video":"h264","audio":"aac","resolution":"p720","container":"mp4"}"#.utf8)
+        let decoded = try JSONDecoder().decode(TimelineExporter.Options.self, from: legacy)
+        #expect(decoded.captions == .burnIn)
+        #expect(decoded.burnsInCaptions)
+        #expect(decoded.video == .h264 && decoded.resolution == .p720)
+        let silentLegacy = Data(#"{"audio":"aac","resolution":"source","container":"m4a"}"#.utf8)
+        #expect(try JSONDecoder().decode(TimelineExporter.Options.self, from: silentLegacy).video == nil)
+
+        let audioOnly = TimelineExporter.Options(video: nil, captions: .embedded)
+        #expect(audioOnly.normalized.captions == .none)
+        #expect(!audioOnly.burnsInCaptions)
+        #expect(!TimelineExporter.Options(captions: .embedded).burnsInCaptions)
     }
 }
 

@@ -21,8 +21,8 @@ struct RemotionParametersView: View {
     @State private var generatedImages: [URL] = []
     @State private var pendingDeletion: PendingDeletion?
     @State private var showDeleteAlert = false
-    private var isStudioRunning: Bool {
-        RemotionStudioSessions.runtime(for: project.projectDir)?.currentURL != nil
+    private var hasComposition: Bool {
+        !project.compositionSource.isEmpty || FileManager.default.fileExists(atPath: project.projectDir.appendingPathComponent("src/Composition.tsx").path)
     }
 
     private enum PendingDeletion: Identifiable {
@@ -399,7 +399,7 @@ struct RemotionParametersView: View {
 
     @ViewBuilder
     private var generateSection: some View {
-        if !isStudioRunning && !project.createdViaMCP {
+        if !hasComposition && !project.createdViaMCP {
             Section {
                 Button {
                     seed()
@@ -410,7 +410,7 @@ struct RemotionParametersView: View {
                     }
                 }
                 .disabled(isSeeding)
-                .popoverTip(FilmWorkflowTips.RemotionStudioTip(), arrowEdge: .top)
+                .popoverTip(FilmWorkflowTips.RemotionPreviewTip(), arrowEdge: .top)
 
                 Button("Generate with AI…") {
                     openAgent()

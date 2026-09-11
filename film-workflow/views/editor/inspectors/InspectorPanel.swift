@@ -1,11 +1,13 @@
 import SwiftData
 import SwiftUI
+import TipKit
 import VideoEditorCore
 import VideoEditorUI
 
-/// Right column: parameters and Generate for the selected footage, the
-/// sequence settings, or the selected timeline clip. Versions live in the
-/// library.
+/// Right column. The tab row comes from the protocols the selected footage
+/// conforms to (`InspectorTabResolver`), plus Clip and Sequence tabs when a
+/// clip or a sequence is selected. Selecting never changes the tab: the last
+/// tab the user picked is remembered and returns whenever it is offered.
 struct InspectorPanel: View {
     let index: LibraryIndex
     @Bindable var state: EditorWindowState
@@ -13,99 +15,79 @@ struct InspectorPanel: View {
     let sequence: SequenceProject?
     let onRender: () -> Void
 
-    @Environment(\.undoManager) private var undoManager
-
     var body: some View {
+        let context = InspectorContext(document: document, state: state, index: index, sequence: sequence, onRender: onRender)
+        let footage = footageItem.flatMap { index.model(for: $0) }
+        let footageTabs = InspectorTabResolver.tabs(
+            footage: footage,
+            hasClip: sequence != nil && !state.selectedClipIDs.isEmpty,
+            sequenceSelected: state.selection?.kind == .sequence,
+            context: context
+        )
+        let tabs = modifierTabs(footageTabs)
+        let current = InspectorTabResolver.effectiveTabID(remembered: state.modifierSelection?.tabID ?? state.inspectorTabID, tabs: tabs)
+        let tab = tabs.first { $0.id == current }
         VStack(spacing: 0) {
             StudioPanelHeader(title: "Inspector", symbol: "slider.horizontal.3")
-            Picker("Inspector", selection: $state.inspectorTab) {
-                Text("Footage").tag(InspectorTab.footage)
-                Text("Sequence").tag(InspectorTab.sequence)
-                Text("Clip").tag(InspectorTab.clip)
+            if !tabs.isEmpty {
+                Picker("Inspector", selection: Binding(get: { current ?? "" }, set: { id in
+                    if id == "effects", let clipID = state.selectedClipID { state.inspectEffects(clipID) }
+                    else if id != "transition" { state.modifierSelection = nil; state.inspectorTabID = id }
+                })) {
+                    ForEach(tabs) { tab in
+                        Text(tab.title).tag(tab.id)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .padding(6)
+                .glassEffect(.regular, in: .rect(cornerRadius: 12))
+                .padding(10)
+                Divider()
             }
-            .pickerStyle(.segmented)
-            .labelsHidden()
-            .padding(6)
-            .glassEffect(.regular, in: .rect(cornerRadius: 12))
-            .padding(10)
-            Divider()
-            inspectorContent
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            Group {
+                if let tab {
+                    tab.content()
+                } else {
+                    StudioEmptyState(title: "Nothing selected", symbol: "slider.horizontal.3",
+                                     message: "Select footage to adjust its settings.")
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .id(state.modifierSelection.map { String(describing: $0) } ?? String(describing: footage?.libraryItemID))
+            if let tab, tab.showsFooter, let footer = (footage as? any InspectorProtocol)?.makeInspectorFooter(context) {
+                Divider()
+                footer.id(footage?.libraryItemID)
+            }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 
-    @ViewBuilder
-    private var inspectorContent: some View {
-        switch state.inspectorTab {
-        case .footage:
-            footageInspector
-        case .sequence:
-            if let sequence {
-                SequenceInspector(sequence: sequence, document: document, onRender: onRender)
-            } else {
-                StudioEmptyState(title: "No Sequence", symbol: "film.stack",
-                                 message: "Create a sequence to adjust its settings.")
-            }
-        case .clip:
-            if let sequence, let clipID = state.selectedClipID {
-                clipInspector(sequence: sequence, clipID: clipID)
-            } else if state.selectedClipIDs.count > 1 {
-                StudioEmptyState(title: "\(state.selectedClipIDs.count) Clips Selected", symbol: "rectangle.stack",
-                                 message: "Drag them to move together, or press Delete to remove them all.")
-            } else {
-                StudioEmptyState(title: "No Clip Selected", symbol: "rectangle.dashed",
-                                 message: "Select a clip on the timeline.")
-            }
+    private func modifierTabs(_ footageTabs: [InspectorTabDescriptor]) -> [InspectorTabDescriptor] {
+        var tabs = footageTabs
+        if let selection = state.modifierSelection {
+            tabs.append(InspectorTabDescriptor(id: selection.tabID, title: selection.tabID == "effects" ? "Effects" : "Transition",
+                                              systemImage: "fx", showsFooter: false) {
+                AnyView(ModifierInspector(selection: selection, sequence: sequence))
+            })
+        } else if let id = state.selectedClipID, sequence?.timeline.acceptsModifiers(on: id) == true {
+            tabs.append(InspectorTabDescriptor(id: "effects", title: "Effects", systemImage: "fx", showsFooter: false) {
+                AnyView(ModifierInspector(selection: .effects(id), sequence: sequence))
+            })
         }
+        return tabs
     }
 
-    @ViewBuilder
-    private var footageInspector: some View {
-        switch state.selection?.kind {
-        case .music?:
-            if let p = state.selection.flatMap({ index.music($0.id) }) { MusicInspector(project: p).id(p.id) } else { empty }
-        case .narration?:
-            if let p = state.selection.flatMap({ index.narration($0.id) }) { NarrationInspector(project: p).id(p.id) } else { empty }
-        case .caption?:
-            if let p = state.selection.flatMap({ index.caption($0.id) }) { CaptionInspector(project: p).id(p.projectUUID) } else { empty }
-        case .image?:
-            if let p = state.selection.flatMap({ index.image($0.id) }) { ImageInspector(project: p).id(p.id) } else { empty }
-        case .video?:
-            if let p = state.selection.flatMap({ index.video($0.id) }) { VideoInspector(project: p).id(p.id) } else { empty }
-        case .remotion?:
-            if let p = state.selection.flatMap({ index.remotion($0.id) }) { RemotionInspector(project: p).id(p.id) } else { empty }
-        case .imported?:
-            if let a = state.selection.flatMap({ index.imported($0.id) }) { ImportedInspector(asset: a).id(a.id) } else { empty }
-        case .sequence?:
-            if let sequence { SequenceInspector(sequence: sequence, document: document, onRender: onRender) } else { empty }
-        case nil:
-            empty
+    /// What the footage tabs show: the source of the clip selected on the
+    /// timeline, or else the library selection. Selecting in the library
+    /// clears the clip selection, so the latest choice wins.
+    private var footageItem: LibraryItemID? {
+        if let sequence, let clipID = state.selectedClipID, let clip = sequence.timeline.clip(id: clipID),
+           let (prefix, id) = DocumentMediaResolver.parse(clip.source.id),
+           let kind = FootageKind(rawValue: prefix.rawValue) {
+            return LibraryItemID(kind: kind, id: id)
         }
-    }
-
-    private var empty: some View {
-        StudioEmptyState(title: "Nothing selected", symbol: "slider.horizontal.3",
-                         message: "Select footage to adjust its settings.")
-    }
-
-    @ViewBuilder
-    private func clipInspector(sequence: SequenceProject, clipID: UUID) -> some View {
-        let timeline = Binding(get: { sequence.timeline }, set: {
-            sequence.editTimeline($0, undoManager: undoManager, actionName: String(localized: "Edit Clip"))
-        })
-        let remotion = remotionProject(for: clipID, in: sequence)
-        let status: String? = remotion.map { project in
-            RemotionRenderService.cachedRender(project: project, width: sequence.width, height: sequence.height, fps: project.compositionFps, context: document.container.mainContext, preserveAlpha: true) == nil
-                ? "Live preview available · renders when exporting" : ""
-        }.flatMap { $0.isEmpty ? nil : $0 }
-        ClipInspectorView(timeline: timeline, clipID: clipID, renderStatus: status, onRender: remotion == nil ? nil : onRender)
-    }
-
-    private func remotionProject(for clipID: UUID, in sequence: SequenceProject) -> RemotionProject? {
-        guard let clip = sequence.timeline.clip(id: clipID), clip.source.kind == .remotion,
-              let (prefix, id) = DocumentMediaResolver.parse(clip.source.id), prefix == .remotion else { return nil }
-        return index.remotion(id)
+        return state.selection
     }
 }
 
@@ -149,31 +131,5 @@ private struct OptionalTip<T: TipKitTip>: ViewModifier {
 extension GenerateButton where Tip == FilmWorkflowTips.GenerateMusicTip {
     init(title: LocalizedStringKey, isBusy: Bool, isEnabled: Bool, action: @escaping () -> Void) {
         self.init(title: title, isBusy: isBusy, isEnabled: isEnabled, tip: nil, action: action)
-    }
-}
-
-import TipKit
-
-/// Keeps detailed authoring tools in the inspector without stacking scroll views.
-struct InspectorEditingTabs<Settings: View, Editor: View>: View {
-    let editorTitle: LocalizedStringKey
-    @ViewBuilder let settings: () -> Settings
-    @ViewBuilder let editor: () -> Editor
-    @State private var showEditor = false
-
-    var body: some View {
-        VStack(spacing: 0) {
-            Picker("Editing", selection: $showEditor) {
-                Text("Settings").tag(false)
-                Text(editorTitle).tag(true)
-            }
-            .pickerStyle(.segmented)
-            .padding(10)
-            Group {
-                if showEditor { editor() } else { settings() }
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }

@@ -1,8 +1,13 @@
 import SwiftData
 import SwiftUI
 
-struct CaptionInspector: View {
+/// Transcribe button, progress sheet and confirmations for a caption project,
+/// shown under every one of its inspector tabs. While a transcription runs the
+/// project is marked busy on the window state so the Settings tab can lock
+/// its controls.
+struct CaptionInspectorFooter: View {
     let project: CaptionProject
+    let state: EditorWindowState
     @Environment(\.modelContext) private var modelContext
 
     @State private var isTranscribing = false
@@ -15,21 +20,13 @@ struct CaptionInspector: View {
     @State private var confirmRetranscribe = false
 
     var body: some View {
-        VStack(spacing: 0) {
-            InspectorEditingTabs(editorTitle: "Captions") {
-                    CaptionProjectParametersView(project: project, isTranscribing: isTranscribing)
-                } editor: {
-                    CaptionProjectViewer(project: project).id(project.projectUUID)
-                }
-            Divider()
-            GenerateButton(title: project.activeSegmentCount > 0 ? "Re-transcribe" : "Transcribe",
-                           isBusy: isTranscribing, isEnabled: project.hasAudio,
-                           tip: FilmWorkflowTips.TranscribeTip()) {
-                requestTranscribe()
-            }
-            .padding(10)
-            .help(project.hasAudio ? "Transcribe this audio into captions" : "Choose an audio file or a narration first")
+        GenerateButton(title: project.activeSegmentCount > 0 ? "Re-transcribe" : "Transcribe",
+                       isBusy: isTranscribing, isEnabled: project.hasAudio,
+                       tip: FilmWorkflowTips.TranscribeTip()) {
+            requestTranscribe()
         }
+        .padding(10)
+        .help(project.hasAudio ? "Transcribe this audio into captions" : "Choose an audio file or a narration first")
         .sheet(isPresented: $isTranscribing) {
             CaptionTranscriptionProgressView(progress: progress) { transcriptionTask?.cancel() }
         }
@@ -55,8 +52,12 @@ struct CaptionInspector: View {
         guard !isTranscribing else { return }
         isTranscribing = true
         progress = nil
+        // Marked on the window state, not this view's state, so the flag
+        // clears even if the selection has moved on before the work ends.
+        let item = project.libraryItemID
+        state.busyItems.insert(item)
         transcriptionTask = Task {
-            defer { isTranscribing = false; progress = nil; transcriptionTask = nil }
+            defer { isTranscribing = false; progress = nil; transcriptionTask = nil; state.busyItems.remove(item) }
             do {
                 let config = try AppConfig.loadFromKeychain()
                 let count: Int

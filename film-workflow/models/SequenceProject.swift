@@ -35,8 +35,11 @@ final class SequenceProject: GroupableProject {
 
     var timeline: Timeline {
         get {
+            // Register the stored data dependency even on a cache hit so inspector
+            // controls and thumbnails refresh after an atomic timeline edit.
+            let data = timelineData
             if let cachedTimeline { return cachedTimeline }
-            let decoded = (try? TimelineCodec.decode(timelineData)) ?? Timeline(width: width, height: height, fps: fps)
+            let decoded = (try? TimelineCodec.decode(data)) ?? Timeline(width: width, height: height, fps: fps)
             cachedTimeline = decoded
             return decoded
         }

@@ -86,6 +86,8 @@ struct PersistedPanelSplit: NSViewRepresentable {
             if split.isVertical && sizes.count == 3 {
                 // Preserve sidebar widths; give changes in window width to the viewer.
                 sizes[1] = max(0, available - sizes[0] - sizes[2])
+            } else if panel == .timelineColumns && sizes.count == 2 {
+                sizes[0] = max(0, available - sizes[1])
             } else {
                 let scale = available / sizes.reduce(0, +)
                 sizes = sizes.map { $0 * scale }

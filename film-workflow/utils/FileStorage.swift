@@ -24,12 +24,6 @@ nonisolated struct FileStorage {
         appSupportURL.appendingPathComponent("tmp", isDirectory: true)
     }
 
-    /// The shared Remotion runtime: `bun`, `node_modules`, and template configs.
-    /// Per-film Remotion projects symlink their `node_modules` here.
-    static var remotionRoot: URL {
-        appSupportURL.appendingPathComponent("remotion", isDirectory: true)
-    }
-
     /// Agent threads and messages, which span films.
     static var agentStoreURL: URL {
         appSupportURL.appendingPathComponent("Agent.store")
@@ -40,7 +34,6 @@ nonisolated struct FileStorage {
         try? fm.createDirectory(at: appSupportURL, withIntermediateDirectories: true)
         try? fm.createDirectory(at: whisperModelsDir, withIntermediateDirectories: true)
         try? fm.createDirectory(at: tempDir, withIntermediateDirectories: true)
-        try? fm.createDirectory(at: remotionRoot, withIntermediateDirectories: true)
     }
 
     /// Removes everything in `tempDir` and recreates it. Called at launch:

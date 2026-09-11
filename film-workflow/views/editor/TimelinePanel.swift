@@ -2,6 +2,7 @@ import SwiftData
 import SwiftUI
 import VideoEditorCore
 import VideoEditorUI
+import VideoEffectsUI
 
 /// Bottom panel: the current sequence's timeline.
 struct TimelinePanel: View {
@@ -13,14 +14,45 @@ struct TimelinePanel: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.undoManager) private var undoManager
     @State private var dropError: String?
+    @State private var browserVisible: Bool
+
+    init(state: EditorWindowState, document: ProjectDocument, sequence: SequenceProject?, onCreateSequence: @escaping () -> Void) {
+        self.state = state
+        self.document = document
+        self.sequence = sequence
+        self.onCreateSequence = onCreateSequence
+        _browserVisible = State(initialValue: document.panelLayout.effectsBrowserVisible ?? true)
+    }
 
     var body: some View {
-        VStack(spacing: 0) {
-            StudioPanelHeader(title: "Timeline", symbol: "timeline.selection")
-            timelineContent
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        TimelineBrowserSplit(document: document, browserVisible: browserVisible) {
+            timelineColumn
+        } browser: {
+            VStack(spacing: 0) {
+                StudioPanelHeader(title: "Effects & Transitions", symbol: "slider.horizontal.below.rectangle")
+                ModifierBrowser { state.modifierSelection = .catalog($0) }
+            }
+            .background(Color(nsColor: .controlBackgroundColor))
         }
         .background(Color(nsColor: .textBackgroundColor))
+    }
+
+    private var timelineColumn: some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 0) {
+                StudioPanelHeader(title: "Timeline", symbol: "timeline.selection")
+                Button {
+                    browserVisible.toggle()
+                    document.setEffectsBrowserVisible(browserVisible)
+                } label: { Image(systemName: "sidebar.right") }
+                    .buttonStyle(.borderless).padding(.horizontal, 10)
+                    .accessibilityLabel("Effects & Transitions")
+                    .help(browserVisible ? "Hide effects and transitions" : "Show effects and transitions")
+                    .accessibilityIdentifier("toggle-modifier-browser")
+            }
+            .background(.bar)
+            timelineContent
+        }
     }
 
     @ViewBuilder
@@ -31,6 +63,10 @@ struct TimelinePanel: View {
                 playhead: Binding(get: { state.playhead }, set: { state.playhead = $0 }),
                 selectedClipIDs: $state.selectedClipIDs,
                 pixelsPerSecond: Binding(get: { sequence.timelinePixelsPerSecond }, set: { sequence.timelinePixelsPerSecond = $0 }),
+                skimming: $state.skimsTimeline,
+                onSkim: { time in
+                    if let time { state.skim(to: time) } else { state.endSkim() }
+                },
                 resolver: DocumentMediaResolver(document: document, width: sequence.width, height: sequence.height, fps: sequence.fps),
                 onDrop: { item, trackID, time in
                     Task { await insert(item, on: trackID, at: time, into: sequence) }
@@ -44,7 +80,10 @@ struct TimelinePanel: View {
                 onDeselect: { state.select(nil) },
                 alignment: { clip, timeline in
                     CaptionAudioAlignment.alignment(for: clip, in: timeline, context: modelContext)
-                }
+                },
+                selectedTransitionID: state.selectedTransitionID,
+                onInspectEffects: { state.inspectEffects($0) },
+                onInspectTransition: { state.inspectTransition($0) }
             )
             .alert("Couldn’t add footage", isPresented: Binding(get: { dropError != nil }, set: { if !$0 { dropError = nil } })) {
                 Button("OK") { dropError = nil }
@@ -68,6 +107,14 @@ struct TimelinePanel: View {
         }
     }
 
+    /// The caption project's default style, so a dropped clip looks the way its Style tab says.
+    private func captionStyle(for source: ClipSource) -> TextStyle {
+        guard let (prefix, id) = DocumentMediaResolver.parse(source.id), prefix == .caption,
+              let project = try? modelContext.fetch(FetchDescriptor<CaptionProject>(predicate: #Predicate { $0.projectUUID == id })).first
+        else { return .caption }
+        return project.captionStyle
+    }
+
     /// Resolves the dropped footage to learn its natural length before placing it.
     private func insert(_ item: FootageDragItem, on trackID: UUID, at time: TimeInterval, into sequence: SequenceProject) async {
         var duration = item.duration ?? 0
@@ -83,7 +130,8 @@ struct TimelinePanel: View {
         if duration <= 0 { duration = FootageDragItem.defaultStillDuration }
 
         var timeline = sequence.timeline
-        let clip = Clip(source: item.source, start: time, duration: duration, sourceDuration: item.source.kind == .image ? nil : duration, text: item.source.kind == .captions ? .caption : nil)
+        let clip = Clip(source: item.source, start: time, duration: duration, sourceDuration: item.source.kind == .image ? nil : duration,
+                        text: item.source.kind == .captions ? captionStyle(for: item.source) : nil)
         do {
             try TimelineEditor.insert(&timeline, clip: clip, on: trackID)
             sequence.editTimeline(timeline, undoManager: undoManager, actionName: String(localized: "Add Clip"))

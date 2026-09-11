@@ -12,6 +12,9 @@ struct FootageViewer: View {
     let name: String
     let versions: [FootageCell]
     let onSelectVersion: (UUID) -> Void
+    /// Where the browser is skimming this footage, as a share of its length.
+    /// Nil when the pointer is not over its cell.
+    var skimFraction: Double? = nil
 
     @State private var player = FootagePlayer()
 
@@ -25,6 +28,9 @@ struct FootageViewer: View {
             transport
         }
         .task(id: cell.id) { await player.load(cell) }
+        .onChange(of: skimFraction, initial: true) { _, fraction in
+            if let fraction { player.skim(toFraction: fraction) } else { player.endSkim() }
+        }
         .onDisappear { player.unload() }
     }
 
@@ -178,6 +184,12 @@ final class FootagePlayer {
     private var timeObserver: Any?
     private var endObserver: NSObjectProtocol?
     private var resumeAfterScrub = false
+    /// Where playback sat when skimming began, so the frame comes back once
+    /// the pointer leaves the footage.
+    @ObservationIgnored private var restingTime: TimeInterval?
+    /// The skimmed position as a share of the length. Kept across a reload
+    /// so a take that is still opening lands on the right frame.
+    @ObservationIgnored private var skimFraction: Double?
     @ObservationIgnored private let log = Logger(subsystem: "com.rxlab.film-workflow", category: "FootagePlayback")
     @ObservationIgnored private var diagnosticsTask: Task<Void, Never>?
     @ObservationIgnored private var lastTimeCallback: ContinuousClock.Instant?
@@ -218,6 +230,8 @@ final class FootagePlayer {
         duration = cell.duration ?? 0
         player.replaceCurrentItem(with: AVPlayerItem(url: url))
         if let natural = await MediaDurationCache.duration(of: url) { duration = natural }
+        guard !Task.isCancelled, let skimFraction else { return }
+        skim(toFraction: skimFraction)
     }
 
     func unload() {
@@ -227,6 +241,7 @@ final class FootagePlayer {
         player.pause()
         player.replaceCurrentItem(with: nil)
         isPlaying = false
+        restingTime = nil
         currentTime = 0
         duration = 0
     }
@@ -270,6 +285,24 @@ final class FootagePlayer {
         log.info("scrub-end resume=\(self.resumeAfterScrub) uiTime=\(self.currentTime)")
         isScrubbing = false
         if resumeAfterScrub { resumeAfterScrub = false; play() }
+    }
+
+    /// Shows the frame at `fraction` (0...1) of the length without losing
+    /// the position playback had. Ignored while playing, so a pass of the
+    /// pointer never interrupts a take that is being listened to.
+    func skim(toFraction fraction: Double) {
+        skimFraction = min(max(0, fraction), 1)
+        guard player.currentItem != nil, duration > 0, !isPlaying else { return }
+        if restingTime == nil { restingTime = currentTime }
+        seek(to: skimFraction! * duration)
+    }
+
+    /// Puts playback back where it was before skimming.
+    func endSkim() {
+        skimFraction = nil
+        guard let resting = restingTime else { return }
+        restingTime = nil
+        seek(to: resting)
     }
 
     /// One heartbeat per second while active; never emit logs on every frame.

@@ -4,6 +4,38 @@ import Foundation
 import SwiftData
 import VideoEditorCore
 
+/// Which text a caption clip shows: the transcript, one translation, or both.
+/// Chosen per render; the preview and the timeline always show the original.
+nonisolated enum CaptionTextSelection: Sendable, Hashable {
+    case original
+    /// The translation, falling back to the original for captions without one.
+    case translation(String)
+    /// Original on the first line, translation underneath.
+    case bilingual(String)
+
+    /// BCP-47 of the translation involved; empty for the original.
+    var languageCode: String {
+        switch self {
+        case .original: return ""
+        case .translation(let code), .bilingual(let code): return code
+        }
+    }
+
+    /// The cue text for one caption, given its rendered original and its
+    /// rendered translations.
+    func text(original: String, translations: [String: String]) -> String {
+        switch self {
+        case .original:
+            return original
+        case .translation(let code):
+            return translations[code].flatMap { $0.isEmpty ? nil : $0 } ?? original
+        case .bilingual(let code):
+            guard let translated = translations[code], !translated.isEmpty else { return original }
+            return original + "\n" + translated
+        }
+    }
+}
+
 /// Maps timeline source ids to files inside a film.
 ///
 /// Id grammar: `<kind>:<uuid>` where kind is `music`, `narration`, `image`,
@@ -18,13 +50,17 @@ struct DocumentMediaResolver: MediaResolver {
     var renderWidth: Int
     var renderHeight: Int
     var renderFps: Int
+    /// What caption clips resolve to. Glossary placeholders are resolved
+    /// either way, so a burned-in caption reads like an exported one.
+    var captionText: CaptionTextSelection
 
-    init(document: ProjectDocument, width: Int, height: Int, fps: Int) {
+    init(document: ProjectDocument, width: Int, height: Int, fps: Int, captionText: CaptionTextSelection = .original) {
         self.container = document.container
         self.storage = document.storage
         self.renderWidth = width
         self.renderHeight = height
         self.renderFps = fps
+        self.captionText = captionText
     }
 
     enum SourceKindPrefix: String {
@@ -81,10 +117,21 @@ struct DocumentMediaResolver: MediaResolver {
         case .caption:
             let rows = try context.fetch(FetchDescriptor<CaptionProject>(predicate: #Predicate { $0.projectUUID == uuid }))
             guard let project = rows.first else { throw MediaResolverError.missing(source) }
-            let cues = project.activeSegments.map { segment in
-                TextCue(start: Double(segment.startMs) / 1000, end: Double(segment.endMs) / 1000, text: segment.text)
-            }
-            return .captions(cues)
+            return .captions(Self.cues(for: project, text: captionText))
+        }
+    }
+
+    /// A caption project's active transcript as cues on its own clock, in the
+    /// chosen language with `{{term}}` placeholders rendered.
+    @MainActor
+    static func cues(for project: CaptionProject, text selection: CaptionTextSelection) -> [TextCue] {
+        let snapshot = project.snapshot()
+        let resolver = CaptionTermResolver(terms: project.usableTerms)
+        return snapshot.segments.compactMap { segment in
+            let original = resolver.render(segment.text, language: snapshot.sourceLanguage)
+            let text = selection.text(original: original, translations: segment.translations)
+            guard !text.isEmpty, segment.endMs > segment.startMs else { return nil }
+            return TextCue(start: Double(segment.startMs) / 1000, end: Double(segment.endMs) / 1000, text: text)
         }
     }
 

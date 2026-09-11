@@ -45,13 +45,13 @@ struct LibraryIndex {
         }
         rows += music.map { p in
             let newest = p.generatedFiles.max { $0.createdAt < $1.createdAt }
-            return LibraryRow(id: LibraryItemID(kind: .music, id: p.id), name: p.name, subtitle: outputSubtitle(newest: newest?.createdAt), updatedAt: p.updatedAt, groupID: p.groupID,
-                              dragItem: newest?.dragItem, versions: generatedVersions(p.generatedFiles, id: \.id, createdAt: \.createdAt))
+            return LibraryRow(id: LibraryItemID(kind: .music, id: p.id), name: p.name, subtitle: outputSubtitle(newest: newest?.createdAt, duration: newest?.durationSeconds), updatedAt: p.updatedAt, groupID: p.groupID,
+                              dragItem: newest?.dragItem, versions: generatedVersions(p.generatedFiles, id: \.id, createdAt: \.createdAt, detail: { durationLabel($0.durationSeconds) }))
         }
         rows += narrations.map { p in
             let newest = p.generatedFiles.max { $0.createdAt < $1.createdAt }
-            return LibraryRow(id: LibraryItemID(kind: .narration, id: p.id), name: p.name, subtitle: outputSubtitle(newest: newest?.createdAt), updatedAt: p.updatedAt, groupID: p.groupID,
-                              dragItem: newest?.dragItem, versions: generatedVersions(p.generatedFiles, id: \.id, createdAt: \.createdAt))
+            return LibraryRow(id: LibraryItemID(kind: .narration, id: p.id), name: p.name, subtitle: outputSubtitle(newest: newest?.createdAt, duration: newest?.durationSeconds), updatedAt: p.updatedAt, groupID: p.groupID,
+                              dragItem: newest?.dragItem, versions: generatedVersions(p.generatedFiles, id: \.id, createdAt: \.createdAt, detail: { durationLabel($0.durationSeconds) }))
         }
         rows += captions.map { p in
             LibraryRow(id: LibraryItemID(kind: .caption, id: p.projectUUID), name: p.name, subtitle: p.activeSegmentCount == 0 ? "No captions" : "\(p.activeSegmentCount) captions", updatedAt: p.updatedAt, groupID: p.groupID,
@@ -91,14 +91,29 @@ struct LibraryIndex {
         rows().first { $0.id == item }?.name
     }
 
+    /// The model behind a library item, as the footage protocols see it.
+    /// The one place the inspector resolves a kind to a concrete type.
+    func model(for item: LibraryItemID) -> (any FootageProtocol)? {
+        switch item.kind {
+        case .sequence: return sequence(item.id)
+        case .music: return music(item.id)
+        case .narration: return narration(item.id)
+        case .caption: return caption(item.id)
+        case .image: return image(item.id)
+        case .video: return video(item.id)
+        case .remotion: return remotion(item.id)
+        case .imported: return imported(item.id)
+        }
+    }
+
     // MARK: - Versions
 
     /// The versions of one item, newest first. Empty for imported files.
     func versions(for item: LibraryItemID) -> [LibraryVersion] {
         switch item.kind {
         case .sequence: return sequence(item.id).map(sequenceVersions) ?? []
-        case .music: return music(item.id).map { generatedVersions($0.generatedFiles, id: \.id, createdAt: \.createdAt) } ?? []
-        case .narration: return narration(item.id).map { generatedVersions($0.generatedFiles, id: \.id, createdAt: \.createdAt) } ?? []
+        case .music: return music(item.id).map { generatedVersions($0.generatedFiles, id: \.id, createdAt: \.createdAt, detail: { durationLabel($0.durationSeconds) }) } ?? []
+        case .narration: return narration(item.id).map { generatedVersions($0.generatedFiles, id: \.id, createdAt: \.createdAt, detail: { durationLabel($0.durationSeconds) }) } ?? []
         case .caption: return caption(item.id).map(captionVersions) ?? []
         case .image: return image(item.id).map { generatedVersions($0.generatedFiles, id: \.id, createdAt: \.createdAt) } ?? []
         case .video: return video(item.id).map { generatedVersions($0.generatedFiles, id: \.id, createdAt: \.createdAt, detail: { $0.dimensionsLabel }) } ?? []
@@ -109,11 +124,12 @@ struct LibraryIndex {
 
     /// Generated outputs carry no version number of their own; they are
     /// numbered by age, the way the footage browser labels them.
-    private func generatedVersions<T>(_ files: [T], id: KeyPath<T, UUID>, createdAt: KeyPath<T, Date>, detail: ((T) -> String)? = nil) -> [LibraryVersion] {
+    private func generatedVersions<T>(_ files: [T], id: KeyPath<T, UUID>, createdAt: KeyPath<T, Date>, detail: ((T) -> String?)? = nil) -> [LibraryVersion] {
         let sorted = files.sorted { $0[keyPath: createdAt] > $1[keyPath: createdAt] }
         return sorted.enumerated().map { i, file in
             let date = file[keyPath: createdAt].formatted(date: .abbreviated, time: .shortened)
-            return LibraryVersion(id: file[keyPath: id], label: "v\(sorted.count - i)", detail: detail.map { "\($0(file)) · \(date)" } ?? date)
+            let extra = detail?(file)
+            return LibraryVersion(id: file[keyPath: id], label: "v\(sorted.count - i)", detail: extra.map { "\($0) · \(date)" } ?? date)
         }
     }
 
@@ -138,9 +154,17 @@ struct LibraryIndex {
         }
     }
 
-    private func outputSubtitle(newest: Date?) -> String {
+    /// Length then date, or just the date while the length is still unknown.
+    private func outputSubtitle(newest: Date?, duration: Double? = nil) -> String {
         guard let newest else { return String(localized: "Not generated yet") }
-        return newest.formatted(date: .abbreviated, time: .shortened)
+        let date = newest.formatted(date: .abbreviated, time: .shortened)
+        return durationLabel(duration).map { "\($0) · \(date)" } ?? date
+    }
+
+    /// "12s" for a known length, nil for zero or missing.
+    private func durationLabel(_ seconds: Double?) -> String? {
+        guard let seconds, seconds > 0 else { return nil }
+        return "\(Int(seconds.rounded()))s"
     }
 
     /// The outputs of one project as draggable footage, newest first.
@@ -150,12 +174,12 @@ struct LibraryIndex {
         case .music:
             guard let p = music(item.id) else { return [] }
             return p.generatedFiles.sorted { $0.createdAt > $1.createdAt }.enumerated().map { i, f in
-                FootageCell(id: f.id, title: "v\(p.generatedFiles.count - i)", subtitle: date(f.createdAt), footage: f)
+                FootageCell(id: f.id, title: "v\(p.generatedFiles.count - i)", subtitle: durationLabel(f.durationSeconds) ?? date(f.createdAt), footage: f)
             }
         case .narration:
             guard let p = narration(item.id) else { return [] }
             return p.generatedFiles.sorted { $0.createdAt > $1.createdAt }.enumerated().map { i, f in
-                FootageCell(id: f.id, title: "v\(p.generatedFiles.count - i)", subtitle: date(f.createdAt), footage: f)
+                FootageCell(id: f.id, title: "v\(p.generatedFiles.count - i)", subtitle: durationLabel(f.durationSeconds) ?? date(f.createdAt), footage: f)
             }
         case .caption:
             guard let p = caption(item.id), p.activeSegmentCount > 0 else { return [] }

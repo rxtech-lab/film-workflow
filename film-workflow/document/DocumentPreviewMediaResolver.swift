@@ -1,6 +1,5 @@
 import CoreGraphics
 import Foundation
-import CoreGraphics
 import SwiftData
 import VideoEditorCore
 
@@ -46,7 +45,9 @@ final class DocumentPreviewMediaResolver: TimelinePreviewResolver {
         let url = try await RemotionPreviewRenderCache.render(project: project, width: width, height: height) {
             progress("Preparing rendered preview" + ($0.detail.map { " · \($0)" } ?? "…"))
         }
-        return .file(url, naturalDuration: project.durationSeconds, naturalSize: CGSize(width: width, height: height))
+        let scale = RemotionPreviewRenderCache.captureScale(width: width, height: height)
+        return .file(url, naturalDuration: project.durationSeconds,
+                     naturalSize: CGSize(width: (Double(width) * scale).rounded(), height: (Double(height) * scale).rounded()))
     }
 
     func release() {

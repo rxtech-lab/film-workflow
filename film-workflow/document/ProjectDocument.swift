@@ -136,6 +136,12 @@ final class ProjectDocument: Identifiable {
         }
     }
 
+    func setEffectsBrowserVisible(_ visible: Bool) {
+        panelLayout.effectsBrowserVisible = visible
+        panelLayoutNeedsSave = true
+        savePanelLayout()
+    }
+
     func setPanelSizes(_ sizes: [Double], for panel: DocumentPanelLayout.Panel) {
         guard sizes.count >= 2, sizes.allSatisfy({ $0.isFinite && $0 > 0 }),
               panelLayout.splits[panel.rawValue] != sizes else { return }
@@ -166,16 +172,11 @@ final class ProjectDocument: Identifiable {
     }
 
     /// Flushes changes and releases per-document registrations. Stops the
-    /// Remotion Studio preview if it is serving a project inside this package.
+    /// native Remotion preview if it is serving a project inside this package.
     func close() async {
         save()
         #if os(macOS)
         RemotionPreviewSessions.shared.stopAll(in: packageURL)
-        await RemotionStudioSessions.stopAll(in: packageURL)
-        if let dir = RemotionRuntime.shared.currentProjectDir,
-           dir.standardizedFileURL.path.hasPrefix(packageURL.path) {
-            await RemotionRuntime.shared.stop()
-        }
         #endif
         ProjectStorage.unregister(container: container)
     }

@@ -33,30 +33,55 @@ public final class TextRenderer: @unchecked Sendable {
         return image
     }
 
+    /// The font a style resolves to at `pointSize`: the named family with the
+    /// bold and italic traits applied, or the system font when the name is unknown.
+    public static func font(for style: TextStyle, pointSize: CGFloat) -> NSFont {
+        var font = NSFont(name: style.fontName, size: pointSize)
+            ?? (style.bold ? NSFont.boldSystemFont(ofSize: pointSize) : NSFont.systemFont(ofSize: pointSize))
+        if style.bold { font = NSFontManager.shared.convert(font, toHaveTrait: .boldFontMask) }
+        if style.italic { font = NSFontManager.shared.convert(font, toHaveTrait: .italicFontMask) }
+        return font
+    }
+
     private func render(text: String, style: TextStyle, frameSize: CGSize) -> CIImage? {
         let width = Int(frameSize.width), height = Int(frameSize.height)
         guard width > 0, height > 0 else { return nil }
         let pointSize = max(8, frameSize.height * style.fontSize)
-        let font = NSFont(name: style.fontName, size: pointSize).map { style.bold ? NSFontManager.shared.convert($0, toHaveTrait: .boldFontMask) : $0 }
-            ?? (style.bold ? NSFont.boldSystemFont(ofSize: pointSize) : NSFont.systemFont(ofSize: pointSize))
+        let font = Self.font(for: style, pointSize: pointSize)
 
         let paragraph = NSMutableParagraphStyle()
-        paragraph.alignment = .center
-        let attributes: [NSAttributedString.Key: Any] = [
+        switch style.alignment {
+        case .leading: paragraph.alignment = .left
+        case .center: paragraph.alignment = .center
+        case .trailing: paragraph.alignment = .right
+        }
+        var attributes: [NSAttributedString.Key: Any] = [
             .font: font,
             .foregroundColor: NSColor(hex: style.colorHex) ?? .white,
             .paragraphStyle: paragraph,
         ]
+        if style.strokeWidth > 0 {
+            // Negative width strokes and fills; positive would outline only.
+            attributes[.strokeColor] = NSColor(hex: style.strokeHex) ?? .black
+            attributes[.strokeWidth] = -(style.strokeWidth * 100)
+        }
         let attributed = NSAttributedString(string: text, attributes: attributes)
-        let maxWidth = frameSize.width * 0.85
+        let margin = frameSize.width * 0.075
+        let maxWidth = frameSize.width - margin * 2
         let bounds = attributed.boundingRect(
             with: CGSize(width: maxWidth, height: frameSize.height),
             options: [.usesLineFragmentOrigin, .usesFontLeading]
         )
         let padding = pointSize * 0.35
         let boxSize = CGSize(width: ceil(bounds.width) + padding * 2, height: ceil(bounds.height) + padding * 2)
+        let boxX: CGFloat
+        switch style.alignment {
+        case .leading: boxX = margin
+        case .center: boxX = (frameSize.width - boxSize.width) / 2
+        case .trailing: boxX = frameSize.width - margin - boxSize.width
+        }
         let boxOrigin = CGPoint(
-            x: (frameSize.width - boxSize.width) / 2,
+            x: boxX,
             // AppKit's flipped context: y grows downward, position 1 = bottom.
             y: (frameSize.height - boxSize.height) * style.verticalPosition
         )
@@ -89,7 +114,7 @@ public final class TextRenderer: @unchecked Sendable {
     }
 }
 
-extension NSColor {
+public extension NSColor {
     /// `#RRGGBB` or `#RRGGBBAA`.
     convenience init?(hex: String) {
         var s = hex.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -108,6 +133,13 @@ extension NSColor {
             a = 1
         }
         self.init(srgbRed: r, green: g, blue: b, alpha: a)
+    }
+
+    /// `#RRGGBB` in sRGB; alpha is dropped because styles carry it separately.
+    var hexString: String {
+        let c = usingColorSpace(.sRGB) ?? self
+        func byte(_ v: CGFloat) -> Int { Int((max(0, min(1, v)) * 255).rounded()) }
+        return String(format: "#%02X%02X%02X", byte(c.redComponent), byte(c.greenComponent), byte(c.blueComponent))
     }
 }
 

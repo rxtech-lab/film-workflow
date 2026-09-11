@@ -12,8 +12,9 @@ struct RemotionPlayerWebView: NSViewRepresentable {
         let config = WKWebViewConfiguration()
         config.mediaTypesRequiringUserActionForPlayback = []
         config.preferences.javaScriptCanOpenWindowsAutomatically = false
-        config.userContentController.add(context.coordinator, name: "rxPreview")
+        config.userContentController.add(context.coordinator, name: "rxRemotion")
         let view = RemotionPreviewWebView.NoContextMenuWebView(frame: .zero, configuration: config)
+        view.underPageBackgroundColor = .clear
         view.setValue(false, forKey: "drawsBackground")
         view.navigationDelegate = context.coordinator
         context.coordinator.webView = view
@@ -28,7 +29,7 @@ struct RemotionPlayerWebView: NSViewRepresentable {
     static func dismantleNSView(_ view: WKWebView, coordinator: Coordinator) {
         coordinator.active = false
         coordinator.playback.ready = false
-        view.configuration.userContentController.removeScriptMessageHandler(forName: "rxPreview")
+        view.configuration.userContentController.removeScriptMessageHandler(forName: "rxRemotion")
         view.navigationDelegate = nil
         view.stopLoading()
         view.loadHTMLString("", baseURL: nil)

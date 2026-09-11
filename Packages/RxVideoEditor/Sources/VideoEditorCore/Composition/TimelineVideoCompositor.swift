@@ -1,6 +1,7 @@
 import AVFoundation
 import CoreImage
 import Foundation
+import VideoEffectsCore
 
 /// Draws every frame of a sequence: composition-track video, still images,
 /// caption text and placeholders, scaled into the render size. Used by both
@@ -48,7 +49,16 @@ public final class TimelineVideoCompositor: NSObject, AVVideoCompositing, @unche
             }
             let size = request.renderContext.size
             let image = compose(instruction: instruction, request: request, size: size)
-            Self.ciContext.render(image, to: buffer, bounds: CGRect(origin: .zero, size: size), colorSpace: Self.colorSpace)
+            let pixels = CGSize(width: CVPixelBufferGetWidth(buffer), height: CVPixelBufferGetHeight(buffer))
+            // The canvas stays in sequence coordinates. Playback can request a
+            // smaller buffer via renderScale; drawing the unscaled canvas into it
+            // crops the picture. AVFoundation's transform also includes pixel aspect
+            // ratio and edge padding and uses a top-left origin, unlike Core Image.
+            let toPixels = CGAffineTransform(translationX: 0, y: size.height).scaledBy(x: 1, y: -1)
+                .concatenating(request.renderContext.renderTransform)
+                .concatenating(CGAffineTransform(translationX: 0, y: pixels.height).scaledBy(x: 1, y: -1))
+            Self.ciContext.render(image.transformed(by: toPixels), to: buffer,
+                                  bounds: CGRect(origin: .zero, size: pixels), colorSpace: Self.colorSpace)
             request.finish(withComposedVideoFrame: buffer)
         }
     }
@@ -61,31 +71,50 @@ public final class TimelineVideoCompositor: NSObject, AVVideoCompositing, @unche
         let time = CMTimeGetSeconds(request.compositionTime)
 
         for layer in instruction.layers {
-            let image: CIImage?
-            switch layer {
-            case .sourceTrack(let trackID, let transform, let opacity, let preferredTransform, _):
-                guard let pixelBuffer = request.sourceFrame(byTrackID: trackID) else { continue }
-                var source = CIImage(cvPixelBuffer: pixelBuffer)
-                if !preferredTransform.isIdentity {
-                    source = source.transformed(by: preferredTransform)
-                    source = source.transformed(by: CGAffineTransform(translationX: -source.extent.minX, y: -source.extent.minY))
-                }
-                image = Self.place(source, in: frame, transform: transform, opacity: opacity)
-            case .still(let url, let transform, let opacity):
-                guard let still = stillCache.image(for: url) else { continue }
-                image = Self.place(still, in: frame, transform: transform, opacity: opacity)
-            case .text(let cues, let style):
-                let active = cues.filter { $0.start <= time && time < $0.end }.map(\.text).joined(separator: "\n")
-                guard !active.isEmpty else { continue }
-                image = TextRenderer.shared.image(for: active, style: style, frameSize: size)
-            case .placeholder(let name):
-                image = Self.placeholder(named: name, in: frame)
-            }
-            if let image {
+            if let image = image(for: layer, at: time, frame: frame, request: request) {
                 output = image.composited(over: output)
             }
         }
         return output.cropped(to: frame)
+    }
+
+    private func image(for layer: LayerSpec, at time: Double, frame: CGRect, request: AVAsynchronousVideoCompositionRequest,
+                       effects: [EffectInstance] = []) -> CIImage? {
+        let catalog = ModifierCatalog.standard
+        switch layer {
+        case .sourceTrack(let trackID, let transform, let opacity, let preferredTransform, _):
+            guard let pixelBuffer = request.sourceFrame(byTrackID: trackID) else { return nil }
+            var source = CIImage(cvPixelBuffer: pixelBuffer)
+            if !preferredTransform.isIdentity {
+                source = source.transformed(by: preferredTransform)
+                source = source.transformed(by: CGAffineTransform(translationX: -source.extent.minX, y: -source.extent.minY))
+            }
+            return Self.place(catalog.apply(effects, to: source), in: frame, transform: transform, opacity: opacity)
+        case .still(let url, let transform, let opacity):
+            guard let still = stillCache.image(for: url) else { return nil }
+            return Self.place(catalog.apply(effects, to: still), in: frame, transform: transform, opacity: opacity)
+        case .text(let cues, let style):
+            let active = cues.filter { $0.start <= time && time < $0.end }.map(\.text).joined(separator: "\n")
+            guard !active.isEmpty else { return nil }
+            return TextRenderer.shared.image(for: active, style: style, frameSize: frame.size)
+        case .placeholder(let name): return Self.placeholder(named: name, in: frame)
+        case .processed(let base, let instances):
+            return image(for: base, at: time, frame: frame, request: request, effects: instances)
+        case .heldEdges(let base, let range, let first, let last, let transform, let opacity):
+            if let held = time < range.lowerBound ? first : (time >= range.upperBound ? last : nil) {
+                return Self.place(catalog.apply(effects, to: CIImage(cgImage: held)), in: frame, transform: transform, opacity: opacity)
+            }
+            return image(for: base, at: time, frame: frame, request: request, effects: effects)
+        case .transition(let from, let to, let instance, let range):
+            let a = from.flatMap { image(for: $0, at: time, frame: frame, request: request) }
+            let b = to.flatMap { image(for: $0, at: time, frame: frame, request: request) }
+            guard let definition = catalog.transition(instance.definitionID) else { return b ?? a }
+            let progress = (time - range.lowerBound) / max(0.000001, range.upperBound - range.lowerBound)
+            if from == nil, let b { return definition.renderEdge(b, progress: progress, atStart: true, parameters: instance.parameters) }
+            if to == nil, let a { return definition.renderEdge(a, progress: progress, atStart: false, parameters: instance.parameters) }
+            let clear = CIImage(color: .clear).cropped(to: frame)
+            return definition.render(from: a ?? clear, to: b ?? clear, progress: progress, parameters: instance.parameters)
+        }
     }
 
     /// Scales and positions an image per the clip transform, then applies opacity.

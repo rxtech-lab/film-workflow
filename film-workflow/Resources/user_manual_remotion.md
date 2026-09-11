@@ -2,17 +2,12 @@
 
 **The Remotion tab is macOS only.** It does not appear on iPhone or iPad.
 
-Remotion builds video from React components. Film Workflow ships a complete Remotion runtime inside
-the app, so there is nothing to install — no Node, no package manager, no terminal. Remotion Studio
-runs in the app window, and rendering happens in place.
-
-The runtime installs itself the first time you use it. The first launch is therefore slower than
-later ones.
+Remotion builds video from React components. Film Workflow uses the RxRemotion Swift package and the system WebView for preview and native movie export. Everything needed is bundled; no runtime installation, Node, Bun, Chromium, or Studio is required.
 
 ## Create a project
 
 Click **+** above the sidebar. The editor is split: the composition's settings on the left, the
-Studio preview on the right.
+native preview on the right.
 
 ### Basic
 
@@ -63,8 +58,10 @@ video.
 
 ## Build the composition
 
+Three.js is included for 3D scenes, together with React Three Fiber, Drei, and Remotion's ThreeCanvas. The agent can use these packages immediately; no installation is needed. Ask for animated 3D objects, lighting, or camera motion just as you would describe a 2D composition.
+
 Once the inputs are set, **Generate with AI…** builds a starting `Composition.tsx` from them and
-launches Studio. Treat it as a first draft.
+starts the native preview. Treat it as a first draft.
 
 Refining the composition happens in the **agent window**, not here — the agent can reach every
 project, so composition editing lives there. Open it with Command-Option-0 and ask for the change
@@ -74,11 +71,9 @@ you want.
 
 ## Preview
 
-The right-hand panel runs **Remotion Studio** against the current project. It shows *Starting
-Remotion Studio…* while the runtime comes up, then the live preview.
+The right-hand panel shows a live composition with native play, pause, seek and reload controls. Source and asset edits refresh the preview. Each timeline instance keeps its own playback position. Preview and export use separate sessions, so exporting does not stop the live preview.
 
-The preview is paused while a render is in progress, and the panel says so. If the runtime fails to
-start, the error is shown in the panel rather than hidden.
+`MapKitMap` and `OpenStreetMap` are available from `@rxlab/remotion-maps`. Apple Maps needs no web SDK credentials. For OpenStreetMap, configure your licensed tile URL, attribution, zoom limits and credentials in **Settings → Remotion**, and confirm that the provider permits movie exports. Public OSM tiles are not used for automated rendering.
 
 ## Render
 
@@ -102,9 +97,8 @@ history.
 
 ## Troubleshooting
 
-- **Studio will not start.** The error appears directly in the preview panel. The runtime is
-  installed into the app's own support folder on first use; if a previous run was interrupted,
-  quitting and reopening the app cleans up any leftover processes on launch.
+- **Preview will not start.** The panel shows compilation or resource errors. Check the entrypoint and source imports, then reload. Only bundled libraries and project-local browser modules are supported.
+- **An effect cannot be exported.** The renderer reports unsupported effects explicitly. Use frame-driven 2D effects; check the package compatibility guide for WebKit capture limits.
 - **Render is disabled.** The composition has no source yet. Use **Generate with AI…** or ask the
   agent to write one.
 - **An asset is missing in the preview.** Check that you are referencing it through `staticFile()`

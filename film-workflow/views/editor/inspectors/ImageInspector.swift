@@ -1,7 +1,8 @@
 import SwiftData
 import SwiftUI
 
-struct ImageInspector: View {
+/// Generate button for an image project, shown under its inspector tabs.
+struct ImageInspectorFooter: View {
     let project: ImageGenProject
     @Environment(\.modelContext) private var modelContext
 
@@ -24,19 +25,15 @@ struct ImageInspector: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            ImageGenProjectParametersView(project: project)
-            Divider()
-            GenerateButton(title: "Generate", isBusy: isGenerating, isEnabled: canGenerate) { Task { await generate() } }
-                .padding(10)
-        }
-        .onAppear {
-            let config = try? AppConfig.loadFromKeychain()
-            usesSubscription = config?.usesSubscription == true
-            subscriptionImageModel = config?.subscriptionImageModel ?? ""
-        }
-        .alert("Error", isPresented: $showError) { Button("OK") {} } message: { Text(errorMessage ?? "An unknown error occurred.") }
-        .insufficientCreditsAlert($insufficientCredits)
+        GenerateButton(title: "Generate", isBusy: isGenerating, isEnabled: canGenerate) { Task { await generate() } }
+            .padding(10)
+            .onAppear {
+                let config = try? AppConfig.loadFromKeychain()
+                usesSubscription = config?.usesSubscription == true
+                subscriptionImageModel = config?.subscriptionImageModel ?? ""
+            }
+            .alert("Error", isPresented: $showError) { Button("OK") {} } message: { Text(errorMessage ?? "An unknown error occurred.") }
+            .insufficientCreditsAlert($insufficientCredits)
     }
 
     private func generate() async {

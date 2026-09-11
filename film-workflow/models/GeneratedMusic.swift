@@ -11,6 +11,9 @@ final class GeneratedMusic {
     var audioFilePath: String
     var lyricsText: String?
     var createdAt: Date
+    /// Length of the audio file, read once when it is generated (or backfilled
+    /// for older records). Zero until known.
+    var durationSeconds: Double = 0
     var project: MusicProject?
 
     init(audioFilePath: String, lyricsText: String?, project: MusicProject) {

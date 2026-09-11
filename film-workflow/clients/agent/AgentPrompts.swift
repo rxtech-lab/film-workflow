@@ -57,6 +57,12 @@ enum AgentPrompts {
             already know the id.
             """)
 
+        #if os(macOS)
+            if toolNames.contains(where: { $0.hasPrefix("remotion_") }) {
+                parts.append(RemotionMCPHandlers.authoringInstructions)
+            }
+        #endif
+
         switch policy {
         case .review:
             parts.append("""

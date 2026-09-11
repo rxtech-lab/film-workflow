@@ -1,12 +1,23 @@
 import SwiftData
 import SwiftUI
 
-struct RemotionInspector: View {
+/// The Remotion project's parameters, owning the seeding status the
+/// parameters view reports.
+struct RemotionSettingsTab: View {
+    let project: RemotionProject
+    @State private var statusMessage: String?
+    @State private var isSeeding = false
+
+    var body: some View {
+        RemotionParametersView(project: project, statusMessage: $statusMessage, isSeeding: $isSeeding)
+    }
+}
+
+/// Source and Render for a Remotion project, shown under its inspector tabs.
+struct RemotionInspectorFooter: View {
     let project: RemotionProject
     @Environment(\.modelContext) private var modelContext
 
-    @State private var statusMessage: String?
-    @State private var isSeeding = false
     @State private var showSourceSheet = false
     @State private var showExportSheet = false
     @State private var exportOptions = RemotionExportOptions()
@@ -18,18 +29,14 @@ struct RemotionInspector: View {
     @State private var refreshToken = 0
 
     var body: some View {
-        VStack(spacing: 0) {
-            RemotionParametersView(project: project, statusMessage: $statusMessage, isSeeding: $isSeeding)
-            Divider()
-            HStack(spacing: 8) {
-                Button { showSourceSheet = true } label: { Label("Source", systemImage: "doc.text") }
-                    .disabled(project.compositionSource.isEmpty)
-                GenerateButton(title: "Render", isBusy: showProgressSheet, isEnabled: !project.compositionSource.isEmpty) {
-                    beginRender()
-                }
+        HStack(spacing: 8) {
+            Button { showSourceSheet = true } label: { Label("Source", systemImage: "doc.text") }
+                .disabled(project.compositionSource.isEmpty)
+            GenerateButton(title: "Render", isBusy: showProgressSheet, isEnabled: !project.compositionSource.isEmpty) {
+                beginRender()
             }
-            .padding(10)
         }
+        .padding(10)
         .sheet(isPresented: $showSourceSheet) {
             RemotionSourceSheetView(projectDir: project.projectDir, refreshToken: refreshToken) { showSourceSheet = false }
         }

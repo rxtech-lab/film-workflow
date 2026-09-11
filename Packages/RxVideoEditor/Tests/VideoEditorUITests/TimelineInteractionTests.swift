@@ -33,6 +33,44 @@ final class TimelineInteractionTests: XCTestCase {
     }
 
     @MainActor
+    func testWaveformStripAdjustsVolumeWhileEdgesTrim() {
+        let capabilities: TimelineEditingCapabilities = [.duration, .speed, .drag]
+        let top: CGFloat = 32
+        for width in [4.0, 12, 100, 1000] {
+            // Inside the strip: the edges still trim, the middle sets volume.
+            XCTAssertEqual(TimelineClipInteraction.mode(at: width / 2, y: 40, width: width, capabilities: capabilities, tool: .select, waveformTop: top), .volume)
+            XCTAssertEqual(TimelineClipInteraction.mode(at: 0, y: 40, width: width, capabilities: capabilities, tool: .select, waveformTop: top), .trimLeading)
+            XCTAssertEqual(TimelineClipInteraction.mode(at: width, y: 40, width: width, capabilities: capabilities, tool: .select, waveformTop: top), .trimTrailing)
+            // Above the strip the body moves; without a strip nothing changes.
+            XCTAssertEqual(TimelineClipInteraction.mode(at: width / 2, y: 20, width: width, capabilities: capabilities, tool: .select, waveformTop: top), .move)
+            XCTAssertEqual(TimelineClipInteraction.mode(at: width / 2, y: 40, width: width, capabilities: capabilities, tool: .select, waveformTop: nil), .move)
+            XCTAssertNil(TimelineClipInteraction.mode(at: width / 2, y: 40, width: width, capabilities: capabilities, tool: .blade, waveformTop: top))
+        }
+        // Volume needs no drag capability: a pinned clip can still be turned down.
+        XCTAssertEqual(TimelineClipInteraction.mode(at: 50, y: 40, width: 100, capabilities: [], tool: .select, waveformTop: top), .volume)
+        // Unknown pointer height never lands in the strip.
+        XCTAssertEqual(TimelineClipInteraction.mode(at: 50, width: 100, capabilities: [.drag], tool: .select, waveformTop: top), .move)
+        XCTAssertEqual(TimelineClipInteraction.waveformHeight(for: .audio), 28)
+        XCTAssertEqual(TimelineClipInteraction.waveformHeight(for: .video), 14)
+        XCTAssertEqual(TimelineClipInteraction.waveformHeight(for: .image), 0)
+        XCTAssertEqual(TimelineClipInteraction.waveformHeight(for: .captions), 0)
+    }
+
+    @MainActor
+    func testVolumeDragMapping() {
+        let unit = TimelineClipInteraction.volumePointsPerUnit
+        // Up raises, down lowers, one unit of travel is 100%.
+        XCTAssertEqual(TimelineClipInteraction.volume(from: 1, translation: -unit / 2), 1.5, accuracy: 0.0001)
+        XCTAssertEqual(TimelineClipInteraction.volume(from: 1, translation: unit / 2), 0.5, accuracy: 0.0001)
+        // Clamped to the inspector's range.
+        XCTAssertEqual(TimelineClipInteraction.volume(from: 1, translation: -unit * 5), 2)
+        XCTAssertEqual(TimelineClipInteraction.volume(from: 1, translation: unit * 5), 0)
+        // Sticks at 100% when close, so a drag can return to unity.
+        XCTAssertEqual(TimelineClipInteraction.volume(from: 0.5, translation: -unit * 0.49), 1)
+        XCTAssertEqual(TimelineClipInteraction.volume(from: 0.5, translation: -unit * 0.4), 0.9, accuracy: 0.0001)
+    }
+
+    @MainActor
     func testMarqueeLaneRange() {
         let ruler: CGFloat = 24, lane: CGFloat = 52
         func lanes(_ minY: CGFloat, _ maxY: CGFloat, count: Int = 4) -> ClosedRange<Int>? {

@@ -11,6 +11,8 @@ struct ViewerPanel: View {
     let document: ProjectDocument
     let sequence: SequenceProject?
 
+    var onRetryModifierPreview: () -> Void = {}
+
     var body: some View {
         VStack(spacing: 0) {
             StudioPanelHeader(title: "Viewer", symbol: "play.rectangle")
@@ -20,18 +22,24 @@ struct ViewerPanel: View {
         .background(Color(nsColor: .underPageBackgroundColor))
     }
 
+    /// The item on screen: the footage being skimmed in the browser while
+    /// the pointer is over it, otherwise the selection.
+    private var shownItem: LibraryItemID? { state.footageSkim?.item ?? state.viewerSelection }
+
     private var viewerContent: some View {
         Group {
-            switch state.viewerSelection?.kind {
+            switch shownItem?.kind {
             case .image?, .video?, .music?, .narration?, .imported?:
-                if let item = state.viewerSelection {
+                if let item = shownItem {
                     let cells = index.footage(for: item)
-                    if let cell = cells.first(where: { $0.id == state.currentVersion(for: item) }) ?? cells.first {
+                    let wanted = state.footageSkim?.cellID ?? state.currentVersion(for: item)
+                    if let cell = cells.first(where: { $0.id == wanted }) ?? cells.first {
                         FootageViewer(
                             cell: cell,
                             name: index.name(of: item) ?? cell.title,
                             versions: cells,
-                            onSelectVersion: { state.setCurrentVersion($0, for: item) }
+                            onSelectVersion: { state.setCurrentVersion($0, for: item) },
+                            skimFraction: state.footageSkim?.fraction
                         )
                     } else {
                         StudioEmptyState(title: "Nothing to preview yet", symbol: item.kind.systemImage,
@@ -39,13 +47,13 @@ struct ViewerPanel: View {
                     }
                 } else { missing }
             case .remotion?:
-                if let p = state.viewerSelection.flatMap({ index.remotion($0.id) }) {
+                if let p = shownItem.flatMap({ index.remotion($0.id) }) {
                     RemotionViewer(project: p, document: document)
                         .id(p.id)
                 } else { missing }
             case .sequence?, .caption?, nil:
                 if let sequence {
-                    SequenceViewerView(controller: state.player, fps: sequence.fps, stage: sequence.timeline.allClips.contains(where: { $0.source.kind == .remotion }) ? AnyView(
+                    SequenceViewerView(controller: state.player, fps: sequence.fps, stage: !sequence.timeline.hasActiveModifiers && sequence.timeline.allClips.contains(where: { $0.source.kind == .remotion }) ? AnyView(
                         TimelineLayeredPreviewView(controller: state.preview) { AnyView(RemotionPlayerWebView(playback: $0)) }
                             .overlay(alignment: .topTrailing) {
                                 if state.preview.lastError != nil || state.preview.layers.contains(where: { $0.error != nil || $0.live?.error != nil }) {
@@ -55,6 +63,17 @@ struct ViewerPanel: View {
                                 }
                             }
                     ) : nil)
+                    .overlay {
+                        if let error = state.modifierPreviewError {
+                            VStack(spacing: 8) {
+                                Text(error).font(.callout).multilineTextAlignment(.center)
+                                Button("Retry Preview", action: onRetryModifierPreview)
+                            }.padding().background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8)).padding()
+                        } else if let progress = state.modifierPreviewProgress {
+                            VStack(spacing: 8) { ProgressView(); Text(progress).font(.callout) }
+                                .padding().background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8))
+                        }
+                    }
                 } else {
                     StudioEmptyState(title: "Ready for your story", symbol: "play.rectangle",
                                      message: "Select footage to preview, or create a sequence to start editing.")
@@ -101,96 +120,6 @@ struct CaptionProjectViewer: View {
             guard !Task.isCancelled else { return }
             validatedAt = project.updatedAt
             issues = found
-        }
-    }
-}
-
-/// Remotion Studio preview for the selected project. Boots Studio when the
-/// project has a composition and stops it when the viewer goes away.
-struct RemotionStudioViewer: View {
-    let project: RemotionProject
-    @State private var studioLease: RemotionStudioLease?
-    @State private var isStarting = false
-    private var runtime: RemotionRuntime? { studioLease?.runtime }
-    @State private var reloadToken = 0
-    @State private var statusMessage: String?
-    @State private var presentedError: String?
-
-    var body: some View {
-        ZStack {
-            Color(NSColor.windowBackgroundColor)
-            if isStarting {
-                VStack(spacing: 8) {
-                    ProgressView()
-                    Text("Starting Remotion Studio…").font(.callout).foregroundStyle(.secondary)
-                }
-            } else if let runtime, runtime.currentURL != nil, runtime.currentProjectId == project.id {
-                RemotionPreviewWebView(url: runtime.currentURL, reloadToken: reloadToken)
-            } else {
-                VStack(spacing: 8) {
-                    Image(systemName: "play.rectangle").font(.largeTitle).foregroundStyle(.secondary)
-                    Text((runtime?.lastError ?? statusMessage) != nil
-                         ? "Preview unavailable."
-                         : project.compositionSource.isEmpty
-                         ? "Create a composition from the inspector to start the preview."
-                         : "Loading the Studio preview…")
-                        .multilineTextAlignment(.center)
-                        .foregroundStyle(.secondary)
-                        .padding(.horizontal)
-                }
-            }
-        }
-
-        .onChange(of: runtime?.lastError ?? statusMessage, initial: true) { _, error in
-            presentedError = error
-        }
-        .alert("Couldn’t Start Preview", isPresented: Binding(
-            get: { presentedError != nil },
-            set: { if !$0 { presentedError = nil } }
-        )) {
-            Button("OK") { presentedError = nil }
-        } message: {
-            Text(presentedError ?? "")
-        }
-        .task(id: "\(project.id):\(project.compositionSource.isEmpty)") { await startStudio() }
-        .onReceive(NotificationCenter.default.publisher(for: .agentDidMutateProject)) { note in
-            guard let tool = note.userInfo?["tool"] as? String, tool.hasPrefix("remotion_") else { return }
-            reloadToken += 1
-            let patched = RemotionCodeBuilder.patchProjectConstants(in: project.compositionSource, project: project)
-            if patched != project.compositionSource {
-                project.compositionSource = patched
-                try? RemotionCodeBuilder.writeComposition(project: project, source: patched)
-            }
-        }
-        .onDisappear {
-            studioLease?.release(); studioLease = nil
-        }
-    }
-
-    private func startStudio() async {
-        // The DB copy of the source can lag behind disk after agent edits.
-        let onDisk = project.projectDir.appendingPathComponent("src/Composition.tsx")
-        if let recovered = try? String(contentsOf: onDisk, encoding: .utf8),
-           !recovered.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            project.compositionSource = recovered
-        }
-        guard !project.compositionSource.isEmpty else {
-            studioLease?.release(); studioLease = nil
-            return
-        }
-        let patched = RemotionCodeBuilder.patchProjectConstants(in: project.compositionSource, project: project)
-        if patched != project.compositionSource { project.compositionSource = patched }
-        try? RemotionCodeBuilder.writeComposition(project: project, source: patched)
-        do {
-            isStarting = true
-            defer { isStarting = false }
-            let lease = try await RemotionStudioSessions.acquire(projectID: project.id, directory: project.projectDir)
-            studioLease?.release()
-            studioLease = lease
-            reloadToken += 1
-        } catch is CancellationError {
-        } catch {
-            statusMessage = error.localizedDescription
         }
     }
 }

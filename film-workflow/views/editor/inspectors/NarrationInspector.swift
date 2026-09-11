@@ -1,7 +1,9 @@
 import SwiftData
 import SwiftUI
 
-struct NarrationInspector: View {
+/// Generate button, prompt preview and progress for a narration project,
+/// shown under every one of its inspector tabs.
+struct NarrationInspectorFooter: View {
     let project: NarrativeProject
     @Environment(\.modelContext) private var modelContext
 
@@ -19,31 +21,23 @@ struct NarrationInspector: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            InspectorEditingTabs(editorTitle: "Transcript") {
-                NarrativeProjectParametersView(project: project)
-            } editor: {
-                TranscriptEditorView(project: project)
+        GenerateButton(title: "Generate", isBusy: isGenerating, isEnabled: canGenerate) { showPromptSheet = true }
+            .padding(10)
+            .alert("Error", isPresented: $showError) { Button("OK") {} } message: { Text(errorMessage ?? "An unknown error occurred.") }
+            .insufficientCreditsAlert($insufficientCredits)
+            .sheet(isPresented: $showPromptSheet) {
+                NarrativePromptPreviewSheet(project: project, isGenerating: isGenerating, canGenerate: canGenerate,
+                                            onCancel: { showPromptSheet = false },
+                                            onStart: {
+                                                showPromptSheet = false
+                                                generationTask = Task { await generate() }
+                                            })
             }
-            Divider()
-            GenerateButton(title: "Generate", isBusy: isGenerating, isEnabled: canGenerate) { showPromptSheet = true }
-                .padding(10)
-        }
-        .alert("Error", isPresented: $showError) { Button("OK") {} } message: { Text(errorMessage ?? "An unknown error occurred.") }
-        .insufficientCreditsAlert($insufficientCredits)
-        .sheet(isPresented: $showPromptSheet) {
-            NarrativePromptPreviewSheet(project: project, isGenerating: isGenerating, canGenerate: canGenerate,
-                                        onCancel: { showPromptSheet = false },
-                                        onStart: {
-                                            showPromptSheet = false
-                                            generationTask = Task { await generate() }
-                                        })
-        }
-        .sheet(isPresented: Binding(get: { generationProgress != nil }, set: { if !$0 { generationProgress = nil } })) {
-            if let progress = generationProgress {
-                NarrativeGenerationProgressView(progress: progress) { generationTask?.cancel() }
+            .sheet(isPresented: Binding(get: { generationProgress != nil }, set: { if !$0 { generationProgress = nil } })) {
+                if let progress = generationProgress {
+                    NarrativeGenerationProgressView(progress: progress) { generationTask?.cancel() }
+                }
             }
-        }
     }
 
     private func generate() async {

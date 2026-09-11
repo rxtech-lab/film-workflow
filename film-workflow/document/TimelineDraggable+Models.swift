@@ -12,6 +12,7 @@ extension GeneratedMusic: TimelineDurationChangeable, TimelineCuttable, Timeline
                    displayName: versionedName(project?.name ?? String(localized: "Music"), version: versionNumber))
     }
     var mediaURL: URL? { audioURL }
+    var storedDuration: TimeInterval? { durationSeconds > 0 ? durationSeconds : nil }
     private var versionNumber: Int? { project.flatMap { takeNumber(of: id, in: $0.generatedFiles.map { ($0.id, $0.createdAt) }) } }
 }
 
@@ -21,6 +22,7 @@ extension GeneratedNarrative: TimelineDurationChangeable, TimelineCuttable, Time
                    displayName: versionedName(project?.name ?? String(localized: "Narration"), version: versionNumber))
     }
     var mediaURL: URL? { audioURL }
+    var storedDuration: TimeInterval? { durationSeconds > 0 ? durationSeconds : nil }
     private var versionNumber: Int? { project.flatMap { takeNumber(of: id, in: $0.generatedFiles.map { ($0.id, $0.createdAt) }) } }
 }
 

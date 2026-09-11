@@ -80,6 +80,16 @@
         }
       }
     },
+    "%@\n%@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@\n%2$@"
+          }
+        }
+      }
+    },
     "%@ - %@" : {
       "localizations" : {
         "en" : {
@@ -191,6 +201,9 @@
           }
         }
       }
+    },
+    "%@ is unavailable. Disable or remove it before exporting." : {
+
     },
     "%@ reserved for work in progress" : {
 
@@ -322,6 +335,9 @@
       }
     },
     "%lld placeholders aren't glossary terms — they will show as written." : {
+
+    },
+    "%lld points" : {
 
     },
     "%lld Remotion clip%@ will be rendered first: %@" : {
@@ -802,6 +818,9 @@
         }
       }
     },
+    "An audio file carries no captions." : {
+
+    },
     "animation" : {
       "localizations" : {
         "zh-Hans" : {
@@ -865,6 +884,9 @@
         }
       }
     },
+    "Apple Maps" : {
+
+    },
     "Apple Translation" : {
       "localizations" : {
         "zh-Hans" : {
@@ -908,7 +930,16 @@
         }
       }
     },
+    "Apply Caption Style" : {
+
+    },
     "Apply immediately" : {
+
+    },
+    "Apply to %lld Clips on the Timeline" : {
+
+    },
+    "Apply to the Clip on the Timeline" : {
 
     },
     "Arabic" : {
@@ -974,6 +1005,9 @@
         }
       }
     },
+    "Attribution" : {
+
+    },
     "Audio" : {
 
     },
@@ -996,6 +1030,9 @@
           }
         }
       }
+    },
+    "Automatic" : {
+
     },
     "Available credits" : {
 
@@ -1119,6 +1156,9 @@
           }
         }
       }
+    },
+    "Bilingual (original + translation)" : {
+
     },
     "Bind" : {
       "localizations" : {
@@ -1402,6 +1442,9 @@
         }
       }
     },
+    "Caption Style" : {
+
+    },
     "Caption text is empty." : {
       "localizations" : {
         "zh-Hans" : {
@@ -1492,6 +1535,9 @@
           }
         }
       }
+    },
+    "Change Caption Style" : {
+
     },
     "Change Sequence Settings" : {
 
@@ -1794,6 +1840,9 @@
     "Clip" : {
 
     },
+    "Clips dropped from these captions start with this style. Applying it replaces the style of every clip of these captions in the current sequence." : {
+
+    },
     "Clips: %lld" : {
 
     },
@@ -1853,12 +1902,12 @@
     "Composition" : {
 
     },
-    "Composition is %lld × %lld @ %lldfps. Output will be %lld × %lld @ %lldfps, saved into the film as a new version." : {
+    "Composition is %lld × %lld @ %lldfps. Output will be %lld × %lld @ %lldfps, %@" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "new",
-            "value" : "Composition is %1$lld × %2$lld @ %3$lldfps. Output will be %4$lld × %5$lld @ %6$lldfps, saved into the film as a new version."
+            "value" : "Composition is %1$lld × %2$lld @ %3$lldfps. Output will be %4$lld × %5$lld @ %6$lldfps, %7$@"
           }
         }
       }
@@ -1990,13 +2039,13 @@
     "Couldn’t Connect to Server" : {
 
     },
+    "Couldn’t edit" : {
+
+    },
     "Couldn’t Open Film" : {
 
     },
     "Couldn’t Refresh Account" : {
-
-    },
-    "Couldn’t Start Preview" : {
 
     },
     "Couldn’t Update Project Groups" : {
@@ -2015,19 +2064,22 @@
     "Create" : {
 
     },
-    "Create a composition from the inspector to start the preview." : {
-
-    },
     "Create a film or open an existing one.\nYour recent films will appear here." : {
-
-    },
-    "Create a sequence to adjust its settings." : {
 
     },
     "Create Composition & Start Studio" : {
 
     },
+    "Credential header (optional)" : {
+
+    },
     "Credential mode" : {
+
+    },
+    "Credential value" : {
+
+    },
+    "Credentials are stored in Keychain and sent only to your tile provider." : {
 
     },
     "Custom…" : {
@@ -2122,6 +2174,9 @@
           }
         }
       }
+    },
+    "Default Style" : {
+
     },
     "Default video model" : {
 
@@ -2472,6 +2527,15 @@
     "Downloading video…" : {
 
     },
+    "Drag an effect onto this clip to get started." : {
+
+    },
+    "Drag onto a clip’s start, end, or a shared boundary to apply this transition." : {
+
+    },
+    "Drag onto a timeline clip to apply and adjust this effect." : {
+
+    },
     "Drag them to move together, or press Delete to remove them all." : {
 
     },
@@ -2518,6 +2582,9 @@
           }
         }
       }
+    },
+    "Duration (seconds)" : {
+
     },
     "E Major" : {
       "localizations" : {
@@ -2640,9 +2707,6 @@
         }
       }
     },
-    "Editing" : {
-
-    },
     "Editor" : {
       "localizations" : {
         "zh-Hans" : {
@@ -2652,6 +2716,15 @@
           }
         }
       }
+    },
+    "Effects" : {
+
+    },
+    "Effects & Transitions" : {
+
+    },
+    "Effects browser width" : {
+
     },
     "Electric Guitar" : {
       "localizations" : {
@@ -2692,6 +2765,9 @@
           }
         }
       }
+    },
+    "Enabled" : {
+
     },
     "End" : {
       "localizations" : {
@@ -2967,6 +3043,9 @@
         }
       }
     },
+    "Export to Disk" : {
+
+    },
     "Export Video" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -3028,6 +3107,9 @@
         }
       }
     },
+    "File" : {
+
+    },
     "File missing" : {
       "localizations" : {
         "zh-Hans" : {
@@ -3037,6 +3119,9 @@
           }
         }
       }
+    },
+    "File Type" : {
+
     },
     "File unavailable" : {
 
@@ -3101,9 +3186,6 @@
         }
       }
     },
-    "Footage" : {
-
-    },
     "Footage version" : {
 
     },
@@ -3149,6 +3231,9 @@
       }
     },
     "Frames" : {
+
+    },
+    "Frames at a time" : {
 
     },
     "French" : {
@@ -3593,6 +3678,9 @@
         }
       }
     },
+    "Hide effects and transitions" : {
+
+    },
     "Hide Lyrics" : {
       "localizations" : {
         "zh-Hans" : {
@@ -3659,6 +3747,9 @@
           }
         }
       }
+    },
+    "https://provider.example/{z}/{x}/{y}.png" : {
+
     },
     "If the configured port is in use, the next free port (up to base+9) will be used instead. The actual port is shown below." : {
       "localizations" : {
@@ -4034,6 +4125,9 @@
         }
       }
     },
+    "Languages" : {
+
+    },
     "Last frame" : {
 
     },
@@ -4193,6 +4287,7 @@
 
     },
     "Loading the Studio preview…" : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -4276,6 +4371,9 @@
     "Manage credits and subscription usage." : {
 
     },
+    "MapKit maps are ready to use in Remotion compositions." : {
+
+    },
     "Mature" : {
       "localizations" : {
         "zh-Hans" : {
@@ -4315,6 +4413,9 @@
           }
         }
       }
+    },
+    "Maximum zoom: %lld" : {
+
     },
     "MCP Server" : {
       "localizations" : {
@@ -4365,6 +4466,9 @@
           }
         }
       }
+    },
+    "Minimum zoom: %lld" : {
+
     },
     "Model" : {
       "localizations" : {
@@ -4443,6 +4547,12 @@
         }
       }
     },
+    "Move effect earlier" : {
+
+    },
+    "Move effect later" : {
+
+    },
     "Move to Group" : {
 
     },
@@ -4507,6 +4617,9 @@
           }
         }
       }
+    },
+    "My provider permits automated movie exports" : {
+
     },
     "Mysterious" : {
       "localizations" : {
@@ -4854,9 +4967,6 @@
         }
       }
     },
-    "No Sequence" : {
-
-    },
     "No speaker assigned." : {
       "localizations" : {
         "zh-Hans" : {
@@ -5093,6 +5203,9 @@
         }
       }
     },
+    "One file per language, named after the movie, written beside it." : {
+
+    },
     "One term per line, or separated by commas." : {
       "localizations" : {
         "zh-Hans" : {
@@ -5234,6 +5347,9 @@
         }
       }
     },
+    "OpenStreetMap" : {
+
+    },
     "Optional. A first frame animates that image; adding a last frame makes the model interpolate between the two." : {
 
     },
@@ -5345,7 +5461,6 @@
       }
     },
     "Parameters" : {
-      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -5481,6 +5596,9 @@
         }
       }
     },
+    "Place a caption project on the timeline to export captions." : {
+
+    },
     "Plain text" : {
       "localizations" : {
         "zh-Hans" : {
@@ -5555,6 +5673,9 @@
         }
       }
     },
+    "Players offer the tracks in their Subtitles menu. Font, size, weight, colours, alignment and position carry over; outlines do not." : {
+
+    },
     "Playful" : {
       "localizations" : {
         "zh-Hans" : {
@@ -5617,9 +5738,6 @@
           }
         }
       }
-    },
-    "Preview unavailable." : {
-
     },
     "Preview voice" : {
       "localizations" : {
@@ -5971,6 +6089,9 @@
     "Remotion Clips" : {
 
     },
+    "Remotion previews run in the native WebView. Source edits refresh the preview automatically." : {
+
+    },
     "Remotion Projects" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -5983,6 +6104,7 @@
       }
     },
     "Remotion Studio runs inside the app; the runtime installs itself the first time you open it." : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -6021,6 +6143,9 @@
           }
         }
       }
+    },
+    "Remove Transition" : {
+
     },
     "Remove Translation" : {
       "localizations" : {
@@ -6103,6 +6228,9 @@
         }
       }
     },
+    "Render more frames at once for faster exports. Higher settings use more memory. Changes apply to the next render." : {
+
+    },
     "Render Now" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -6130,6 +6258,9 @@
 
     },
     "Render Version" : {
+
+    },
+    "Rendering" : {
 
     },
     "Rendering Sequence" : {
@@ -6496,6 +6627,9 @@
         }
       }
     },
+    "Save Map Settings" : {
+
+    },
     "Save To" : {
       "localizations" : {
         "zh-Hans" : {
@@ -6627,6 +6761,9 @@
     "Select a clip on the timeline." : {
 
     },
+    "Select a clip to inspect its effects." : {
+
+    },
     "Select a model" : {
       "localizations" : {
         "zh-Hans" : {
@@ -6658,6 +6795,9 @@
           }
         }
       }
+    },
+    "Select a transition on the timeline." : {
+
     },
     "Select All" : {
       "localizations" : {
@@ -6927,6 +7067,9 @@
       }
     },
     "Show All Versions…" : {
+
+    },
+    "Show effects and transitions" : {
 
     },
     "Show in Finder" : {
@@ -7307,6 +7450,7 @@
 
     },
     "Starting Remotion Studio…" : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -7434,6 +7578,9 @@
           }
         }
       }
+    },
+    "Style" : {
+
     },
     "Style degree" : {
       "localizations" : {
@@ -7730,6 +7877,9 @@
     "The stored reference image file will be permanently deleted." : {
 
     },
+    "The style is applied to the caption clips as you change it, so the viewer shows what will be rendered." : {
+
+    },
     "The term and its known spelling variants will be permanently deleted." : {
 
     },
@@ -7762,6 +7912,9 @@
           }
         }
       }
+    },
+    "These clips move together. Remove the transition to unlink them." : {
+
     },
     "Thinking…" : {
       "extractionState" : "stale",
@@ -7855,6 +8008,9 @@
       }
     },
     "Threads" : {
+
+    },
+    "Tile URL" : {
 
     },
     "Timeline" : {
@@ -8029,6 +8185,9 @@
           }
         }
       }
+    },
+    "Transition" : {
+
     },
     "Translate" : {
       "localizations" : {
@@ -8349,6 +8508,12 @@
 
     },
     "Use a fixed seed" : {
+
+    },
+    "Use a provider licensed for rendering. The public OpenStreetMap tile server is not available for automated exports." : {
+
+    },
+    "Use a tile provider" : {
 
     },
     "Use app default" : {

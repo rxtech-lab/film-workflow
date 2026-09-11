@@ -177,6 +177,32 @@ struct TimelineEditorTests {
         #expect(t[trackID: v]!.sortedClips.map(\.id) == [a.id, b.id, c.id])
     }
 
+    @Test("A group of butted off-grid clips reaches zero without overlapping itself")
+    func groupMoveOffGrid() throws {
+        var t = timeline
+        let v = videoTrack(t)
+        // Media lengths rarely fall on the frame grid, and ripple edits shift
+        // starts by those lengths, so butted clips end up off-grid too.
+        let a = video("a", start: 1, duration: 5.2345)
+        let b = video("b", start: 6.2345, duration: 2)
+        let index = t.tracks.firstIndex { $0.id == v }!
+        t.tracks[index].clips = [a, b]
+
+        try TimelineEditor.move(&t, clipIDs: [a.id, b.id], by: -10)
+        let movedA = try #require(t.clip(id: a.id))
+        let movedB = try #require(t.clip(id: b.id))
+        #expect(movedA.start == 0)
+        #expect(abs(movedB.start - movedA.end) < 1e-9)
+        #expect(!movedA.overlaps(movedB))
+
+        // Anywhere else along the lane the pair stays butted as well.
+        try TimelineEditor.move(&t, clipIDs: [a.id, b.id], by: 0.7)
+        let laterA = try #require(t.clip(id: a.id))
+        let laterB = try #require(t.clip(id: b.id))
+        #expect(abs(laterA.start - 0.7) < 1e-9)
+        #expect(abs(laterB.start - laterA.end) < 1e-9)
+    }
+
     @Test("A group changes lane only when every clip fits the new lane")
     func groupLaneShift() throws {
         var t = timeline

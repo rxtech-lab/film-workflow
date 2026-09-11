@@ -11,6 +11,9 @@ final class GeneratedNarrative {
     var audioFilePath: String
     var transcriptText: String
     var createdAt: Date
+    /// Length of the audio file, read once when it is generated (or backfilled
+    /// for older records). Zero until known.
+    var durationSeconds: Double = 0
     var providerName: String = ""
     var speakerSummary: String = ""
     /// Weak link to the `CaptionProject` generated for this audio, if any. A

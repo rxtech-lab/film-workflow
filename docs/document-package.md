@@ -18,7 +18,7 @@ My Film.rxfilmstudio/
 │   ├── Videos/      generated video clips
 │   ├── Captions/    imported caption audio and exports
 │   └── Imported/    files copied in from Finder
-├── Remotion/<projectId>/         src/, public/, configs; node_modules is a symlink
+├── Remotion/<projectId>/         src/, public/, configs and local browser modules
 │                                 to the shared runtime in Application Support
 ├── Renders/
 │   ├── Remotion/<projectId>/vNNN-<hash8>.mp4   render cache, keyed by source hash
@@ -49,8 +49,7 @@ This optional file does not change the document format version.
 
 ## What stays global
 
-`~/Library/Application Support/com.rxlab.film-workflow/` keeps the Remotion
-runtime (`bun`, `node_modules`, template configs), Whisper models, scratch
+`~/Library/Application Support/com.rxlab.film-workflow/` keeps Whisper models, scratch
 space (`tmp/`, cleared at launch), the agent store and two JSON caches.
 
 ## Caveats
@@ -61,7 +60,7 @@ space (`tmp/`, cleared at launch), the agent store and two JSON caches.
 - Referenced imports (Finder files left in place) are stored as bookmarks.
   The app is not sandboxed, so a plain bookmark is used when a
   security-scoped one cannot be created.
-- `RemotionRender.sourceHash` covers `src/**`, the three config files, the
+- `RemotionRender.sourceHash` includes the RxRemotion runtime/dependency manifest, map settings, browser sources/configuration, the
   output size and frame rate, and the path, size and modification time of
   everything under `public/`. Logs, `node_modules` and bundler caches are
   ignored.

@@ -16,6 +16,24 @@ extension Notification.Name {
 /// Externally-driven agents call these to iterate on a remotion project.
 @MainActor
 enum RemotionMCPHandlers {
+    /// Shared by MCP tool descriptions and every in-app agent backend.
+    static let authoringInstructions = """
+        Native RxRemotion compiles TS/TSX, CSS, JSON, assets, and project-local browser modules without Node. \
+        Bundled imports are available immediately without installation: react, react-dom, react-dom/client, \
+        remotion, @remotion/player, three, @react-three/fiber, @react-three/drei, @remotion/three, \
+        mapbox-gl, react-map-gl/mapbox, @tsparticles/react, @tsparticles/engine, @tsparticles/slim, \
+        leaflet, and @rxlab/remotion-maps (MapKitMap and OpenStreetMap). \
+        For 3D scenes, use ThreeCanvas from @remotion/three with width and height from useVideoConfig(). \
+        Drive animation with useCurrentFrame() and explicit transforms; do not accumulate useFrame() deltas \
+        or use wall-clock animation. Use Sequence layout="none" inside ThreeCanvas. \
+        Use WebGL, and hold delayRender/continueRender until custom models and textures are ready. \
+        Prefer local assets via staticFile(); remote textures require CORS. Only the listed package entrypoints \
+        are bundled; three/addons/*, three/examples/jsm/* and other unlisted subpath imports are unavailable. \
+        WebGPU, worker-owned OffscreenCanvas and CSS 3D/perspective exports are unsupported. \
+        Mapbox needs a valid access token. OpenStreetMap needs an export-permitted provider in Settings > Maps. \
+        Server frameworks, Node APIs and npm installation are unavailable.
+        """
+
     static let descriptors: [MCPToolDescriptor] = [
         MCPToolDescriptor(
             name: "remotion_list_files",
@@ -42,7 +60,7 @@ enum RemotionMCPHandlers {
         ),
         MCPToolDescriptor(
             name: "remotion_write_file",
-            description: "Write (create or overwrite) a file in a remotion project. Parent directories are created. NOTE: package.json, package-lock.json, bun.lockb, tsconfig.json, remotion.config.ts and anything under node_modules/ are protected and will be rejected — you cannot add npm packages. Available packages to import: react, react-dom, remotion, mapbox-gl, react-map-gl, @tsparticles/react, @tsparticles/engine, @tsparticles/slim.",
+            description: "Write (create or overwrite) a file in a remotion project. Parent directories are created. NOTE: package.json, package-lock.json, bun.lockb, tsconfig.json, remotion.config.ts and anything under node_modules/ are protected and will be rejected — you cannot add npm packages. " + authoringInstructions,
             inputSchema: [
                 "type": "object",
                 "properties": [
@@ -69,7 +87,7 @@ enum RemotionMCPHandlers {
         ),
         MCPToolDescriptor(
             name: "remotion_take_screenshot",
-            description: "Render a single PNG of the composition at the given timestamp and return it as a base64 data URL.",
+            description: "Capture a deterministic PNG with native RxRemotion at the given timestamp and return it as a base64 data URL.",
             inputSchema: [
                 "type": "object",
                 "properties": [

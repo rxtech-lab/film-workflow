@@ -1,3 +1,4 @@
+import VideoEffectsCore
 import CoreGraphics
 import Foundation
 
@@ -71,7 +72,16 @@ public struct ClipTransform: Codable, Sendable, Hashable {
     public static let identity = ClipTransform()
 }
 
-/// Text styling for caption and title overlays.
+/// Horizontal placement of caption text inside the frame.
+public enum CaptionAlignment: String, Codable, Sendable, CaseIterable {
+    case leading
+    case center
+    case trailing
+}
+
+/// Text styling for caption and title overlays. Drawn by `TextRenderer` for
+/// the preview and burn-in, and mapped onto a tx3g track when captions are
+/// embedded, so every field here is one the export can honour.
 public struct TextStyle: Codable, Sendable, Hashable {
     public var fontName: String
     /// Fraction of the frame height.
@@ -82,6 +92,11 @@ public struct TextStyle: Codable, Sendable, Hashable {
     /// 0 = top, 0.5 = middle, 1 = bottom.
     public var verticalPosition: Double
     public var bold: Bool
+    public var italic: Bool
+    public var alignment: CaptionAlignment
+    /// Outline width as a fraction of the font size; 0 = none.
+    public var strokeWidth: Double
+    public var strokeHex: String
 
     public init(
         fontName: String = "Helvetica Neue",
@@ -90,7 +105,11 @@ public struct TextStyle: Codable, Sendable, Hashable {
         backgroundHex: String = "#000000",
         backgroundOpacity: Double = 0.6,
         verticalPosition: Double = 0.9,
-        bold: Bool = true
+        bold: Bool = true,
+        italic: Bool = false,
+        alignment: CaptionAlignment = .center,
+        strokeWidth: Double = 0,
+        strokeHex: String = "#000000"
     ) {
         self.fontName = fontName
         self.fontSize = fontSize
@@ -99,9 +118,51 @@ public struct TextStyle: Codable, Sendable, Hashable {
         self.backgroundOpacity = backgroundOpacity
         self.verticalPosition = verticalPosition
         self.bold = bold
+        self.italic = italic
+        self.alignment = alignment
+        self.strokeWidth = strokeWidth
+        self.strokeHex = strokeHex
     }
 
     public static let caption = TextStyle()
+
+    private enum CodingKeys: String, CodingKey {
+        case fontName, fontSize, colorHex, backgroundHex, backgroundOpacity, verticalPosition, bold
+        case italic, alignment, strokeWidth, strokeHex
+    }
+
+    /// Tolerant of fields added later: anything missing takes the default
+    /// caption style's value, so timelines saved before a field existed decode.
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        let d = TextStyle.caption
+        fontName = try c.decodeIfPresent(String.self, forKey: .fontName) ?? d.fontName
+        fontSize = try c.decodeIfPresent(Double.self, forKey: .fontSize) ?? d.fontSize
+        colorHex = try c.decodeIfPresent(String.self, forKey: .colorHex) ?? d.colorHex
+        backgroundHex = try c.decodeIfPresent(String.self, forKey: .backgroundHex) ?? d.backgroundHex
+        backgroundOpacity = try c.decodeIfPresent(Double.self, forKey: .backgroundOpacity) ?? d.backgroundOpacity
+        verticalPosition = try c.decodeIfPresent(Double.self, forKey: .verticalPosition) ?? d.verticalPosition
+        bold = try c.decodeIfPresent(Bool.self, forKey: .bold) ?? d.bold
+        italic = try c.decodeIfPresent(Bool.self, forKey: .italic) ?? d.italic
+        alignment = try c.decodeIfPresent(CaptionAlignment.self, forKey: .alignment) ?? d.alignment
+        strokeWidth = try c.decodeIfPresent(Double.self, forKey: .strokeWidth) ?? d.strokeWidth
+        strokeHex = try c.decodeIfPresent(String.self, forKey: .strokeHex) ?? d.strokeHex
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(fontName, forKey: .fontName)
+        try c.encode(fontSize, forKey: .fontSize)
+        try c.encode(colorHex, forKey: .colorHex)
+        try c.encode(backgroundHex, forKey: .backgroundHex)
+        try c.encode(backgroundOpacity, forKey: .backgroundOpacity)
+        try c.encode(verticalPosition, forKey: .verticalPosition)
+        try c.encode(bold, forKey: .bold)
+        try c.encode(italic, forKey: .italic)
+        try c.encode(alignment, forKey: .alignment)
+        try c.encode(strokeWidth, forKey: .strokeWidth)
+        try c.encode(strokeHex, forKey: .strokeHex)
+    }
 }
 
 /// One item on a track. Times are seconds on the timeline; `inPoint` is the
@@ -121,6 +182,7 @@ public struct Clip: Codable, Sendable, Hashable, Identifiable {
     public var opacity: Float
     public var transform: ClipTransform
     public var text: TextStyle?
+    public var effects: [EffectInstance]
 
     public init(
         id: UUID = UUID(),
@@ -134,7 +196,8 @@ public struct Clip: Codable, Sendable, Hashable, Identifiable {
         volume: Float = 1,
         opacity: Float = 1,
         transform: ClipTransform = .identity,
-        text: TextStyle? = nil
+        text: TextStyle? = nil,
+        effects: [EffectInstance] = []
     ) {
         self.id = id
         self.source = source
@@ -148,10 +211,11 @@ public struct Clip: Codable, Sendable, Hashable, Identifiable {
         self.opacity = opacity
         self.transform = transform
         self.text = text
+        self.effects = effects
     }
 
     private enum CodingKeys: String, CodingKey {
-        case id, source, start, duration, inPoint, playbackRate, isReversed, sourceDuration, volume, opacity, transform, text
+        case id, source, start, duration, inPoint, playbackRate, isReversed, sourceDuration, volume, opacity, transform, text, effects
     }
 
     /// Tolerant of fields added later: anything missing takes its default.
@@ -172,6 +236,7 @@ public struct Clip: Codable, Sendable, Hashable, Identifiable {
         opacity = try c.decodeIfPresent(Float.self, forKey: .opacity) ?? 1
         transform = try c.decodeIfPresent(ClipTransform.self, forKey: .transform) ?? .identity
         text = try c.decodeIfPresent(TextStyle.self, forKey: .text)
+        effects = try c.decodeIfPresent([EffectInstance].self, forKey: .effects) ?? []
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -188,6 +253,7 @@ public struct Clip: Codable, Sendable, Hashable, Identifiable {
         try c.encode(opacity, forKey: .opacity)
         try c.encode(transform, forKey: .transform)
         try c.encodeIfPresent(text, forKey: .text)
+        try c.encode(effects, forKey: .effects)
     }
 
     public var sourceRangeDuration: TimeInterval { duration * playbackRate }
@@ -256,6 +322,7 @@ public struct Timeline: Codable, Sendable, Hashable {
     public var fps: Int
     public var tracks: [Track]
     public var backgroundHex: String
+    public var transitions: [TransitionInstance]
 
     public init(
         id: UUID = UUID(),
@@ -263,7 +330,8 @@ public struct Timeline: Codable, Sendable, Hashable {
         height: Int = 1080,
         fps: Int = 30,
         tracks: [Track]? = nil,
-        backgroundHex: String = "#000000"
+        backgroundHex: String = "#000000",
+        transitions: [TransitionInstance] = []
     ) {
         self.id = id
         self.width = width
@@ -271,6 +339,7 @@ public struct Timeline: Codable, Sendable, Hashable {
         self.fps = fps
         self.tracks = tracks ?? Timeline.defaultTracks()
         self.backgroundHex = backgroundHex
+        self.transitions = transitions
     }
 
     /// The FCP-like starting layout: captions over one video lane, two audio lanes.
@@ -284,7 +353,7 @@ public struct Timeline: Codable, Sendable, Hashable {
     }
 
     private enum CodingKeys: String, CodingKey {
-        case id, width, height, fps, tracks, backgroundHex
+        case id, width, height, fps, tracks, backgroundHex, transitions
     }
 
     public init(from decoder: Decoder) throws {
@@ -295,6 +364,7 @@ public struct Timeline: Codable, Sendable, Hashable {
         fps = try c.decodeIfPresent(Int.self, forKey: .fps) ?? 30
         tracks = try c.decodeIfPresent([Track].self, forKey: .tracks) ?? Timeline.defaultTracks()
         backgroundHex = try c.decodeIfPresent(String.self, forKey: .backgroundHex) ?? "#000000"
+        transitions = try c.decodeIfPresent([TransitionInstance].self, forKey: .transitions) ?? []
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -305,6 +375,7 @@ public struct Timeline: Codable, Sendable, Hashable {
         try c.encode(fps, forKey: .fps)
         try c.encode(tracks, forKey: .tracks)
         try c.encode(backgroundHex, forKey: .backgroundHex)
+        try c.encode(transitions, forKey: .transitions)
     }
 
     public var duration: TimeInterval { tracks.map(\.end).max() ?? 0 }

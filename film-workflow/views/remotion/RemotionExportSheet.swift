@@ -59,6 +59,8 @@ struct RemotionExportSheet: View {
     let sourceHeight: Int
     let sourceFps: Int
     @Binding var options: RemotionExportOptions
+    /// True when the result goes to a file the user picks instead of into the film.
+    var savesToDisk = false
     var onCancel: () -> Void
     var onExport: () -> Void
 
@@ -88,7 +90,7 @@ struct RemotionExportSheet: View {
                 .font(.title2)
                 .foregroundStyle(.tint)
             VStack(alignment: .leading, spacing: 2) {
-                Text("Render Version")
+                Text(savesToDisk ? "Export to Disk" : "Render Version")
                     .font(.headline)
                 Text(projectName)
                     .font(.caption)
@@ -132,7 +134,10 @@ struct RemotionExportSheet: View {
 
     private var summary: some View {
         let (w, h) = options.resolution.size
-        return Text("Composition is \(sourceWidth) × \(sourceHeight) @ \(sourceFps)fps. Output will be \(w) × \(h) @ \(options.frameRate.rawValue)fps, saved into the film as a new version.")
+        let location = savesToDisk
+            ? "saved as an MP4 file you choose. A matching render already in the film is reused."
+            : "saved into the film as a new version."
+        return Text("Composition is \(sourceWidth) × \(sourceHeight) @ \(sourceFps)fps. Output will be \(w) × \(h) @ \(options.frameRate.rawValue)fps, \(location)")
             .font(.caption)
             .foregroundStyle(.secondary)
             .padding(.top, 4)
@@ -143,7 +148,7 @@ struct RemotionExportSheet: View {
             Spacer()
             Button("Cancel", role: .cancel) { onCancel() }
                 .keyboardShortcut(.cancelAction)
-            Button("Render") { onExport() }
+            Button(savesToDisk ? "Export…" : "Render") { onExport() }
                 .keyboardShortcut(.defaultAction)
                 .buttonStyle(.borderedProminent)
         }

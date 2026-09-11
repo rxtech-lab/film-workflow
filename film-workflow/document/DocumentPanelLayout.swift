@@ -3,8 +3,10 @@ import Foundation
 /// Optional presentation state, kept separate from the film's required metadata.
 struct DocumentPanelLayout: Codable, Equatable {
     enum Panel: String {
-        case editorColumns, editorRows, libraryRows
+        case editorColumns, editorRows, libraryRows, timelineColumns
     }
+
+    var effectsBrowserVisible: Bool?
 
     var splits: [String: [Double]] = [:]
 

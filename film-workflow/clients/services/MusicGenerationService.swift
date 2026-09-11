@@ -49,11 +49,13 @@ enum MusicGenerationService {
         }
 
         let relativePath = try storage.saveAudio(response.audioData, extension: ext, kind: .music)
+        let durationSeconds = await AudioProbe.durationSeconds(of: storage.absoluteURL(for: relativePath))
         let generated = GeneratedMusic(
             audioFilePath: relativePath,
             lyricsText: response.lyricsText,
             project: project
         )
+        generated.durationSeconds = durationSeconds
         context.insert(generated)
         project.updatedAt = Date()
         return generated

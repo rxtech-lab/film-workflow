@@ -1,5 +1,6 @@
 import Foundation
 import SwiftData
+import VideoEditorCore
 
 @Model
 final class CaptionProject: GroupableProject {
@@ -99,6 +100,10 @@ final class CaptionProject: GroupableProject {
     /// the export sheet's initial selection. Empty means original only.
     var displayedTranslationLanguage: String = ""
 
+    /// JSON of the `TextStyle` clips of these captions start with when dropped
+    /// on a timeline. Empty means the default caption style.
+    var captionStyleData: Data = Data()
+
     /// **Every** segment of **every** version. Use `activeSegments` or
     /// `orderedSegments` to read the transcript; this is storage, and iterating
     /// it directly will mix takes together.
@@ -129,7 +134,18 @@ final class CaptionProject: GroupableProject {
         self.versions = []
         self.activeVersionID = nil
         self.displayedTranslationLanguage = ""
+        self.captionStyleData = Data()
         self.segments = []
+    }
+
+    /// The style new timeline clips of these captions start with. Stored as
+    /// JSON so the timeline package's type stays the single definition.
+    var captionStyle: TextStyle {
+        get { (try? JSONDecoder().decode(TextStyle.self, from: captionStyleData)) ?? .caption }
+        set {
+            captionStyleData = (try? JSONEncoder().encode(newValue)) ?? Data()
+            updatedAt = Date()
+        }
     }
 
     // MARK: - Enum accessors

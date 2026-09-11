@@ -3,6 +3,8 @@ import Foundation
 import SwiftUI
 import UniformTypeIdentifiers
 import VideoEditorCore
+import VideoEffectsCore
+import VideoEffectsUI
 
 /// A context-menu offer to line a clip up with the clip it came from.
 /// `targetClipID` is nil when the origin isn't on the timeline; the item then
@@ -28,6 +30,12 @@ public struct SequenceTimelineView: View {
     @Binding var timeline: Timeline
     @Binding var playhead: TimeInterval
     @Binding var selectedClipIDs: Set<UUID>
+    let selectedTransitionID: UUID?
+    let onInspectEffects: ((UUID) -> Void)?
+    let onInspectTransition: ((UUID) -> Void)?
+    @State private var modifierDropTarget: ModifierDropTarget?
+    @State private var modifierDropTrackID: UUID?
+
     let resolver: (any MediaResolver)?
     /// Called with the dropped item, the track and the snapped drop time.
     let onDrop: (FootageDragItem, UUID, TimeInterval) -> Void
@@ -38,9 +46,18 @@ public struct SequenceTimelineView: View {
     let alignment: ((Clip, Timeline) -> ClipAlignment?)?
 
     @Binding private var pixelsPerSecond: Double
+    /// Whether moving the pointer across the lanes previews the frame under
+    /// it (skimming). The toolbar shows the toggle only when `onSkim` is set.
+    @Binding private var skimming: Bool
+    /// Called with the time under the pointer while skimming, and with nil
+    /// once the pointer leaves the lanes so the host can restore its playhead.
+    let onSkim: ((TimeInterval?) -> Void)?
     @State private var dragState = ClipDragState()
     @State private var hoveredHandle: TrimHandleID?
     @State private var hoveredRetimeHandle: TrimHandleID?
+    /// The clip whose waveform strip is under the pointer; dragging it
+    /// vertically changes that clip's volume.
+    @State private var hoveredVolumeClipID: UUID?
     @State private var dropTarget: (trackID: UUID, time: TimeInterval)?
     /// The footage being dragged over the lanes, decoded on entry so the
     /// ghost clip can take its real length.
@@ -65,7 +82,7 @@ public struct SequenceTimelineView: View {
 
     private static let zoomRange: ClosedRange<Double> = 0.5...400
     private let headerWidth: CGFloat = 64
-    private let rulerHeight: CGFloat = 24
+    private let rulerHeight: CGFloat = 20
     private let laneHeight: CGFloat = 52
     private let snapTolerancePixels: Double = 8
 
@@ -74,21 +91,31 @@ public struct SequenceTimelineView: View {
         playhead: Binding<TimeInterval>,
         selectedClipIDs: Binding<Set<UUID>>,
         pixelsPerSecond: Binding<Double>,
+        skimming: Binding<Bool> = .constant(false),
+        onSkim: ((TimeInterval?) -> Void)? = nil,
         resolver: (any MediaResolver)? = nil,
         onDrop: @escaping (FootageDragItem, UUID, TimeInterval) -> Void,
         onDeleteClips: ((Set<UUID>) -> Void)? = nil,
         onDeselect: (() -> Void)? = nil,
-        alignment: ((Clip, Timeline) -> ClipAlignment?)? = nil
+        alignment: ((Clip, Timeline) -> ClipAlignment?)? = nil,
+        selectedTransitionID: UUID? = nil,
+        onInspectEffects: ((UUID) -> Void)? = nil,
+        onInspectTransition: ((UUID) -> Void)? = nil
     ) {
         _timeline = timeline
         _playhead = playhead
         _selectedClipIDs = selectedClipIDs
         _pixelsPerSecond = pixelsPerSecond
+        _skimming = skimming
+        self.onSkim = onSkim
         self.resolver = resolver
         self.onDrop = onDrop
         self.onDeleteClips = onDeleteClips
         self.onDeselect = onDeselect
         self.alignment = alignment
+        self.selectedTransitionID = selectedTransitionID
+        self.onInspectEffects = onInspectEffects
+        self.onInspectTransition = onInspectTransition
     }
 
     private var contentDuration: TimeInterval {
@@ -103,7 +130,6 @@ public struct SequenceTimelineView: View {
     public var body: some View {
         VStack(spacing: 0) {
             toolbar
-            editingToolbar
             Divider()
             GeometryReader { geometry in
                 let canvasHeight = max(geometry.size.height, rulerHeight + CGFloat(timeline.tracks.count) * (laneHeight + 1))
@@ -135,9 +161,13 @@ public struct SequenceTimelineView: View {
                             .onContinuousHover(coordinateSpace: .local) { phase in
                                 switch phase {
                                 case .active(let point):
-                                    hoverTime = timeline.quantized(min(max(0, point.x / pixelsPerSecond), contentDuration))
+                                    let time = timeline.quantized(min(max(0, point.x / pixelsPerSecond), contentDuration))
+                                    hoverTime = time
+                                    // A clip or marquee drag already moves things; skimming then would fight it.
+                                    if skimming, dragState.clipID == nil, marquee == nil { onSkim?(time) }
                                 case .ended:
                                     hoverTime = nil
+                                    onSkim?(nil)
                                 }
                             }
                             .coordinateSpace(name: "timelineCanvas")
@@ -165,9 +195,25 @@ public struct SequenceTimelineView: View {
         .focusEffectDisabled()
         .focused($timelineFocused)
         .onDeleteCommand { deleteSelection() }
+        // Edit > Select All (Command-A) reaches the timeline through the
+        // responder chain while it holds focus, so text fields keep theirs.
+        .onCommand(#selector(NSResponder.selectAll(_:))) { selectAllClips() }
         .onKeyPress(.delete) { deleteSelection(); return .handled }
-        .onKeyPress(characters: CharacterSet(charactersIn: "bB")) { _ in tool = .blade; return .handled }
-        .onKeyPress(characters: CharacterSet(charactersIn: "aA")) { _ in tool = .select; return .handled }
+        .onKeyPress(characters: CharacterSet(charactersIn: "bB")) { press in
+            guard press.modifiers.isDisjoint(with: [.command, .control, .option]) else { return .ignored }
+            tool = .blade
+            return .handled
+        }
+        .onKeyPress(characters: CharacterSet(charactersIn: "aA")) { press in
+            guard press.modifiers.isDisjoint(with: [.command, .control, .option]) else { return .ignored }
+            tool = .select
+            return .handled
+        }
+        .onKeyPress(characters: CharacterSet(charactersIn: "sS")) { press in
+            guard onSkim != nil, press.modifiers.isDisjoint(with: [.command, .control, .option]) else { return .ignored }
+            skimming.toggle()
+            return .handled
+        }
         .onKeyPress(.escape) { tool = .select; return .handled }
         .popover(isPresented: Binding(get: { speedClipID != nil }, set: { if !$0 { speedClipID = nil } })) {
             if let speedClipID { ClipSpeedEditor(timeline: $timeline, clipID: speedClipID) }
@@ -216,49 +262,65 @@ public struct SequenceTimelineView: View {
     }
 
     private var toolbar: some View {
-        HStack(spacing: 12) {
-            Menu {
-                Button {
-                    TimelineEditor.addTrack(&timeline, kind: .video)
-                } label: {
-                    Label("Video Track", systemImage: "film")
-                }
-                Button {
-                    TimelineEditor.addTrack(&timeline, kind: .audio)
-                } label: {
-                    Label("Audio Track", systemImage: "waveform")
-                }
-                Button {
-                    TimelineEditor.addTrack(&timeline, kind: .overlay)
-                } label: {
-                    Label("Overlay Track", systemImage: "square.3.layers.3d")
-                }
-            } label: {
-                Label("Add Track", systemImage: "plus")
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 10) {
+                addTrackMenu
+                editingToolbar
+                Text("\(timeline.width)×\(timeline.height) · \(timeline.fps) fps")
+                    .font(.caption2).foregroundStyle(.secondary).fixedSize()
+                selectionSummary
+                Spacer(minLength: 8)
+                toolbarTimecode
+                zoomControl(compact: false)
             }
-            .fixedSize()
-            .help("Add a video, audio or overlay track")
-            Text("\(timeline.width)×\(timeline.height) · \(timeline.fps) fps")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            Spacer()
-            Text(Timecode.string(seconds: playhead, fps: timeline.fps))
-                .font(.system(.callout, design: .monospaced))
-            Spacer()
-            Image(systemName: "minus.magnifyingglass").foregroundStyle(.secondary)
+            HStack(spacing: 6) {
+                addTrackMenu.labelStyle(.iconOnly)
+                editingToolbar.labelStyle(.iconOnly)
+                Spacer(minLength: 0)
+                toolbarTimecode
+                zoomControl(compact: true)
+            }
+        }
+        .controlSize(.small)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 3)
+        .background(.bar)
+    }
+
+    private var addTrackMenu: some View {
+        Menu {
+            Button { TimelineEditor.addTrack(&timeline, kind: .video) } label: {
+                Label("Video Track", systemImage: "film")
+            }
+            Button { TimelineEditor.addTrack(&timeline, kind: .audio) } label: {
+                Label("Audio Track", systemImage: "waveform")
+            }
+            Button { TimelineEditor.addTrack(&timeline, kind: .overlay) } label: {
+                Label("Overlay Track", systemImage: "square.3.layers.3d")
+            }
+        } label: { Label("Add Track", systemImage: "plus") }
+        .fixedSize()
+        .help("Add a video, audio or overlay track")
+    }
+
+    private var toolbarTimecode: some View {
+        Text(Timecode.string(seconds: playhead, fps: timeline.fps))
+            .font(.system(.caption, design: .monospaced)).fixedSize()
+    }
+
+    private func zoomControl(compact: Bool) -> some View {
+        HStack(spacing: 6) {
+            if !compact { Image(systemName: "minus.magnifyingglass").foregroundStyle(.secondary) }
             // A logarithmic scale keeps the wider zoom-out range easy to adjust.
             Slider(value: Binding(
                 get: { log2(Self.clampedZoom(pixelsPerSecond)) },
                 set: { pixelsPerSecond = pow(2, $0) }
             ), in: log2(Self.zoomRange.lowerBound)...log2(Self.zoomRange.upperBound))
-                .frame(width: 140)
-                .controlSize(.small)
+                .frame(width: compact ? 60 : 120)
                 .accessibilityLabel("Timeline zoom")
-            Image(systemName: "plus.magnifyingglass").foregroundStyle(.secondary)
+                .help("Timeline zoom")
+            if !compact { Image(systemName: "plus.magnifyingglass").foregroundStyle(.secondary) }
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 6)
-        .background(.bar)
     }
 
     /// The one selected clip, for edits that only make sense on a single clip.
@@ -281,12 +343,23 @@ public struct SequenceTimelineView: View {
             .tint(tool == .blade ? .accentColor : .secondary)
             .help("Blade tool (B): click footage to split it")
             .accessibilityIdentifier("timeline.tool.cut")
+            if onSkim != nil {
+                Button { skimming.toggle(); timelineFocused = true } label: {
+                    Label("Skim", systemImage: "cursorarrow.motionlines")
+                }
+                .tint(skimming ? .accentColor : .secondary)
+                .help(skimming ? "Skim (S): moving the pointer over the timeline previews that frame. Click to turn off."
+                               : "Skim (S): preview the frame under the pointer as it moves over the timeline")
+                .accessibilityIdentifier("timeline.skim")
+                .accessibilityValue(skimming ? "On" : "Off")
+            }
             Divider().frame(height: 16)
             Button { speedClipID = selectedClip?.id } label: {
                 Label("Speed", systemImage: "speedometer")
             }
             .disabled(selectedClip?.source.capabilities.contains(.speed) != true)
             .accessibilityIdentifier("timeline.speed")
+            .help("Change playback speed")
             Button {
                 if let selectedClip { performEdit { try TimelineEditor.reverse(&timeline, clipID: selectedClip.id) } }
             } label: {
@@ -295,21 +368,22 @@ public struct SequenceTimelineView: View {
             .tint(selectedClip?.isReversed == true ? .accentColor : .secondary)
             .disabled(selectedClip?.source.capabilities.contains(.reverse) != true)
             .accessibilityIdentifier("timeline.reverse")
-            Spacer()
-            if selectedClipIDs.count > 1 {
-                Text("\(selectedClipIDs.count) clips selected")
-                    .font(.caption.monospacedDigit()).foregroundStyle(.secondary)
-                    .accessibilityIdentifier("timeline.selection.count")
-            } else if let selectedClip, selectedClip.source.capabilities.contains(.speed) {
-                Text("\((selectedClip.playbackRate * 100).formatted(.number.precision(.fractionLength(0...3))))%\(selectedClip.isReversed ? " · Reversed" : "")")
-                    .font(.caption.monospacedDigit()).foregroundStyle(.secondary)
-            }
+            .help("Reverse selected footage")
         }
         .buttonStyle(.bordered)
         .controlSize(.small)
-        .padding(.horizontal, 10)
-        .padding(.bottom, 6)
-        .background(.bar)
+        .fixedSize()
+    }
+
+    @ViewBuilder private var selectionSummary: some View {
+        if selectedClipIDs.count > 1 {
+            Text("\(selectedClipIDs.count) clips selected")
+                .font(.caption.monospacedDigit()).foregroundStyle(.secondary).fixedSize()
+                .accessibilityIdentifier("timeline.selection.count")
+        } else if let selectedClip, selectedClip.source.capabilities.contains(.speed) {
+            Text("\((selectedClip.playbackRate * 100).formatted(.number.precision(.fractionLength(0...3))))%\(selectedClip.isReversed ? " · Reversed" : "")")
+                .font(.caption.monospacedDigit()).foregroundStyle(.secondary).fixedSize()
+        }
     }
 
     private func performEdit(_ edit: () throws -> Void) {
@@ -390,6 +464,13 @@ public struct SequenceTimelineView: View {
             ForEach(track.clips) { clip in
                 clipView(clip, on: track)
             }
+            TimelineModifierRegions(timeline: $timeline, track: track, pixelsPerSecond: pixelsPerSecond, laneHeight: laneHeight,
+                                    selectedTransitionID: selectedTransitionID,
+                                    onInspectEffects: { timelineFocused = true; onInspectEffects?($0) }, onInspectTransition: { timelineFocused = true; onInspectTransition?($0) },
+                                    onError: { editError = $0 }, movedStarts: dragState.movedStarts, laneOffset: dragState.laneOffset)
+            if modifierDropTrackID == track.id, let target = modifierDropTarget {
+                modifierDropHighlight(target)
+            }
         }
         .frame(width: width, height: laneHeight, alignment: .topLeading)
         // Clips previewing a lane change draw over the lanes they cross.
@@ -406,7 +487,7 @@ public struct SequenceTimelineView: View {
                 }
             }
         }
-        .onDrop(of: [.rxFootage], delegate: FootageLaneDropDelegate(
+        .onDrop(of: [.rxFootage, .videoModifier], delegate: FootageLaneDropDelegate(
             entered: { item in
                 dragPreviewItem = item
                 Task { await loadThumbnail(for: item.source) }
@@ -426,8 +507,53 @@ public struct SequenceTimelineView: View {
                 dragPreviewItem = nil
                 guard item.canBePlaced(on: track.kind) else { return }
                 onDrop(item, track.id, landingTime(for: item, at: point.x / pixelsPerSecond, on: track))
-            }
+            },
+            modifier: ModifierLaneDropDelegate(target: { item, point in
+                modifierDropTrackID = track.id
+                modifierDropTarget = ModifierDropHitTesting.target(item: item, point: point, track: track, timeline: timeline, pixelsPerSecond: pixelsPerSecond)
+                return modifierDropTarget != nil
+            }, exited: { modifierDropTarget = nil; modifierDropTrackID = nil }, drop: { item, point in
+                guard let target = ModifierDropHitTesting.target(item: item, point: point, track: track, timeline: timeline, pixelsPerSecond: pixelsPerSecond) else { return }
+                performEdit {
+                    switch target {
+                    case .effect(let id):
+                        try TimelineEditor.addEffect(&timeline, definitionID: item.definitionID, clipID: id)
+                        onInspectEffects?(id)
+                    case .transition(let attachment):
+                        let id = try TimelineEditor.addTransition(&timeline, definitionID: item.definitionID, attachment: attachment)
+                        onInspectTransition?(id)
+                    }
+                }
+            })
         ))
+    }
+
+    @ViewBuilder
+    private func modifierDropHighlight(_ target: ModifierDropTarget) -> some View {
+        let range: Range<Double> = {
+            switch target {
+            case .effect(let id): return timeline.clip(id: id)?.range ?? 0..<0
+            case .transition(let attachment):
+                var candidate = timeline
+                if let id = try? TimelineEditor.addTransition(&candidate, definitionID: "rx.cross-dissolve", attachment: attachment),
+                   let item = candidate.transitions.first(where: { $0.id == id }), let range = item.range(in: candidate) { return range }
+                return timeline.clip(id: attachment.clipIDs.first ?? UUID())?.range ?? 0..<0
+            }
+        }()
+        let label: String = {
+            switch target {
+            case .effect: return "Add Effect"
+            case .transition(.start): return "In"
+            case .transition(.end): return "Out"
+            case .transition(.between): return "Join"
+            }
+        }()
+        RoundedRectangle(cornerRadius: 4).fill(.purple.opacity(0.45))
+            .overlay(RoundedRectangle(cornerRadius: 4).stroke(.white, style: StrokeStyle(lineWidth: 2, dash: [4, 2])))
+            .overlay(Text(label).font(.caption2.bold()).foregroundStyle(.white).fixedSize())
+            .frame(width: max(24, (range.upperBound - range.lowerBound) * pixelsPerSecond), height: laneHeight - 6)
+            .offset(x: range.lowerBound * pixelsPerSecond, y: 3)
+            .allowsHitTesting(false)
     }
 
     /// Where footage would start from a pointer time: snapped to nearby clip
@@ -529,6 +655,10 @@ public struct SequenceTimelineView: View {
         let y = inset + (movedStart == nil ? 0 : CGFloat(dragState.laneOffset) * (laneHeight + 1))
         let displayedClip = isDragging ? (dragState.previewClip ?? clip) : clip
         let showsSpeed = TimelineClipInteraction.showsSpeedOverlay(for: clip) || (isDragging && dragState.mode.isRetiming)
+        let waveformHeight = TimelineClipInteraction.waveformHeight(for: clip.source.kind)
+        let waveformTop: CGFloat? = waveformHeight > 0 ? laneHeight - inset * 2 - waveformHeight : nil
+        let adjustingVolume = isDragging && dragState.mode == .volume
+        let volumeLit = adjustingVolume || hoveredVolumeClipID == clip.id
 
         return ZStack(alignment: .leading) {
             RoundedRectangle(cornerRadius: 5)
@@ -549,9 +679,15 @@ public struct SequenceTimelineView: View {
                     duration: displayedClip.duration,
                     playbackRate: displayedClip.playbackRate,
                     isReversed: clip.isReversed,
-                    volume: track.isMuted ? 0 : clip.volume
+                    volume: track.isMuted ? 0 : (adjustingVolume ? dragState.previewVolume ?? clip.volume : clip.volume)
                 )
-                .frame(height: clip.source.kind == .audio ? 28 : 14)
+                .frame(height: waveformHeight)
+                .overlay(alignment: .top) {
+                    // A level line marks the strip as the volume control.
+                    Rectangle()
+                        .fill(.white.opacity(volumeLit ? 0.9 : 0))
+                        .frame(height: 1)
+                }
                 .frame(maxHeight: .infinity, alignment: .bottom)
                 .clipShape(RoundedRectangle(cornerRadius: 5))
                 .allowsHitTesting(false)
@@ -572,7 +708,8 @@ public struct SequenceTimelineView: View {
             RoundedRectangle(cornerRadius: 5)
                 .strokeBorder(isSelected ? Color.white : Color.black.opacity(0.25), lineWidth: isSelected ? 2 : 1)
             if isDragging {
-                dragReadout(alignment: dragState.mode.isLeading ? .bottomLeading : .bottomTrailing)
+                // The volume readout sits above the waveform being dragged.
+                dragReadout(alignment: adjustingVolume ? .topTrailing : dragState.mode.isLeading ? .bottomLeading : .bottomTrailing)
             }
         }
         .frame(width: width, height: laneHeight - inset * 2)
@@ -591,14 +728,16 @@ public struct SequenceTimelineView: View {
         .onContinuousHover { phase in
             switch phase {
             case .active(let location):
-                let mode = TimelineClipInteraction.mode(at: location.x, y: location.y, width: width, capabilities: clip.source.capabilities, tool: tool, showsSpeedOverlay: showsSpeed)
+                let mode = TimelineClipInteraction.mode(at: location.x, y: location.y, width: width, capabilities: clip.source.capabilities, tool: tool, showsSpeedOverlay: showsSpeed, waveformTop: waveformTop)
                 hoveredRetimeHandle = mode?.isRetiming == true
                     ? TrimHandleID(clipID: clip.id, leading: mode == .retimeLeading) : nil
                 hoveredHandle = mode == .trimLeading || mode == .trimTrailing
                     ? TrimHandleID(clipID: clip.id, leading: mode == .trimLeading) : nil
+                hoveredVolumeClipID = mode == .volume ? clip.id : nil
             case .ended:
                 if hoveredHandle?.clipID == clip.id { hoveredHandle = nil }
                 if hoveredRetimeHandle?.clipID == clip.id { hoveredRetimeHandle = nil }
+                if hoveredVolumeClipID == clip.id { hoveredVolumeClipID = nil }
             }
         }
         .onTapGesture { location in
@@ -617,13 +756,20 @@ public struct SequenceTimelineView: View {
             SpatialTapGesture(count: 2).onEnded { value in
                 let mode = TimelineClipInteraction.mode(
                     at: value.location.x, y: value.location.y, width: width,
-                    capabilities: clip.source.capabilities, tool: tool, showsSpeedOverlay: showsSpeed
+                    capabilities: clip.source.capabilities, tool: tool, showsSpeedOverlay: showsSpeed, waveformTop: waveformTop
                 )
-                guard mode == .retimeTrailing else { return }
-                performEdit { try TimelineEditor.changeSpeed(&timeline, clipID: clip.id, rate: 1) }
+                switch mode {
+                case .retimeTrailing:
+                    performEdit { try TimelineEditor.changeSpeed(&timeline, clipID: clip.id, rate: 1) }
+                case .volume:
+                    // Double-clicking the waveform restores 100%, like the speed strip.
+                    performEdit { try TimelineEditor.update(&timeline, clipID: clip.id) { $0.volume = 1 } }
+                default:
+                    break
+                }
             }
         )
-        .gesture(clipGesture(clip, on: track, width: width))
+        .gesture(clipGesture(clip, on: track, width: width, waveformTop: waveformTop))
         .offset(x: x, y: y)
         .contextMenu {
             // Destructive items act on the whole selection when this clip is part of it.
@@ -689,9 +835,15 @@ public struct SequenceTimelineView: View {
     private func dragReadout(alignment: Alignment) -> some View {
         let start = dragState.previewStart
         let end = start + dragState.previewDuration
-        let text = dragState.mode == .move
-            ? "\(Timecode.string(seconds: start, fps: timeline.fps)) – \(Timecode.string(seconds: end, fps: timeline.fps))"
-            : "\(Timecode.string(seconds: dragState.previewDuration, fps: timeline.fps)) · \(Timecode.string(seconds: dragState.mode.isLeading ? start : end, fps: timeline.fps))"
+        let text: String
+        switch dragState.mode {
+        case .volume:
+            text = "Volume \(Int(((dragState.previewVolume ?? 1) * 100).rounded()))%"
+        case .move:
+            text = "\(Timecode.string(seconds: start, fps: timeline.fps)) – \(Timecode.string(seconds: end, fps: timeline.fps))"
+        default:
+            text = "\(Timecode.string(seconds: dragState.previewDuration, fps: timeline.fps)) · \(Timecode.string(seconds: dragState.mode.isLeading ? start : end, fps: timeline.fps))"
+        }
         return Text(text)
             .font(.system(size: 9, weight: .semibold, design: .monospaced))
             .foregroundStyle(.white)
@@ -744,13 +896,16 @@ public struct SequenceTimelineView: View {
         if let handle = hoveredHandle, handle.clipID == clip.id {
             return .frameResize(position: handle.leading ? .leading : .trailing)
         }
+        if hoveredVolumeClipID == clip.id || (dragState.clipID == clip.id && dragState.mode == .volume) {
+            return .rowResize
+        }
         return clip.source.capabilities.contains(.drag)
             ? (dragState.clipID == clip.id ? .grabActive : .grabIdle) : .default
     }
 
     /// A single gesture chooses an edge or body at mouse-down. A fixed canvas
     /// coordinate space keeps the trailing edge from drifting as its width changes.
-    private func clipGesture(_ clip: Clip, on track: Track, width: CGFloat) -> some Gesture {
+    private func clipGesture(_ clip: Clip, on track: Track, width: CGFloat, waveformTop: CGFloat?) -> some Gesture {
         DragGesture(minimumDistance: 2, coordinateSpace: .named("timelineCanvas"))
             .onChanged { value in
                 if dragState.clipID == nil {
@@ -758,7 +913,7 @@ public struct SequenceTimelineView: View {
                     let trackIndex = timeline.tracks.firstIndex { $0.id == track.id } ?? 0
                     let localY = value.startLocation.y - rulerHeight - CGFloat(trackIndex) * (laneHeight + 1) - 3
                     guard let mode = TimelineClipInteraction.mode(at: localX, y: localY, width: width, capabilities: clip.source.capabilities, tool: tool,
-                                                                  showsSpeedOverlay: TimelineClipInteraction.showsSpeedOverlay(for: clip)) else { return }
+                                                                  showsSpeedOverlay: TimelineClipInteraction.showsSpeedOverlay(for: clip), waveformTop: waveformTop) else { return }
                     dragState = ClipDragState(clipID: clip.id, mode: mode, originalStart: clip.start, originalDuration: clip.duration)
                     timelineFocused = true
                     if mode == .move {
@@ -766,7 +921,8 @@ public struct SequenceTimelineView: View {
                         // clips that cannot be dragged stay where they are.
                         let selection = selectedClipIDs.contains(clip.id) ? selectedClipIDs : [clip.id]
                         selectedClipIDs = selection
-                        let moving = timeline.allClips.filter { selection.contains($0.id) && $0.source.capabilities.contains(.drag) }
+                        let linkedSelection = timeline.linkedClipIDs(selection)
+                        let moving = timeline.allClips.filter { linkedSelection.contains($0.id) && $0.source.capabilities.contains(.drag) }
                         dragState.groupIDs = Set(moving.map(\.id))
                         dragState.movedStarts = Dictionary(uniqueKeysWithValues: moving.map { ($0.id, $0.start) })
                     }
@@ -798,17 +954,26 @@ public struct SequenceTimelineView: View {
                         for id in dragState.groupIDs {
                             if let moved = preview.clip(id: id) { dragState.movedStarts[id] = moved.start }
                         }
+                    case .volume:
+                        let volume = TimelineClipInteraction.volume(from: clip.volume, translation: value.translation.height)
+                        try TimelineEditor.update(&preview, clipID: clip.id) { $0.volume = volume }
+                        dragState.previewVolume = volume
                     }
+                    dragState.rejection = nil
                     if let updated = preview.clip(id: clip.id) {
                         dragState.previewClip = updated
                         dragState.previewStart = updated.start
                         dragState.previewDuration = updated.duration
                     }
+                } catch let error as ModifierEditError {
+                    dragState.rejection = error.localizedDescription
                 } catch { /* Keep the last valid preview at source bounds or neighbours. */ }
             }
             .onEnded { _ in
                 defer { dragState = ClipDragState() }
-                guard dragState.clipID == clip.id, let preview = dragState.previewClip else { return }
+                guard dragState.clipID == clip.id else { return }
+                if let rejection = dragState.rejection { editError = rejection; return }
+                guard let preview = dragState.previewClip else { return }
                 let natural = sourceDurations[clip.source.id] ?? clip.sourceDuration
                 performEdit {
                     switch dragState.mode {
@@ -822,6 +987,9 @@ public struct SequenceTimelineView: View {
                         try TimelineEditor.retime(&timeline, clipID: clip.id, duration: preview.duration)
                     case .move:
                         try TimelineEditor.move(&timeline, clipIDs: dragState.groupIDs, by: dragState.moveDelta, laneOffset: dragState.laneOffset)
+                    case .volume:
+                        guard preview.volume != clip.volume else { return }
+                        try TimelineEditor.update(&timeline, clipID: clip.id) { $0.volume = preview.volume }
                     }
                 }
             }
@@ -849,8 +1017,10 @@ public struct SequenceTimelineView: View {
     }
 
     private func split(_ clip: Clip, at time: TimeInterval) {
-        if let right = try? TimelineEditor.split(&timeline, clipID: clip.id, at: time) {
-            selectedClipIDs = [right]
+        performEdit {
+            if let right = try TimelineEditor.split(&timeline, clipID: clip.id, at: time) {
+                selectedClipIDs = [right]
+            }
         }
     }
 
@@ -866,7 +1036,18 @@ public struct SequenceTimelineView: View {
     }
 
     private func deleteSelection() {
-        delete(selectedClipIDs)
+        if let selectedTransitionID {
+            TimelineEditor.removeTransition(&timeline, id: selectedTransitionID)
+        } else { delete(selectedClipIDs) }
+    }
+
+    /// Selects every clip on every lane. Selection never mutates the timeline,
+    /// so there is nothing to undo.
+    private func selectAllClips() {
+        let ids = Set(timeline.allClips.map(\.id))
+        guard !ids.isEmpty else { return }
+        timelineFocused = true
+        selectedClipIDs = ids
     }
 
     /// Command or shift held: clicks and marquees add to the selection.
@@ -1018,12 +1199,14 @@ private struct FootageLaneDropDelegate: DropDelegate {
     /// Whether the lane can hold the item; false shows the forbidden cursor.
     let accepts: (FootageDragItem) -> Bool
     let drop: (FootageDragItem, CGPoint) -> Void
+    let modifier: ModifierLaneDropDelegate
 
     func validateDrop(info: DropInfo) -> Bool {
-        info.hasItemsConforming(to: [.rxFootage])
+        info.hasItemsConforming(to: [.rxFootage, .videoModifier])
     }
 
     func dropEntered(info: DropInfo) {
+        if info.hasItemsConforming(to: [.videoModifier]) { modifier.dropEntered(info: info); return }
         hover(info.location)
         if let item = FootageDragSession.shared.item {
             entered(item)
@@ -1037,6 +1220,7 @@ private struct FootageLaneDropDelegate: DropDelegate {
     }
 
     func dropUpdated(info: DropInfo) -> DropProposal? {
+        if info.hasItemsConforming(to: [.videoModifier]) { return modifier.dropUpdated(info: info) }
         hover(info.location)
         if let item = FootageDragSession.shared.item, !accepts(item) {
             return DropProposal(operation: .forbidden)
@@ -1045,10 +1229,12 @@ private struct FootageLaneDropDelegate: DropDelegate {
     }
 
     func dropExited(info: DropInfo) {
+        if info.hasItemsConforming(to: [.videoModifier]) { modifier.dropExited(info: info); return }
         hover(nil)
     }
 
     func performDrop(info: DropInfo) -> Bool {
+        if info.hasItemsConforming(to: [.videoModifier]) { return modifier.performDrop(info: info) }
         let location = info.location
         if let item = FootageDragSession.shared.item {
             FootageDragSession.shared.end()
@@ -1093,6 +1279,9 @@ private struct ClipDragState {
     var previewStart: TimeInterval = 0
     var previewDuration: TimeInterval = 0
     var previewClip: Clip?
+    /// The volume a `.volume` drag currently previews.
+    var previewVolume: Float?
+    var rejection: String?
     /// Every clip moving with the grabbed one (the selection), for `.move`.
     var groupIDs: Set<UUID> = []
     /// Where each moving clip currently previews.

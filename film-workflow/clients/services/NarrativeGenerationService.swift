@@ -66,6 +66,7 @@ enum NarrativeGenerationService {
                 providerName: project.providerEnum.displayName,
                 speakerSummary: summary
             )
+            generated.durationSeconds = await AudioProbe.durationSeconds(of: storage.absoluteURL(for: relativePath))
             context.insert(generated)
             project.updatedAt = Date()
             await generateCaptionsIfEnabled(
@@ -113,6 +114,7 @@ enum NarrativeGenerationService {
                 providerName: project.providerEnum.displayName,
                 speakerSummary: summary
             )
+            generated.durationSeconds = await AudioProbe.durationSeconds(of: storage.absoluteURL(for: relativePath))
             context.insert(generated)
             project.updatedAt = Date()
             await generateCaptionsIfEnabled(

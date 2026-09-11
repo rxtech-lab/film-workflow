@@ -1,6 +1,7 @@
 import AVFoundation
 import CoreGraphics
 import Foundation
+import VideoEffectsCore
 
 /// The AVFoundation objects for one timeline, ready for a player or exporter.
 public struct BuiltComposition {
@@ -22,8 +23,8 @@ public enum CompositionBuildError: Error, Sendable {
 /// Turns a `Timeline` into an `AVMutableComposition` plus a video
 /// composition driven by `TimelineVideoCompositor`.
 ///
-/// Video files become composition tracks (one per timeline track, since a
-/// track never holds overlapping clips). Stills, captions and placeholders
+/// Video files share a composition track per lane, except joined transition
+/// inputs, which need separate tracks for simultaneous frames. Stills, captions and placeholders
 /// never touch the composition: the compositor draws them. A looping black
 /// base clip underlies everything so every segment has a source frame, which
 /// is what makes AVFoundation invoke the compositor at all.
@@ -36,7 +37,10 @@ public struct TimelineCompositionBuilder {
         self.resolver = resolver
     }
 
-    public func build(_ timeline: Timeline, allowPlaceholders: Bool, includeSilentAudio: Bool = false, audioOnly: Bool = false) async throws -> BuiltComposition {
+    /// `includeCaptions` false leaves caption overlays out of the picture, for
+    /// exports that deliver them as a subtitle track or a sidecar file instead.
+    public func build(_ timeline: Timeline, allowPlaceholders: Bool, includeSilentAudio: Bool = false, audioOnly: Bool = false, includeCaptions: Bool = true) async throws -> BuiltComposition {
+        try timeline.validateModifiers(requireDefinitions: !allowPlaceholders)
         let composition = AVMutableComposition()
         let duration = max(timeline.duration, timeline.frameDuration)
         let totalTime = CMTime(seconds: duration, preferredTimescale: timescale)
@@ -81,11 +85,32 @@ public struct TimelineCompositionBuilder {
                 switch resolved[clip.source.id] {
                 case .success(.file(let url, _, _))? where clip.source.kind.hasVideo:
                     let asset = AVURLAsset(url: url)
-                    if let compositionTrack = try await insertVideo(asset: asset, clip: clip, timeline: timeline, into: composition, trackIDs: &videoTrackIDs, timelineTrack: track) {
+                    let window = renderWindow(for: clip, in: timeline)
+                    let naturalDuration = CMTimeGetSeconds(try await asset.load(.duration))
+                    let lower = max(window.lowerBound, clip.start - clip.inPoint / clip.playbackRate)
+                    let upper = min(window.upperBound, clip.start + (naturalDuration - clip.inPoint) / clip.playbackRate)
+                    guard upper > lower else { throw TimelineEditError.invalidDuration }
+                    var renderClip = clip
+                    renderClip.start = lower
+                    renderClip.duration = upper - lower
+                    renderClip.inPoint = max(0, clip.inPoint + (lower - clip.start) * clip.playbackRate)
+                    if let compositionTrack = try await insertVideo(asset: asset, clip: renderClip, timeline: timeline, into: composition, trackIDs: &videoTrackIDs, timelineTrack: track) {
                         let sourceTrack = try await asset.loadTracks(withMediaType: .video).first
                         let preferred = try await sourceTrack?.load(.preferredTransform) ?? .identity
                         let natural = try await sourceTrack?.load(.naturalSize) ?? .zero
-                        clipLayers[clip.id] = .sourceTrack(compositionTrack, transform: clip.transform, opacity: clip.opacity, preferredTransform: preferred, naturalSize: natural)
+                        var layer: LayerSpec = .sourceTrack(compositionTrack, transform: clip.transform, opacity: clip.opacity, preferredTransform: preferred, naturalSize: natural)
+                        if lower > window.lowerBound + 0.000001 || upper < window.upperBound - 0.000001 {
+                            let generator = AVAssetImageGenerator(asset: asset)
+                            generator.appliesPreferredTrackTransform = true
+                            generator.requestedTimeToleranceAfter = .zero
+                            let fps = Double(try await sourceTrack?.load(.nominalFrameRate) ?? 30)
+                            let first: CGImage? = lower > window.lowerBound + 0.000001
+                                ? try await generator.image(at: .zero).image : nil
+                            let last: CGImage? = upper < window.upperBound - 0.000001
+                                ? try await generator.image(at: CMTime(seconds: max(0, naturalDuration - 1 / max(1, fps)), preferredTimescale: timescale)).image : nil
+                            layer = .heldEdges(layer, playable: lower..<upper, first: first, last: last, transform: clip.transform, opacity: clip.opacity)
+                        }
+                        clipLayers[clip.id] = layer
                     }
                     if includeSilentAudio || (!track.isMuted && clip.volume > 0) {
                         try await insertAudio(asset: asset, clip: clip, into: composition, parameters: &audioParameters, trackIDs: &audioTrackIDs, volume: track.isMuted ? 0 : clip.volume)
@@ -107,13 +132,8 @@ public struct TimelineCompositionBuilder {
             for clip in track.sortedClips {
                 switch resolved[clip.source.id] {
                 case .success(.captions(let cues))?:
-                    // Shift cues onto the timeline clock and clip them to the clip.
-                    let shifted = cues.compactMap { cue -> TextCue? in
-                        let start = max(clip.start, cue.start - clip.inPoint + clip.start)
-                        let end = min(clip.end, cue.end - clip.inPoint + clip.start)
-                        return end > start ? TextCue(start: start, end: end, text: cue.text) : nil
-                    }
-                    clipLayers[clip.id] = .text(shifted, style: clip.text ?? .caption)
+                    guard includeCaptions else { continue }
+                    clipLayers[clip.id] = .text(clip.timelineCues(cues), style: clip.text ?? .caption)
                 case .success(.file(let url, _, _))?:
                     clipLayers[clip.id] = .still(url, transform: clip.transform, opacity: clip.opacity)
                 case .failure(let error)?:
@@ -140,28 +160,43 @@ public struct TimelineCompositionBuilder {
             throw CompositionBuildError.unrenderedClips(placeholders)
         }
 
-        // Segment the timeline at every picture edge.
-        let pictureClips = (videoTracks + overlayTracks).flatMap(\.clips)
+        for clip in timeline.allClips where !clip.effects.isEmpty {
+            if let layer = clipLayers[clip.id] { clipLayers[clip.id] = .processed(layer, clip.effects) }
+        }
+
+        // Segment at clip and transition edges, including held-frame boundaries.
+
+        let pictureClips = (videoTracks + overlayTracks).flatMap(\.clips).filter { includeCaptions || $0.source.kind != .captions }
         var edges: Set<TimeInterval> = [0, duration]
         for clip in pictureClips {
             edges.insert(min(max(0, clip.start), duration))
             edges.insert(min(max(0, clip.end), duration))
         }
-        let sorted = edges.sorted()
+        for transition in timeline.transitions where transition.isEnabled {
+            if let range = transition.range(in: timeline) { edges.insert(range.lowerBound); edges.insert(range.upperBound) }
+        }
+        for layer in clipLayers.values { addPlayableEdges(layer, to: &edges) }
+        let sorted = edges.filter { $0 >= 0 && $0 <= duration }.sorted()
         var instructions: [TimelineCompositionInstruction] = []
         let background = CGColor.fromHex(timeline.backgroundHex)
         for (a, b) in zip(sorted, sorted.dropFirst()) where b > a {
             let mid = (a + b) / 2
             var layers: [LayerSpec] = []
             var trackIDs: [CMPersistentTrackID] = [baseTrackID]
-            for track in videoTracks {
-                guard let clip = track.clip(at: mid), let layer = clipLayers[clip.id] else { continue }
-                layers.append(layer)
-                if case .sourceTrack(let id, _, _, _, _) = layer { trackIDs.append(id) }
-            }
-            for track in overlayTracks {
-                guard let clip = track.clip(at: mid), let layer = clipLayers[clip.id] else { continue }
-                layers.append(layer)
+            for track in videoTracks + overlayTracks {
+                let active = timeline.transitions.first { transition in
+                    transition.isEnabled && transition.attachment.clipIDs.contains(where: { id in track.clips.contains { $0.id == id } })
+                        && transition.range(in: timeline)?.contains(mid) == true
+                }
+                let layer: LayerSpec?
+                if let active, let range = active.range(in: timeline) {
+                    switch active.attachment {
+                    case .start(let id): layer = .transition(from: nil, to: clipLayers[id], instance: active, range: range)
+                    case .end(let id): layer = .transition(from: clipLayers[id], to: nil, instance: active, range: range)
+                    case .between(let a, let b): layer = .transition(from: clipLayers[a], to: clipLayers[b], instance: active, range: range)
+                    }
+                } else { layer = track.clip(at: mid).flatMap { clipLayers[$0.id] } }
+                if let layer { layers.append(layer); trackIDs.append(contentsOf: layer.sourceTrackIDs(at: mid)) }
             }
             let range = CMTimeRange(
                 start: CMTime(seconds: a, preferredTimescale: timescale),
@@ -195,6 +230,22 @@ public struct TimelineCompositionBuilder {
         )
     }
 
+    private func renderWindow(for clip: Clip, in timeline: Timeline) -> Range<Double> {
+        var lower = clip.start, upper = clip.end
+        for item in timeline.transitions where item.isEnabled && item.attachment.isPair && item.attachment.clipIDs.contains(clip.id) {
+            if let range = item.range(in: timeline) { lower = min(lower, range.lowerBound); upper = max(upper, range.upperBound) }
+        }
+        return lower..<upper
+    }
+
+    private func addPlayableEdges(_ layer: LayerSpec, to edges: inout Set<Double>) {
+        switch layer {
+        case .heldEdges(_, let range, _, _, _, _): edges.insert(range.lowerBound); edges.insert(range.upperBound)
+        case .processed(let layer, _): addPlayableEdges(layer, to: &edges)
+        default: break
+        }
+    }
+
     // MARK: - Tracks
 
     private func insertBaseTrack(into composition: AVMutableComposition, duration: CMTime) throws -> CMPersistentTrackID? {
@@ -226,11 +277,12 @@ public struct TimelineCompositionBuilder {
     ) async throws -> CMPersistentTrackID? {
         guard let source = try await asset.loadTracks(withMediaType: .video).first else { return nil }
         let compositionTrack: AVMutableCompositionTrack
-        if let id = trackIDs[timelineTrack.id], let existing = composition.track(withTrackID: id) as? AVMutableCompositionTrack {
+        let key = timeline.transitions.contains { $0.isEnabled && $0.attachment.isPair && $0.attachment.clipIDs.contains(clip.id) } ? clip.id : timelineTrack.id
+        if let id = trackIDs[key], let existing = composition.track(withTrackID: id) as? AVMutableCompositionTrack {
             compositionTrack = existing
         } else if let created = composition.addMutableTrack(withMediaType: .video, preferredTrackID: kCMPersistentTrackID_Invalid) {
             compositionTrack = created
-            trackIDs[timelineTrack.id] = created.trackID
+            trackIDs[key] = created.trackID
         } else {
             return nil
         }

@@ -19,6 +19,7 @@ final class AppNavigation {
         case aiProvider
         case agent
         case captions
+        case remotion
         case mcp
 
         var id: String { rawValue }

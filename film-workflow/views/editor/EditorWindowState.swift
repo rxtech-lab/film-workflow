@@ -64,11 +64,12 @@ struct LibraryItemID: Hashable, Codable {
     let id: UUID
 }
 
-enum InspectorTab: String, CaseIterable, Identifiable {
-    case footage
-    case sequence
-    case clip
-    var id: String { rawValue }
+/// Footage the pointer is skimming in the browser. The viewer shows this
+/// take at `fraction` of its length until the pointer leaves the cell.
+struct FootageSkim: Equatable {
+    let item: LibraryItemID
+    let cellID: UUID
+    var fraction: Double
 }
 
 /// Per-window editor state: what is selected in the library, which sequence
@@ -83,8 +84,9 @@ final class EditorWindowState {
     var currentVersions: [LibraryItemID: UUID] = [:]
     var currentSequenceID: UUID?
     /// The clips selected on the timeline; they move and delete together.
+    /// Selecting shows the sequence viewer but leaves the inspector tab alone.
     var selectedClipIDs: Set<UUID> = [] {
-        didSet { if !selectedClipIDs.isEmpty { inspectorTab = .clip; showSequenceViewer() } }
+        didSet { modifierSelection = nil; if !selectedClipIDs.isEmpty { showSequenceViewer() } }
     }
     /// The single selected clip, for the inspector and single-clip edits.
     /// Nil while several clips are selected.
@@ -92,15 +94,103 @@ final class EditorWindowState {
         get { selectedClipIDs.count == 1 ? selectedClipIDs.first : nil }
         set { selectedClipIDs = newValue.map { [$0] } ?? [] }
     }
-    var inspectorTab: InspectorTab = .footage
+    /// The inspector tab the user last picked, by `InspectorTabDescriptor.id`.
+    /// Remembered across selections and launches; a selection that does not
+    /// offer it shows its first tab without forgetting this.
+    var modifierSelection: ModifierInspectorSelection?
+    var selectedTransitionID: UUID? {
+        if case .transition(let id) = modifierSelection { return id }; return nil
+    }
+    func inspectEffects(_ clipID: UUID) {
+        selectedClipIDs = [clipID]
+        modifierSelection = .effects(clipID)
+        showSequenceViewer()
+    }
+    func inspectTransition(_ id: UUID) {
+        selectedClipIDs = []
+        modifierSelection = .transition(id)
+        showSequenceViewer()
+    }
+    var modifierPreviewGeneration = UUID()
+    var modifierPreviewTask: Task<Void, Never>?
+    var modifierPreviewProgress: String?
+    var modifierPreviewError: String?
+
+    var inspectorTabID: String {
+        didSet { defaults.set(inspectorTabID, forKey: Self.inspectorTabKey) }
+    }
+    /// Items with a generation or transcription in flight, so their Settings
+    /// tab can lock its controls while the footer runs the work.
+    var busyItems: Set<LibraryItemID> = []
+    private let defaults: UserDefaults
+    private static let inspectorTabKey = "inspector.tab"
+    private static let skimKey = "timeline.skim"
+
+    init(defaults: UserDefaults = .standard) {
+        self.defaults = defaults
+        self.inspectorTabID = defaults.string(forKey: Self.inspectorTabKey) ?? InspectorTabResolver.settingsTabID
+        self.skimsTimeline = defaults.bool(forKey: Self.skimKey)
+    }
     /// Sequence playback has one position; footage players own their own time.
+    /// While the pointer skims the timeline the player shows the skimmed
+    /// frame, but the playhead itself stays put until a click moves it.
     var playhead: TimeInterval {
-        get { player.currentTime }
+        get { restingPlayhead ?? player.currentTime }
         set {
+            restingPlayhead = nil
             showSequenceViewer()
             player.pause()
             player.seek(to: newValue)
         }
+    }
+    /// Whether moving the pointer across the timeline previews the frame
+    /// under it. Remembered across launches.
+    var skimsTimeline: Bool {
+        didSet {
+            defaults.set(skimsTimeline, forKey: Self.skimKey)
+            if !skimsTimeline { endSkim() }
+        }
+    }
+    /// The footage cell under the pointer while the browser is skimmed, so
+    /// the viewer can show it without changing what is selected.
+    private(set) var footageSkim: FootageSkim?
+
+    /// Shows `cellID` of `item` at `fraction` (0...1) of its length in the
+    /// viewer. Always on, unlike timeline skimming, because a pass over a
+    /// browser cell is deliberate; like it, it stays out of the way while
+    /// the sequence plays. Only footage the footage viewer can play takes
+    /// part; sequences, captions and Remotion projects have viewers of
+    /// their own.
+    func skimFootage(_ item: LibraryItemID, cellID: UUID, fraction: Double) {
+        guard !player.isPlaying, fraction.isFinite else { return }
+        switch item.kind {
+        case .image, .video, .music, .narration, .imported: break
+        case .sequence, .caption, .remotion: return
+        }
+        footageSkim = FootageSkim(item: item, cellID: cellID, fraction: min(max(0, fraction), 1))
+    }
+
+    /// Returns the viewer to the selection once the pointer leaves the footage.
+    func endFootageSkim() {
+        footageSkim = nil
+    }
+    /// Where the playhead was when skimming started, so it can come back
+    /// once the pointer leaves the timeline.
+    private var restingPlayhead: TimeInterval?
+
+    /// Previews `time` without moving the playhead. Ignored while the
+    /// sequence plays, so skimming never interrupts playback.
+    func skim(to time: TimeInterval) {
+        guard skimsTimeline, !player.isPlaying else { return }
+        if restingPlayhead == nil { restingPlayhead = player.currentTime }
+        player.seek(to: time)
+    }
+
+    /// Puts the player back on the playhead after a skim.
+    func endSkim() {
+        guard let resting = restingPlayhead else { return }
+        restingPlayhead = nil
+        player.seek(to: resting)
     }
     let player = TimelinePlayerController()
     @ObservationIgnored lazy var preview = TimelinePreviewController(transport: player)
@@ -117,15 +207,14 @@ final class EditorWindowState {
     var renderError: String?
     var showRenderError = false
 
+    /// Changes the selection without touching the inspector tab.
     func select(_ item: LibraryItemID?, updateViewer: Bool = true) {
         selection = item
         if updateViewer { viewerSelection = item }
         if let item, item.kind == .sequence {
             currentSequenceID = item.id
-            inspectorTab = .sequence
-        } else {
-            if item != nil { player.pause() }
-            inspectorTab = .footage
+        } else if item != nil {
+            player.pause()
         }
         selectedClipIDs = []
     }

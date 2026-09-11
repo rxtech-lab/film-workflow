@@ -127,6 +127,27 @@ public enum TimelineExporter {
         }
     }
 
+    /// How caption clips on the timeline reach the output.
+    public enum CaptionDelivery: String, CaseIterable, Sendable, Codable {
+        /// Drawn into the picture, as the preview shows them.
+        case burnIn
+        /// Soft subtitle tracks inside the movie, one per language.
+        case embedded
+        /// Caption files written next to the movie, one per language.
+        case sidecar
+        /// Left out entirely.
+        case none
+
+        public var displayName: String {
+            switch self {
+            case .burnIn: return "Burn In"
+            case .embedded: return "Embedded Track"
+            case .sidecar: return "Separate File"
+            case .none: return "None"
+            }
+        }
+    }
+
     /// What to write. `video == nil` exports audio only; `audio == nil` drops
     /// every audio track. `normalized` fixes the container to match.
     public struct Options: Equatable, Sendable, Codable {
@@ -134,21 +155,51 @@ public enum TimelineExporter {
         public var audio: AudioCodec?
         public var resolution: Resolution
         public var container: Container
+        public var captions: CaptionDelivery
 
-        public init(video: VideoCodec? = .h264, audio: AudioCodec? = .aac, resolution: Resolution = .source, container: Container = .mp4) {
+        public init(video: VideoCodec? = .h264, audio: AudioCodec? = .aac, resolution: Resolution = .source, container: Container = .mp4, captions: CaptionDelivery = .burnIn) {
             self.video = video
             self.audio = audio
             self.resolution = resolution
             self.container = container
+            self.captions = captions
+        }
+
+        private enum CodingKeys: String, CodingKey {
+            case video, audio, resolution, container, captions
+        }
+
+        /// Options saved before a field existed decode with its default.
+        public init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            video = try c.decodeIfPresent(VideoCodec.self, forKey: .video)
+            audio = try c.decodeIfPresent(AudioCodec.self, forKey: .audio)
+            resolution = try c.decodeIfPresent(Resolution.self, forKey: .resolution) ?? .source
+            container = try c.decodeIfPresent(Container.self, forKey: .container) ?? .mp4
+            captions = try c.decodeIfPresent(CaptionDelivery.self, forKey: .captions) ?? .burnIn
+        }
+
+        public func encode(to encoder: Encoder) throws {
+            var c = encoder.container(keyedBy: CodingKeys.self)
+            try c.encodeIfPresent(video, forKey: .video)
+            try c.encodeIfPresent(audio, forKey: .audio)
+            try c.encode(resolution, forKey: .resolution)
+            try c.encode(container, forKey: .container)
+            try c.encode(captions, forKey: .captions)
         }
 
         public var isAudioOnly: Bool { video == nil }
 
-        /// The same options with a container AVFoundation can actually write.
+        /// Whether the compositor draws caption overlays into the picture.
+        public var burnsInCaptions: Bool { captions == .burnIn && !isAudioOnly }
+
+        /// The same options with a container AVFoundation can actually write,
+        /// and no caption delivery for an audio file.
         public var normalized: Options {
             var copy = self
             let allowed = Container.choices(audioOnly: isAudioOnly)
             if !allowed.contains(copy.container) { copy.container = allowed[0] }
+            if isAudioOnly { copy.captions = .none }
             return copy
         }
 
@@ -193,7 +244,9 @@ public enum TimelineExporter {
         let options = options.normalized
         guard options.video != nil || options.audio != nil else { throw TimelineExportError.nothingToExport }
 
-        let built = try await TimelineCompositionBuilder(resolver: resolver).build(timeline, allowPlaceholders: false, audioOnly: options.isAudioOnly)
+        let built = try await TimelineCompositionBuilder(resolver: resolver).build(
+            timeline, allowPlaceholders: false, audioOnly: options.isAudioOnly, includeCaptions: options.burnsInCaptions
+        )
         let composition = built.asset
         if options.audio == nil {
             for track in composition.tracks(withMediaType: .audio) { composition.removeTrack(track) }

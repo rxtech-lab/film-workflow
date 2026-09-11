@@ -23,7 +23,7 @@ enum RemotionRenderService {
             try RemotionCodeBuilder.writeComposition(project: project, source: project.compositionSource)
         }
         let hash = try RemotionSourceHasher.hash(projectDir: project.projectDir, width: width, height: height, fps: fps)
-        return preserveAlpha ? "alpha-v1-" + hash : hash
+        return "native-v1-" + RemotionMapSettings.fingerprint + (preserveAlpha ? "-alpha-" : "-opaque-") + hash
     }
 
     /// An existing render that matches the project's current source, if any.

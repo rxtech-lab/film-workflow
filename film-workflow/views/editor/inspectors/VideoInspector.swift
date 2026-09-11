@@ -1,7 +1,9 @@
 import SwiftData
 import SwiftUI
 
-struct VideoInspector: View {
+/// Generate and Resume for a video project, with the pending-job banner,
+/// shown under its inspector tabs.
+struct VideoInspectorFooter: View {
     let project: VideoGenProject
     @Environment(\.modelContext) private var modelContext
 
@@ -31,8 +33,6 @@ struct VideoInspector: View {
                 .padding(8)
                 .background(.yellow.opacity(0.15))
             }
-            VideoGenProjectParametersView(project: project)
-            Divider()
             GenerateButton(title: "Generate", isBusy: isGenerating, isEnabled: canGenerate) { startGenerate() }
                 .padding(10)
         }

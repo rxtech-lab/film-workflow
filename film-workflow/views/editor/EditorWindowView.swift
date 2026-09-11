@@ -34,11 +34,36 @@ struct EditorWindowView: View {
     @State private var renameText = ""
     @State private var pendingDeletion: LibraryRow?
     @State private var versionsTarget: LibraryVersionsTarget?
+    @State private var exportingRemotion: RemotionProject?
 
     private var index: LibraryIndex {
         LibraryIndex(music: music, narrations: narrations, captions: captions, images: images, videos: videos,
                      remotions: remotions, imported: imported, sequences: sequences,
                      sequenceRenders: sequenceRenders, remotionRenders: remotionRenders)
+    }
+
+    /// Generated audio recorded before lengths were stored. Keyed on ids so
+    /// the backfill runs once per set of files, not on every re-render.
+    private var unmeasuredAudioIDs: [UUID] {
+        music.flatMap(\.generatedFiles).filter { $0.durationSeconds <= 0 }.map(\.id)
+            + narrations.flatMap(\.generatedFiles).filter { $0.durationSeconds <= 0 }.map(\.id)
+    }
+
+    /// Reads and records the length of older audio so the library can show it.
+    private func backfillAudioDurations() async {
+        let files: [(url: URL, set: (Double) -> Void)] =
+            music.flatMap(\.generatedFiles).filter { $0.durationSeconds <= 0 }.map { f in (f.audioURL, { f.durationSeconds = $0 }) }
+            + narrations.flatMap(\.generatedFiles).filter { $0.durationSeconds <= 0 }.map { f in (f.audioURL, { f.durationSeconds = $0 }) }
+        guard !files.isEmpty else { return }
+        var changed = false
+        for file in files {
+            if Task.isCancelled { break }
+            let seconds = await AudioProbe.durationSeconds(of: file.url)
+            guard seconds > 0 else { continue }
+            file.set(seconds)
+            changed = true
+        }
+        if changed { try? modelContext.save() }
     }
 
     private var currentSequence: SequenceProject? {
@@ -54,10 +79,11 @@ struct EditorWindowView: View {
                                  onCreate: create, onMove: move, onImport: chooseFilesToImport, onCreateGroup: beginCreatingGroup,
                                  onRenameGroup: beginRenamingGroup, onDeleteGroup: { pendingGroupDeletion = $0 },
                                  onRename: beginRenaming, onDelete: { pendingDeletion = $0 },
+                                 onExport: { exportingRemotion = index.remotion($0.id.id) },
                                  onShowVersions: { versionsTarget = LibraryVersionsTarget(item: $0.id, versionID: $1) })
                         .frame(minWidth: 240, idealWidth: 280, maxWidth: 420, maxHeight: .infinity)
                         .background(.regularMaterial)
-                    ViewerPanel(index: index, state: state, document: document, sequence: currentSequence)
+                    ViewerPanel(index: index, state: state, document: document, sequence: currentSequence, onRetryModifierPreview: reloadPlayer)
                         .frame(minWidth: 360, idealWidth: 800, maxWidth: .infinity, maxHeight: .infinity)
                         .background(PersistedPanelSplit(document: document, panel: .editorColumns))
                     InspectorPanel(index: index, state: state, document: document, sequence: currentSequence, onRender: beginRender)
@@ -83,12 +109,16 @@ struct EditorWindowView: View {
         .onChange(of: currentSequence?.timelineData) { _, _ in
             let stale = state.selectedClipIDs.filter { currentSequence?.timeline.clip(id: $0) == nil }
             if !stale.isEmpty { state.selectedClipIDs.subtract(stale) }
+            if let id = state.selectedTransitionID, currentSequence?.timeline.transitions.contains(where: { $0.id == id }) != true {
+                state.modifierSelection = nil
+            }
             reloadPlayer()
         }
         .onChange(of: remotions.map { "\($0.id):\($0.durationSeconds):\($0.compositionFps):\($0.compositionWidth):\($0.compositionHeight):\($0.compositionSource.isEmpty)" }) { _, _ in
             if currentSequence?.timeline.allClips.contains(where: { $0.source.kind == .remotion }) == true { reloadPlayer() }
         }
-        .onDisappear { state.preview.unload(); state.player.unload() }
+        .onDisappear { state.modifierPreviewGeneration = UUID(); state.modifierPreviewTask?.cancel(); state.preview.unload(); state.player.unload() }
+        .task(id: unmeasuredAudioIDs) { await backfillAudioDurations() }
         .onReceive(NotificationCenter.default.publisher(for: .remotionPreviewChanged)) { notification in
             guard let directory = notification.userInfo?["directory"] as? URL,
                   directory.path.hasPrefix(document.packageURL.path + "/"),
@@ -97,14 +127,15 @@ struct EditorWindowView: View {
         }
         .sheet(isPresented: $state.showImportSheet) {
             MediaImportSheet(urls: state.pendingImportURLs, groupID: nil) {
+                state.showImportSheet = false
                 state.pendingImportURLs = []
             }
         }
         .sheet(isPresented: $state.showRenderSheet) {
             if let sequence = currentSequence {
-                SequenceRenderSheet(sequence: sequence) { options, destination in
+                SequenceRenderSheet(sequence: sequence) { options, captions, destination in
                     state.showRenderSheet = false
-                    startRender(sequence: sequence, options: options, destination: destination)
+                    startRender(sequence: sequence, options: options, captions: captions, destination: destination)
                 } onCancel: {
                     state.showRenderSheet = false
                 }
@@ -126,6 +157,7 @@ struct EditorWindowView: View {
         .sheet(item: $versionsTarget) { target in
             LibraryVersionsSheet(index: index, target: target) { versionsTarget = nil }
         }
+        .remotionExportToDisk(project: $exportingRemotion)
         .sheet(item: $renamingRow) { row in
             RenameSheet(name: $renameText) {
                 rename(row, to: renameText)
@@ -310,12 +342,18 @@ struct EditorWindowView: View {
     // MARK: - Player and render
 
     private func reloadPlayer() {
+        state.modifierPreviewTask?.cancel()
+        state.modifierPreviewGeneration = UUID()
+        state.modifierPreviewProgress = nil
+        state.modifierPreviewError = nil
         guard let sequence = currentSequence else {
             state.preview.unload()
             state.player.unload()
             return
         }
-        if sequence.timeline.allClips.contains(where: { $0.source.kind == .remotion }) {
+        if sequence.timeline.hasActiveModifiers && sequence.timeline.allClips.contains(where: { $0.source.kind == .remotion }) {
+            loadRenderedModifierPreview(sequence)
+        } else if sequence.timeline.allClips.contains(where: { $0.source.kind == .remotion }) {
             state.preview.load(sequence.timeline, resolver: DocumentPreviewMediaResolver(document: document, width: sequence.width, height: sequence.height, fps: sequence.fps))
         } else {
             state.preview.unload()
@@ -324,12 +362,43 @@ struct EditorWindowView: View {
         }
     }
 
+    private func loadRenderedModifierPreview(_ sequence: SequenceProject) {
+        state.preview.unload()
+        state.player.setBuffering(true)
+        state.modifierPreviewProgress = "Preparing rendered preview…"
+        let timeline = sequence.timeline
+        let resolver = DocumentPreviewMediaResolver(document: document, width: sequence.width, height: sequence.height, fps: sequence.fps)
+        let fallback = DocumentMediaResolver(document: document, width: sequence.width, height: sequence.height, fps: sequence.fps)
+        let generation = state.modifierPreviewGeneration
+        state.modifierPreviewTask = Task { @MainActor in
+            defer { resolver.release() }
+            do {
+                var files: [String: ResolvedMedia] = [:]
+                for clip in timeline.allClips where clip.source.kind == .remotion && files[clip.source.id] == nil {
+                    files[clip.source.id] = try await resolver.renderedPreview(clip.source) { label in
+                        if state.modifierPreviewGeneration == generation { state.modifierPreviewProgress = label }
+                    }
+                    try Task.checkCancellation()
+                }
+                guard state.modifierPreviewGeneration == generation else { return }
+                state.player.setBuffering(false)
+                state.player.load(timeline, resolver: RenderedModifierMediaResolver(files: files, fallback: fallback))
+                state.modifierPreviewProgress = nil
+            } catch {
+                guard !Task.isCancelled, state.modifierPreviewGeneration == generation else { return }
+                state.modifierPreviewProgress = nil
+                state.modifierPreviewError = error.localizedDescription
+                state.player.setBuffering(true)
+            }
+        }
+    }
+
     private func beginRender() {
         guard currentSequence != nil else { return }
         state.showRenderSheet = true
     }
 
-    private func startRender(sequence: SequenceProject, options: TimelineExporter.Options, destination: SequenceRenderDestination) {
+    private func startRender(sequence: SequenceProject, options: TimelineExporter.Options, captions: CaptionRenderRequest, destination: SequenceRenderDestination) {
         state.renderError = nil
         state.renderProgress = .exporting(0)
         state.renderTask = Task { @MainActor in
@@ -338,15 +407,14 @@ struct EditorWindowView: View {
                 state.renderTask = nil
             }
             do {
-                let output = try await SequenceRenderService.render(sequence: sequence, document: document, options: options, destination: destination) { p in
+                let output = try await SequenceRenderService.render(sequence: sequence, document: document, options: options, captions: captions, destination: destination) { p in
                     state.renderProgress = p
                 }
                 switch output {
                 case .version:
-                    state.inspectorTab = .sequence
                     reloadPlayer()
-                case .file(let url):
-                    NSWorkspace.shared.activateFileViewerSelecting([url])
+                case .file(let url, let captionFiles):
+                    NSWorkspace.shared.activateFileViewerSelecting([url] + captionFiles)
                 }
             } catch is CancellationError {
                 // User cancelled.

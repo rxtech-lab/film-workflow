@@ -13,8 +13,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         #if os(macOS)
         Task { @MainActor in
             RemotionPreviewSessions.shared.stopAll()
-            await RemotionStudioSessions.stopAll()
-            await RemotionRuntime.shared.stop()
             sender.reply(toApplicationShouldTerminate: true)
         }
         return .terminateLater

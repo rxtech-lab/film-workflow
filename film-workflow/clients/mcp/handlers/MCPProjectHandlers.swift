@@ -413,26 +413,25 @@ enum MCPProjectHandlers {
             context.insert(p)
             try context.save()
             // Seed a default no-AI composition so callers get a ready-to-preview
-            // project without a round-trip to the LLM agent. Then bring up Studio.
+            // project without a round-trip to the LLM agent. Then start the native preview.
             let source = RemotionCodeBuilder.defaultComposition(project: p)
             p.compositionSource = source
             try? RemotionCodeBuilder.writeComposition(project: p, source: source)
             try? context.save()
 
-            var studioStatus: String = "starting"
-            var studioURL: String?
+            var previewStatus: String = "starting"
+            var previewURL: String?
             do {
-                let runtime = try await RemotionStudioSessions.keepRunning(projectID: p.id, directory: p.projectDir)
-                studioURL = runtime.currentURL?.absoluteString
-                studioStatus = "running"
+                previewURL = try await RemotionPreviewSessions.shared.keepRunning(project: p).absoluteString
+                previewStatus = "running"
             } catch {
-                studioStatus = "failed: \(error.localizedDescription)"
+                previewStatus = "failed: \(error.localizedDescription)"
             }
 
             var summary = remotionSummary(p)
-            summary["studio"] = [
-                "status": studioStatus,
-                "url": studioURL as Any
+            summary["preview"] = [
+                "status": previewStatus,
+                "url": previewURL as Any
             ] as [String: Any]
             summary["compositionSource"] = source
             return MCPToolRegistry.jsonResult(summary)
@@ -905,6 +904,7 @@ enum MCPProjectHandlers {
                 "transcriptText": f.transcriptText,
                 "providerName": f.providerName,
                 "speakerSummary": f.speakerSummary,
+                "durationSeconds": f.durationSeconds,
                 "createdAt": isoDate(f.createdAt)
             ]
         }
@@ -947,6 +947,7 @@ enum MCPProjectHandlers {
             [
                 "audioFilePath": $0.audioFilePath,
                 "lyricsText": $0.lyricsText as Any,
+                "durationSeconds": $0.durationSeconds,
                 "createdAt": isoDate($0.createdAt)
             ] as [String: Any]
         }
@@ -1177,7 +1178,7 @@ enum MCPProjectHandlers {
 
         // Keep src/Composition.tsx on disk in sync. Remotion's still/render CLI
         // reads durationInFrames / fps / width / height from the COMPOSITION_*
-        // exports in this file (see RemotionRuntime/template/src/Root.tsx). If we
+        // exports in this file (see Packages/RxRemotion/Sources/RxRemotion/Resources/Template/src/Root.tsx). If we
         // only update the SwiftData model, `bun remotion still --frame N` keeps
         // clamping to the old durationInFrames.
         let constantKeys = ["durationSeconds", "compositionWidth", "compositionHeight", "compositionFps"]

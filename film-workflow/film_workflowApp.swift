@@ -24,9 +24,7 @@ struct film_workflowApp: App {
         // Audio chunks and multipart bodies staged during transcription can be
         // hundreds of megabytes; a crash mid-run would otherwise leak them.
         FileStorage.clearTemp()
-        // Clean up any bun/node/remotion processes left behind by an unclean exit
-        // of a previous app launch (Bun's Chromium grandchildren survive Process.terminate).
-        ProcessTreeKiller.killOrphans(matching: FileStorage.remotionRoot.path)
+
     }
 
     /// Runs once per window that can start the app. Skipped under XCTest: the
