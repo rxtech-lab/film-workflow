@@ -53,12 +53,14 @@ struct TimelinePlayerControllerTests {
         let controller = TimelinePlayerController()
         defer { controller.unload() }
         controller.load(timeline, resolver: resolver)
-        for _ in 0..<100 {
-            if controller.player.currentItem != nil { break }
+        // Seeking and playing an item that is not ready waits on the media
+        // subsystem for as long as it likes; require readiness up front.
+        for _ in 0..<500 {
+            if controller.player.currentItem?.status == .readyToPlay { break }
             try await Task.sleep(for: .milliseconds(20))
         }
         let item = try #require(controller.player.currentItem)
-        try await Task.sleep(for: .milliseconds(100))
+        try #require(item.status == .readyToPlay, "item status: \(item.status.rawValue) error: \(String(describing: item.error))")
         await controller.player.seek(to: CMTime(seconds: 0.5, preferredTimescale: 600))
         controller.play()
         for volume: Float in [0.5, 1, 0, 1.5] {

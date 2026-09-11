@@ -68,7 +68,9 @@ struct LivePreviewTests {
         let preview = TimelinePreviewController(transport: transport)
         preview.setVisible(true); preview.load(timeline, resolver: resolver)
         defer { preview.unload(); transport.unload() }
-        try await wait { preview.layers.count == 1 && !transport.isLoading }
+        // The sequence audio item must be ready to play, or the transport is
+        // blocked on it rather than on the live layer under test.
+        try await wait { preview.layers.count == 1 && !transport.isLoading && transport.player.currentItem?.status == .readyToPlay }
         let live = try #require(preview.layers.first?.live)
         live.received(type: "ready")
         transport.play()
