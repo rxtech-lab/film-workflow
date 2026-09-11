@@ -8,6 +8,7 @@ struct CaptionProjectParametersView: View {
     let isTranscribing: Bool
 
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.projectStorage) private var storage
     #if os(macOS)
         // Raises the Settings window; on iOS, switching tabs is enough.
         @Environment(\.openSettings) private var openSettings
@@ -527,9 +528,9 @@ struct CaptionProjectParametersView: View {
             do {
                 // Drop audio the project previously owned so imports don't pile up.
                 if project.ownsAudioFile, !project.audioFilePath.isEmpty {
-                    FileStorage.deleteFile(at: project.audioFilePath)
+                    storage.deleteFile(at: project.audioFilePath)
                 }
-                let relative = try FileStorage.importAudio(from: url)
+                let relative = try storage.importAudio(from: url)
                 project.audioFilePath = relative
                 project.ownsAudioFile = true
                 project.sourceKindEnum = .importedFile
@@ -545,7 +546,7 @@ struct CaptionProjectParametersView: View {
 
                 Task {
                     if let ms = try? await AudioProbe.durationMs(
-                        of: FileStorage.absoluteURL(for: relative)
+                        of: storage.absoluteURL(for: relative)
                     ) {
                         project.audioDurationMs = ms
                     }

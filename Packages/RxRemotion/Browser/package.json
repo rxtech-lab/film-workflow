@@ -1,0 +1,31 @@
+{
+  "name": "rxremotion-browser-resources",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node build.mjs"
+  },
+  "dependencies": {
+    "@react-three/drei": "10.7.8",
+    "@react-three/fiber": "9.7.0",
+    "@remotion/player": "4.0.459",
+    "@remotion/three": "4.0.459",
+    "@tsparticles/engine": "3.9.1",
+    "@tsparticles/react": "3.0.0",
+    "@tsparticles/slim": "3.9.1",
+    "esbuild-wasm": "0.25.0",
+    "leaflet": "1.9.4",
+    "mapbox-gl": "3.23.1",
+    "react": "19.2.0",
+    "react-dom": "19.2.0",
+    "react-map-gl": "8.1.1",
+    "remotion": "4.0.459",
+    "three": "0.185.0"
+  },
+  "devDependencies": {
+    "@types/leaflet": "1.9.21",
+    "@types/react": "19.2.2",
+    "esbuild": "0.25.0",
+    "typescript": "5.9.3"
+  }
+}

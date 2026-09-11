@@ -47,6 +47,13 @@ nonisolated struct AudioProbe {
         throw AudioProbeError.unknownDuration(url)
     }
 
+    /// Duration in seconds, or zero when the file cannot be read. For callers
+    /// that record the length as a nicety rather than a requirement.
+    static func durationSeconds(of url: URL) async -> Double {
+        guard let ms = try? await durationMs(of: url) else { return 0 }
+        return Double(ms) / 1000
+    }
+
     /// Duration from a RIFF/WAVE header, reading only the first few KB.
     private static func wavDurationMs(of url: URL) -> Int? {
         guard let handle = try? FileHandle(forReadingFrom: url) else { return nil }

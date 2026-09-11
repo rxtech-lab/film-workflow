@@ -34,7 +34,11 @@ enum AgentMCPBridge {
     struct Endpoint: Sendable {
         var url: String
         var token: String?
+        /// Pins every tool call from this CLI session to one film.
+        var documentID: UUID?
     }
+
+    nonisolated static let documentHeader = "X-RxFilm-Document"
 
     // MARK: - Lifecycle
 
@@ -53,7 +57,7 @@ enum AgentMCPBridge {
     /// A user who has never enabled the MCP server still expects the agent to
     /// work, so this starts one on demand rather than telling them to go turn a
     /// setting on — and `release` puts it back the way it was.
-    static func acquire() async throws -> Endpoint {
+    static func acquire(documentID: UUID? = nil) async throws -> Endpoint {
         let settings = MCPSettings.shared
         let server = MCPServer.shared
 
@@ -76,7 +80,8 @@ enum AgentMCPBridge {
         holdCount += 1
         return Endpoint(
             url: "http://127.0.0.1:\(port)/mcp",
-            token: settings.token
+            token: settings.token,
+            documentID: documentID
         )
     }
 
@@ -100,9 +105,14 @@ enum AgentMCPBridge {
             "type": "http",
             "url": endpoint.url,
         ]
+        var headers: [String: String] = [:]
         if let token = endpoint.token, !token.isEmpty {
-            server["headers"] = ["Authorization": "Bearer \(token)"]
+            headers["Authorization"] = "Bearer \(token)"
         }
+        if let documentID = endpoint.documentID {
+            headers[documentHeader] = documentID.uuidString
+        }
+        if !headers.isEmpty { server["headers"] = headers }
 
         let config: [String: Any] = ["mcpServers": [serverKey: server]]
         let data = try JSONSerialization.data(withJSONObject: config, options: [.sortedKeys])
@@ -127,6 +137,11 @@ enum AgentMCPBridge {
         if let token = endpoint.token, !token.isEmpty {
             overrides.append(
                 "mcp_servers.\(serverKey).bearer_token_env_var=\"\(tokenEnvironmentKey)\""
+            )
+        }
+        if let documentID = endpoint.documentID {
+            overrides.append(
+                "mcp_servers.\(serverKey).http_headers={\"\(documentHeader)\"=\"\(documentID.uuidString)\"}"
             )
         }
         return overrides

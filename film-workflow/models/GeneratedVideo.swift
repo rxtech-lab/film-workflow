@@ -3,6 +3,11 @@ import SwiftData
 
 @Model
 final class GeneratedVideo {
+    /// Stable identity for MCP, agent targets and timeline references.
+    /// A `PersistentIdentifier` is neither stable across launches nor
+    /// representable in a scene payload.
+    var id: UUID = UUID()
+
     /// Relative, e.g. `videos/<uuid>.mp4`.
     var videoFilePath: String
     /// Locally extracted poster frame, `images/<uuid>.jpg`. Optional because a
@@ -41,11 +46,11 @@ final class GeneratedVideo {
     }
 
     var videoURL: URL {
-        FileStorage.absoluteURL(for: videoFilePath)
+        ProjectStorage.for(model: self).absoluteURL(for: videoFilePath)
     }
 
     var thumbnailURL: URL? {
-        thumbnailFilePath.map { FileStorage.absoluteURL(for: $0) }
+        thumbnailFilePath.map { ProjectStorage.for(model: self).absoluteURL(for: $0) }
     }
 
     var fileExtension: String {

@@ -260,7 +260,7 @@ enum MCPCaptionHandlers {
                 throw MCPToolError.invalidArguments("no file at \(path)")
             }
             do {
-                importedPath = try FileStorage.importAudio(from: url)
+                importedPath = try ProjectStorage.forContainer(context.container).importAudio(from: url)
             } catch {
                 throw MCPToolError.underlying(error)
             }
@@ -776,7 +776,7 @@ enum MCPCaptionHandlers {
         if let path = arguments["destination"] as? String {
             destination = URL(fileURLWithPath: path)
         } else {
-            destination = FileStorage.captionsDir.appendingPathComponent(
+            destination = ProjectStorage.for(model: project).mediaDir(.captions).appendingPathComponent(
                 CaptionExporter.defaultFilename(
                     projectName: project.name,
                     options: options,
@@ -819,7 +819,7 @@ enum MCPCaptionHandlers {
         options: CaptionExportOptions,
         directory: URL?
     ) async throws -> [String: Any] {
-        let root = directory ?? FileStorage.captionsDir
+        let root = directory ?? ProjectStorage.for(model: project).mediaDir(.captions)
         do {
             try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         } catch {

@@ -5,6 +5,7 @@ import PhotosUI
 #endif
 
 struct MusicProjectParametersView: View {
+    @Environment(\.projectStorage) private var storage
     private let maxReferenceImages = 10
     @Bindable var project: MusicProject
     @State private var selectedInstruments: Set<MusicInstrument> = []
@@ -186,7 +187,7 @@ struct MusicProjectParametersView: View {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 8) {
                         ForEach(Array(project.referenceImagePaths.enumerated()), id: \.offset) { index, path in
-                            let url = FileStorage.absoluteURL(for: path)
+                            let url = storage.absoluteURL(for: path)
                             ZStack(alignment: .topTrailing) {
                                 if let image = Image(contentsOfFile: url) {
                                     image
@@ -253,7 +254,7 @@ struct MusicProjectParametersView: View {
             for url in urls.prefix(remaining) {
                 guard url.startAccessingSecurityScopedResource() else { continue }
                 defer { url.stopAccessingSecurityScopedResource() }
-                if let relativePath = try? FileStorage.copyImage(from: url) {
+                if let relativePath = try? storage.copyImage(from: url) {
                     project.referenceImagePaths.append(relativePath)
                 }
             }
@@ -276,9 +277,9 @@ struct MusicProjectParametersView: View {
                     guard let data = try await item.loadTransferable(type: Data.self) else { continue }
                     let relativePath: String
                     if let ext = preferredImageExtension(from: item), !ext.isEmpty {
-                        relativePath = try FileStorage.saveImage(data, fileExtension: ext)
+                        relativePath = try storage.saveImage(data, fileExtension: ext)
                     } else {
-                        relativePath = try FileStorage.saveImage(data)
+                        relativePath = try storage.saveImage(data)
                     }
                     await MainActor.run {
                         project.referenceImagePaths.append(relativePath)
@@ -304,6 +305,6 @@ struct MusicProjectParametersView: View {
 
     private func removeImage(at index: Int) {
         let path = project.referenceImagePaths.remove(at: index)
-        FileStorage.deleteFile(at: path)
+        storage.deleteFile(at: path)
     }
 }

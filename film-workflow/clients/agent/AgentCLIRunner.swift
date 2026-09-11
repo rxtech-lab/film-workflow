@@ -32,6 +32,16 @@ enum AgentCLIRunner {
         var policy: AgentWritePolicy
     }
 
+    /// The film package, so relative paths the agent mentions resolve to the
+    /// film and Claude Code's project memory lands beside it.
+    static func workingDirectory(for context: Context) -> URL {
+        if let id = context.endpoint.documentID,
+           let doc = ProjectDocumentController.shared.document(id: id) {
+            return doc.packageURL
+        }
+        return ProjectDocumentController.shared.activeDocument?.packageURL ?? FileStorage.appSupportURL
+    }
+
     static func run(context: Context) -> AsyncThrowingStream<AgentEvent, Error> {
         AsyncThrowingStream { continuation in
             let task = Task { @MainActor in
@@ -117,7 +127,7 @@ enum AgentCLIRunner {
             executable: context.executable,
             arguments: arguments,
             environment: AgentMCPBridge.environment(token: context.endpoint.token),
-            workingDirectory: FileStorage.appSupportURL,
+            workingDirectory: Self.workingDirectory(for: context),
             onLine: { line in sink.ingest(line) }
         )
 
@@ -155,7 +165,7 @@ enum AgentCLIRunner {
             arguments.append(contentsOf: ["-c", "model_reasoning_effort=\(context.reasoningEffort)"])
         }
         arguments.append(contentsOf: ["--output-last-message", lastMessageURL.path])
-        arguments.append(contentsOf: ["--cd", FileStorage.appSupportURL.path])
+        arguments.append(contentsOf: ["--cd", Self.workingDirectory(for: context).path])
 
         let sink = CodexStreamSink(emit: emit)
         let combined = context.systemPrompt + "\n\n" + context.prompt
@@ -165,7 +175,7 @@ enum AgentCLIRunner {
             executable: context.executable,
             arguments: arguments,
             environment: AgentMCPBridge.environment(token: context.endpoint.token),
-            workingDirectory: FileStorage.appSupportURL,
+            workingDirectory: Self.workingDirectory(for: context),
             // Passed on stdin rather than argv: a long conversation would
             // otherwise run into the argument-length limit.
             stdin: combined,

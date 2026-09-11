@@ -13,6 +13,7 @@ enum RemotionProjectService {
         newName: String? = nil,
         context: ModelContext
     ) -> RemotionProject {
+        let storage = ProjectStorage.forContainer(context.container)
         let copy = RemotionProject(name: newName ?? (source.name + " Copy"))
         copy.text = source.text
         copy.durationSeconds = source.durationSeconds
@@ -23,12 +24,12 @@ enum RemotionProjectService {
         copy.compositionFps = source.compositionFps
         copy.compositionSource = source.compositionSource
 
-        copy.imagePaths = source.imagePaths.compactMap(copyStoredFile(atRelative:))
-        copy.referenceImagePath = source.referenceImagePath.flatMap(copyStoredFile(atRelative:))
-        copy.audioFilePaths = source.audioFilePaths.compactMap(copyStoredFile(atRelative:))
+        copy.imagePaths = source.imagePaths.compactMap(storage.copyStoredFile(atRelative:))
+        copy.referenceImagePath = source.referenceImagePath.flatMap(storage.copyStoredFile(atRelative:))
+        copy.audioFilePaths = source.audioFilePaths.compactMap(storage.copyStoredFile(atRelative:))
 
-        let srcDir = FileStorage.remotionProjectDir(id: source.id)
-        let dstDir = FileStorage.remotionProjectDir(id: copy.id)
+        let srcDir = storage.remotionProjectDir(id: source.id)
+        let dstDir = storage.remotionProjectDir(id: copy.id)
         if FileManager.default.fileExists(atPath: srcDir.path) {
             try? FileManager.default.createDirectory(
                 at: dstDir.deletingLastPathComponent(),
@@ -52,39 +53,17 @@ enum RemotionProjectService {
         _ project: RemotionProject,
         context: ModelContext
     ) {
+        RemotionRenderService.deleteAll(for: project, context: context)
+        let storage = ProjectStorage.forContainer(context.container)
         for path in project.imagePaths {
-            FileStorage.deleteFile(at: path)
+            storage.deleteFile(at: path)
         }
-        if let p = project.referenceImagePath { FileStorage.deleteFile(at: p) }
-        for m in project.audioFilePaths { FileStorage.deleteFile(at: m) }
-        let dir = FileStorage.remotionProjectDir(id: project.id)
-        try? FileManager.default.removeItem(at: dir)
+        if let p = project.referenceImagePath { storage.deleteFile(at: p) }
+        for m in project.audioFilePaths { storage.deleteFile(at: m) }
+        try? FileManager.default.removeItem(at: storage.remotionProjectDir(id: project.id))
+        try? FileManager.default.removeItem(at: storage.remotionRenderDir(projectID: project.id))
         context.delete(project)
     }
 
-    /// Copy a file stored under `<appSupport>/<folder>/<name>` to a new name in the same folder.
-    /// Returns the new relative path or nil if the source is missing / unreadable.
-    static func copyStoredFile(atRelative relativePath: String) -> String? {
-        let src = FileStorage.absoluteURL(for: relativePath)
-        guard FileManager.default.fileExists(atPath: src.path) else { return nil }
-        let parts = relativePath.split(separator: "/", maxSplits: 1, omittingEmptySubsequences: false)
-        guard parts.count == 2 else { return nil }
-        let folder = String(parts[0])
-        let ext = src.pathExtension
-        let newName = UUID().uuidString + (ext.isEmpty ? "" : "." + ext)
-        let dst = FileStorage.appSupportURL
-            .appendingPathComponent(folder, isDirectory: true)
-            .appendingPathComponent(newName)
-        do {
-            try FileManager.default.createDirectory(
-                at: dst.deletingLastPathComponent(),
-                withIntermediateDirectories: true
-            )
-            try FileManager.default.copyItem(at: src, to: dst)
-            return folder + "/" + newName
-        } catch {
-            return nil
-        }
-    }
 }
 #endif

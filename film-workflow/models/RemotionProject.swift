@@ -28,6 +28,11 @@ final class RemotionProject: GroupableProject {
     /// projects never show the "Generate Initial Composition" button.
     var createdViaMCP: Bool = false
 
+    /// On-disk Remotion project folder inside the film package.
+    var projectDir: URL {
+        ProjectStorage.for(model: self).remotionProjectDir(id: id)
+    }
+
     init(name: String) {
         self.id = UUID()
         self.name = name

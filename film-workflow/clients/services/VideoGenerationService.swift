@@ -53,6 +53,7 @@ enum VideoGenerationService {
         config: AppConfig,
         onProgress: VideoProgressHandler?
     ) async throws -> VideoGenJob {
+        let storage = ProjectStorage.forContainer(context.container)
         onProgress?(.submitting)
 
         guard !project.prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
@@ -77,10 +78,10 @@ enum VideoGenerationService {
                 numberOfVideos: project.googleNumberOfVideos,
                 generateAudio: project.googleGenerateAudio,
                 seed: project.useSeed ? project.seed : nil,
-                firstFrame: project.googleFirstFrameImagePath.flatMap(VideoInputImage.init(relativePath:)),
-                lastFrame: project.googleLastFrameImagePath.flatMap(VideoInputImage.init(relativePath:)),
+                firstFrame: project.googleFirstFrameImagePath.flatMap { VideoInputImage(relativePath: $0, storage: storage) },
+                lastFrame: project.googleLastFrameImagePath.flatMap { VideoInputImage(relativePath: $0, storage: storage) },
                 referenceImages: family.supportsReferenceImages
-                    ? project.googleReferenceImagePaths.compactMap(VideoInputImage.init(relativePath:))
+                    ? project.googleReferenceImagePaths.compactMap { VideoInputImage(relativePath: $0, storage: storage) }
                     : [],
                 apiKey: config.googleAIKey
             )
@@ -138,13 +139,14 @@ enum VideoGenerationService {
 
         onProgress?(.saving)
 
-        let relativePath = try FileStorage.importVideo(
+        let storage = ProjectStorage.forContainer(context.container)
+        let relativePath = try storage.importVideo(
             movingFrom: result.fileURL,
             fileExtension: result.fileExtension
         )
-        let videoURL = FileStorage.absoluteURL(for: relativePath)
+        let videoURL = storage.absoluteURL(for: relativePath)
 
-        let thumbnailPath = await VideoThumbnailer.generate(for: videoURL)
+        let thumbnailPath = await VideoThumbnailer.generate(for: videoURL, storage: storage)
         let probed = await VideoThumbnailer.probe(url: videoURL)
 
         let generated = GeneratedVideo(

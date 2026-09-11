@@ -413,26 +413,25 @@ enum MCPProjectHandlers {
             context.insert(p)
             try context.save()
             // Seed a default no-AI composition so callers get a ready-to-preview
-            // project without a round-trip to the LLM agent. Then bring up Studio.
+            // project without a round-trip to the LLM agent. Then start the native preview.
             let source = RemotionCodeBuilder.defaultComposition(project: p)
             p.compositionSource = source
             try? RemotionCodeBuilder.writeComposition(project: p, source: source)
             try? context.save()
 
-            var studioStatus: String = "starting"
-            var studioURL: String?
+            var previewStatus: String = "starting"
+            var previewURL: String?
             do {
-                try await RemotionRuntime.shared.start(projectId: p.id)
-                studioURL = RemotionRuntime.shared.currentURL?.absoluteString
-                studioStatus = "running"
+                previewURL = try await RemotionPreviewSessions.shared.keepRunning(project: p).absoluteString
+                previewStatus = "running"
             } catch {
-                studioStatus = "failed: \(error.localizedDescription)"
+                previewStatus = "failed: \(error.localizedDescription)"
             }
 
             var summary = remotionSummary(p)
-            summary["studio"] = [
-                "status": studioStatus,
-                "url": studioURL as Any
+            summary["preview"] = [
+                "status": previewStatus,
+                "url": previewURL as Any
             ] as [String: Any]
             summary["compositionSource"] = source
             return MCPToolRegistry.jsonResult(summary)
@@ -543,29 +542,30 @@ enum MCPProjectHandlers {
     // MARK: - Delete
 
     private static func deleteProject(type: ProjectType, id: String, context: ModelContext) throws -> [String: Any] {
+        let storage = ProjectStorage.forContainer(context.container)
         switch type {
         case .narrative:
             let p = try fetchNarrative(id: id, context: context)
-            for f in p.generatedFiles { FileStorage.deleteFile(at: f.audioFilePath) }
+            for f in p.generatedFiles { storage.deleteFile(at: f.audioFilePath) }
             context.delete(p)
         case .music:
             let p = try fetchMusic(id: id, context: context)
-            for f in p.generatedFiles { FileStorage.deleteFile(at: f.audioFilePath) }
-            for path in p.referenceImagePaths { FileStorage.deleteFile(at: path) }
+            for f in p.generatedFiles { storage.deleteFile(at: f.audioFilePath) }
+            for path in p.referenceImagePaths { storage.deleteFile(at: path) }
             context.delete(p)
         case .image:
             let p = try fetchImage(id: id, context: context)
-            for f in p.generatedFiles { FileStorage.deleteFile(at: f.imageFilePath) }
+            for f in p.generatedFiles { storage.deleteFile(at: f.imageFilePath) }
             context.delete(p)
         case .video:
             let p = try fetchVideo(id: id, context: context)
             for f in p.generatedFiles {
-                FileStorage.deleteFile(at: f.videoFilePath)
-                if let thumbnail = f.thumbnailFilePath { FileStorage.deleteFile(at: thumbnail) }
+                storage.deleteFile(at: f.videoFilePath)
+                if let thumbnail = f.thumbnailFilePath { storage.deleteFile(at: thumbnail) }
             }
-            for path in p.googleReferenceImagePaths { FileStorage.deleteFile(at: path) }
-            if let path = p.googleFirstFrameImagePath { FileStorage.deleteFile(at: path) }
-            if let path = p.googleLastFrameImagePath { FileStorage.deleteFile(at: path) }
+            for path in p.googleReferenceImagePaths { storage.deleteFile(at: path) }
+            if let path = p.googleFirstFrameImagePath { storage.deleteFile(at: path) }
+            if let path = p.googleLastFrameImagePath { storage.deleteFile(at: path) }
             context.delete(p)
         case .remotion:
             #if os(macOS)
@@ -579,7 +579,7 @@ enum MCPProjectHandlers {
             // Only delete audio the project owns; narrative-sourced projects
             // point at a GeneratedNarrative's file, which must survive.
             if p.ownsAudioFile, !p.audioFilePath.isEmpty {
-                FileStorage.deleteFile(at: p.audioFilePath)
+                storage.deleteFile(at: p.audioFilePath)
             }
             context.delete(p)
         }
@@ -629,7 +629,7 @@ enum MCPProjectHandlers {
             copy.songStructureEntries = src.songStructureEntries
             copy.lyricEntries = src.lyricEntries
             #if os(macOS)
-            copy.referenceImagePaths = src.referenceImagePaths.compactMap(RemotionProjectService.copyStoredFile(atRelative:))
+            copy.referenceImagePaths = src.referenceImagePaths.compactMap(ProjectStorage.forContainer(context.container).copyStoredFile(atRelative:))
             #else
             copy.referenceImagePaths = src.referenceImagePaths
             #endif
@@ -676,9 +676,9 @@ enum MCPProjectHandlers {
             // Frames and references are copied so deleting either project
             // cannot pull the files out from under the other. The pending job
             // and the render history deliberately do not come along.
-            copy.googleFirstFrameImagePath = src.googleFirstFrameImagePath.flatMap(copyStoredImage(atRelative:))
-            copy.googleLastFrameImagePath = src.googleLastFrameImagePath.flatMap(copyStoredImage(atRelative:))
-            copy.googleReferenceImagePaths = src.googleReferenceImagePaths.compactMap(copyStoredImage(atRelative:))
+            copy.googleFirstFrameImagePath = src.googleFirstFrameImagePath.flatMap(ProjectStorage.forContainer(context.container).copyStoredFile(atRelative:))
+            copy.googleLastFrameImagePath = src.googleLastFrameImagePath.flatMap(ProjectStorage.forContainer(context.container).copyStoredFile(atRelative:))
+            copy.googleReferenceImagePaths = src.googleReferenceImagePaths.compactMap(ProjectStorage.forContainer(context.container).copyStoredFile(atRelative:))
             context.insert(copy)
             try context.save()
             return MCPToolRegistry.jsonResult(videoSummary(copy))
@@ -784,11 +784,6 @@ enum MCPProjectHandlers {
             throw MCPToolError.projectNotFound(id)
         }
         return p
-    }
-
-    /// Duplicates a stored image so two projects never share one file.
-    private static func copyStoredImage(atRelative path: String) -> String? {
-        try? FileStorage.copyImage(from: FileStorage.absoluteURL(for: path))
     }
 
     #if os(macOS)
@@ -909,6 +904,7 @@ enum MCPProjectHandlers {
                 "transcriptText": f.transcriptText,
                 "providerName": f.providerName,
                 "speakerSummary": f.speakerSummary,
+                "durationSeconds": f.durationSeconds,
                 "createdAt": isoDate(f.createdAt)
             ]
         }
@@ -951,6 +947,7 @@ enum MCPProjectHandlers {
             [
                 "audioFilePath": $0.audioFilePath,
                 "lyricsText": $0.lyricsText as Any,
+                "durationSeconds": $0.durationSeconds,
                 "createdAt": isoDate($0.createdAt)
             ] as [String: Any]
         }
@@ -1181,7 +1178,7 @@ enum MCPProjectHandlers {
 
         // Keep src/Composition.tsx on disk in sync. Remotion's still/render CLI
         // reads durationInFrames / fps / width / height from the COMPOSITION_*
-        // exports in this file (see RemotionRuntime/template/src/Root.tsx). If we
+        // exports in this file (see Packages/RxRemotion/Sources/RxRemotion/Resources/Template/src/Root.tsx). If we
         // only update the SwiftData model, `bun remotion still --frame N` keeps
         // clamping to the old durationInFrames.
         let constantKeys = ["durationSeconds", "compositionWidth", "compositionHeight", "compositionFps"]

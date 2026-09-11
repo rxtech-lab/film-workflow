@@ -10,10 +10,14 @@
 		DF4F815C2F91465100DE82DA /* appicon.icon in Resources */ = {isa = PBXBuildFile; fileRef = DF4F815B2F91465100DE82DA /* appicon.icon */; };
 		DF9D8F11302D630100CD3C3D /* RxAuthSwift in Frameworks */ = {isa = PBXBuildFile; productRef = DF9D8F10302D630100CD3C3D /* RxAuthSwift */; };
 		DF9D8F13302D630100CD3C3D /* RxAuthSwiftUI in Frameworks */ = {isa = PBXBuildFile; productRef = DF9D8F12302D630100CD3C3D /* RxAuthSwiftUI */; };
-		DFAA0001000000000000A0A1 /* RemotionRuntime in Resources */ = {isa = PBXBuildFile; fileRef = DFAA0001000000000000A0A2 /* RemotionRuntime */; };
+		DFAB0001000000000000D001 /* RxRemotion in Frameworks */ = {isa = PBXBuildFile; productRef = DFAB0002000000000000D002 /* RxRemotion */; };
 		DFC60EA52FAF81D200B99679 /* Textual in Frameworks */ = {isa = PBXBuildFile; productRef = DFC60EA42FAF81D200B99679 /* Textual */; };
 		DFCA0001000000000000B001 /* WhisperKit in Frameworks */ = {isa = PBXBuildFile; productRef = DFCA0002000000000000B002 /* WhisperKit */; };
 		DFSP0001000000000000C001 /* Sparkle in Frameworks */ = {isa = PBXBuildFile; platformFilters = (macos, ); productRef = DFSP0002000000000000C002 /* Sparkle */; };
+		DFVE0001000000000000D001 /* VideoEditorCore in Frameworks */ = {isa = PBXBuildFile; productRef = DFVE0002000000000000D002 /* VideoEditorCore */; };
+		DFVE0004000000000000D004 /* VideoEditorUI in Frameworks */ = {isa = PBXBuildFile; productRef = DFVE0005000000000000D005 /* VideoEditorUI */; };
+		EFE000010000000000000001 /* VideoEffectsCore in Frameworks */ = {isa = PBXBuildFile; productRef = EFE000020000000000000001 /* VideoEffectsCore */; };
+		EFE000010000000000000002 /* VideoEffectsUI in Frameworks */ = {isa = PBXBuildFile; productRef = EFE000020000000000000002 /* VideoEffectsUI */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -38,7 +42,6 @@
 		DF4F81092F9120D400DE82DA /* film-workflowTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "film-workflowTests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 		DF4F81132F9120D400DE82DA /* film-workflowUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "film-workflowUITests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 		DF4F815B2F91465100DE82DA /* appicon.icon */ = {isa = PBXFileReference; lastKnownFileType = folder.iconcomposer.icon; path = appicon.icon; sourceTree = "<group>"; };
-		DFAA0001000000000000A0A2 /* RemotionRuntime */ = {isa = PBXFileReference; lastKnownFileType = folder; path = RemotionRuntime; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -69,6 +72,11 @@
 				DFCA0001000000000000B001 /* WhisperKit in Frameworks */,
 				DF9D8F13302D630100CD3C3D /* RxAuthSwiftUI in Frameworks */,
 				DFSP0001000000000000C001 /* Sparkle in Frameworks */,
+				DFVE0001000000000000D001 /* VideoEditorCore in Frameworks */,
+				EFE000010000000000000002 /* VideoEffectsUI in Frameworks */,
+				EFE000010000000000000001 /* VideoEffectsCore in Frameworks */,
+				DFAB0001000000000000D001 /* RxRemotion in Frameworks */,
+				DFVE0004000000000000D004 /* VideoEditorUI in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -93,7 +101,6 @@
 			isa = PBXGroup;
 			children = (
 				DF4F815B2F91465100DE82DA /* appicon.icon */,
-				DFAA0001000000000000A0A2 /* RemotionRuntime */,
 				DF4F80FC2F9120D300DE82DA /* film-workflow */,
 				DF4F810C2F9120D400DE82DA /* film-workflowTests */,
 				DF4F81162F9120D400DE82DA /* film-workflowUITests */,
@@ -118,11 +125,9 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = DF4F811D2F9120D400DE82DA /* Build configuration list for PBXNativeTarget "film-workflow" */;
 			buildPhases = (
-				DFAA0001000000000000A0A3 /* Build Remotion Runtime */,
 				DF4F80F62F9120D300DE82DA /* Sources */,
 				DF4F80F72F9120D300DE82DA /* Frameworks */,
 				DF4F80F82F9120D300DE82DA /* Resources */,
-				DFAA0001000000000000A0A4 /* Sign Remotion Runtime */,
 			);
 			buildRules = (
 			);
@@ -137,6 +142,11 @@
 				DFCA0002000000000000B002 /* WhisperKit */,
 				DF9D8F10302D630100CD3C3D /* RxAuthSwift */,
 				DF9D8F12302D630100CD3C3D /* RxAuthSwiftUI */,
+				DFVE0002000000000000D002 /* VideoEditorCore */,
+				EFE000020000000000000002 /* VideoEffectsUI */,
+				EFE000020000000000000001 /* VideoEffectsCore */,
+				DFAB0002000000000000D002 /* RxRemotion */,
+				DFVE0005000000000000D005 /* VideoEditorUI */,
 			);
 			productName = "film-workflow";
 			productReference = DF4F80FA2F9120D300DE82DA /* film-workflow.app */;
@@ -225,6 +235,9 @@
 				DFC60EA32FAF81D200B99679 /* XCRemoteSwiftPackageReference "textual" */,
 				DFCA0003000000000000B003 /* XCRemoteSwiftPackageReference "WhisperKit" */,
 				DFSP0003000000000000C003 /* XCLocalSwiftPackageReference "Vendor/Sparkle" */,
+				DFVE0003000000000000D003 /* XCLocalSwiftPackageReference "Packages/RxVideoEditor" */,
+				EFE000030000000000000001 /* XCLocalSwiftPackageReference "Packages/RxVideoEffects" */,
+				DFAB0003000000000000D003 /* XCLocalSwiftPackageReference "Packages/RxRemotion" */,
 				DF9D8F0F302D630100CD3C3D /* XCRemoteSwiftPackageReference "RxAuthSwift" */,
 			);
 			preferredProjectObjectVersion = 77;
@@ -245,7 +258,6 @@
 			buildActionMask = 2147483647;
 			files = (
 				DF4F815C2F91465100DE82DA /* appicon.icon in Resources */,
-				DFAA0001000000000000A0A1 /* RemotionRuntime in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -264,47 +276,6 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXResourcesBuildPhase section */
-
-/* Begin PBXShellScriptBuildPhase section */
-		DFAA0001000000000000A0A3 /* Build Remotion Runtime */ = {
-			isa = PBXShellScriptBuildPhase;
-			alwaysOutOfDate = 1;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			inputFileListPaths = (
-			);
-			inputPaths = (
-			);
-			name = "Build Remotion Runtime";
-			outputFileListPaths = (
-			);
-			outputPaths = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-			shellPath = /bin/bash;
-			shellScript = "if [ \"$PLATFORM_NAME\" != \"macosx\" ]; then\n  echo \"Skipping Remotion runtime build on $PLATFORM_NAME\"\n  exit 0\nfi\nbash \"$SRCROOT/scripts/build-remotion-runtime.sh\"\n";
-		};
-		DFAA0001000000000000A0A4 /* Sign Remotion Runtime */ = {
-			isa = PBXShellScriptBuildPhase;
-			alwaysOutOfDate = 1;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			inputFileListPaths = (
-			);
-			inputPaths = (
-			);
-			name = "Sign Remotion Runtime";
-			outputFileListPaths = (
-			);
-			outputPaths = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-			shellPath = /bin/bash;
-			shellScript = "bash \"$SRCROOT/scripts/sign-remotion-runtime.sh\"\n";
-		};
-/* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		DF4F80F62F9120D300DE82DA /* Sources */ = {
@@ -495,36 +466,22 @@
 				INFOPLIST_KEY_CFBundleDisplayName = RxFilmStudio;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.video";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
-				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
-				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
-				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
-				);
-				"LD_RUNPATH_SEARCH_PATHS[sdk=iphoneos*]" = (
-					"$(inherited)",
-					"@executable_path/Frameworks",
-				);
-				"LD_RUNPATH_SEARCH_PATHS[sdk=iphonesimulator*]" = (
-					"$(inherited)",
-					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.3.0;
 				PRODUCT_BUNDLE_IDENTIFIER = "rxlab.film-workflow";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
-				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx";
+				SUPPORTED_PLATFORMS = macosx;
 				SUPPORTS_MACCATALYST = NO;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2";
 			};
 			name = Debug;
 		};
@@ -559,22 +516,9 @@
 				INFOPLIST_KEY_CFBundleDisplayName = RxFilmStudio;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.video";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
-				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
-				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
-				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
-				);
-				"LD_RUNPATH_SEARCH_PATHS[sdk=iphoneos*]" = (
-					"$(inherited)",
-					"@executable_path/Frameworks",
-				);
-				"LD_RUNPATH_SEARCH_PATHS[sdk=iphonesimulator*]" = (
-					"$(inherited)",
-					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.3.0;
 				PRODUCT_BUNDLE_IDENTIFIER = "rxlab.film-workflow";
@@ -582,14 +526,13 @@
 				"PROVISIONING_PROFILE_SPECIFIER[sdk=macosx*]" = FilmStudio;
 				REGISTER_APP_GROUPS = YES;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
-				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx";
+				SUPPORTED_PLATFORMS = macosx;
 				SUPPORTS_MACCATALYST = NO;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2";
 			};
 			name = Release;
 		};
@@ -715,9 +658,21 @@
 /* End XCConfigurationList section */
 
 /* Begin XCLocalSwiftPackageReference section */
+		DFAB0003000000000000D003 /* XCLocalSwiftPackageReference "Packages/RxRemotion" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = Packages/RxRemotion;
+		};
 		DFSP0003000000000000C003 /* XCLocalSwiftPackageReference "Vendor/Sparkle" */ = {
 			isa = XCLocalSwiftPackageReference;
 			relativePath = Vendor/Sparkle;
+		};
+		DFVE0003000000000000D003 /* XCLocalSwiftPackageReference "Packages/RxVideoEditor" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = Packages/RxVideoEditor;
+		};
+		EFE000030000000000000001 /* XCLocalSwiftPackageReference "Packages/RxVideoEffects" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = Packages/RxVideoEffects;
 		};
 /* End XCLocalSwiftPackageReference section */
 
@@ -726,8 +681,8 @@
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/rxtech-lab/RxAuthSwift";
 			requirement = {
-				branch = main;
-				kind = branch;
+				kind = exactVersion;
+				version = 1.2.1;
 			};
 		};
 		DFC60EA32FAF81D200B99679 /* XCRemoteSwiftPackageReference "textual" */ = {
@@ -759,6 +714,11 @@
 			package = DF9D8F0F302D630100CD3C3D /* XCRemoteSwiftPackageReference "RxAuthSwift" */;
 			productName = RxAuthSwiftUI;
 		};
+		DFAB0002000000000000D002 /* RxRemotion */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = DFAB0003000000000000D003 /* XCLocalSwiftPackageReference "Packages/RxRemotion" */;
+			productName = RxRemotion;
+		};
 		DFC60EA42FAF81D200B99679 /* Textual */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = DFC60EA32FAF81D200B99679 /* XCRemoteSwiftPackageReference "textual" */;
@@ -773,6 +733,26 @@
 			isa = XCSwiftPackageProductDependency;
 			package = DFSP0003000000000000C003 /* XCLocalSwiftPackageReference "Vendor/Sparkle" */;
 			productName = Sparkle;
+		};
+		DFVE0002000000000000D002 /* VideoEditorCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = DFVE0003000000000000D003 /* XCLocalSwiftPackageReference "Packages/RxVideoEditor" */;
+			productName = VideoEditorCore;
+		};
+		DFVE0005000000000000D005 /* VideoEditorUI */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = DFVE0003000000000000D003 /* XCLocalSwiftPackageReference "Packages/RxVideoEditor" */;
+			productName = VideoEditorUI;
+		};
+		EFE000020000000000000001 /* VideoEffectsCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = EFE000030000000000000001 /* XCLocalSwiftPackageReference "Packages/RxVideoEffects" */;
+			productName = VideoEffectsCore;
+		};
+		EFE000020000000000000002 /* VideoEffectsUI */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = EFE000030000000000000001 /* XCLocalSwiftPackageReference "Packages/RxVideoEffects" */;
+			productName = VideoEffectsUI;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

@@ -9,9 +9,6 @@
 # individually with `--options runtime --timestamp` or notarization rejects
 # them. Signing runs inside-out: helpers, then the framework, then the app.
 #
-# The Remotion runtime binaries under Resources/RemotionRuntime are already
-# signed by the "Sign Remotion Runtime" build phase; resealing the wrapper here
-# (without --deep) leaves those signatures intact.
 set -e
 
 APP_PATH="${APP_PATH:-output/output.xcarchive/Products/Applications/film-workflow.app}"

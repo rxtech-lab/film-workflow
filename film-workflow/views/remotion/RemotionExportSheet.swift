@@ -51,7 +51,6 @@ enum ExportFrameRate: Int, CaseIterable, Identifiable {
 struct RemotionExportOptions: Equatable {
     var resolution: ExportResolution = .p1080
     var frameRate: ExportFrameRate = .fps30
-    var destination: URL
 }
 
 struct RemotionExportSheet: View {
@@ -60,6 +59,8 @@ struct RemotionExportSheet: View {
     let sourceHeight: Int
     let sourceFps: Int
     @Binding var options: RemotionExportOptions
+    /// True when the result goes to a file the user picks instead of into the film.
+    var savesToDisk = false
     var onCancel: () -> Void
     var onExport: () -> Void
 
@@ -72,7 +73,6 @@ struct RemotionExportSheet: View {
             VStack(alignment: .leading, spacing: 16) {
                 resolutionRow
                 frameRateRow
-                destinationRow
                 summary
             }
             .padding(20)
@@ -90,7 +90,7 @@ struct RemotionExportSheet: View {
                 .font(.title2)
                 .foregroundStyle(.tint)
             VStack(alignment: .leading, spacing: 2) {
-                Text("Export Video")
+                Text(savesToDisk ? "Export to Disk" : "Render Version")
                     .font(.headline)
                 Text(projectName)
                     .font(.caption)
@@ -132,27 +132,12 @@ struct RemotionExportSheet: View {
         }
     }
 
-    private var destinationRow: some View {
-        HStack(alignment: .firstTextBaseline) {
-            Text("Save To")
-                .frame(width: 110, alignment: .leading)
-                .foregroundStyle(.secondary)
-            VStack(alignment: .leading, spacing: 6) {
-                Text(options.destination.path)
-                    .font(.callout)
-                    .lineLimit(2)
-                    .truncationMode(.middle)
-                    .textSelection(.enabled)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                Button("Choose…") { chooseDestination() }
-                    .controlSize(.small)
-            }
-        }
-    }
-
     private var summary: some View {
         let (w, h) = options.resolution.size
-        return Text("Composition is \(sourceWidth) × \(sourceHeight) @ \(sourceFps)fps. Output will be \(w) × \(h) @ \(options.frameRate.rawValue)fps.")
+        let location = savesToDisk
+            ? "saved as an MP4 file you choose. A matching render already in the film is reused."
+            : "saved into the film as a new version."
+        return Text("Composition is \(sourceWidth) × \(sourceHeight) @ \(sourceFps)fps. Output will be \(w) × \(h) @ \(options.frameRate.rawValue)fps, \(location)")
             .font(.caption)
             .foregroundStyle(.secondary)
             .padding(.top, 4)
@@ -163,26 +148,12 @@ struct RemotionExportSheet: View {
             Spacer()
             Button("Cancel", role: .cancel) { onCancel() }
                 .keyboardShortcut(.cancelAction)
-            Button("Export…") { onExport() }
+            Button(savesToDisk ? "Export…" : "Render") { onExport() }
                 .keyboardShortcut(.defaultAction)
                 .buttonStyle(.borderedProminent)
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 14)
-    }
-
-    private func chooseDestination() {
-        let panel = NSSavePanel()
-        panel.allowedContentTypes = [.mpeg4Movie]
-        panel.canCreateDirectories = true
-        panel.isExtensionHidden = false
-        panel.nameFieldStringValue = options.destination.lastPathComponent
-        panel.directoryURL = options.destination.deletingLastPathComponent()
-        panel.title = "Choose Export Location"
-
-        if panel.runModal() == .OK, let url = panel.url {
-            options.destination = url
-        }
     }
 }
 #endif

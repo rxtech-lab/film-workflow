@@ -187,6 +187,10 @@ Three buttons at the bottom go beyond a single file:
 Translations have no word timings, so translated exports use whole-sentence cues and long captions
 are not re-wrapped.
 
+Captions placed on a sequence's timeline are exported with the sequence instead: the render sheet's
+**Captions** row burns them into the picture, embeds them as subtitle tracks or writes them as files
+beside the movie, with its own language and style choices.
+
 ## Narrative alignment
 
 When a caption project came from a narration, an **Narrative alignment** section reports how well it

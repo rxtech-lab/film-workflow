@@ -20,13 +20,19 @@ struct AgentWindowView: View {
     @Query(sort: \AgentThread.updatedAt, order: .reverse)
     private var threads: [AgentThread]
 
-    @Query private var captionProjects: [CaptionProject]
-    @Query private var musicProjects: [MusicProject]
-    @Query private var narrativeProjects: [NarrativeProject]
-    @Query private var imageProjects: [ImageGenProject]
-    #if os(macOS)
-        @Query private var remotionProjects: [RemotionProject]
-    #endif
+    // Projects live in the active film's store, not in this window's
+    // container (which only holds threads), so they are fetched rather than
+    // queried and refreshed whenever the key film changes.
+    @State private var documentController = ProjectDocumentController.shared
+    @State private var captionProjects: [CaptionProject] = []
+    @State private var musicProjects: [MusicProject] = []
+    @State private var narrativeProjects: [NarrativeProject] = []
+    @State private var imageProjects: [ImageGenProject] = []
+    @State private var remotionProjects: [RemotionProject] = []
+
+    private var documentContext: ModelContext? {
+        documentController.activeDocument?.container.mainContext
+    }
 
     @State private var selectedThreadID: UUID?
     @State private var pendingThreadDeletion: AgentThread?
@@ -83,6 +89,9 @@ struct AgentWindowView: View {
         }
         .task {
             if threads.isEmpty { newThread() }
+        }
+        .task(id: documentController.activeDocument?.id) {
+            reloadProjects()
         }
         .onChange(of: selectedThreadID) { _, newValue in
             guard let newValue else { return }
@@ -146,7 +155,7 @@ struct AgentWindowView: View {
     }
 
     private func threadMenuLabel(_ thread: AgentThread) -> String {
-        let name = AgentTargetResolver.name(for: thread.target, context: modelContext)
+        let name = documentContext.flatMap { AgentTargetResolver.name(for: thread.target, context: $0) }
         guard let name else { return thread.displayTitle }
         return "\(thread.displayTitle)  ·  \(name)"
     }
@@ -187,7 +196,7 @@ struct AgentWindowView: View {
         } label: {
             let target = selectedThread?.target ?? .none
             Label {
-                if let name = AgentTargetResolver.name(for: target, context: modelContext) {
+                if let name = documentContext.flatMap({ AgentTargetResolver.name(for: target, context: $0) }) {
                     Text(name)
                 } else {
                     Text("No project")
@@ -233,21 +242,36 @@ struct AgentWindowView: View {
                 name: $0.name
             )
         }
-        #if os(macOS)
-            options += remotionProjects.map {
-                AgentTargetOption(kind: .remotion, projectUUID: $0.id, name: $0.name)
-            }
-        #endif
+        options += remotionProjects.map {
+            AgentTargetOption(kind: .remotion, projectUUID: $0.id, name: $0.name)
+        }
 
         return options.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
     }
 
     // MARK: - Actions
 
+    private func reloadProjects() {
+        guard let context = documentContext else {
+            captionProjects = []; musicProjects = []; narrativeProjects = []
+            imageProjects = []; remotionProjects = []
+            return
+        }
+        captionProjects = (try? context.fetch(FetchDescriptor<CaptionProject>())) ?? []
+        musicProjects = (try? context.fetch(FetchDescriptor<MusicProject>())) ?? []
+        narrativeProjects = (try? context.fetch(FetchDescriptor<NarrativeProject>())) ?? []
+        imageProjects = (try? context.fetch(FetchDescriptor<ImageGenProject>())) ?? []
+        remotionProjects = (try? context.fetch(FetchDescriptor<RemotionProject>())) ?? []
+    }
+
     private func newThread() {
         // A new thread inherits whatever the app is currently showing; existing
         // threads keep their own target.
         let thread = AgentThread(target: navigation.currentTarget)
+        if let doc = documentController.activeDocument {
+            thread.documentID = doc.id
+            thread.documentPath = doc.packageURL.path
+        }
         modelContext.insert(thread)
         selectedThreadID = thread.id
     }

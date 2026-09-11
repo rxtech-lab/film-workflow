@@ -16,6 +16,24 @@ extension Notification.Name {
 /// Externally-driven agents call these to iterate on a remotion project.
 @MainActor
 enum RemotionMCPHandlers {
+    /// Shared by MCP tool descriptions and every in-app agent backend.
+    static let authoringInstructions = """
+        Native RxRemotion compiles TS/TSX, CSS, JSON, assets, and project-local browser modules without Node. \
+        Bundled imports are available immediately without installation: react, react-dom, react-dom/client, \
+        remotion, @remotion/player, three, @react-three/fiber, @react-three/drei, @remotion/three, \
+        mapbox-gl, react-map-gl/mapbox, @tsparticles/react, @tsparticles/engine, @tsparticles/slim, \
+        leaflet, and @rxlab/remotion-maps (MapKitMap and OpenStreetMap). \
+        For 3D scenes, use ThreeCanvas from @remotion/three with width and height from useVideoConfig(). \
+        Drive animation with useCurrentFrame() and explicit transforms; do not accumulate useFrame() deltas \
+        or use wall-clock animation. Use Sequence layout="none" inside ThreeCanvas. \
+        Use WebGL, and hold delayRender/continueRender until custom models and textures are ready. \
+        Prefer local assets via staticFile(); remote textures require CORS. Only the listed package entrypoints \
+        are bundled; three/addons/*, three/examples/jsm/* and other unlisted subpath imports are unavailable. \
+        WebGPU, worker-owned OffscreenCanvas and CSS 3D/perspective exports are unsupported. \
+        Mapbox needs a valid access token. OpenStreetMap needs an export-permitted provider in Settings > Maps. \
+        Server frameworks, Node APIs and npm installation are unavailable.
+        """
+
     static let descriptors: [MCPToolDescriptor] = [
         MCPToolDescriptor(
             name: "remotion_list_files",
@@ -42,7 +60,7 @@ enum RemotionMCPHandlers {
         ),
         MCPToolDescriptor(
             name: "remotion_write_file",
-            description: "Write (create or overwrite) a file in a remotion project. Parent directories are created. NOTE: package.json, package-lock.json, bun.lockb, tsconfig.json, remotion.config.ts and anything under node_modules/ are protected and will be rejected — you cannot add npm packages. Available packages to import: react, react-dom, remotion, mapbox-gl, react-map-gl, @tsparticles/react, @tsparticles/engine, @tsparticles/slim.",
+            description: "Write (create or overwrite) a file in a remotion project. Parent directories are created. NOTE: package.json, package-lock.json, bun.lockb, tsconfig.json, remotion.config.ts and anything under node_modules/ are protected and will be rejected — you cannot add npm packages. " + authoringInstructions,
             inputSchema: [
                 "type": "object",
                 "properties": [
@@ -69,7 +87,7 @@ enum RemotionMCPHandlers {
         ),
         MCPToolDescriptor(
             name: "remotion_take_screenshot",
-            description: "Render a single PNG of the composition at the given timestamp and return it as a base64 data URL.",
+            description: "Capture a deterministic PNG with native RxRemotion at the given timestamp and return it as a base64 data URL.",
             inputSchema: [
                 "type": "object",
                 "properties": [
@@ -218,8 +236,9 @@ enum RemotionMCPHandlers {
             throw MCPToolError.invalidArguments("missing project_id")
         }
         let project = try MCPProjectHandlers.fetchRemotion(id: projectId, context: context)
-        let projectDir = (try? RemotionRuntime.shared.prepareProjectDirectory(id: project.id))
-            ?? FileStorage.remotionProjectDir(id: project.id)
+        let storage = ProjectStorage.forContainer(context.container)
+        let projectDir = project.projectDir
+        _ = try? RemotionRuntime.shared.prepareProjectDirectory(projectDir)
 
         switch name {
         case "remotion_list_files":
@@ -275,9 +294,9 @@ enum RemotionMCPHandlers {
             let durationFrames = max(1, Int((project.durationSeconds * Double(fps)).rounded()))
             let frame = max(0, min(Int((t * Double(fps)).rounded()), durationFrames - 1))
             let runId = UUID().uuidString.prefix(8).lowercased()
-            defer { RemotionStillCapture.cleanup(projectId: project.id, runId: String(runId)) }
+            defer { RemotionStillCapture.cleanup(projectDir: projectDir, runId: String(runId)) }
             let url = try await RemotionStillCapture.still(
-                projectId: project.id, frame: frame, runId: String(runId)
+                projectDir: projectDir, frame: frame, runId: String(runId)
             )
             let data = try Data(contentsOf: url)
             return [
@@ -303,9 +322,9 @@ enum RemotionMCPHandlers {
             let fps = max(1, project.compositionFps)
             let durationFrames = max(1, Int((project.durationSeconds * Double(fps)).rounded()))
             let runId = UUID().uuidString.prefix(8).lowercased()
-            defer { RemotionStillCapture.cleanup(projectId: project.id, runId: String(runId)) }
+            defer { RemotionStillCapture.cleanup(projectDir: projectDir, runId: String(runId)) }
             let results = try await RemotionStillCapture.stills(
-                projectId: project.id, count: count, durationFrames: durationFrames, runId: String(runId)
+                projectDir: projectDir, count: count, durationFrames: durationFrames, runId: String(runId)
             )
             var contentParts: [[String: Any]] = []
             var structured: [[String: Any]] = []
@@ -338,7 +357,7 @@ enum RemotionMCPHandlers {
             let sourceURL = try resolveLocalSourcePath(arguments)
             let imageData = try Data(contentsOf: sourceURL)
             let ext = sourceURL.pathExtension.isEmpty ? "png" : sourceURL.pathExtension.lowercased()
-            let stored = try FileStorage.saveImage(imageData, fileExtension: ext)
+            let stored = try storage.saveImage(imageData, fileExtension: ext)
             project.imagePaths.append(stored)
             project.updatedAt = Date()
             try context.save()
@@ -363,7 +382,7 @@ enum RemotionMCPHandlers {
                 throw MCPToolError.invalidArguments("provide a valid `index` or `path` matching an entry in imagePaths")
             }
             let removedPath = project.imagePaths.remove(at: idx)
-            FileStorage.deleteFile(at: removedPath)
+            storage.deleteFile(at: removedPath)
             let uploadCopy = projectDir
                 .appendingPathComponent("public", isDirectory: true)
                 .appendingPathComponent("upload", isDirectory: true)
@@ -381,11 +400,8 @@ enum RemotionMCPHandlers {
             let sourceURL = try resolveLocalSourcePath(arguments)
             let audioData = try Data(contentsOf: sourceURL)
             let ext = sourceURL.pathExtension.isEmpty ? "mp3" : sourceURL.pathExtension.lowercased()
-            let filename = UUID().uuidString + "." + ext
-            let dest = FileStorage.imagesDir.appendingPathComponent(filename)
-            try FileManager.default.createDirectory(at: FileStorage.imagesDir, withIntermediateDirectories: true)
-            try audioData.write(to: dest)
-            let stored = "images/" + filename
+            let stored = try storage.saveAudio(audioData, extension: ext, kind: .imported)
+            let filename = (stored as NSString).lastPathComponent
             project.audioFilePaths.append(stored)
             project.updatedAt = Date()
             try context.save()
@@ -409,7 +425,7 @@ enum RemotionMCPHandlers {
                 throw MCPToolError.invalidArguments("provide a valid `index` or `path` matching an entry in audioFilePaths")
             }
             let removedPath = project.audioFilePaths.remove(at: idx)
-            FileStorage.deleteFile(at: removedPath)
+            storage.deleteFile(at: removedPath)
             let publicCopy = projectDir
                 .appendingPathComponent("public", isDirectory: true)
                 .appendingPathComponent("audio", isDirectory: true)
