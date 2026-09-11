@@ -43,10 +43,19 @@ enum Fixtures {
     /// A short solid-colour H.264 clip with no audio.
     static func video(color: NSColor, seconds: Double, fps: Int32 = 30, size: (Int, Int) = (320, 180), image: CGImage? = nil, at url: URL) throws {
         let writer = try AVAssetWriter(outputURL: url, fileType: .mp4)
+        // Tag the colour space explicitly. Untagged BGRA is converted with
+        // whatever the encoder assumes, which differs between Apple silicon
+        // hardware and the software path on virtualised CI runners; a video
+        // written that way decodes with visibly wrong "zero" channels.
         let input = AVAssetWriterInput(mediaType: .video, outputSettings: [
             AVVideoCodecKey: AVVideoCodecType.h264,
             AVVideoWidthKey: size.0,
             AVVideoHeightKey: size.1,
+            AVVideoColorPropertiesKey: [
+                AVVideoColorPrimariesKey: AVVideoColorPrimaries_ITU_R_709_2,
+                AVVideoTransferFunctionKey: AVVideoTransferFunction_ITU_R_709_2,
+                AVVideoYCbCrMatrixKey: AVVideoYCbCrMatrix_ITU_R_709_2,
+            ],
         ])
         let adaptor = AVAssetWriterInputPixelBufferAdaptor(assetWriterInput: input, sourcePixelBufferAttributes: [
             kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA,
@@ -59,6 +68,9 @@ enum Fixtures {
         var buffer: CVPixelBuffer?
         CVPixelBufferCreate(kCFAllocatorDefault, size.0, size.1, kCVPixelFormatType_32BGRA, nil, &buffer)
         let pixelBuffer = try #require(buffer)
+        CVBufferSetAttachment(pixelBuffer, kCVImageBufferColorPrimariesKey, kCVImageBufferColorPrimaries_ITU_R_709_2, .shouldPropagate)
+        CVBufferSetAttachment(pixelBuffer, kCVImageBufferTransferFunctionKey, kCVImageBufferTransferFunction_ITU_R_709_2, .shouldPropagate)
+        CVBufferSetAttachment(pixelBuffer, kCVImageBufferYCbCrMatrixKey, kCVImageBufferYCbCrMatrix_ITU_R_709_2, .shouldPropagate)
         CVPixelBufferLockBaseAddress(pixelBuffer, [])
         let base = CVPixelBufferGetBaseAddress(pixelBuffer)!.assumingMemoryBound(to: UInt8.self)
         let rgb = color.usingColorSpace(.sRGB)!

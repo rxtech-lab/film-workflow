@@ -22,6 +22,11 @@ struct ModifierCompositionTests {
         try TimelineEditor.addTransition(&timeline, definitionID: "rx.cross-dissolve", attachment: .between(outgoing: a.id, incoming: b.id))
         let resolver = FixtureResolver(files: ["red": .file(aURL, naturalDuration: held ? 2 : 4, naturalSize: nil),
                                                "blue": .file(bURL, naturalDuration: held ? 2 : 4, naturalSize: nil)])
+        // The sources must decode as pure colours before the blend is judged.
+        let sourceRed = try await Fixtures.averageColor(of: aURL, at: 1)
+        let sourceBlue = try await Fixtures.averageColor(of: bURL, at: 1)
+        #expect(sourceRed.r > 0.9 && sourceRed.g < 0.05 && sourceRed.b < 0.05, "source red: \(sourceRed)")
+        #expect(sourceBlue.b > 0.9 && sourceBlue.r < 0.05 && sourceBlue.g < 0.05, "source blue: \(sourceBlue)")
         let built = try await TimelineCompositionBuilder(resolver: resolver).build(timeline, allowPlaceholders: true)
         #expect(CMTimeGetSeconds(built.duration) == 4)
         let generator = AVAssetImageGenerator(asset: built.asset)
@@ -37,7 +42,7 @@ struct ModifierCompositionTests {
         // Core Image blends in linear light; 50% becomes about 0.735 in encoded sRGB.
         let half = encodeSRGB(0.5)
         #expect(abs(middle.r - half) < 0.08 && abs(middle.b - half) < 0.08 && middle.g < 0.12, "midpoint: \(middle)")
-        #expect(end.b > 0.9 && end.r < 0.1)
+        #expect(end.b > 0.9 && end.r < 0.1, "end: \(end)")
         let previewColor = sample(preview)
         #expect(abs(previewColor.0 - middle.r) < 0.06)
         #expect(abs(previewColor.2 - middle.b) < 0.06)
