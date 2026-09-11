@@ -1,15 +1,26 @@
 import Foundation
 import Observation
+import RxAgentSDK
 import SwiftData
+
+/// Posted after a tool call that changed a project, so a tab showing that
+/// project can refresh.
+extension Notification.Name {
+    static let agentDidMutateProject = Notification.Name("agentDidMutateProject")
+}
 
 /// Owns every in-flight agent turn.
 ///
 /// Keyed by **thread**, not by project, which is the whole reason threads exist:
 /// a Remotion turn and a caption turn can be streaming at the same time, and
-/// closing the agent window must not cancel either. Replaces the two
-/// single-session controllers this descends from (`RemotionChatController` and
-/// `CaptionAssistantController`), which could each run one conversation per
-/// project and nothing across projects.
+/// closing the agent window must not cancel either.
+///
+/// After the RxAgentSDK migration this is a much smaller object. It used to hold
+/// the event-to-transcript reducer, the backend dispatch switch, the history
+/// replay and the compaction loop; all four now live in `RxAgentSDK.Agent`, one
+/// instance per thread. What is left is the three things the SDK cannot know
+/// about: **SwiftData persistence**, **caption proposals**, and **which of this
+/// app's five engines a thread is pinned to**.
 @MainActor
 @Observable
 final class AgentController {
@@ -17,11 +28,7 @@ final class AgentController {
 
     struct Run {
         var input: String = ""
-        var isSending: Bool = false
         var errorMessage: String?
-        var task: Task<Void, Never>?
-        /// Turns typed while this one was streaming, sent in order afterwards.
-        var queued: [String] = []
         /// Set when a turn finishes on a thread the user isn't looking at, so
         /// the thread menu can show a "done" dot.
         var hasUnseenCompletion: Bool = false
@@ -29,10 +36,21 @@ final class AgentController {
 
     private var runs: [UUID: Run] = [:]
 
+    /// One SDK agent per open thread. Created lazily and kept, because a thread
+    /// the user switches away from must keep streaming.
+    ///
+    /// Deliberately *not* `@ObservationIgnored`: the thread view asks for its
+    /// agent in `body`, so it has to be told when one appears.
+    private var agents: [UUID: Agent] = [:]
+
+    /// MCP holds taken per thread, released when the thread's agent is torn
+    /// down. The server is refcounted, so overlapping threads share one.
+    @ObservationIgnored private var mcpHolds: Set<UUID> = []
+
     /// Caption proposals waiting for review, keyed by the project they apply to.
     ///
     /// Keyed by project rather than thread because a proposal can arrive from a
-    /// CLI backend, whose tool call comes in over HTTP with no idea which thread
+    /// CLI engine, whose tool call comes in over HTTP with no idea which thread
     /// it belongs to. The project id is the only thing both paths know.
     private var proposalsByProject: [UUID: CaptionEditProposal] = [:]
 
@@ -45,15 +63,11 @@ final class AgentController {
     }
 
     func isRunning(_ threadID: UUID) -> Bool {
-        runs[threadID]?.isSending ?? false
-    }
-
-    var runningThreadIDs: Set<UUID> {
-        Set(runs.filter { $0.value.isSending }.keys)
+        agents[threadID]?.phase.isBusy ?? false
     }
 
     var runningCount: Int {
-        runs.reduce(into: 0) { $0 += ($1.value.isSending ? 1 : 0) }
+        agents.reduce(into: 0) { $0 += ($1.value.phase.isBusy ? 1 : 0) }
     }
 
     func setInput(_ text: String, for threadID: UUID) {
@@ -69,49 +83,63 @@ final class AgentController {
         mutate(threadID) { $0.hasUnseenCompletion = false }
     }
 
-    func cancel(threadID: UUID) {
-        runs[threadID]?.task?.cancel()
-        mutate(threadID) { $0.queued = [] }
-    }
-
-    func clear(threadID: UUID) {
-        runs[threadID]?.task?.cancel()
-        runs[threadID] = nil
-    }
-
     private func mutate(_ threadID: UUID, _ body: (inout Run) -> Void) {
         var run = runs[threadID] ?? Run()
         body(&run)
         runs[threadID] = run
     }
 
-    // MARK: - Queue
+    // MARK: - Agents
 
-    /// Queues a turn typed while the thread was streaming.
-    func enqueue(_ text: String, for threadID: UUID) {
-        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return }
-        mutate(threadID) { $0.queued.append(trimmed) }
+    /// The live agent for `thread`, if one has been built.
+    ///
+    /// Non-throwing and non-async so a view body can ask. `prepare(thread:)`
+    /// is what actually builds one.
+    func agent(for thread: AgentThread) -> Agent? {
+        agents[thread.id]
     }
 
-    func removeQueued(at index: Int, for threadID: UUID) {
-        mutate(threadID) {
-            guard $0.queued.indices.contains(index) else { return }
-            $0.queued.remove(at: index)
+    /// Builds and configures the thread's agent if it doesn't have one yet.
+    ///
+    /// Called from `.task` when a thread appears, so the transcript, the MCP
+    /// server and the engine are ready before the user types rather than after
+    /// they hit send.
+    func prepare(thread: AgentThread, context: ModelContext) async {
+        let container = ProjectDocumentController.shared.document(for: thread)?.container
+            ?? ProjectDocumentController.shared.activeDocument?.container
+
+        do {
+            _ = try await agent(for: thread, context: context, container: container)
+        } catch {
+            setError(error.localizedDescription, for: thread.id)
         }
     }
 
-    func mergeQueued(for threadID: UUID) {
-        mutate(threadID) {
-            guard $0.queued.count > 1 else { return }
-            $0.queued = [$0.queued.joined(separator: "\n\n")]
+    func cancel(threadID: UUID) {
+        agents[threadID]?.stop()
+    }
+
+    /// Tears a thread's agent down, releasing its MCP hold and any child process.
+    func clear(threadID: UUID) {
+        guard let agent = agents.removeValue(forKey: threadID) else {
+            runs[threadID] = nil
+            return
         }
+        runs[threadID] = nil
+        releaseMCP(threadID: threadID)
+        Task { await agent.shutdown() }
+    }
+
+    // MARK: - Backend resolution
+
+    func backend(for thread: AgentThread) -> AgentBackend {
+        thread.backendOverride ?? AgentSettings.shared.defaultBackend
     }
 
     // MARK: - Proposals
 
-    /// Called by `MCPCaptionHandlers.caption_propose_edits`, from either the
-    /// in-process runtime or a CLI agent over HTTP.
+    /// Called by `MCPCaptionHandlers.caption_propose_edits`, from either an
+    /// in-process client or a CLI agent over HTTP.
     func setPendingProposal(_ proposal: CaptionEditProposal?, forProjectUUID projectUUID: UUID) {
         if let proposal {
             proposalsByProject[projectUUID] = proposal
@@ -147,17 +175,17 @@ final class AgentController {
         let note = applied == 0
             ? "The user reviewed your proposed changes and applied none of them."
             : "The user applied \(applied) of \(total) proposed change\(total == 1 ? "" : "s")."
-        let row = AgentMessage(role: .system, content: note)
-        row.thread = thread
-        context.insert(row)
-        thread.messages.append(row)
-        thread.updatedAt = Date()
-    }
 
-    // MARK: - Backend resolution
-
-    func backend(for thread: AgentThread) -> AgentBackend {
-        thread.backendOverride ?? AgentSettings.shared.defaultBackend
+        let row = AgentTranscriptStore.append(
+            role: .system,
+            content: note,
+            to: thread,
+            context: context
+        )
+        // The SDK thread carries what the model replays, so the note has to
+        // reach it too — not just the persisted transcript.
+        agents[thread.id]?.thread.appendUserMessage(note)
+        _ = row
     }
 
     // MARK: - Sending
@@ -171,408 +199,356 @@ final class AgentController {
         let threadID = thread.id
         let trimmed = instruction.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
+
         // Tools act on a film; without one open there is nothing to point them at.
         guard let container else {
             setError("Open a film before sending to the agent.", for: threadID)
             return
         }
 
-        // Typing while a turn runs queues rather than interrupting it.
-        guard !isRunning(threadID) else {
-            enqueue(trimmed, for: threadID)
-            setInput("", for: threadID)
-            return
-        }
-
-        let config = try? AppConfig.loadFromKeychain()
-        let preferred = backend(for: thread)
-
-        let resolved: AgentBackend
-        do {
-            resolved = try AgentBackendAvailability.shared.resolved(
-                preferred: preferred,
-                config: config,
-                for: .conversation
-            )
-        } catch {
-            setError(error.localizedDescription, for: threadID)
-            return
-        }
-
-        // Persist the user's turn before starting, so it survives a crash and is
-        // on screen while the model thinks.
-        let userMessage = AgentMessage(role: .user, content: trimmed)
-        userMessage.thread = thread
-        context.insert(userMessage)
-        thread.messages.append(userMessage)
-        thread.updatedAt = Date()
-
         mutate(threadID) {
             $0.input = ""
-            $0.isSending = true
             $0.errorMessage = nil
             $0.hasUnseenCompletion = false
         }
 
-        let policy = AgentSettings.shared.writePolicy
-        let maxIterations = AgentSettings.shared.maxIterations
-
-        let task = Task { @MainActor [weak self] in
-            defer {
-                if let self {
-                    self.mutate(threadID) {
-                        $0.isSending = false
-                        $0.task = nil
-                        $0.hasUnseenCompletion = true
-                    }
-                    self.drainQueue(thread: thread, context: context, container: container)
-                }
-            }
-
+        Task { @MainActor in
             do {
-                try await self?.perform(
-                    instruction: trimmed,
-                    thread: thread,
-                    backend: resolved,
-                    policy: policy,
-                    maxIterations: maxIterations,
-                    config: config,
+                let agent = try await agent(
+                    for: thread,
                     context: context,
                     container: container
                 )
-            } catch is CancellationError {
-                // User pressed stop; nothing to report.
-            } catch {
-                self?.setError(error.localizedDescription, for: threadID)
-            }
-        }
 
-        mutate(threadID) { $0.task = task }
-    }
-
-    /// Starts the next queued turn once the current one finishes.
-    private func drainQueue(
-        thread: AgentThread,
-        context: ModelContext,
-        container: ModelContainer
-    ) {
-        let threadID = thread.id
-        guard runs[threadID]?.errorMessage == nil else { return }
-        guard let next = runs[threadID]?.queued.first, !next.isEmpty else { return }
-        mutate(threadID) { $0.queued.removeFirst() }
-        send(instruction: next, thread: thread, context: context, container: container)
-    }
-
-    // MARK: - Turn execution
-
-    private func perform(
-        instruction: String,
-        thread: AgentThread,
-        backend: AgentBackend,
-        policy: AgentWritePolicy,
-        maxIterations: Int,
-        config: AppConfig?,
-        context: ModelContext,
-        container: ModelContainer
-    ) async throws {
-        let (older, recent) = Self.partition(thread.liveTextMessages.dropLast())
-        let request = AgentRunRequest(
-            instruction: instruction,
-            summary: thread.summary,
-            recentTurns: recent,
-            target: thread.target,
-            policy: policy,
-            maxIterations: maxIterations
-        )
-
-        switch backend {
-        case .openAICompatible, .subscription:
-            guard let config else { throw AgentRuntimeError.missingLLMConfig }
-            // The engine picks the route; `.openAICompatible` keeps following
-            // the credential mode, so threads that predate the subscription
-            // engine behave exactly as before.
-            let route = backend == .subscription
-                ? try AIRoute.requireSubscription()
-                : try AIRoute.resolve(config, for: .chat)
-            // The thread's own pick wins over Settings, as it does for the CLI
-            // engines — a thread can run a model the settings never named.
-            let pinned = thread.modelOverride(for: backend)?.trimmingCharacters(in: .whitespaces)
-            let model = pinned?.isEmpty == false
-                ? pinned!
-                : (route == .subscription ? config.subscriptionChatModel : config.openAIModel)
-            try await consume(
-                AgentRuntime.run(
-                    request: request,
-                    config: config,
-                    route: route,
-                    model: model,
-                    container: container
-                ),
-                thread: thread,
-                context: context
-            )
-
-        case .claudeCode, .codex:
-            #if os(macOS)
-                try await runCLI(
-                    request: request,
-                    backend: backend,
-                    thread: thread,
-                    config: config,
-                    context: context,
-                    container: container
-                )
-            #else
-                throw CaptionAIError.backendUnavailable(backend, "Command-line agents need macOS.")
-            #endif
-
-        case .appleIntelligence:
-            try await runOnDevice(
-                request: request,
-                thread: thread,
-                config: config,
-                context: context
-            )
-        }
-
-        await compactIfNeeded(thread: thread, older: older, backend: backend, config: config)
-    }
-
-    #if os(macOS)
-    private func runCLI(
-        request: AgentRunRequest,
-        backend: AgentBackend,
-        thread: AgentThread,
-        config: AppConfig?,
-        context: ModelContext,
-        container: ModelContainer
-    ) async throws {
-        guard let executable = AgentBackendAvailability.shared.executablePath(for: backend) else {
-            throw CaptionAIError.backendUnavailable(
-                backend,
-                "The \(backend.executableName) command isn't installed."
-            )
-        }
-
-        let document = ProjectDocumentController.shared.document(forContainer: container)
-        let endpoint = try await AgentMCPBridge.acquire(documentID: document?.id)
-        defer { Task { await AgentMCPBridge.release() } }
-
-        let resume = thread.providerSessionID(for: backend)
-        // Resuming means the CLI already holds the history, so replaying ours
-        // would duplicate it. Send just the new instruction in that case.
-        let prompt = resume == nil
-            ? AgentPrompts.turn(
-                instruction: request.instruction,
-                summary: request.summary,
-                recentTurns: request.recentTurns
-              )
-            : request.instruction
-
-        // The thread's own pick wins over Settings, then the CLI's own default.
-        // Always the CLI's model field, never `openAIModel` — those name models
-        // in different namespaces, and passing a `gpt-4o` meant for the endpoint
-        // to `claude --model` cannot work.
-        let model = thread.modelOverride(for: backend) ?? backend.model(config: config)
-
-        let cliContext = AgentCLIRunner.Context(
-            backend: backend,
-            executable: executable,
-            endpoint: endpoint,
-            model: model,
-            // Dropped when the thread's model doesn't accept it: effort is
-            // configured once in Settings but the model can be overridden per
-            // thread, and the levels differ between Codex models.
-            reasoningEffort: AgentModelCatalog.shared.effort(
-                for: model,
-                configured: backend.reasoningEffort(config: config)
-            ) ?? "",
-            resumeSessionID: resume,
-            systemPrompt: AgentPrompts.system(
-                target: request.target,
-                toolNames: AgentToolPolicy.toolNames(policy: request.policy),
-                policy: request.policy,
-                context: ModelContext(container),
-                toolNamePrefix: "mcp__\(AgentMCPBridge.serverKey)__"
-            ),
-            prompt: prompt,
-            policy: request.policy
-        )
-
-        try await consume(
-            AgentCLIRunner.run(context: cliContext),
-            thread: thread,
-            context: context
-        )
-    }
-    #endif
-
-    /// Apple Intelligence has no tool calling and a ~2.5k-character budget, so
-    /// it answers as text.
-    ///
-    /// For a caption target it still goes through the structured-edit path the
-    /// caption assistant used, so choosing the on-device model doesn't silently
-    /// lose the ability to propose caption changes — it just can't reach any
-    /// other tool.
-    private func runOnDevice(
-        request: AgentRunRequest,
-        thread: AgentThread,
-        config: AppConfig?,
-        context: ModelContext
-    ) async throws {
-        let engine = try CaptionAIEngineFactory.make(backend: .appleIntelligence, config: config)
-
-        var lines: [CaptionAILine] = []
-        var project: CaptionProject?
-        if request.target.kind == .caption,
-           let uuid = request.target.projectUUID,
-           let found = try? MCPCaptionHandlers.fetchCaption(id: uuid.uuidString, context: context) {
-            project = found
-            lines = CaptionAIContext.lines(from: found.snapshot().segments)
-        }
-
-        let budget = max(
-            AgentBackend.appleIntelligence.contextBudgetCharacters
-                - request.instruction.count - request.summary.count - 400,
-            300
-        )
-
-        let chatRequest = CaptionChatRequest(
-            instruction: request.instruction,
-            summary: request.summary,
-            recentTurns: request.recentTurns.map {
-                CaptionChatTurn(role: $0.role, content: $0.content)
-            },
-            lines: lines.isEmpty ? [] : CaptionAIContext.retrieve(
-                query: request.instruction,
-                lines: lines,
-                selection: [],
-                budget: budget
-            ),
-            totalLines: lines.count,
-            speakers: project?.speakers ?? [],
-            terms: project?.usableTerms ?? [],
-            languageHint: project?.languageHint ?? ""
-        )
-
-        let reply = try await engine.converse(chatRequest)
-        try Task.checkCancellation()
-
-        let text = reply.assistantText.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !text.isEmpty {
-            appendAssistantText(text, thread: thread, context: context)
-        }
-
-        guard let project, !reply.edits.isEmpty else { return }
-        let proposal = CaptionProposalMapping.proposal(
-            from: reply.edits,
-            lines: lines,
-            transcript: project.snapshot(),
-            terms: project.usableTerms,
-            maxRunes: CaptionSettings.shared.maxCueRunes,
-            engine: AgentBackend.appleIntelligence.engineLabel
-        )
-        guard let proposal, !proposal.isEmpty else { return }
-        setPendingProposal(proposal, forProjectUUID: project.projectUUID)
-        appendProposalRow(proposal, projectUUID: project.projectUUID, thread: thread, context: context)
-    }
-
-    // MARK: - Event consumption
-
-    /// Turns an event stream into persisted transcript rows.
-    ///
-    /// Shared by every streaming backend so the transcript looks identical
-    /// whichever engine produced it.
-    private func consume(
-        _ stream: AsyncThrowingStream<AgentEvent, Error>,
-        thread: AgentThread,
-        context: ModelContext
-    ) async throws {
-        var pendingTools: [String: AgentMessage] = [:]
-        let backend = backend(for: thread)
-
-        defer {
-            // Anything still pending never got a result — a cancelled turn or a
-            // stream that ended mid-call. Leaving it spinning forever would be
-            // worse than marking it failed.
-            for message in pendingTools.values {
-                message.toolStatusEnum = .failed
-                if message.toolResult == nil { message.toolResult = "no result" }
-            }
-        }
-
-        for try await event in stream {
-            try Task.checkCancellation()
-
-            switch event {
-            case .status:
-                break
-
-            case .sessionID(let id):
-                thread.setProviderSessionID(id, for: backend)
-
-            case .toolCall(let id, let name, let args):
-                let message = AgentMessage(
-                    role: .assistant,
-                    content: "",
-                    kind: .tool,
-                    toolName: name,
-                    toolArgs: args,
-                    toolStatus: .pending,
-                    toolCallId: id
-                )
-                message.thread = thread
-                context.insert(message)
-                thread.messages.append(message)
-                pendingTools[id] = message
-
-            case .toolResult(let id, let name, let summary, let ok):
-                if let message = pendingTools.removeValue(forKey: id) {
-                    message.toolResult = summary
-                    message.toolStatusEnum = ok ? .ok : .failed
-                }
-                // A successful propose call has parked a proposal keyed by
-                // project; surface it as a reviewable row in this thread.
-                if ok, name == "caption_propose_edits",
-                   let projectUUID = thread.target.projectUUID,
-                   let proposal = proposalsByProject[projectUUID] {
-                    appendProposalRow(
-                        proposal,
-                        projectUUID: projectUUID,
-                        thread: thread,
+                // Persist the user's turn before starting, so it survives a
+                // crash. The SDK appends its own copy to the live transcript;
+                // reusing the id is what stops `persistTurnEnd` writing a
+                // duplicate row at the end of the turn.
+                let queuedBehind = agent.phase.isBusy
+                agent.send(trimmed)
+                if !queuedBehind,
+                   let sent = agent.thread.messages.last(where: { $0.role == .user }) {
+                    AgentTranscriptStore.append(
+                        role: .user,
+                        content: trimmed,
+                        id: sent.id,
+                        to: thread,
                         context: context
                     )
                 }
-
-            case .assistantText(let text):
-                let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-                guard !trimmed.isEmpty else { continue }
-                appendAssistantText(trimmed, thread: thread, context: context)
-
-            case .completed:
-                thread.updatedAt = Date()
+            } catch {
+                setError(error.localizedDescription, for: threadID)
             }
         }
     }
 
-    private func appendAssistantText(
-        _ text: String,
+    // MARK: - Agent construction
+
+    /// The SDK agent for `thread`, built on first use and reconfigured each turn.
+    ///
+    /// Reconfigured rather than rebuilt because the transcript lives on the
+    /// agent: settings that can change between turns (the engine, the model, the
+    /// write policy, the target) are written onto the existing instance, so
+    /// switching engines mid-thread keeps the conversation.
+    private func agent(
+        for thread: AgentThread,
+        context: ModelContext,
+        container: ModelContainer?
+    ) async throws -> Agent {
+        let config = try? AppConfig.loadFromKeychain()
+        let preferred = backend(for: thread)
+        let resolved = try AgentBackendAvailability.shared.resolved(
+            preferred: preferred,
+            config: config,
+            for: .conversation
+        )
+
+        let agent: Agent
+        if let existing = agents[thread.id] {
+            agent = existing
+        } else {
+            agent = try await makeAgent(
+                thread: thread,
+                config: config,
+                container: container
+            )
+            agents[thread.id] = agent
+        }
+
+        configure(
+            agent: agent,
+            thread: thread,
+            backend: resolved,
+            config: config,
+            container: container
+        )
+        return agent
+    }
+
+    private func makeAgent(
         thread: AgentThread,
-        context: ModelContext
+        config: AppConfig?,
+        container: ModelContainer?
+    ) async throws -> Agent {
+        let clients = AgentClientFactory.makeClients(config: config)
+        guard !clients.isEmpty else { throw CaptionAIError.noBackendAvailable }
+
+        // No film open means no tools to offer. The agent is still built, so
+        // the composer works and `send` can say what is wrong, rather than the
+        // window presenting no input at all.
+        var mcpServers: [MCPServerSpec] = []
+        #if os(macOS)
+            if let container {
+                let document = ProjectDocumentController.shared.document(forContainer: container)
+                mcpServers.append(try await AgentMCPBridge.acquire(documentID: document?.id))
+                mcpHolds.insert(thread.id)
+            }
+        #endif
+
+        let agent = Agent(
+            clients: clients,
+            mcpServers: mcpServers,
+            workingDirectory: workingDirectory(for: thread),
+            // There is no approval UI here, and deliberately so: the agent's
+            // whole surface is this app's own MCP tools, which `allowedTools`
+            // pre-approves. Anything *else* it tries has by definition escaped
+            // that surface, and the only honest answer to a question we cannot
+            // ask the user is no.
+            //
+            // `.default` rather than `.bypassPermissions` is load-bearing:
+            // bypass turns off the very pipeline that carries `--allowedTools`,
+            // which would hand a coding agent an unscoped shell.
+            permissions: DenyAllPermissions(),
+            permissionMode: .default
+        )
+
+        agent.resume(AgentTranscriptStore.load(thread))
+        agent.autoCompact = Agent.AutoCompact(
+            afterMessages: CaptionAIContext.verbatimTurns * 3,
+            keepingLast: CaptionAIContext.verbatimTurns
+        )
+        agent.summarizer = Self.makeSummarizer(config: config)
+        agent.onEvent = { [weak self] event in
+            self?.record(event, thread: thread)
+        }
+        return agent
+    }
+
+    /// Applies everything that can change between turns.
+    private func configure(
+        agent: Agent,
+        thread: AgentThread,
+        backend: AgentBackend,
+        config: AppConfig?,
+        container: ModelContainer?
     ) {
-        let message = AgentMessage(role: .assistant, content: text)
-        message.thread = thread
-        context.insert(message)
-        thread.messages.append(message)
+        let clientID = AgentClientFactory.clientID(for: backend)
+        if agent.activeClientID != clientID {
+            agent.select(clientID)
+        }
+
+        // The thread's own pick wins over Settings, then the engine's default.
+        // Always the engine's own model field: `openAIModel` and
+        // `claudeCodeModel` name models in different namespaces, and passing a
+        // `gpt-4o` meant for the endpoint to `claude --model` cannot work.
+        let pinned = thread.modelOverride(for: backend)?.trimmingCharacters(in: .whitespaces)
+        let model = (pinned?.isEmpty == false ? pinned! : backend.model(config: config))
+        agent.model = model.isEmpty ? nil : model
+
+        // Dropped when the thread's model doesn't accept it: effort is
+        // configured once in Settings but the model can be overridden per
+        // thread, and the levels differ between Codex models.
+        let effort = AgentModelCatalog.shared.effort(
+            for: model,
+            configured: backend.reasoningEffort(config: config)
+        ) ?? ""
+        agent.effort = effort.isEmpty ? nil : effort
+
+        let policy = AgentSettings.shared.writePolicy
+        agent.allowedTools = AgentToolPolicy.toolNames(policy: policy)
+        agent.disallowedTools = AgentToolPolicy.disallowedToolNames(policy: policy)
+        agent.maxToolIterations = AgentSettings.shared.maxIterations
+        agent.workingDirectory = workingDirectory(for: thread)
+
+        guard let container else { return }
+        agent.context = AgentPrompts.context(
+            target: thread.target,
+            toolNames: AgentToolPolicy.toolNames(policy: policy),
+            policy: policy,
+            context: ModelContext(container),
+            // A CLI agent namespaces every MCP tool it discovers; an in-process
+            // client speaks MCP itself and sees the bare name. The prompt has to
+            // list the names that engine will actually see.
+            toolNamePrefix: backend.isCommandLine ? "mcp__\(AgentMCPBridge.serverKey)__" : ""
+        )
+    }
+
+    /// The film package, so relative paths the agent mentions resolve to the
+    /// film and Claude Code's project memory lands beside it.
+    private func workingDirectory(for thread: AgentThread) -> URL {
+        if let document = ProjectDocumentController.shared.document(for: thread) {
+            return document.packageURL
+        }
+        return ProjectDocumentController.shared.activeDocument?.packageURL
+            ?? FileStorage.appSupportURL
+    }
+
+    /// Compacts with an in-process engine even on a CLI thread: spawning a
+    /// subprocess to compress history would cost more than the history does.
+    private static func makeSummarizer(
+        config: AppConfig?
+    ) -> @Sendable (String, String) async -> String? {
+        { existing, transcript in
+            let prepared = await MainActor.run { () -> (any CaptionAIEngine, String)? in
+                guard let backend = try? AgentBackendAvailability.shared.resolved(
+                    preferred: .openAICompatible,
+                    config: config,
+                    for: .transcriptReview
+                ),
+                    let engine = try? CaptionAIEngineFactory.make(backend: backend, config: config)
+                else { return nil }
+                return (
+                    engine,
+                    AgentPrompts.summarizationInstruction(
+                        existing: existing,
+                        transcript: transcript
+                    )
+                )
+            }
+            guard let (engine, instruction) = prepared else { return nil }
+
+            guard let reply = try? await engine.converse(CaptionChatRequest(
+                instruction: instruction,
+                summary: "",
+                recentTurns: [],
+                lines: [],
+                totalLines: 0,
+                speakers: [],
+                terms: [],
+                languageHint: ""
+            )) else { return nil }
+
+            let text = reply.assistantText.trimmingCharacters(in: .whitespacesAndNewlines)
+            return text.isEmpty ? nil : text
+        }
+    }
+
+    private func releaseMCP(threadID: UUID) {
+        #if os(macOS)
+            guard mcpHolds.remove(threadID) != nil else { return }
+            Task { await AgentMCPBridge.release() }
+        #endif
+    }
+
+    // MARK: - Persistence
+
+    /// Folds the live event stream into SwiftData rows.
+    ///
+    /// The SDK maintains the transcript the UI renders; this exists so the same
+    /// transcript is still there after a relaunch. Row ids are taken from the
+    /// SDK's message and tool-call ids so the two stay addressable by the same
+    /// key — see `AgentTranscriptStore`.
+    private func record(
+        _ event: AgentEvent,
+        thread: AgentThread
+    ) {
+        let context = thread.modelContext
+        guard let context else { return }
+        let threadID = thread.id
+
+        switch event {
+        case .toolCallStarted(let id, let name):
+            guard toolRow(callID: id, in: thread) == nil else { return }
+            let row = AgentMessage(
+                role: .assistant,
+                content: "",
+                kind: .tool,
+                toolName: MCPToolName.bare(name),
+                toolStatus: .pending,
+                toolCallId: id
+            )
+            AgentTranscriptStore.attach(row, to: thread, context: context)
+
+        case .toolCallInput(let id, let input):
+            toolRow(callID: id, in: thread)?.toolArgs = JSONValue.object(input).jsonString
+
+        case .toolCallResult(let id, let content, let isError):
+            if let row = toolRow(callID: id, in: thread) {
+                row.toolResult = Self.summarize(content)
+                row.toolStatusEnum = isError ? .failed : .ok
+                surfaceProposalIfNeeded(
+                    toolName: row.toolName,
+                    isError: isError,
+                    thread: thread,
+                    context: context
+                )
+                if !isError, let name = row.toolName {
+                    NotificationCenter.default.post(
+                        name: .agentDidMutateProject,
+                        object: nil,
+                        userInfo: ["tool": name]
+                    )
+                }
+            }
+
+        case .failed(let error):
+            setError(error.description, for: threadID)
+
+        case .turnEnded:
+            persistTurnEnd(thread: thread, context: context)
+            mutate(threadID) { $0.hasUnseenCompletion = true }
+
+        default:
+            break
+        }
+    }
+
+    /// The SDK owns the assistant's message while it streams, so prose is
+    /// written once at the end of the turn rather than delta by delta.
+    private func persistTurnEnd(thread: AgentThread, context: ModelContext) {
+        guard let agent = agents[thread.id] else { return }
+
+        AgentTranscriptStore.saveSessionIDs(from: agent.thread, to: thread)
+        AgentTranscriptStore.saveCompaction(from: agent.thread, to: thread)
+
+        let persisted = Set(thread.orderedMessages.map(\.id))
+        for message in agent.thread.messages where !persisted.contains(message.id) {
+            let text = message.plainText.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !text.isEmpty else { continue }
+            let role: AgentMessageRole = switch message.role {
+            case .user: .user
+            case .assistant: .assistant
+            case .system: .system
+            }
+            AgentTranscriptStore.append(
+                role: role,
+                content: text,
+                id: message.id,
+                createdAt: message.timestamp,
+                to: thread,
+                context: context
+            )
+        }
         thread.updatedAt = Date()
     }
 
-    private func appendProposalRow(
-        _ proposal: CaptionEditProposal,
-        projectUUID: UUID,
+    private func toolRow(callID: String, in thread: AgentThread) -> AgentMessage? {
+        thread.messages.first { $0.kindEnum == .tool && $0.toolCallId == callID }
+    }
+
+    /// A successful propose call has parked a proposal keyed by project; surface
+    /// it as a reviewable row in this thread.
+    private func surfaceProposalIfNeeded(
+        toolName: String?,
+        isError: Bool,
         thread: AgentThread,
         context: ModelContext
     ) {
+        guard !isError, toolName == "caption_propose_edits",
+              let projectUUID = thread.target.projectUUID,
+              let proposal = proposalsByProject[projectUUID]
+        else { return }
+
         // The tool can be called more than once in a turn; don't stack identical
         // review rows for the same proposal.
         let alreadyShown = thread.messages.contains {
@@ -587,88 +563,39 @@ final class AgentController {
             proposalJSON: proposal.encodedJSON(),
             proposalProjectUUID: projectUUID
         )
-        row.thread = thread
-        context.insert(row)
-        thread.messages.append(row)
+        AgentTranscriptStore.attach(row, to: thread, context: context)
     }
 
-    // MARK: - Compaction
-
-    /// Folds older turns into the thread's summary once the conversation grows
-    /// past what the backend can replay.
-    ///
-    /// Rows are marked rather than deleted, so the visible transcript is
-    /// unchanged — only what we *send* shrinks.
-    private func compactIfNeeded(
-        thread: AgentThread,
-        older: [AgentChatTurn],
-        backend: AgentBackend,
-        config: AppConfig?
-    ) async {
-        guard !older.isEmpty else { return }
-        // A CLI thread that resumes natively keeps its own history; compacting
-        // ours would only desync the two.
-        if backend.isCommandLine, thread.providerSessionID(for: backend) != nil { return }
-
-        let live = thread.liveTextMessages
-        guard live.count > CaptionAIContext.verbatimTurns else { return }
-
-        let transcriptText = older.map { "\($0.role): \($0.content)" }.joined(separator: "\n")
-        let existing = thread.summary
-
-        let instruction = """
-            Summarize the conversation below in at most three sentences. Keep \
-            decisions, identifiers and anything still outstanding. Drop \
-            pleasantries. Reply with the summary only.
-
-            \(transcriptText)
-            """
-
-        var merged = existing
-        // Summarize with an in-process engine even on a CLI thread: spawning a
-        // subprocess to compress history would cost more than the history does.
-        let summarizer = (try? AgentBackendAvailability.shared.resolved(
-            preferred: backend.isCommandLine ? .openAICompatible : backend,
-            config: config,
-            for: .transcriptReview
-        )) ?? .appleIntelligence
-
-        if let engine = try? CaptionAIEngineFactory.make(backend: summarizer, config: config),
-           let reply = try? await engine.converse(CaptionChatRequest(
-               instruction: instruction,
-               summary: existing,
-               recentTurns: [],
-               lines: [],
-               totalLines: 0,
-               speakers: [],
-               terms: [],
-               languageHint: ""
-           )),
-           !reply.assistantText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            merged = reply.assistantText.trimmingCharacters(in: .whitespacesAndNewlines)
-        } else {
-            // Summarizing failed — truncate rather than keep replaying the whole
-            // conversation, which would eventually exceed the window.
-            merged = String((existing + "\n" + transcriptText).suffix(600))
-        }
-
-        thread.summary = merged
-        let cutoff = live.count - CaptionAIContext.verbatimTurns
-        for message in live.prefix(cutoff) {
-            message.isCompacted = true
-        }
+    /// One short line for the tool card in the transcript.
+    private static func summarize(_ text: String) -> String {
+        let collapsed = text
+            .replacingOccurrences(of: "\n", with: " ")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return collapsed.count > 200 ? String(collapsed.prefix(200)) + "…" : collapsed
     }
 
-    /// Splits replayable turns into the part that gets summarized and the tail
-    /// that is sent verbatim.
-    private static func partition(
-        _ messages: some Collection<AgentMessage>
-    ) -> (older: [AgentChatTurn], recent: [AgentChatTurn]) {
-        let turns = messages.map {
-            AgentChatTurn(role: $0.roleEnum.rawValue, content: $0.content)
+    // MARK: - Thread commands
+
+    /// Deletes every message in a thread, here and in the SDK.
+    func clearTranscript(_ thread: AgentThread, context: ModelContext) {
+        cancel(threadID: thread.id)
+        for message in thread.messages {
+            context.delete(message)
         }
-        guard turns.count > CaptionAIContext.verbatimTurns else { return ([], turns) }
-        let cutoff = turns.count - CaptionAIContext.verbatimTurns
-        return (Array(turns.prefix(cutoff)), Array(turns.suffix(CaptionAIContext.verbatimTurns)))
+        thread.messages = []
+        thread.summary = ""
+        // The CLI engines keep their own copy of the history; a resume after
+        // clearing would bring back everything the user just deleted.
+        thread.clearProviderSessionIDs()
+        agents[thread.id]?.thread.clear()
+    }
+
+    /// Folds older turns into the summary now, without a model call.
+    func compactNow(_ thread: AgentThread) {
+        guard let agent = agents[thread.id] else { return }
+        guard agent.thread.compactWithoutSummarizing(
+            keepingLast: CaptionAIContext.verbatimTurns
+        ) else { return }
+        AgentTranscriptStore.saveCompaction(from: agent.thread, to: thread)
     }
 }

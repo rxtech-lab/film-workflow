@@ -68,21 +68,32 @@ enum AgentToolPolicy {
         !withheldNames(policy: policy).contains(name)
     }
 
-    // MARK: - Conversion
+    // MARK: - Coding-agent tools
 
-    /// MCP descriptors as OpenAI function-calling definitions.
+    /// A CLI agent's own built-in tools, all of which are withheld.
     ///
-    /// A straight field rename — `MCPToolDescriptor.inputSchema` and
-    /// `OpenAIToolDefinition.parametersSchema` are both a JSON Schema object —
-    /// which is what makes the in-process runtime and the CLI backends able to
-    /// share one tool surface without a translation layer.
-    static func openAIToolDefinitions(policy: AgentWritePolicy) -> [OpenAIToolDefinition] {
-        descriptors(policy: policy).map {
-            OpenAIToolDefinition(
-                name: $0.name,
-                description: $0.description,
-                parametersSchema: $0.inputSchema
-            )
-        }
+    /// The agent window is not a coding agent: it works entirely through the
+    /// MCP tools above, and the system prompt says as much. But a prompt is a
+    /// request, not a guarantee — a model that decides to `Bash` its way to an
+    /// answer would be running shell commands against the user's machine on the
+    /// strength of a sentence asking it not to.
+    ///
+    /// So the real guarantee is structural, in two layers: `--allowedTools`
+    /// names only our MCP surface, so nothing else is pre-approved, and these
+    /// names are additionally passed to `--disallowedTools` so an attempt is
+    /// refused outright rather than routed to an approval resolver that has no
+    /// UI to ask with.
+    static let codingAgentTools: [String] = [
+        "Bash", "BashOutput", "KillShell",
+        "Edit", "MultiEdit", "Write", "NotebookEdit",
+        "Read", "Glob", "Grep", "LS",
+        "WebFetch", "WebSearch",
+        "Task", "Agent", "TaskOutput",
+    ]
+
+    /// Everything withheld from a turn: the policy's own withholdings plus the
+    /// agent's built-in tools.
+    static func disallowedToolNames(policy: AgentWritePolicy) -> [String] {
+        Array(withheldNames(policy: policy)) + codingAgentTools
     }
 }

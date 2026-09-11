@@ -1,63 +1,56 @@
 #if os(macOS)
 import Foundation
+import RxAgentSDK
 
-/// Points a command-line agent at this app's own MCP server.
+/// Points every agent engine at this app's own MCP server.
 ///
-/// The insight that makes the CLI backends cheap: Claude Code and Codex are
+/// The insight that makes all five engines cheap: Claude Code and Codex are
 /// general coding agents that need a permission broker because they can write
 /// files and run shells. Ours needs neither — it works entirely through tools
 /// this app already exposes over MCP. So instead of porting an agent runtime we
-/// scope the CLI to our own tools and let it call back in, which means the
-/// in-process runtime and the CLI agents reach the identical
+/// scope each engine to our own tools and let it call back in, which means the
+/// in-process clients and the CLI agents reach the identical
 /// `MCPToolRegistry.invoke` and cannot drift apart.
+///
+/// What changed in the RxAgentSDK migration: this no longer renders anyone's
+/// config dialect. It hands back an ``MCPServerSpec`` and the SDK writes
+/// Claude's `--mcp-config`, Codex's `-c mcp_servers.…` overrides, or connects
+/// to it directly from an in-process client. The per-CLI config rendering that
+/// used to live here was the main thing that had to be updated whenever a CLI
+/// changed its flags.
 @MainActor
 enum AgentMCPBridge {
 
     /// Key for our server in the agent's MCP config. Also the tool-name prefix
-    /// the agent sees (`mcp__film_workflow__caption_search_segments`), so it has
-    /// to be a valid identifier — the server's own name has a hyphen.
+    /// a CLI agent sees (`mcp__film_workflow__caption_search_segments`), so it
+    /// has to be a valid identifier — the server's own name has a hyphen.
     nonisolated static let serverKey = "film_workflow"
 
-    nonisolated static func prefix(_ name: String) -> String {
-        "mcp__\(serverKey)__\(name)"
-    }
-
-    /// Tool names as the CLI sees them, filtered by the write policy.
-    ///
-    /// This is what replaced the old four-caption-tool allowlist: the CLI
-    /// agents now get the same surface the in-process runtime does, so a thread
-    /// on Codex is no less capable than one on the OpenAI loop.
-    static func prefixedToolNames(policy: AgentWritePolicy) -> [String] {
-        AgentToolPolicy.toolNames(policy: policy).map(prefix)
-    }
-
-    struct Endpoint: Sendable {
-        var url: String
-        var token: String?
-        /// Pins every tool call from this CLI session to one film.
-        var documentID: UUID?
-    }
-
     nonisolated static let documentHeader = "X-RxFilm-Document"
+
+    nonisolated static func prefix(_ name: String) -> String {
+        MCPToolName.prefixed(name, server: serverKey)
+    }
 
     // MARK: - Lifecycle
 
     /// How many turns are currently relying on the server we started.
     ///
     /// Refcounted because threads run concurrently: without this, the first of
-    /// two overlapping CLI turns to finish would stop the server out from under
-    /// the second, which would then fail every remaining tool call. Only the
-    /// last release actually stops it, and only if the user hadn't enabled the
+    /// two overlapping turns to finish would stop the server out from under the
+    /// second, which would then fail every remaining tool call. Only the last
+    /// release actually stops it, and only if the user hadn't enabled the
     /// server themselves.
     private static var holdCount = 0
     private static var startedByUs = false
 
-    /// Starts the MCP server if it isn't already up, and returns where to reach it.
+    /// Starts the MCP server if it isn't already up, and returns the spec that
+    /// points an agent at it.
     ///
     /// A user who has never enabled the MCP server still expects the agent to
     /// work, so this starts one on demand rather than telling them to go turn a
     /// setting on — and `release` puts it back the way it was.
-    static func acquire(documentID: UUID? = nil) async throws -> Endpoint {
+    static func acquire(documentID: UUID? = nil) async throws -> MCPServerSpec {
         let settings = MCPSettings.shared
         let server = MCPServer.shared
 
@@ -73,16 +66,27 @@ enum AgentMCPBridge {
             throw CaptionAIError.backendUnavailable(
                 .claudeCode,
                 server.lastError ?? "The app's MCP server couldn't start, so the "
-                    + "command-line agent has no way to reach your projects."
+                    + "agent has no way to reach your projects."
             )
         }
 
         holdCount += 1
-        return Endpoint(
-            url: "http://127.0.0.1:\(port)/mcp",
-            token: settings.token,
-            documentID: documentID
-        )
+
+        var headers: [String: String] = [:]
+        if let token = settings.token, !token.isEmpty {
+            // The SDK routes this to Claude's config headers and to Codex's
+            // `bearer_token_env_var`, which keeps it out of `ps` output.
+            headers["Authorization"] = "Bearer \(token)"
+        }
+        if let documentID {
+            // Pins every tool call from this session to one film.
+            headers[documentHeader] = documentID.uuidString
+        }
+
+        guard let url = URL(string: "http://127.0.0.1:\(port)/mcp") else {
+            throw CaptionAIError.backendUnavailable(.claudeCode, "Invalid MCP server address.")
+        }
+        return MCPServerSpec.http(name: serverKey, url: url, headers: headers)
     }
 
     /// Releases one hold, stopping the server again once the last one goes and
@@ -94,65 +98,10 @@ enum AgentMCPBridge {
         await MCPServer.shared.stop()
     }
 
-    // MARK: - Agent configuration
-
-    /// Writes the `--mcp-config` file Claude Code reads.
-    ///
-    /// A temp file rather than inline JSON on the command line: the token would
-    /// otherwise show up in `ps` output for every user on the machine.
-    nonisolated static func writeClaudeConfig(_ endpoint: Endpoint) throws -> URL {
-        var server: [String: Any] = [
-            "type": "http",
-            "url": endpoint.url,
-        ]
-        var headers: [String: String] = [:]
-        if let token = endpoint.token, !token.isEmpty {
-            headers["Authorization"] = "Bearer \(token)"
-        }
-        if let documentID = endpoint.documentID {
-            headers[documentHeader] = documentID.uuidString
-        }
-        if !headers.isEmpty { server["headers"] = headers }
-
-        let config: [String: Any] = ["mcpServers": [serverKey: server]]
-        let data = try JSONSerialization.data(withJSONObject: config, options: [.sortedKeys])
-        let url = FileStorage.temporaryFileURL(extension: "json")
-        try data.write(to: url, options: [.atomic])
-        // 0600: the file carries a bearer token.
-        try? FileManager.default.setAttributes(
-            [.posixPermissions: 0o600],
-            ofItemAtPath: url.path
-        )
-        return url
-    }
-
-    /// `-c key=value` overrides that register our server with Codex.
-    ///
-    /// Codex takes the token from an environment variable rather than a header,
-    /// which is why `environment(token:)` exists.
-    nonisolated static func codexConfigOverrides(_ endpoint: Endpoint) -> [String] {
-        var overrides = [
-            "mcp_servers.\(serverKey).url=\"\(endpoint.url)\"",
-        ]
-        if let token = endpoint.token, !token.isEmpty {
-            overrides.append(
-                "mcp_servers.\(serverKey).bearer_token_env_var=\"\(tokenEnvironmentKey)\""
-            )
-        }
-        if let documentID = endpoint.documentID {
-            overrides.append(
-                "mcp_servers.\(serverKey).http_headers={\"\(documentHeader)\"=\"\(documentID.uuidString)\"}"
-            )
-        }
-        return overrides
-    }
-
-    nonisolated static let tokenEnvironmentKey = "FILM_WORKFLOW_MCP_TOKEN"
-
-    nonisolated static func environment(token: String?) -> [String: String] {
-        var env = RemotionRuntime.enrichedEnvironment()
-        if let token, !token.isEmpty { env[tokenEnvironmentKey] = token }
-        return env
+    /// Environment every CLI engine is launched with, so `node`, `npx` and the
+    /// rest resolve the way they do in the user's shell.
+    nonisolated static func environment() -> [String: String] {
+        RemotionRuntime.enrichedEnvironment()
     }
 }
 #endif

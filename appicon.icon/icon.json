@@ -1,26 +1,34 @@
 {
   "fill" : {
-    "linear-gradient" : [
-      "display-p3:0.31313,0.15395,0.08986,1.00000",
-      "display-p3:0.12785,0.04570,0.00239,1.00000"
-    ],
-    "orientation" : {
-      "start" : {
-        "x" : 0.5,
-        "y" : 0
-      },
-      "stop" : {
-        "x" : 0.5,
-        "y" : 0.7
-      }
-    }
+    "automatic-gradient" : "extended-srgb:1.00000,0.80000,0.00000,1.00000"
   },
   "groups" : [
     {
       "layers" : [
         {
-          "image-name" : "music generator-icon-1024x1024.png",
-          "name" : "music generator-icon-1024x1024"
+          "hidden" : true,
+          "image-name" : "未命名1.svg",
+          "name" : "未命名1"
+        },
+        {
+          "hidden" : false,
+          "image-name" : "222.svg",
+          "name" : "222"
+        },
+        {
+          "image-name" : "shadow.svg",
+          "name" : "shadow"
+        },
+        {
+          "blend-mode" : "normal",
+          "hidden" : false,
+          "image-name" : "R.svg",
+          "name" : "R"
+        },
+        {
+          "hidden" : false,
+          "image-name" : "1.svg",
+          "name" : "1"
         }
       ],
       "shadow" : {
@@ -29,7 +37,7 @@
       },
       "translucency" : {
         "enabled" : true,
-        "value" : 0.5
+        "value" : 0.3
       }
     }
   ],

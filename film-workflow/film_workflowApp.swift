@@ -130,6 +130,11 @@ struct film_workflowApp: App {
             AgentWindowView()
                 .environment(AgentController.shared)
                 .signInSheetPresenter()
+                // Nothing inside the agent window paints a ground of its own,
+                // so the window supplies one: a material rather than a solid
+                // fill, which is what makes the panel read as glass over
+                // whatever is behind it instead of a grey slab.
+                .containerBackground(.ultraThinMaterial, for: .window)
         }
         .modelContainer(AppModelContainer.shared)
         .defaultSize(width: 760, height: 720)

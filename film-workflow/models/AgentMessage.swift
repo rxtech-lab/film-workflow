@@ -103,8 +103,7 @@ final class AgentMessage {
     }
 }
 
-extension AgentMessage: MessageListItem {
-    var messageID: UUID { id }
+extension AgentMessage {
     var isUserMessage: Bool { roleEnum == .user }
 }
 

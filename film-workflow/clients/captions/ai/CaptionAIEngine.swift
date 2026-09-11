@@ -200,7 +200,7 @@ protocol CaptionBatchAIEngine: CaptionAIEngine {
 /// Builds the engine for a caption task.
 ///
 /// Conversation moved to the agent window, where the command-line backends are
-/// driven by `AgentCLIRunner` as a streaming tool-calling agent rather than a
+/// driven by RxAgentSDK as a streaming tool-calling agent rather than a
 /// one-shot request/response. What is left here answers the batch tasks —
 /// splitting, glossary review, translation. The first two run per cue, which is
 /// why the CLI engine still refuses them; translation batches, so it doesn't.

@@ -1,5 +1,6 @@
 import AppKit
 import Foundation
+import RxAgentSDK
 import RxRemotion
 import SwiftData
 import Testing
@@ -59,8 +60,12 @@ struct RemotionNativeWorkflowTests {
             let tools = AgentToolPolicy.descriptors(policy: policy)
             let write = try #require(tools.first { $0.name == "remotion_write_file" })
             for prefix in ["", "mcp__film_workflow__"] {
-                let prompt = AgentPrompts.system(target: .none, toolNames: tools.map(\.name),
-                    policy: policy, context: container.mainContext, toolNamePrefix: prefix)
+                // The prompt is an `AgentContext` now; `renderText()` is what the
+                // SDK actually sends, so that is what the assertions read.
+                let prompt = AgentPrompts.context(
+                    target: AgentTarget.none, toolNames: tools.map(\.name),
+                    policy: policy, context: container.mainContext, toolNamePrefix: prefix
+                ).renderText()
                 for name in ["three", "@react-three/fiber", "@react-three/drei", "@remotion/three"] {
                     #expect(prompt.contains(name)); #expect(write.description.contains(name))
                 }

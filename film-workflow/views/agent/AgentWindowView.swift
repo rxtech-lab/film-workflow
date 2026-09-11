@@ -66,13 +66,35 @@ struct AgentWindowView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        // The window is glass from the title bar down; a toolbar background
+        // would draw an opaque band across the top of it.
+        .toolbarBackground(.hidden, for: .windowToolbar)
+        // The system title is drawn straight onto that transparent bar, so the
+        // transcript scrolling up behind it runs right through the lettering.
+        // Dropping it and re-adding it as a toolbar item — rxcode's
+        // `ThreadTitlePopoverButton` — puts it on glass of its own, the same
+        // surface the buttons beside it sit on.
+        .toolbar(removing: .title)
+        // Everything sits in the default placement so the spacers decide the
+        // layout: title hard left, a flexible gap, then the controls against
+        // the trailing edge. `.navigation` is a leading-only region — a
+        // flexible spacer inside it has nothing to expand into, which is what
+        // pinned every button to the left.
         .toolbar {
+            ToolbarItem {
+                titleChip
+            }
+
+            ToolbarSpacer(.flexible)
+
             ToolbarItemGroup {
                 threadsMenu
                 targetMenu
             }
 
-            ToolbarItemGroup(placement: .primaryAction) {
+            ToolbarSpacer(.fixed)
+
+            ToolbarItemGroup {
                 Button {
                     selectedThread?.isPinned.toggle()
                 } label: {
@@ -117,6 +139,22 @@ struct AgentWindowView: View {
     }
 
     // MARK: - Toolbar menus
+
+    /// The window title. A toolbar item brings its own liquid glass, so this
+    /// adds none of its own — a second `glassEffect` here draws a capsule
+    /// inside the capsule.
+    private var titleChip: some View {
+        Text(selectedThread?.displayTitle ?? "Agent")
+            .font(.callout.weight(.semibold))
+            .lineLimit(1)
+            .truncationMode(.tail)
+            .frame(maxWidth: 220, alignment: .leading)
+            .fixedSize(horizontal: true, vertical: false)
+            // The item's glass hugs its content, so without this the capsule
+            // closes on the lettering.
+            .padding(.horizontal, 8)
+            .help(selectedThread?.displayTitle ?? "Agent")
+    }
 
     private var threadsMenu: some View {
         Menu {

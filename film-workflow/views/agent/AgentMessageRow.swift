@@ -1,80 +1,161 @@
+import RxAgentSDK
 import SwiftUI
 import Textual
 
-/// One transcript row: plain text, a tool card, or a caption-edit proposal.
+/// One transcript row.
 ///
-/// The tool card and its detail sheet are carried over from the Remotion chat
-/// view — that design was the better of the two the app had, and it now serves
-/// every backend rather than only the OpenAI loop.
+/// Renders an `AgentTranscriptItem` from the SDK, with two app-specific
+/// departures from the stock row:
+///
+/// 1. **The tool card and its detail sheet** — the design carried over from the
+///    Remotion chat view, which reads better than a bare line and now serves
+///    every engine rather than only the OpenAI loop.
+/// 2. **Caption proposals.** A successful `caption_propose_edits` call isn't
+///    really a tool result, it is something waiting for the user. It is rendered
+///    from the tool call itself rather than from a separate message kind, so it
+///    appears the moment the call lands whichever engine made it.
 struct AgentMessageRow: View {
-    let message: AgentMessage
-    /// Opens the review sheet for this row. Handed the row itself rather than
-    /// its proposal, because applying writes the outcome back onto it.
+    let item: AgentTranscriptItem
+    let thread: AgentThread
+    /// Opens the review sheet for a proposal. Handed the persisted row rather
+    /// than the decoded proposal, because applying writes the outcome back onto
+    /// it.
     var onReviewProposal: (AgentMessage) -> Void = { _ in }
 
     var body: some View {
-        Group {
-            switch message.kindEnum {
-            case .tool:
-                HStack(spacing: 0) {
-                    AgentToolCard(message: message)
-                        .frame(maxWidth: 460, alignment: .leading)
-                    Spacer(minLength: 0)
-                }
-            case .proposal:
-                proposalCard
-            case .text:
-                if message.roleEnum == .system {
-                    // Something the app did on the user's behalf — applying a
-                    // reviewed batch — not something either party said. It is
-                    // still replayed to the model, so the agent knows how the
-                    // review went before it answers again.
-                    Label(message.content, systemImage: "info.circle")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.horizontal, 4)
-                } else if message.roleEnum == .user {
-                    HStack {
-                        Spacer(minLength: 40)
-                        Text(message.content)
-                            .font(.body)
-                            .textSelection(.enabled)
-                            .padding()
-                            .background(
-                                RoundedRectangle(cornerRadius: 16)
-                                    .fill(Color.accentColor.opacity(0.18))
-                            )
+        switch item.kind {
+        case .message(let message):
+            messageRow(message)
+        case .transientGroup(let calls):
+            // One container for the run of cards, so their glass title bars
+            // blend into each other instead of each sampling on its own.
+            GlassEffectContainer(spacing: 6) {
+                VStack(alignment: .leading, spacing: 5) {
+                    ForEach(calls) { call in
+                        toolRow(call)
                     }
-                } else {
-                    StructuredText(markdown: message.content)
-                        .textual.structuredTextStyle(.gitHub)
-                        .textual.textSelection(.enabled)
-                        .font(.body)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.horizontal, 4)
-                        .padding(.vertical, 2)
                 }
+            }
+        case .accessory:
+            EmptyView()
+        }
+    }
+
+    // MARK: - Message
+
+    @ViewBuilder
+    private func messageRow(_ message: RxAgentSDK.AgentMessage) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            ForEach(message.blocks) { block in
+                switch block {
+                case .text(_, let text):
+                    textBlock(text, role: message.role)
+                case .thinking(_, let text):
+                    thinkingBlock(text)
+                case .toolCall(let call):
+                    toolRow(call)
+                }
+            }
+            if let error = message.error {
+                Label(error, systemImage: "exclamationmark.triangle")
+                    .font(.caption)
+                    .foregroundStyle(.red)
             }
         }
         .padding(.vertical, 5)
     }
 
-    // MARK: - Proposal
+    @ViewBuilder
+    private func textBlock(_ text: String, role: AgentRole) -> some View {
+        if text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            EmptyView()
+        } else if role == .system {
+            // Something the app did on the user's behalf — applying a reviewed
+            // batch — not something either party said. It is still replayed to
+            // the model, so the agent knows how the review went before it
+            // answers again.
+            Label(text, systemImage: "info.circle")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 4)
+        } else if role == .user {
+            HStack {
+                Spacer(minLength: 40)
+                Text(text)
+                    .font(.body)
+                    .textSelection(.enabled)
+                    .padding()
+                    .background(
+                        RoundedRectangle(cornerRadius: 16)
+                            .fill(Color.accentColor.opacity(0.18))
+                    )
+            }
+        } else {
+            StructuredText(markdown: text)
+                .textual.structuredTextStyle(.gitHub)
+                .textual.textSelection(.enabled)
+                .font(.body)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 4)
+                .padding(.vertical, 2)
+        }
+    }
 
-    private var proposalCard: some View {
+    @ViewBuilder
+    private func thinkingBlock(_ text: String) -> some View {
+        if text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            EmptyView()
+        } else {
+            Label(text, systemImage: "brain")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .italic()
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 4)
+        }
+    }
+
+    // MARK: - Tool
+
+    @ViewBuilder
+    private func toolRow(_ call: AgentToolCall) -> some View {
+        if let row = proposalRow(for: call) {
+            proposalCard(row)
+        } else {
+            HStack(spacing: 0) {
+                AgentToolCard(call: call)
+                    .frame(maxWidth: 460, alignment: .leading)
+                Spacer(minLength: 0)
+            }
+        }
+    }
+
+    /// The persisted proposal row this call produced, if it produced one.
+    ///
+    /// Matched by project rather than by call id: a proposal arriving from a CLI
+    /// engine reaches the app over HTTP, where the only identity both sides know
+    /// is the project's.
+    private func proposalRow(for call: AgentToolCall) -> AgentMessage? {
+        guard MCPToolName.bare(call.name) == "caption_propose_edits",
+              !call.isError, call.isComplete
+        else { return nil }
+        return thread.orderedMessages.last { $0.kindEnum == .proposal }
+    }
+
+    private func proposalCard(_ row: AgentMessage) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             Label {
-                Text(message.content.isEmpty ? "Proposed changes" : message.content)
+                Text(row.content.isEmpty ? "Proposed changes" : row.content)
             } icon: {
                 Image(systemName: "checklist")
             }
             .font(.callout)
 
-            if let proposal = message.proposal {
+            if let proposal = row.proposal {
                 // Reviewed once already: say what came of it, and let the user
                 // go back in — the rest of the batch may still be waiting.
-                if let applied = message.proposalAppliedCount {
+                if let applied = row.proposalAppliedCount {
                     Label {
                         Text(
                             applied == 0
@@ -89,11 +170,11 @@ struct AgentMessageRow: View {
                 }
 
                 Button(
-                    message.proposalAppliedCount == nil
+                    row.proposalAppliedCount == nil
                         ? "Review \(proposal.items.count) change\(proposal.items.count == 1 ? "" : "s")…"
                         : "Review again…"
                 ) {
-                    onReviewProposal(message)
+                    onReviewProposal(row)
                 }
                 .buttonStyle(.bordered)
             } else {
@@ -114,116 +195,185 @@ struct AgentMessageRow: View {
 // MARK: - Tool card
 
 private struct AgentToolCard: View {
-    let message: AgentMessage
+    let call: AgentToolCall
     @State private var showDetails = false
     @State private var isHovered = false
 
     private static let maxDisplayChars = 200
 
-    private var status: AgentToolStatus { message.toolStatusEnum ?? .pending }
+    private enum Status { case pending, ok, failed }
+
+    private var status: Status {
+        guard call.isComplete else { return .pending }
+        return call.isError ? .failed : .ok
+    }
 
     var body: some View {
         Button {
             showDetails = true
         } label: {
-            HStack(spacing: 0) {
-                // Colored left accent strip
-                RoundedRectangle(cornerRadius: 2)
-                    .fill(accentColor)
-                    .frame(width: 3)
-                    .padding(.vertical, 6)
-
-                HStack(alignment: .center, spacing: 10) {
-                    iconView
-
-                    VStack(alignment: .leading, spacing: 3) {
-                        HStack(spacing: 6) {
-                            Text(message.toolName ?? "tool")
-                                .font(.caption.weight(.semibold))
-                                .monospaced()
-                                .foregroundStyle(.primary)
-                            if let args = compactArgs(message.toolArgs), !args.isEmpty {
-                                Text(truncate(args))
-                                    .font(.caption2)
-                                    .foregroundStyle(.secondary)
-                                    .lineLimit(1)
-                                    .truncationMode(.middle)
-                            }
-                        }
-                        resultLine
-                    }
-
-                    Spacer(minLength: 0)
-
-                    Image(systemName: "chevron.right")
-                        .font(.caption2.weight(.semibold))
-                        .foregroundStyle(.tertiary)
-                }
-                .padding(.horizontal, 10)
-                .padding(.vertical, 9)
+            VStack(alignment: .leading, spacing: 0) {
+                titleRow
+                detailRow
             }
-            .background(
-                RoundedRectangle(cornerRadius: 8)
-                    .fill(isHovered ? accentColor.opacity(0.08) : Color.secondary.opacity(0.06))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 8)
-                    .strokeBorder(accentColor.opacity(0.25), lineWidth: 0.5)
-            )
+            .background {
+                // Only drawn when a second row exists — with the title alone the
+                // glass edge is the card's edge, and a second outline doubles it.
+                if detailText != nil {
+                    RoundedRectangle(cornerRadius: Self.radius, style: .continuous)
+                        .fill(Color.secondary.opacity(0.07))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: Self.radius, style: .continuous)
+                                .strokeBorder(accentColor.opacity(0.16), lineWidth: 0.5)
+                        )
+                }
+            }
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .onHover { isHovered = $0 }
         .animation(.easeInOut(duration: 0.15), value: isHovered)
+        .animation(.easeInOut(duration: 0.2), value: call.isComplete)
         .sheet(isPresented: $showDetails) {
-            AgentToolDetailSheet(message: message)
+            AgentToolDetailSheet(call: call)
         }
     }
 
-    @ViewBuilder
+    private static let radius: CGFloat = 12
+
+    // MARK: - Title
+
+    /// The tool name and its arguments, on liquid glass tinted by the call's
+    /// outcome. The glass carries the card's edge, so the shape closes off its
+    /// bottom corners only when a result line sits underneath it.
+    private var titleRow: some View {
+        HStack(spacing: 8) {
+            iconView
+
+            Text(MCPToolName.bare(call.name))
+                .font(.caption.weight(.semibold))
+                .monospaced()
+                .foregroundStyle(.primary)
+                .lineLimit(1)
+                .layoutPriority(1)
+
+            if let args = compactArgs, !args.isEmpty {
+                Text(truncate(args))
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+            }
+
+            Spacer(minLength: 4)
+
+            Image(systemName: "chevron.right")
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(.tertiary)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 7)
+        .glassEffect(
+            .regular.tint(accentColor.opacity(isHovered ? 0.24 : 0.11)).interactive(),
+            in: titleShape
+        )
+    }
+
+    private var titleShape: UnevenRoundedRectangle {
+        let bottom: CGFloat = detailText == nil ? Self.radius : 0
+        return UnevenRoundedRectangle(
+            topLeadingRadius: Self.radius,
+            bottomLeadingRadius: bottom,
+            bottomTrailingRadius: bottom,
+            topTrailingRadius: Self.radius,
+            style: .continuous
+        )
+    }
+
+    /// What the tool is, with how it went badged onto the corner: the glyph
+    /// says "caption edit" at a glance, the badge says whether it landed.
     private var iconView: some View {
-        ZStack {
-            Circle()
-                .fill(accentColor.opacity(0.12))
-                .frame(width: 26, height: 26)
-            switch status {
-            case .pending:
-                ProgressView()
-                    .controlSize(.small)
-                    .scaleEffect(0.75)
-            case .ok:
-                Image(systemName: "checkmark")
-                    .font(.caption.weight(.bold))
-                    .foregroundStyle(accentColor)
-            case .failed:
-                Image(systemName: "xmark")
-                    .font(.caption.weight(.bold))
-                    .foregroundStyle(accentColor)
+        ZStack(alignment: .bottomTrailing) {
+            RoundedRectangle(cornerRadius: 7, style: .continuous)
+                .fill(accentColor.opacity(0.16))
+                .frame(width: 24, height: 24)
+                .overlay {
+                    if status == .pending {
+                        ProgressView()
+                            .controlSize(.small)
+                            .scaleEffect(0.65)
+                    } else {
+                        Image(systemName: toolIcon)
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(accentColor)
+                    }
+                }
+
+            if status != .pending {
+                Image(systemName: status == .ok ? "checkmark.circle.fill" : "xmark.circle.fill")
+                    .symbolRenderingMode(.palette)
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundStyle(.white, accentColor)
+                    .offset(x: 3, y: 3)
             }
         }
     }
 
+    // MARK: - Detail
+
     @ViewBuilder
-    private var resultLine: some View {
-        if let result = message.toolResult, !result.isEmpty {
-            Text(truncate(result))
+    private var detailRow: some View {
+        if let text = detailText {
+            Text(text)
                 .font(.caption)
-                .foregroundStyle(status == .failed ? .red : .secondary)
-                .lineLimit(1)
+                .foregroundStyle(status == .failed ? Color.red : .secondary)
+                .lineLimit(2)
                 .truncationMode(.tail)
-        } else if status == .pending {
-            Text("Running…")
-                .font(.caption)
-                .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 12)
+                .padding(.top, 6)
+                .padding(.bottom, 8)
         }
+    }
+
+    /// The one line of outcome the card shows: the result if there is one,
+    /// otherwise what the call is still doing.
+    private var detailText: String? {
+        if let result = call.result, !result.isEmpty {
+            return truncate(collapse(result))
+        }
+        if status == .pending {
+            return call.hasCompleteInput ? "Running…" : "Preparing…"
+        }
+        return nil
     }
 
     private var accentColor: Color {
         switch status {
-        case .pending: return .secondary
-        case .ok:     return .green
-        case .failed: return .red
+        case .pending: .secondary
+        case .ok: .green
+        case .failed: .red
         }
+    }
+
+    /// A glyph for the family of work the tool does, so a run of cards reads as
+    /// a sequence of steps rather than a wall of identical rows.
+    private var toolIcon: String {
+        let name = MCPToolName.bare(call.name)
+        if name.hasPrefix("caption_") { return "captions.bubble" }
+        if name.hasPrefix("remotion_") { return "film.stack" }
+        if name.hasPrefix("sequence_") { return "rectangle.stack" }
+        if name.hasPrefix("podcast_") { return "mic" }
+        if name.hasPrefix("music_") { return "music.note" }
+        if name.hasPrefix("image_") { return "photo" }
+        if name.hasPrefix("video_") { return "video" }
+        if name.hasPrefix("narrative_") { return "text.book.closed" }
+        if name.contains("project") || name.contains("group") { return "folder" }
+        if name.contains("import") || name.contains("footage") { return "tray.and.arrow.down" }
+        if name.contains("search") || name.contains("list") { return "magnifyingglass" }
+        if name.contains("read") || name.contains("document") { return "doc.text" }
+        if name.contains("write") || name.contains("edit") { return "square.and.pencil" }
+        return "wrench.and.screwdriver"
     }
 
     private func truncate(_ s: String) -> String {
@@ -231,62 +381,65 @@ private struct AgentToolCard: View {
         return String(s.prefix(Self.maxDisplayChars)) + "…"
     }
 
+    private func collapse(_ s: String) -> String {
+        s.replacingOccurrences(of: "\n", with: " ")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
     /// `{"caption_id":"…","limit":50}` → `caption_id=… limit=50`, so the card
     /// shows what the call actually did without the JSON noise.
-    private func compactArgs(_ raw: String?) -> String? {
-        guard let raw, !raw.isEmpty else { return nil }
-        if let data = raw.data(using: .utf8),
-           let dict = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
-        {
-            let joined = dict.keys.sorted().compactMap { key -> String? in
-                guard let value = dict[key] else { return nil }
-                return "\(key)=\(value)"
-            }.joined(separator: " ")
-            return joined.isEmpty ? nil : joined
+    private var compactArgs: String? {
+        guard !call.input.isEmpty else { return nil }
+        let joined = call.input.keys.sorted().compactMap { key -> String? in
+            guard let value = call.input[key] else { return nil }
+            return "\(key)=\(Self.plain(value))"
         }
-        return raw
+        .joined(separator: " ")
+        return joined.isEmpty ? nil : joined
+    }
+
+    /// Scalars render bare; anything structured renders as JSON.
+    static func plain(_ value: JSONValue) -> String {
+        switch value {
+        case .string(let text): text
+        case .number(let number):
+            number == number.rounded() ? String(Int(number)) : String(number)
+        case .bool(let flag): String(flag)
+        case .null: "null"
+        case .object, .array: value.jsonString
+        }
     }
 }
 
 // MARK: - Tool detail
 
 private struct AgentToolDetailSheet: View {
-    let message: AgentMessage
+    let call: AgentToolCall
     @Environment(\.dismiss) private var dismiss
 
-    private var status: AgentToolStatus { message.toolStatusEnum ?? .pending }
-
     private var statusLabel: String {
-        switch status {
-        case .pending: return "Running"
-        case .ok:      return "Success"
-        case .failed:  return "Failed"
-        }
+        guard call.isComplete else { return "Running" }
+        return call.isError ? "Failed" : "Success"
     }
 
     private var statusColor: Color {
-        switch status {
-        case .pending: return .secondary
-        case .ok:      return .green
-        case .failed:  return .red
-        }
+        guard call.isComplete else { return .secondary }
+        return call.isError ? .red : .green
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             HStack(alignment: .center, spacing: 10) {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(message.toolName ?? "tool")
+                    Text(MCPToolName.bare(call.name))
                         .font(.headline)
                         .monospaced()
                     Text(statusLabel)
                         .font(.caption.weight(.medium))
                         .foregroundStyle(statusColor)
-                        .padding(.horizontal, 7)
-                        .padding(.vertical, 2)
-                        .background(
-                            Capsule().fill(statusColor.opacity(0.12))
-                        )
+                        .padding(.horizontal, 9)
+                        .padding(.vertical, 3)
+                        .glassEffect(.regular.tint(statusColor.opacity(0.18)), in: .capsule)
                 }
                 Spacer()
                 Button("Done") { dismiss() }
@@ -295,11 +448,11 @@ private struct AgentToolDetailSheet: View {
 
             Divider()
 
-            section(title: "Parameters", content: prettifyJSON(message.toolArgs))
+            section(title: "Parameters", content: prettified(JSONValue.object(call.input)))
             section(
                 title: "Result",
-                content: prettifyJSON(message.toolResult) ?? message.toolResult,
-                isError: message.toolStatusEnum == .failed
+                content: call.result.flatMap { prettify($0) } ?? call.result,
+                isError: call.isError
             )
         }
         .padding(16)
@@ -335,10 +488,14 @@ private struct AgentToolDetailSheet: View {
         }
     }
 
+    private func prettified(_ value: JSONValue) -> String? {
+        prettify(value.jsonString)
+    }
+
     /// Returns nil when the content isn't JSON, so the caller can fall back to
     /// showing it raw rather than an empty box.
-    private func prettifyJSON(_ raw: String?) -> String? {
-        guard let raw, !raw.isEmpty,
+    private func prettify(_ raw: String) -> String? {
+        guard !raw.isEmpty,
               let data = raw.data(using: .utf8),
               let object = try? JSONSerialization.jsonObject(with: data),
               let pretty = try? JSONSerialization.data(
