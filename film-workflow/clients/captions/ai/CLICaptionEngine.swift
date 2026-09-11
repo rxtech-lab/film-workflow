@@ -6,7 +6,7 @@ import Foundation
 /// Deliberately *not* an agent turn: no MCP server, no tools, no session to
 /// resume. The CLI is used here as a one-shot completion endpoint — prompt in,
 /// JSON out — which is what makes it usable for a batched task at all. The
-/// agent-window arrangement in `AgentCLIRunner`, where the CLI reads the
+/// agent-window arrangement RxAgentSDK now drives, where the CLI reads the
 /// transcript back over MCP, is the opposite shape and stays where it is.
 ///
 /// Only `translate` is offered. `planSplit` and `reviewTerms` are asked once per
@@ -149,7 +149,7 @@ nonisolated struct CLICaptionEngine: CaptionAIEngine {
     // MARK: - Codex
 
     /// `--sandbox read-only` and `--skip-git-repo-check` matter for the same
-    /// reason they do in `AgentCLIRunner`: Codex expects a git repository it may
+    /// reason they do for the agent window: Codex expects a git repository it may
     /// edit, and neither is true here. No `-c mcp_servers…` overrides are
     /// passed, so it has nothing to call.
     private func runCodex(instructions: String, prompt: String) async throws -> String {

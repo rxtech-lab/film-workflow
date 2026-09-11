@@ -1,7 +1,13 @@
+import RxAgentSDK
 import SwiftData
 import SwiftUI
 
 /// One thread's transcript and composer.
+///
+/// The transcript, the composer, the scroll pinning and the streaming indicator
+/// are all `AgentChatView` now. What remains here is the app-specific shell
+/// around it: the error bar, the caption-proposal row and its review sheet, the
+/// `/` and `@` completions, and the engine picker under the field.
 struct AgentThreadView: View {
     @Bindable var thread: AgentThread
     let targets: [AgentTargetOption]
@@ -9,9 +15,6 @@ struct AgentThreadView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(AgentController.self) private var controller
 
-    @State private var isAtBottom = true
-    @State private var shouldScrollToBottom = false
-    @State private var scrollRequestTask: Task<Void, Never>?
     /// The proposal row being reviewed. The row, not its decoded proposal, so
     /// applying can write the outcome back onto it.
     @State private var reviewingRow: AgentMessage?
@@ -19,87 +22,69 @@ struct AgentThreadView: View {
 
     private var threadID: UUID { thread.id }
     private var run: AgentController.Run { controller.run(for: threadID) }
-    private var messages: [AgentMessage] { thread.orderedMessages }
-    private var isStreaming: Bool { run.isSending }
 
     var body: some View {
-        transcript
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .contentMargins(.top, 16, for: .scrollContent)
-            .safeAreaInset(edge: .bottom, spacing: 0) {
-                composerArea
+        Group {
+            if let agent = controller.agent(for: thread) {
+                chat(agent)
+            } else {
+                placeholder
             }
-            .confirmationDialog(
-                "Clear this conversation?",
-                isPresented: $showClearConfirm,
-                titleVisibility: .visible
-            ) {
-                Button("Clear", role: .destructive) { clearAll() }
-                Button("Cancel", role: .cancel) {}
-            } message: {
-                Text("Your projects are not affected.")
-            }
-            .sheet(item: $reviewingRow) { row in
-                reviewSheet(row)
-            }
-            .onChange(of: messages.count) { _, _ in
-                requestScrollToBottom()
-            }
-            .onChange(of: isStreaming) { _, streaming in
-                guard !streaming else { return }
-                controller.markSeen(threadID)
-            }
-            .onAppear {
-                controller.markSeen(threadID)
-                requestScrollToBottom(animated: false)
-            }
-            .onDisappear { scrollRequestTask?.cancel() }
-    }
-
-    private var composerArea: some View {
-        VStack(spacing: 0) {
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .safeAreaInset(edge: .top, spacing: 0) {
             if let error = run.errorMessage {
                 errorBar(error)
             }
-            AgentComposer(
-                thread: thread,
-                targets: targets,
-                isStreaming: isStreaming,
-                onSend: send,
-                onStop: { controller.cancel(threadID: threadID) },
-                onCommand: handle
-            )
         }
-        .shadow(color: .black.opacity(0.08), radius: 8, y: -2)
+        .confirmationDialog(
+            "Clear this conversation?",
+            isPresented: $showClearConfirm,
+            titleVisibility: .visible
+        ) {
+            Button("Clear", role: .destructive) {
+                controller.clearTranscript(thread, context: modelContext)
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Your projects are not affected.")
+        }
+        .sheet(item: $reviewingRow) { row in
+            reviewSheet(row)
+        }
+        .task { await controller.prepare(thread: thread, context: modelContext) }
+        .onAppear { controller.markSeen(threadID) }
+        .onChange(of: controller.isRunning(threadID)) { _, streaming in
+            guard !streaming else { return }
+            controller.markSeen(threadID)
+        }
     }
 
-    // MARK: - Transcript
+    // MARK: - Chat
 
-    @ViewBuilder
-    private var transcript: some View {
-        if messages.isEmpty {
-            placeholder
-        } else {
-            MessageList(
-                messages: messages,
-                isStreaming: isStreaming,
-                shouldScrollToBottom: shouldScrollToBottom,
-                isAtBottom: $isAtBottom
-            ) { message in
-                AgentMessageRow(message: message) { row in
+    private func chat(_ agent: Agent) -> some View {
+        AgentChatView(
+            agent: agent,
+            draft: Binding(
+                get: { controller.run(for: threadID).input },
+                set: { controller.setInput($0, for: threadID) }
+            ),
+            completions: completionSources,
+            onDropFiles: handleDrop,
+            row: { item in
+                AgentMessageRow(item: item, thread: thread) { row in
                     reviewingRow = row
                 }
-                .padding(.horizontal, 14)
-            } trailingContent: {
-                if isStreaming {
-                    TypingIndicator()
-                        .padding(.horizontal, 14)
-                        .padding(.top, 4)
-                        .padding(.bottom, 8)
-                }
+            },
+            accessories: {
+                AgentEngineMenu(thread: thread)
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-        }
+        )
+        .agentTheme(.filmStudio)
+        // The engine picker lives under the field, in `accessories`. The SDK's
+        // own header would put a second one at the top of the window — and its
+        // chrome is the only opaque band in an otherwise transparent surface.
+        .agentToolbar(.hidden)
     }
 
     private var placeholder: some View {
@@ -140,6 +125,72 @@ struct AgentThreadView: View {
         .background(Color.orange.opacity(0.12))
     }
 
+    // MARK: - Completions
+
+    /// `/` commands and `@` project mentions, as SDK completion sources.
+    private var completionSources: [AgentCompletionSource] {
+        [
+            AgentCompletionSource(trigger: "/") { query in
+                AgentSlashCommand.allCases
+                    .filter { query.isEmpty || $0.rawValue.hasPrefix(query.lowercased()) }
+                    .map { command in
+                        AgentCompletionItem(
+                            id: command.rawValue,
+                            label: command.command,
+                            detail: command.summary,
+                            systemImage: command.systemImage,
+                            // No insertion: a command runs instead of leaving
+                            // text behind for the user to delete.
+                            action: { run(command) }
+                        )
+                    }
+            },
+            AgentCompletionSource(trigger: "@") { query in
+                targets
+                    .filter {
+                        query.isEmpty
+                            || $0.name.localizedCaseInsensitiveContains(query)
+                    }
+                    .prefix(12)
+                    .map { option in
+                        AgentCompletionItem(
+                            id: "\(option.kind.rawValue):\(option.projectUUID.uuidString)",
+                            label: option.name,
+                            detail: option.kind.rawValue,
+                            systemImage: option.kind.systemImage,
+                            insertion: "@\(option.kind.rawValue):\(option.name)"
+                        )
+                    }
+            },
+        ]
+    }
+
+    private func run(_ command: AgentSlashCommand) {
+        switch command {
+        case .new:
+            let fresh = AgentThread(target: thread.target)
+            modelContext.insert(fresh)
+        case .clear:
+            showClearConfirm = true
+        case .compact:
+            controller.compactNow(thread)
+        case .stop:
+            controller.cancel(threadID: threadID)
+        }
+    }
+
+    /// Dropped files become paths in the draft — the tools take paths, so
+    /// "transcribe /Users/…/a.mp4" is what the agent can actually act on.
+    private func handleDrop(_ urls: [URL]) -> Bool {
+        let paths = urls.map(\.path).joined(separator: " ")
+        var draft = controller.run(for: threadID).input
+        if !draft.isEmpty, !draft.hasSuffix(" ") { draft += " " }
+        controller.setInput(draft + paths, for: threadID)
+        return true
+    }
+
+    // MARK: - Review sheet
+
     @ViewBuilder
     private func reviewSheet(_ row: AgentMessage) -> some View {
         // The row's own project, falling back to the thread's target for rows
@@ -147,7 +198,8 @@ struct AgentThreadView: View {
         // the changes still belong to the project they were proposed against.
         if let proposal = row.proposal,
            let uuid = row.proposalProjectUUID ?? thread.target.projectUUID,
-           let documentContext = ProjectDocumentController.shared.document(for: thread)?.container.mainContext,
+           let documentContext = ProjectDocumentController.shared
+               .document(for: thread)?.container.mainContext,
            let project = try? MCPCaptionHandlers.fetchCaption(
                id: uuid.uuidString,
                context: documentContext
@@ -176,98 +228,52 @@ struct AgentThreadView: View {
             .frame(minWidth: 360, minHeight: 260)
         }
     }
+}
 
-    // MARK: - Scrolling
+// MARK: - Slash commands
 
-    /// Coalesces scroll requests.
-    ///
-    /// Streaming appends rows in bursts; cancelling and reallocating a task —
-    /// plus toggling the flag false→true — on every one is pure churn. The
-    /// `MessageList` treats this as an edge trigger, hence the toggle.
-    private func requestScrollToBottom(animated: Bool = true) {
-        if scrollRequestTask != nil { return }
-        shouldScrollToBottom = false
-        scrollRequestTask = Task { @MainActor in
-            try? await Task.sleep(for: .milliseconds(10))
-            guard !Task.isCancelled else { return }
-            scrollRequestTask = nil
-            shouldScrollToBottom = true
+enum AgentSlashCommand: String, CaseIterable, Identifiable {
+    case new
+    case clear
+    case compact
+    case stop
+
+    var id: String { rawValue }
+    var command: String { "/\(rawValue)" }
+
+    var summary: String {
+        switch self {
+        case .new: "Start a new thread"
+        case .clear: "Delete every message in this thread"
+        case .compact: "Fold older turns into the summary now"
+        case .stop: "Stop the running turn"
         }
     }
 
-    // MARK: - Actions
-
-    private func send() {
-        controller.send(
-            instruction: run.input,
-            thread: thread,
-            context: modelContext,
-            container: ProjectDocumentController.shared.document(for: thread)?.container
-        )
-    }
-
-    private func handle(_ command: AgentSlashCommand) {
-        switch command {
-        case .new:
-            let fresh = AgentThread(target: thread.target)
-            modelContext.insert(fresh)
-        case .clear:
-            showClearConfirm = true
-        case .compact:
-            compactNow()
-        case .stop:
-            controller.cancel(threadID: threadID)
-        }
-    }
-
-    private func clearAll() {
-        controller.cancel(threadID: threadID)
-        for message in thread.messages {
-            modelContext.delete(message)
-        }
-        thread.messages = []
-        thread.summary = ""
-        // The CLI backends keep their own copy of the history; a resume after
-        // clearing would bring back everything the user just deleted.
-        thread.clearProviderSessionIDs()
-    }
-
-    /// Marks every replayable turn compacted, so the next request sends only the
-    /// summary. Cheap, immediate, and reversible by clearing the thread.
-    private func compactNow() {
-        let live = thread.liveTextMessages
-        guard live.count > CaptionAIContext.verbatimTurns else { return }
-        let cutoff = live.count - CaptionAIContext.verbatimTurns
-        let folded = live.prefix(cutoff)
-        let text = folded.map { "\($0.roleEnum.rawValue): \($0.content)" }.joined(separator: "\n")
-        thread.summary = String((thread.summary + "\n" + text).suffix(600))
-        for message in folded {
-            message.isCompacted = true
+    var systemImage: String {
+        switch self {
+        case .new: "square.and.pencil"
+        case .clear: "trash"
+        case .compact: "arrow.down.right.and.arrow.up.left"
+        case .stop: "stop.fill"
         }
     }
 }
 
-private struct TypingIndicator: View {
-    @State private var animate = false
 
-    var body: some View {
-        HStack(spacing: 5) {
-            ForEach(0 ..< 3, id: \.self) { i in
-                Circle()
-                    .fill(Color.secondary.opacity(0.6))
-                    .frame(width: 7, height: 7)
-                    .scaleEffect(animate ? 1.0 : 0.5)
-                    .animation(
-                        .easeInOut(duration: 0.45)
-                            .repeatForever(autoreverses: true)
-                            .delay(Double(i) * 0.15),
-                        value: animate
-                    )
-            }
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 9)
-        .background(Color.secondary.opacity(0.1), in: RoundedRectangle(cornerRadius: 16))
-        .onAppear { animate = true }
-    }
+// MARK: - Theme
+
+extension AgentTheme {
+    /// The agent window's look.
+    ///
+    /// Both grounds are clear so the conversation sits directly on the window's
+    /// own material rather than on a slab of its own — the composer already
+    /// floats over the transcript, and a second opaque layer behind it flattens
+    /// that back out.
+    static let filmStudio: AgentTheme = {
+        var theme = AgentTheme.compact
+        theme.background = .clear
+        theme.listBackground = .clear
+        return theme
+    }()
 }
