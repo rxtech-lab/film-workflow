@@ -1,0 +1,23 @@
+{
+  "react": "vendor-0.js",
+  "react/jsx-runtime": "vendor-1.js",
+  "react/jsx-dev-runtime": "vendor-2.js",
+  "react-dom": "vendor-3.js",
+  "react-dom/client": "vendor-4.js",
+  "remotion": "vendor-5.js",
+  "@remotion/player": "vendor-6.js",
+  "mapbox-gl": "vendor-7.js",
+  "react-map-gl/mapbox": "vendor-8.js",
+  "@tsparticles/react": "vendor-9.js",
+  "@tsparticles/engine": "vendor-10.js",
+  "@tsparticles/slim": "vendor-11.js",
+  "leaflet": "vendor-12.js",
+  "three": "vendor-13.js",
+  "@react-three/fiber": "vendor-14.js",
+  "@react-three/drei": "vendor-15.js",
+  "@remotion/three": "vendor-16.js",
+  "react-map-gl": "vendor-8.js",
+  "@rxlab/remotion-maps": "maps.js",
+  "leaflet/dist/leaflet.css": "leaflet/leaflet.css",
+  "mapbox-gl/dist/mapbox-gl.css": "mapbox-gl.css"
+}

@@ -19,6 +19,7 @@ final class AppNavigation {
         case aiProvider
         case agent
         case captions
+        case remotion
         case mcp
 
         var id: String { rawValue }
@@ -29,12 +30,11 @@ final class AppNavigation {
         case whisperModels
     }
 
-    /// The selected top-level tab. Only settable to `.Settings` on iOS, where
-    /// Settings is a tab; on macOS it's a separate window with no tab to select.
-    var tab: Tabs = .Music
-
     var settingsSection: SettingsSection = .account
-    var showAccountSheet = false
+
+    /// Bumped by `requestSignIn()`. The active window's `signInSheetPresenter`
+    /// watches it and raises the sign-in sheet.
+    private(set) var signInRequestCount = 0
 
     /// What the app is currently showing, so the agent window can follow along.
     ///
@@ -56,9 +56,6 @@ final class AppNavigation {
     func showCaptionSettings(focus: SettingsFocus? = nil) {
         settingsSection = .captions
         pendingSettingsFocus = focus
-        #if !os(macOS)
-            tab = .Settings
-        #endif
     }
 
     /// Opens the AI provider settings, where the endpoint and key live.
@@ -68,16 +65,15 @@ final class AppNavigation {
     func showAIProviderSettings() {
         settingsSection = .aiProvider
         pendingSettingsFocus = nil
-        #if !os(macOS)
-            tab = .Settings
-        #endif
     }
 
     func showAccountSettings() {
         settingsSection = .account
         pendingSettingsFocus = nil
-        #if !os(macOS)
-            tab = .Settings
-        #endif
+    }
+
+    /// Asks the active window to present the dedicated sign-in sheet.
+    func requestSignIn() {
+        signInRequestCount += 1
     }
 }

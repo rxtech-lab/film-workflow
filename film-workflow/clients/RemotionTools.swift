@@ -35,9 +35,8 @@ enum RemotionTools {
     /// Cap a single read_file response to avoid blowing the context window.
     static let maxReadBytes = 200_000
 
-    /// Files tools must NEVER modify. Bun + Remotion package management is owned
-    /// by the runtime; if an LLM rewrites these we end up with broken/inconsistent
-    /// projects. Reads are still allowed.
+    /// Project metadata is preserved for compatibility. Browser dependencies belong
+    /// to the Swift package catalog; tools cannot install or replace npm packages.
     static let writeProtectedPaths: Set<String> = [
         "package.json",
         "package-lock.json",

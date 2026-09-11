@@ -2,12 +2,22 @@ import SwiftUI
 
 struct GeneratedImageListView: View {
     let files: [GeneratedImage]
+    /// Previewed when the list first appears, e.g. from the library's Versions menu.
+    var initialSelectionID: UUID? = nil
     var onDelete: (GeneratedImage) -> Void
 
     @State private var previewedFile: GeneratedImage?
     @State private var pendingDeletion: GeneratedImage?
 
     private let columns = [GridItem(.adaptive(minimum: 160), spacing: 12)]
+
+    /// Waits for the hosting sheet to finish presenting before stacking the preview on it.
+    private func openInitial() async {
+        guard previewedFile == nil, let id = initialSelectionID, let file = files.first(where: { $0.id == id }) else { return }
+        try? await Task.sleep(for: .milliseconds(300))
+        guard !Task.isCancelled else { return }
+        previewedFile = file
+    }
 
     var body: some View {
         Group {
@@ -32,6 +42,7 @@ struct GeneratedImageListView: View {
                 }
             }
         }
+        .task { await openInitial() }
         .sheet(item: $previewedFile) { file in
             GeneratedImagePreviewSheet(file: file) {
                 previewedFile = nil

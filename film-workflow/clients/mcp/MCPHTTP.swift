@@ -2,7 +2,7 @@ import Foundation
 
 /// Minimal HTTP/1.1 request/response handling — just enough to serve a single MCP
 /// endpoint without taking on a server framework. Built on Apple's Network framework
-/// already in use by `RemotionRuntime`.
+/// used by the native local services.
 enum MCPHTTP {
 
     struct Request {

@@ -62,7 +62,7 @@ enum ImageGenerationService {
         }
         }
 
-        let relativePath = try FileStorage.saveImage(result.imageData, fileExtension: result.fileExtension)
+        let relativePath = try ProjectStorage.forContainer(context.container).saveImage(result.imageData, fileExtension: result.fileExtension)
         let generated = GeneratedImage(
             imageFilePath: relativePath,
             prompt: project.prompt,

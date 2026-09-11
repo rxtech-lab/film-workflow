@@ -1,5 +1,4 @@
 import RxAuthSwift
-import RxAuthSwiftUI
 import SwiftUI
 
 struct AccountSheet: View {
@@ -26,7 +25,9 @@ struct AccountDetailContent: View {
     @State private var auth = AuthManager.shared
     @State private var balance = CreditBalanceStore.shared
     @State private var usage = UsageHistoryStore.shared
+    @State private var navigation = AppNavigation.shared
     @State private var confirmSignOut = false
+    @State private var refreshError: String?
 
     var body: some View {
         Group {
@@ -41,26 +42,27 @@ struct AccountDetailContent: View {
                     .padding(24)
                 }
                 .task { await refresh() }
-            } else if let manager = auth.oauthManager {
-                RxSignInView(
-                    manager: manager,
-                    appearance: RxSignInAppearance(
-                        title: "Sign in to RxLab",
-                        subtitle: "Manage credits and subscription usage.",
-                    ),
-                    style: .native,
-                    onAuthSuccess: { Task { await CreditBalanceStore.shared.refresh() } }
-                )
+            } else if auth.isRestoring {
+                AccountRestorationView(auth: auth)
             } else {
+                // Credentials are collected in `SignInSheet`, never inline here.
                 ContentUnavailableView {
-                    Label("Sign in to RxLab", systemImage: "person.crop.circle")
+                    Label("Account Not Signed In", systemImage: "person.crop.circle.badge.xmark")
                 } description: {
-                    Text("Use your account to manage credits and subscription usage.")
+                    Text("Sign in to your RxLab account to manage credits and subscription usage.")
                 } actions: {
-                    Button("Sign in") { Task { await auth.signIn() } }
+                    Button("Sign In…") { navigation.requestSignIn() }
                         .buttonStyle(.borderedProminent)
                 }
             }
+        }
+        .alert("Couldn’t Refresh Account", isPresented: Binding(
+            get: { refreshError != nil },
+            set: { if !$0 { refreshError = nil } }
+        )) {
+            Button("OK") { refreshError = nil }
+        } message: {
+            Text(refreshError ?? "")
         }
         .alert("Sign out?", isPresented: $confirmSignOut) {
             Button("Cancel", role: .cancel) {}
@@ -153,6 +155,7 @@ struct AccountDetailContent: View {
         async let balanceRefresh: Void = balance.refresh()
         async let usageRefresh: Void = usage.refresh()
         _ = await (balanceRefresh, usageRefresh)
+        refreshError = balance.error ?? usage.error
     }
 
     private func icon(_ capability: String) -> String {

@@ -1,0 +1,22 @@
+{
+  "engine": "1.0.0",
+  "dependencies": {
+    "@react-three/drei": "10.7.8",
+    "@react-three/fiber": "9.7.0",
+    "@remotion/player": "4.0.459",
+    "@remotion/three": "4.0.459",
+    "@tsparticles/engine": "3.9.1",
+    "@tsparticles/react": "3.0.0",
+    "@tsparticles/slim": "3.9.1",
+    "esbuild-wasm": "0.25.0",
+    "leaflet": "1.9.4",
+    "mapbox-gl": "3.23.1",
+    "react": "19.2.0",
+    "react-dom": "19.2.0",
+    "react-map-gl": "8.1.1",
+    "remotion": "4.0.459",
+    "three": "0.185.0"
+  },
+  "lockHash": "2f4abffe89daede678233d4c1ca20e0634755cf0660b91786bb4255cf3815781",
+  "adapterHash": "89c4401977f2ed25753ea429dad0c02d2bd4bad5916147313061bcdb9707c7fa"
+}

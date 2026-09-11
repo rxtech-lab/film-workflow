@@ -234,12 +234,7 @@ struct CaptionTranslateSheet: View {
 
     private func openAIProviderSettings() {
         AppNavigation.shared.settingsSection = .aiProvider
-        #if os(macOS)
-            openSettings()
-        #else
-            dismiss()
-            AppNavigation.shared.tab = .Settings
-        #endif
+        openSettings()
     }
 
     private func seed() {

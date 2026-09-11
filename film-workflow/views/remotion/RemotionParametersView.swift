@@ -12,6 +12,7 @@ struct RemotionParametersView: View {
     @Binding var isSeeding: Bool
 
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.projectStorage) private var storage
     @Environment(\.openWindow) private var openWindow
 
     @State private var showImagePicker = false
@@ -20,10 +21,8 @@ struct RemotionParametersView: View {
     @State private var generatedImages: [URL] = []
     @State private var pendingDeletion: PendingDeletion?
     @State private var showDeleteAlert = false
-    @State private var runtime = RemotionRuntime.shared
-
-    private var isStudioRunning: Bool {
-        runtime.currentURL != nil && runtime.currentProjectId == project.id
+    private var hasComposition: Bool {
+        !project.compositionSource.isEmpty || FileManager.default.fileExists(atPath: project.projectDir.appendingPathComponent("src/Composition.tsx").path)
     }
 
     private enum PendingDeletion: Identifiable {
@@ -189,7 +188,7 @@ struct RemotionParametersView: View {
                     HStack(spacing: 8) {
                         ForEach(Array(project.imagePaths.enumerated()), id: \.offset) { index, path in
                             ZStack(alignment: .topTrailing) {
-                                if let image = Image(contentsOfFile: FileStorage.absoluteURL(for: path)) {
+                                if let image = Image(contentsOfFile: storage.absoluteURL(for: path)) {
                                     image
                                         .resizable()
                                         .aspectRatio(contentMode: .fill)
@@ -243,7 +242,7 @@ struct RemotionParametersView: View {
         Section("Reference Image") {
             HStack {
                 if let path = project.referenceImagePath,
-                   let image = Image(contentsOfFile: FileStorage.absoluteURL(for: path)) {
+                   let image = Image(contentsOfFile: storage.absoluteURL(for: path)) {
                     image
                         .resizable()
                         .aspectRatio(contentMode: .fill)
@@ -400,7 +399,7 @@ struct RemotionParametersView: View {
 
     @ViewBuilder
     private var generateSection: some View {
-        if !isStudioRunning && !project.createdViaMCP {
+        if !hasComposition && !project.createdViaMCP {
             Section {
                 Button {
                     seed()
@@ -411,7 +410,7 @@ struct RemotionParametersView: View {
                     }
                 }
                 .disabled(isSeeding)
-                .popoverTip(FilmWorkflowTips.RemotionStudioTip(), arrowEdge: .top)
+                .popoverTip(FilmWorkflowTips.RemotionPreviewTip(), arrowEdge: .top)
 
                 Button("Generate with AI…") {
                     openAgent()
@@ -473,7 +472,6 @@ struct RemotionParametersView: View {
         isSeeding = true
         statusMessage = "Creating composition…"
 
-        let projectId = project.id
         let bindable = project
         let source = RemotionCodeBuilder.defaultComposition(project: bindable)
         bindable.compositionSource = source
@@ -483,9 +481,7 @@ struct RemotionParametersView: View {
             defer { isSeeding = false }
             do {
                 try RemotionCodeBuilder.writeComposition(project: bindable, source: source)
-                statusMessage = "Starting Remotion Studio…"
-                try await RemotionRuntime.shared.start(projectId: projectId)
-                statusMessage = "Studio running. Refine it in the agent window."
+                statusMessage = "Composition ready. Preview it in the viewer."
             } catch {
                 statusMessage = error.localizedDescription
             }
@@ -515,7 +511,7 @@ struct RemotionParametersView: View {
             for url in urls.prefix(remaining) {
                 guard url.startAccessingSecurityScopedResource() else { continue }
                 defer { url.stopAccessingSecurityScopedResource() }
-                if let path = try? FileStorage.copyImage(from: url) {
+                if let path = try? storage.copyImage(from: url) {
                     project.imagePaths.append(path)
                 }
             }
@@ -530,9 +526,9 @@ struct RemotionParametersView: View {
         guard url.startAccessingSecurityScopedResource() else { return }
         defer { url.stopAccessingSecurityScopedResource() }
         if let oldPath = project.referenceImagePath {
-            FileStorage.deleteFile(at: oldPath)
+            storage.deleteFile(at: oldPath)
         }
-        if let path = try? FileStorage.copyImage(from: url) {
+        if let path = try? storage.copyImage(from: url) {
             project.referenceImagePath = path
         }
         syncAssetsToPublic()
@@ -544,12 +540,8 @@ struct RemotionParametersView: View {
             guard url.startAccessingSecurityScopedResource() else { continue }
             defer { url.stopAccessingSecurityScopedResource() }
             do {
-                let data = try Data(contentsOf: url)
-                let ext = url.pathExtension.isEmpty ? "mp3" : url.pathExtension
-                let filename = UUID().uuidString + "." + ext
-                let dest = FileStorage.imagesDir.appendingPathComponent(filename)
-                try data.write(to: dest)
-                project.audioFilePaths.append("images/" + filename)
+                let relative = try storage.copyFile(from: url, kind: .imported, fallbackExtension: "mp3")
+                project.audioFilePaths.append(relative)
             } catch {
                 continue
             }
@@ -576,18 +568,18 @@ struct RemotionParametersView: View {
         case .uploadedImage(let index):
             guard project.imagePaths.indices.contains(index) else { return }
             let path = project.imagePaths.remove(at: index)
-            FileStorage.deleteFile(at: path)
+            storage.deleteFile(at: path)
             deletePublicCopy(relativePath: path, subfolder: "upload")
         case .referenceImage:
             if let path = project.referenceImagePath {
-                FileStorage.deleteFile(at: path)
+                storage.deleteFile(at: path)
                 deletePublicCopy(relativePath: path, subfolder: "reference")
             }
             project.referenceImagePath = nil
         case .audio(let index):
             guard project.audioFilePaths.indices.contains(index) else { return }
             let path = project.audioFilePaths.remove(at: index)
-            FileStorage.deleteFile(at: path)
+            storage.deleteFile(at: path)
             deletePublicCopy(relativePath: path, subfolder: "audio")
         case .generatedImage(let url):
             try? FileManager.default.removeItem(at: url)
@@ -596,7 +588,7 @@ struct RemotionParametersView: View {
     }
 
     private func deletePublicCopy(relativePath: String, subfolder: String?) {
-        let publicDir = FileStorage.remotionProjectDir(id: project.id)
+        let publicDir = project.projectDir
             .appendingPathComponent("public", isDirectory: true)
         let fileName = (relativePath as NSString).lastPathComponent
         let target: URL
@@ -611,7 +603,7 @@ struct RemotionParametersView: View {
     }
 
     private func generatedDir() -> URL {
-        FileStorage.remotionProjectDir(id: project.id)
+        project.projectDir
             .appendingPathComponent("public", isDirectory: true)
             .appendingPathComponent("generated", isDirectory: true)
     }

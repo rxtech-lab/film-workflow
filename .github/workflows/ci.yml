@@ -7,21 +7,6 @@ on:
     branches: [main]
 
 jobs:
-  build-ios:
-    name: Build iOS
-    runs-on: self-hosted
-    steps:
-      - uses: actions/checkout@v7
-
-      - name: Build for iOS Simulator
-        run: |
-          xcodebuild build \
-            -project film-workflow.xcodeproj \
-            -scheme film-workflow \
-            -destination 'generic/platform=iOS Simulator' \
-            -configuration Debug \
-            CODE_SIGNING_ALLOWED=NO
-
   build-macos:
     name: Build macOS
     runs-on: self-hosted
@@ -36,3 +21,15 @@ jobs:
             -destination 'generic/platform=macOS' \
             -configuration Debug \
             CODE_SIGNING_ALLOWED=NO
+
+  test-video-editor:
+    name: Test RxVideoEditor package
+    runs-on: self-hosted
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Run package tests
+        run: swift test --package-path Packages/RxVideoEditor --no-parallel
+
+      - name: Test effects package
+        run: swift test --package-path Packages/RxVideoEffects --no-parallel

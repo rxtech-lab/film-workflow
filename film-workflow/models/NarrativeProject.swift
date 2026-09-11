@@ -3,6 +3,11 @@ import SwiftData
 
 @Model
 final class NarrativeProject: GroupableProject {
+    /// Stable identity for MCP, agent targets and timeline references.
+    /// A `PersistentIdentifier` is neither stable across launches nor
+    /// representable in a scene payload.
+    var id: UUID = UUID()
+
     var name: String
     var createdAt: Date
     var updatedAt: Date

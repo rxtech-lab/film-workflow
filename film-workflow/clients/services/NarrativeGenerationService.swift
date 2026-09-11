@@ -55,8 +55,9 @@ enum NarrativeGenerationService {
             }
             // Write the (potentially large) audio off the main actor so the UI doesn't freeze.
             let audioData = response.audioData
+            let storage = ProjectStorage.forContainer(context.container)
             let relativePath = try await Task.detached {
-                try FileStorage.saveAudio(audioData, extension: "wav")
+                try storage.saveAudio(audioData, extension: "wav", kind: .narration)
             }.value
             let generated = GeneratedNarrative(
                 audioFilePath: relativePath,
@@ -65,6 +66,7 @@ enum NarrativeGenerationService {
                 providerName: project.providerEnum.displayName,
                 speakerSummary: summary
             )
+            generated.durationSeconds = await AudioProbe.durationSeconds(of: storage.absoluteURL(for: relativePath))
             context.insert(generated)
             project.updatedAt = Date()
             await generateCaptionsIfEnabled(
@@ -101,8 +103,9 @@ enum NarrativeGenerationService {
             // Write the (potentially large) audio off the main actor so the UI doesn't freeze.
             let audioData = response.audioData
             let fileExtension = response.fileExtension
+            let storage = ProjectStorage.forContainer(context.container)
             let relativePath = try await Task.detached {
-                try FileStorage.saveAudio(audioData, extension: fileExtension)
+                try storage.saveAudio(audioData, extension: fileExtension, kind: .narration)
             }.value
             let generated = GeneratedNarrative(
                 audioFilePath: relativePath,
@@ -111,6 +114,7 @@ enum NarrativeGenerationService {
                 providerName: project.providerEnum.displayName,
                 speakerSummary: summary
             )
+            generated.durationSeconds = await AudioProbe.durationSeconds(of: storage.absoluteURL(for: relativePath))
             context.insert(generated)
             project.updatedAt = Date()
             await generateCaptionsIfEnabled(

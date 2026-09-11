@@ -25,6 +25,11 @@ final class AgentThread {
     var targetKind: String = AgentTargetKind.none.rawValue
     var targetUUID: UUID?
 
+    /// The film the thread works on. Threads live in the app-level store, so
+    /// this is the only link back to the package that holds the target.
+    var documentID: UUID?
+    var documentPath: String?
+
     // MARK: - Backend
 
     /// Empty means "follow `AgentSettings.shared.defaultBackend`". Stored rather

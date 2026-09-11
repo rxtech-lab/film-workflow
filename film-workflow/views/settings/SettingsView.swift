@@ -24,6 +24,10 @@ struct SettingsView: View {
                 }
                 .tag(AppNavigation.SettingsSection.captions)
 
+            RemotionMapSettingsView()
+                .tabItem { Label("Remotion", systemImage: "film") }
+                .tag(AppNavigation.SettingsSection.remotion)
+
             MCPSettingsView()
                 .tabItem {
                     Label("MCP Server", systemImage: "network")

@@ -80,6 +80,17 @@ claude mcp add --transport http film http://127.0.0.1:7711/...
 `remotion_add_image`、`remotion_remove_image`、`remotion_add_audio`、`remotion_remove_audio`、
 `remotion_generate_image`、`remotion_take_screenshot`、`remotion_take_screenshots`
 
+**序列**
+
+`sequence_create`、`sequence_list`、`sequence_get`、`sequence_set_timeline`、`sequence_add_clip`、
+`sequence_remove_clip`、`sequence_render`、`sequence_renders`
+
+`sequence_render` 按 `captions` 参数处理时间线上的字幕片段：`burn_in`（烧录进画面）、`embedded`
+（每种语言一条内嵌字幕轨）、`sidecar`（每种语言一个 `.srt` 或 `.vtt` 文件，放在影片旁，格式由
+`caption_sidecar_format` 决定）或 `none`。`caption_languages` 是 BCP-47 语言代码列表，`""` 表示原文；
+烧录时取第一项作为显示语言，`caption_bilingual` 会在其上方加上原文。结果中包含 `captions` 与
+`caption_files`。
+
 ## 注意事项
 
 - 通过 MCP 请求的翻译一律使用 AI 后端。Apple 的设备端翻译引擎只能在应用内运行。

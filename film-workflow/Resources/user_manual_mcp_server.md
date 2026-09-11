@@ -84,6 +84,18 @@ The server exposes the app's own operations. The tool set groups roughly by tab:
 `remotion_add_image`, `remotion_remove_image`, `remotion_add_audio`, `remotion_remove_audio`,
 `remotion_generate_image`, `remotion_take_screenshot`, `remotion_take_screenshots`
 
+**Sequences**
+
+`sequence_create`, `sequence_list`, `sequence_get`, `sequence_set_timeline`, `sequence_add_clip`,
+`sequence_remove_clip`, `sequence_render`, `sequence_renders`
+
+`sequence_render` delivers the caption clips on the timeline the way `captions` asks: `burn_in`
+(drawn into the picture), `embedded` (one subtitle track per language inside the movie), `sidecar`
+(one `.srt` or `.vtt` per language beside the movie, per `caption_sidecar_format`) or `none`.
+`caption_languages` lists BCP-47 codes, with `""` for the original; for burn-in the first entry is
+the language drawn and `caption_bilingual` adds the original above it. Results report `captions` and
+`caption_files`.
+
 ## Notes
 
 - Translations requested over MCP always use the AI backend. Apple's on-device translation engine

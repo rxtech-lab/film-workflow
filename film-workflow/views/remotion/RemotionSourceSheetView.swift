@@ -3,7 +3,7 @@ import SwiftUI
 import AppKit
 
 struct RemotionSourceSheetView: View {
-    let projectId: UUID
+    let projectDir: URL
     /// Bumped by the parent whenever the agent writes a file — triggers a refresh of
     /// the file list and the currently-selected file's contents.
     let refreshToken: Int
@@ -14,9 +14,6 @@ struct RemotionSourceSheetView: View {
     @State private var content: String = ""
     @State private var highlighted: AttributedString = AttributedString("")
 
-    private var projectDir: URL {
-        FileStorage.remotionProjectDir(id: projectId)
-    }
 
     var body: some View {
         NavigationSplitView {

@@ -75,3 +75,11 @@ release_notes.html
 xcodebuild-archive.log
 *.mdb
 index-build
+# Coverage data from launching the debug app directly
+*.profraw
+
+# Swift package build output
+Packages/*/.build/
+
+# Generated legacy runtime from older builds; no longer packaged.
+/RemotionRuntime/
