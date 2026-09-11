@@ -14,17 +14,15 @@ struct LibraryGridTests {
         var item: LibraryItemID?
     }
 
-    private struct Footage: TimelineDraggable {
+    private struct Footage: LibPreviewableProtocol {
         let clipSource: ClipSource
         let thumbnailURL: URL?
         let storedDuration: TimeInterval?
         var mediaURL: URL? { nil }
     }
 
-    private func descendants(_ value: Any, depth: Int = 0) -> [any NSAccessibilityProtocol] {
-        guard depth < 20, let element = value as? any NSAccessibilityProtocol else { return [] }
-        let children = element.accessibilityChildren() ?? element.accessibilityContents() ?? element.accessibilityVisibleChildren() ?? []
-        return [element] + children.flatMap { descendants($0, depth: depth + 1) }
+    private func descendants(_ value: Any) -> [HostedAccessibilityElement] {
+        hostedAccessibilityDescendants(value)
     }
 
     @Test("Filmstrips wrap with panel width, display posters and durations, select, and collapse with their folder")
@@ -110,7 +108,22 @@ struct LibraryGridTests {
         let folder = try #require(descendants(host).first { $0.accessibilityIdentifier() == "library.folder.\(group.id.uuidString)" })
         #expect(folder.accessibilityPerformPress())
         try await Task.sleep(for: .milliseconds(300))
-        #expect(!descendants(host).contains { $0.accessibilityIdentifier() == "library.item.\(rows[0].id.id.uuidString)" })
+        host.layoutSubtreeIfNeeded()
+        let collapsedBitmap = try #require(host.bitmapImageRepForCachingDisplay(in: host.bounds))
+        host.cacheDisplay(in: host.bounds, to: collapsedBitmap)
+        try #require(collapsedBitmap.representation(using: .png, properties: [:]))
+            .write(to: URL(fileURLWithPath: "/tmp/film-library-collapsed.png"))
+        // SwiftUI keeps virtual nodes in its lazy layout cache after collapse.
+        // Check the rendered surface so cached accessibility nodes cannot mask
+        // footage that is still visibly on screen.
+        var visiblePosterPixels = 0
+        for y in 0..<collapsedBitmap.pixelsHigh {
+            for x in 0..<collapsedBitmap.pixelsWide {
+                if let color = collapsedBitmap.colorAt(x: x, y: y)?.usingColorSpace(.deviceRGB),
+                   color.redComponent > 0.7, color.greenComponent < 0.4 { visiblePosterPixels += 1 }
+            }
+        }
+        #expect(visiblePosterPixels == 0)
         #expect(folder.accessibilityPerformPress())
         try await Task.sleep(for: .milliseconds(300))
         #expect(descendants(host).contains { $0.accessibilityIdentifier() == "library.item.\(rows[0].id.id.uuidString)" })

@@ -146,6 +146,9 @@ struct DocumentMediaResolver: MediaResolver {
     }
 
     func thumbnail(for source: ClipSource, at time: TimeInterval) async -> CGImage? {
+        if let preview = await libraryPreview(for: source) {
+            return await preview.thumbnail(at: time, maximumSize: CGSize(width: 240, height: 136))
+        }
         guard let media = try? await resolve(source), let url = media.fileURL else { return nil }
         switch source.kind {
         case .image:
@@ -158,5 +161,22 @@ struct DocumentMediaResolver: MediaResolver {
         default:
             return nil
         }
+    }
+
+    @MainActor
+    func libraryPreview(for source: ClipSource) async -> LibPreviewSource? {
+        guard let (prefix, uuid) = Self.parse(source.id) else { return nil }
+        let context = container.mainContext
+        let model: (any LibPreviewableProtocol)?
+        switch prefix {
+        case .music: model = try? context.fetch(FetchDescriptor<GeneratedMusic>(predicate: #Predicate { $0.id == uuid })).first
+        case .narration: model = try? context.fetch(FetchDescriptor<GeneratedNarrative>(predicate: #Predicate { $0.id == uuid })).first
+        case .image: model = try? context.fetch(FetchDescriptor<GeneratedImage>(predicate: #Predicate { $0.id == uuid })).first
+        case .video: model = try? context.fetch(FetchDescriptor<GeneratedVideo>(predicate: #Predicate { $0.id == uuid })).first
+        case .imported: model = try? context.fetch(FetchDescriptor<ImportedAsset>(predicate: #Predicate { $0.id == uuid })).first
+        case .caption: model = try? context.fetch(FetchDescriptor<CaptionProject>(predicate: #Predicate { $0.projectUUID == uuid })).first
+        case .remotion: model = try? context.fetch(FetchDescriptor<RemotionProject>(predicate: #Predicate { $0.id == uuid })).first
+        }
+        return model?.makeLibPreviewSource()
     }
 }

@@ -22,6 +22,10 @@ struct LibraryPanel: View {
 
     @State private var filter: FootageKind?
     @State private var searchText = ""
+    /// Set once the user toggles the pane; until then the document's saved state applies.
+    @State private var footageToggled: Bool?
+
+    private var footageVisible: Bool { footageToggled ?? document.panelLayout.footageBrowserVisible ?? true }
 
     private var rows: [LibraryRow] {
         index.rows().filter { row in
@@ -31,7 +35,7 @@ struct LibraryPanel: View {
     }
 
     var body: some View {
-        VSplitView {
+        LibraryFootageSplit(document: document, footageVisible: footageVisible) {
             VStack(spacing: 0) {
                 StudioPanelHeader(title: "Library", symbol: "sidebar.left")
                 HStack(spacing: 6) {
@@ -76,8 +80,7 @@ struct LibraryPanel: View {
                 )
             }
             .frame(maxWidth: .infinity, minHeight: 180, maxHeight: .infinity)
-            .background(PersistedPanelSplit(document: document, panel: .libraryRows))
-
+        } footage: {
             let cells = state.selection.map { index.footage(for: $0) } ?? []
             FootageBrowserView(
                 libraryItem: state.selection,
@@ -98,9 +101,10 @@ struct LibraryPanel: View {
                 },
                 onSeek: { cell, fraction in
                     if let item = state.selection { state.seekFootage(item, cellID: cell.id, fraction: fraction) }
-                }
+                },
+                isExpanded: footageVisible,
+                onToggle: toggleFootage
             )
-            .frame(maxWidth: .infinity, minHeight: 150, idealHeight: 200, maxHeight: .infinity)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .task(id: rows.map(\.id)) { await warmDurations() }
@@ -109,6 +113,12 @@ struct LibraryPanel: View {
                 Label("Import Media…", systemImage: "square.and.arrow.down")
             }
         }
+    }
+
+    private func toggleFootage() {
+        let visible = !footageVisible
+        footageToggled = visible
+        document.setFootageBrowserVisible(visible)
     }
 
     /// The version in force for an item: the one chosen here, a caption

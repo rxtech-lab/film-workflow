@@ -167,14 +167,13 @@ final class EditorWindowState {
     /// Shows `cellID` of `item` at `fraction` (0...1) of its length in the
     /// viewer. Always on, unlike timeline skimming, because a pass over a
     /// browser cell is deliberate; like it, it stays out of the way while
-    /// the sequence plays. Only footage the footage viewer can play takes
-    /// part; sequences, captions and Remotion projects have viewers of
-    /// their own.
+    /// the sequence plays. Sequences retain their own viewer; captions and
+    /// Remotion compositions use the shared footage preview.
     func skimFootage(_ item: LibraryItemID, cellID: UUID, fraction: Double) {
         guard !player.isPlaying, !footagePlayer.isPlaying, fraction.isFinite else { return }
         switch item.kind {
-        case .image, .video, .music, .narration, .imported: break
-        case .sequence, .caption, .remotion: return
+        case .image, .video, .music, .narration, .imported, .caption, .remotion: break
+        case .sequence: return
         }
         footageSkim = FootageSkim(item: item, cellID: cellID, fraction: min(max(0, fraction), 1))
     }

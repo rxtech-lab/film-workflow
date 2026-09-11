@@ -163,11 +163,15 @@ private struct TransitionRegion: View {
             Button("Inspect Transition", action: onSelect)
             Button("Remove Transition", role: .destructive, action: onDelete)
         }
-        .overlay(alignment: .bottom) {
+        .overlay {
+            // The readout stays inside this lane: lanes below draw on top, so
+            // anything hung beneath the chip would be hidden by their clips.
             if draft != nil {
                 Text("\(duration.formatted(.number.precision(.fractionLength(2)))) s")
-                    .font(.caption2.monospacedDigit()).padding(3).background(.regularMaterial, in: RoundedRectangle(cornerRadius: 3))
-                    .offset(y: 22).fixedSize().allowsHitTesting(false)
+                    .font(.caption2.monospacedDigit().weight(.semibold)).foregroundStyle(.white)
+                    .padding(.horizontal, 5).padding(.vertical, 2)
+                    .background(.black.opacity(0.75), in: RoundedRectangle(cornerRadius: 3))
+                    .fixedSize().allowsHitTesting(false)
             }
         }
     }

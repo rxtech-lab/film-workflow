@@ -142,6 +142,12 @@ final class ProjectDocument: Identifiable {
         savePanelLayout()
     }
 
+    func setFootageBrowserVisible(_ visible: Bool) {
+        panelLayout.footageBrowserVisible = visible
+        panelLayoutNeedsSave = true
+        savePanelLayout()
+    }
+
     func setPanelSizes(_ sizes: [Double], for panel: DocumentPanelLayout.Panel) {
         guard sizes.count >= 2, sizes.allSatisfy({ $0.isFinite && $0 > 0 }),
               panelLayout.splits[panel.rawValue] != sizes else { return }

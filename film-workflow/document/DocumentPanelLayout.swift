@@ -7,6 +7,8 @@ struct DocumentPanelLayout: Codable, Equatable {
     }
 
     var effectsBrowserVisible: Bool?
+    /// Whether the library's footage pane shows its versions or only its header.
+    var footageBrowserVisible: Bool?
 
     var splits: [String: [Double]] = [:]
 

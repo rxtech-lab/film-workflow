@@ -43,9 +43,10 @@ struct FootageFilmstrip: View {
 
     @State private var availableWidth: CGFloat = 300
     @State private var skimFraction: Double?
+    @State private var previewRevision = 0
 
-    private var temporal: Bool { cell.kind == .video || cell.kind == .audio || cell.kind == .remotion }
-    private var skimmable: Bool { temporal && cell.mediaURL != nil && cell.kind != .remotion }
+    private var temporal: Bool { cell.previewSource?.isTemporal == true }
+    private var skimmable: Bool { cell.previewSource?.canScrub == true }
 
     var body: some View {
         let layout = FilmstripLayout(duration: duration, availableWidth: availableWidth, isTemporal: temporal)
@@ -58,11 +59,24 @@ struct FootageFilmstrip: View {
         .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { availableWidth = max(1, $0) }
         .onChange(of: cell.id) { _, _ in endSkim() }
         .onDisappear { if skimFraction != nil { endSkim() } }
+        .onReceive(NotificationCenter.default.publisher(for: .remotionPreviewChanged)) { note in
+            if let directory = note.userInfo?["directory"] as? URL, directory.standardizedFileURL == cell.previewDirectory {
+                previewRevision += 1
+            }
+        }
     }
 
     private func strip(row: Int, layout: FilmstripLayout) -> some View {
-        FilmstripFrames(cell: cell, duration: duration, startFraction: layout.fraction(row: row, x: 0),
-                        endFraction: layout.fraction(row: row, x: layout.rowWidth(row)), width: layout.rowWidth(row))
+        Group {
+            if let source = cell.previewSource {
+                LibPreviewFrameStrip(source: source.refreshed(String(previewRevision)), startTime: layout.fraction(row: row, x: 0) * (duration ?? 0),
+                                     endTime: layout.fraction(row: row, x: layout.rowWidth(row)) * (duration ?? 0),
+                                     width: layout.rowWidth(row), height: FilmstripLayout.height, symbol: cell.kind.symbolName)
+            } else {
+                FootageThumbnail(thumbnailURL: cell.thumbnailURL, videoURL: cell.kind == .video ? cell.mediaURL : nil,
+                                 icon: cell.kind.symbolName, duration: nil, cornerRadius: 0)
+            }
+        }
             .frame(width: layout.rowWidth(row), height: FilmstripLayout.height)
             .clipped()
             .overlay {
@@ -148,50 +162,6 @@ private struct FilmstripIndicators: View {
                     .font(.system(size: 9)).foregroundStyle(color).offset(y: -4)
             }
             .shadow(color: .black.opacity(0.8), radius: 1)
-    }
-}
-
-private struct FilmstripFrames: View {
-    let cell: FootageCell
-    let duration: TimeInterval?
-    let startFraction: Double
-    let endFraction: Double
-    let width: CGFloat
-    @State private var frames: [CGImage] = []
-    private var count: Int { max(1, Int(ceil(width / FilmstripLayout.posterWidth))) }
-    private var request: String { "\(cell.id)|\(cell.mediaURL?.path ?? "")|\(duration ?? 0)|\(startFraction)|\(endFraction)|\(count)" }
-
-    var body: some View {
-        HStack(spacing: 0) {
-            ForEach(0..<count, id: \.self) { index in
-                if frames.indices.contains(index) {
-                    Image(decorative: frames[index], scale: 1).resizable().scaledToFill()
-                        .frame(width: FilmstripLayout.posterWidth, height: FilmstripLayout.height).clipped()
-                } else {
-                    FootageThumbnail(thumbnailURL: cell.thumbnailURL, videoURL: nil,
-                                     icon: cell.kind.symbolName, duration: nil)
-                        .frame(width: FilmstripLayout.posterWidth, height: FilmstripLayout.height)
-                }
-            }
-        }
-        .frame(width: width, alignment: .leading)
-        .accessibilityHidden(true)
-        .task(id: request) {
-            frames = []
-            guard cell.kind == .video, let url = cell.mediaURL, let duration, duration > 0 else { return }
-            let generator = AVAssetImageGenerator(asset: AVURLAsset(url: url))
-            generator.appliesPreferredTrackTransform = true
-            generator.maximumSize = CGSize(width: 240, height: 136)
-            generator.requestedTimeToleranceBefore = CMTime(seconds: 0.15, preferredTimescale: 600)
-            generator.requestedTimeToleranceAfter = CMTime(seconds: 0.15, preferredTimescale: 600)
-            for index in 0..<count {
-                guard !Task.isCancelled else { generator.cancelAllCGImageGeneration(); return }
-                let fraction = startFraction + (endFraction - startFraction) * min(1, (Double(index) + 0.5) * FilmstripLayout.posterWidth / width)
-                let time = CMTime(seconds: min(max(0, duration - 0.04), fraction * duration), preferredTimescale: 600)
-                guard let image = try? await generator.image(at: time).image, !Task.isCancelled else { return }
-                frames.append(image)
-            }
-        }
     }
 }
 

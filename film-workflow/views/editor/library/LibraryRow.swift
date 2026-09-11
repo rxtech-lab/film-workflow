@@ -183,7 +183,7 @@ struct LibraryIndex {
             }
         case .caption:
             guard let p = caption(item.id), p.activeSegmentCount > 0 else { return [] }
-            return [FootageCell(id: p.projectUUID, title: p.name, subtitle: "\(p.activeSegmentCount) captions", footage: p)]
+            return [FootageCell(id: p.activeVersionID ?? p.projectUUID, title: p.activeVersion.map { "v\($0.number)" } ?? "Captions", subtitle: "\(p.activeSegmentCount) captions", footage: p)]
         case .image:
             guard let p = image(item.id) else { return [] }
             return p.generatedFiles.sorted { $0.createdAt > $1.createdAt }.enumerated().map { i, f in
@@ -219,6 +219,11 @@ struct FootageCell: Identifiable, Hashable {
     /// Known length; nil when only the file knows (generated audio).
     let duration: TimeInterval?
     let drag: FootageDragItem
+    let previewSource: LibPreviewSource?
+    let captionStyle: TextStyle?
+    let captionAudioURL: URL?
+    let previewFPS: Int
+    let previewDirectory: URL?
 
     @MainActor
     init(id: UUID, title: String, subtitle: String, footage: some TimelineDraggable, thumbnailURL: URL? = nil) {
@@ -228,7 +233,12 @@ struct FootageCell: Identifiable, Hashable {
         self.kind = footage.timelineKind
         self.thumbnailURL = thumbnailURL ?? footage.thumbnailURL
         self.mediaURL = footage.mediaURL
-        self.duration = footage.knownDuration
+        self.previewSource = (footage as? any LibPreviewableProtocol)?.makeLibPreviewSource()
+        self.duration = previewSource?.duration ?? footage.knownDuration
         self.drag = footage.dragItem
+        self.captionStyle = (footage as? CaptionProject)?.captionStyle
+        self.captionAudioURL = (footage as? CaptionProject).flatMap { $0.hasAudio ? $0.audioURL : nil }
+        self.previewFPS = (footage as? RemotionProject)?.compositionFps ?? 30
+        self.previewDirectory = (footage as? RemotionProject)?.projectDir.standardizedFileURL
     }
 }

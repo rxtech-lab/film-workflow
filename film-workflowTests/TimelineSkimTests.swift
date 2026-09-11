@@ -74,7 +74,7 @@ struct TimelineSkimTests {
     func footageSkimGates() {
         let state = EditorWindowState(defaults: defaults())
         let video = LibraryItemID(kind: .video, id: UUID())
-        for kind in [FootageKind.sequence, .caption, .remotion] {
+        for kind in [FootageKind.sequence] {
             state.skimFootage(LibraryItemID(kind: kind, id: UUID()), cellID: UUID(), fraction: 0.5)
             #expect(state.footageSkim == nil)
         }

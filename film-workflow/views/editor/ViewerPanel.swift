@@ -15,7 +15,7 @@ struct ViewerPanel: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            if shownItem?.kind == .sequence || shownItem?.kind == .caption || shownItem == nil {
+            if shownItem?.kind == .sequence || shownItem == nil {
                 HStack {
                     if let sequence {
                         Text("\(sequence.width)×\(sequence.height) · \(sequence.fps)p")
@@ -45,7 +45,7 @@ struct ViewerPanel: View {
     private var viewerContent: some View {
         Group {
             switch shownItem?.kind {
-            case .image?, .video?, .music?, .narration?, .imported?:
+            case .image?, .video?, .music?, .narration?, .imported?, .caption?, .remotion?:
                 if let item = shownItem {
                     let cells = index.footage(for: item)
                     let wanted = state.footageSkim?.cellID ?? state.currentVersion(for: item)
@@ -56,19 +56,14 @@ struct ViewerPanel: View {
                             versions: cells,
                             onSelectVersion: { state.setCurrentVersion($0, for: item) },
                             skimFraction: state.footageSkim?.fraction,
-                            player: state.footagePlayer
+                            player: state.footagePlayer, document: document
                         )
                     } else {
                         StudioEmptyState(title: "Nothing to preview yet", symbol: item.kind.systemImage,
                                          message: "Generate footage from the inspector, then play it here.")
                     }
                 } else { missing }
-            case .remotion?:
-                if let p = shownItem.flatMap({ index.remotion($0.id) }) {
-                    RemotionViewer(project: p, document: document)
-                        .id(p.id)
-                } else { missing }
-            case .sequence?, .caption?, nil:
+            case .sequence?, nil:
                 if let sequence {
                     SequenceViewerView(controller: state.player, fps: sequence.fps, stage: !sequence.timeline.hasActiveModifiers && sequence.timeline.allClips.contains(where: { $0.source.kind == .remotion }) ? AnyView(
                         TimelineLayeredPreviewView(controller: state.preview) { AnyView(RemotionPlayerWebView(playback: $0)) }

@@ -38,6 +38,11 @@ public enum MediaResolverError: Error, Sendable, Equatable {
 public protocol MediaResolver: Sendable {
     func resolve(_ source: ClipSource) async throws -> ResolvedMedia
     func thumbnail(for source: ClipSource, at time: TimeInterval) async -> CGImage?
+    func libraryPreview(for source: ClipSource) async -> LibPreviewSource?
+}
+
+public extension MediaResolver {
+    func libraryPreview(for source: ClipSource) async -> LibPreviewSource? { nil }
 }
 
 extension UTType {

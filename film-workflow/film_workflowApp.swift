@@ -34,6 +34,7 @@ struct film_workflowApp: App {
     private static func bootstrapServices() async {
         guard !didBootstrap, NSClassFromString("XCTestCase") == nil else { return }
         didBootstrap = true
+        MCPServer.shared.bootstrap()
         // `-skipStartupAuth` lets a debug launch skip the keychain read, whose
         // access prompt would otherwise block an unattended run.
         if !ProcessInfo.processInfo.arguments.contains("-skipStartupAuth") {
@@ -47,7 +48,6 @@ struct film_workflowApp: App {
                 alert.runModal()
             }
         }
-        MCPServer.shared.bootstrap()
     }
 
     var body: some Scene {
@@ -55,6 +55,7 @@ struct film_workflowApp: App {
         // restoration reopens the same packages.
         WindowGroup(id: EditorWindowID.value, for: URL.self) { $url in
             EditorWindowRoot(documentURL: url)
+                .signInSheetPresenter()
                 .task { await Self.bootstrapServices() }
         }
         .windowStyle(.hiddenTitleBar)
@@ -114,6 +115,7 @@ struct film_workflowApp: App {
 
         Window("Welcome to RxFilmStudio", id: WelcomeWindowID.value) {
             WelcomeWindowView()
+                .signInSheetPresenter()
                 .task { await Self.bootstrapServices() }
         }
         .windowStyle(.hiddenTitleBar)
@@ -127,12 +129,14 @@ struct film_workflowApp: App {
         Window("Agent", id: AgentWindowID.value) {
             AgentWindowView()
                 .environment(AgentController.shared)
+                .signInSheetPresenter()
         }
         .modelContainer(AppModelContainer.shared)
         .defaultSize(width: 760, height: 720)
 
         Settings {
             SettingsView()
+                .signInSheetPresenter()
         }
     }
 }

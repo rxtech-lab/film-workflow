@@ -1,6 +1,46 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+    "Restoring account…" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在恢复账户…"
+          }
+        }
+      }
+    },
+    "Couldn’t connect to your account. Retrying automatically." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法连接到你的账户，正在自动重试。"
+          }
+        }
+      }
+    },
+    "Retry Now" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "立即重试"
+          }
+        }
+      }
+    },
+    "Your session expired. Please sign in again." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "你的登录会话已过期，请重新登录。"
+          }
+        }
+      }
+    },
     "" : {
       "localizations" : {
         "zh-Hans" : {
@@ -526,6 +566,9 @@
       }
     },
     "Account" : {
+
+    },
+    "Account Not Signed In" : {
 
     },
     "Account…" : {
@@ -1898,6 +1941,12 @@
     "Codex reasoning effort" : {
 
     },
+    "Collapse footage" : {
+
+    },
+    "Collapsed" : {
+
+    },
     "Combining the chunks into one file…" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -2050,6 +2099,9 @@
 
     },
     "Couldn’t Connect to Server" : {
+
+    },
+    "Couldn’t connect to your account. Retrying automatically." : {
 
     },
     "Couldn’t edit" : {
@@ -3016,6 +3068,12 @@
         }
       }
     },
+    "Expand footage" : {
+
+    },
+    "Expanded" : {
+
+    },
     "Export" : {
       "localizations" : {
         "zh-Hans" : {
@@ -3201,6 +3259,9 @@
           }
         }
       }
+    },
+    "Footage pane height" : {
+
     },
     "Footage version" : {
 
@@ -4964,9 +5025,6 @@
         }
       }
     },
-    "No Preview" : {
-
-    },
     "No project" : {
 
     },
@@ -6088,7 +6146,7 @@
         }
       }
     },
-    "Reload preview" : {
+    "Reload Preview" : {
 
     },
     "reluctantly" : {
@@ -6380,6 +6438,9 @@
         }
       }
     },
+    "Restoring account…" : {
+
+    },
     "Resume" : {
 
     },
@@ -6415,6 +6476,9 @@
           }
         }
       }
+    },
+    "Retry Now" : {
+
     },
     "Retry Preview" : {
 
@@ -6590,6 +6654,9 @@
       }
     },
     "RxFilmStudio" : {
+
+    },
+    "RxLab sign-in is not configured for this build." : {
 
     },
     "sad" : {
@@ -7159,6 +7226,9 @@
         }
       }
     },
+    "Sign in to your RxLab account to manage credits and subscription usage." : {
+
+    },
     "Sign In…" : {
 
     },
@@ -7166,6 +7236,9 @@
 
     },
     "Sign out?" : {
+
+    },
+    "Sign-in Unavailable" : {
 
     },
     "Size" : {
@@ -8623,9 +8696,6 @@
     "Use This Version" : {
 
     },
-    "Use your account to manage credits and subscription usage." : {
-
-    },
     "Used" : {
       "localizations" : {
         "zh-Hans" : {
@@ -9174,6 +9244,9 @@
 
     },
     "Your projects are not affected." : {
+
+    },
+    "Your session expired. Please sign in again." : {
 
     },
     "Youthful" : {

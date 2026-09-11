@@ -9,7 +9,7 @@ import VideoEditorCore
 @Suite("Footage filmstrip and viewer", .serialized)
 @MainActor
 struct FootageFilmstripTests {
-    private struct Media: TimelineDraggable {
+    private struct Media: LibPreviewableProtocol {
         let clipSource: ClipSource
         let mediaURL: URL?
         var storedDuration: TimeInterval? { nil }
@@ -72,14 +72,13 @@ struct FootageFilmstripTests {
         player.pause()
     }
 
-    private func descendants(_ value: Any, depth: Int = 0) -> [any NSAccessibilityProtocol] {
-        guard depth < 20, let element = value as? any NSAccessibilityProtocol else { return [] }
-        let children = element.accessibilityChildren() ?? element.accessibilityContents() ?? []
-        return [element] + children.flatMap { descendants($0, depth: depth + 1) }
+    private func descendants(_ value: Any) -> [HostedAccessibilityElement] {
+        hostedAccessibilityDescendants(value)
     }
 
     @Test("The narrow viewer keeps metadata above, controls below, and has no slider")
     func compactViewer() async throws {
+        NSApp.accessibilitySetValue(true, forAttribute: .init(rawValue: "AXEnhancedUserInterface"))
         let url = FileManager.default.temporaryDirectory.appendingPathComponent("CompactViewer-\(UUID()).wav")
         defer { try? FileManager.default.removeItem(at: url) }
         let cell = try audioCell(at: url)
@@ -94,16 +93,19 @@ struct FootageFilmstripTests {
         defer { window.close(); player.unload() }
         try await Task.sleep(for: .milliseconds(500))
         host.layoutSubtreeIfNeeded()
+        let bitmap = try #require(host.bitmapImageRepForCachingDisplay(in: host.bounds))
+        host.cacheDisplay(in: host.bounds, to: bitmap)
+        try #require(bitmap.representation(using: .png, properties: [:]))
+            .write(to: URL(fileURLWithPath: "/tmp/film-viewer-compact.png"))
         let elements = descendants(host)
+        try elements.map { "\($0.accessibilityIdentifier() ?? "-") | \($0.accessibilityLabel() ?? "-") | \(String(describing: $0.accessibilityValue())) | \($0.accessibilityFrame())" }
+            .joined(separator: "\n").write(toFile: "/tmp/film-viewer-accessibility.txt", atomically: true, encoding: .utf8)
         let name = try #require(elements.first { $0.accessibilityValue() as? String == "Harbor sunrise" || $0.accessibilityLabel() == "Harbor sunrise" })
         let timecode = try #require(elements.first { $0.accessibilityIdentifier() == "viewer.timecode" })
         #expect(name.accessibilityFrame().minY > timecode.accessibilityFrame().maxY)
         #expect(!elements.contains { $0.accessibilityRole() == .slider })
         let timeFrame = timecode.accessibilityFrame()
         #expect(timeFrame.width > 100 && timeFrame.minX >= window.frame.minX && timeFrame.maxX <= window.frame.maxX)
-        let bitmap = try #require(host.bitmapImageRepForCachingDisplay(in: host.bounds))
-        host.cacheDisplay(in: host.bounds, to: bitmap)
-        try #require(bitmap.representation(using: .png, properties: [:]))
-            .write(to: URL(fileURLWithPath: "/tmp/film-viewer-compact.png"))
+
     }
 }

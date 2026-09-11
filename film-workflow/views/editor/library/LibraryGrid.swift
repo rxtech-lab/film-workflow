@@ -43,6 +43,7 @@ struct LibraryGrid: View {
                     section(group: group, rows: rows.filter { $0.groupID == group.id })
                 }
             }
+            .accessibilityElement(children: .contain)
             .padding(8)
         }
         .contentShape(Rectangle())
@@ -66,10 +67,10 @@ struct LibraryGrid: View {
                         .background(.quaternary.opacity(0.35), in: RoundedRectangle(cornerRadius: 8))
                         .modifier(LibraryGroupDropTarget(groupID: group?.id, onMove: move))
                 } else {
-                    LazyVStack(alignment: .leading, spacing: 12) {
-                        ForEach(rows) { row in
-                            rowView(row)
-                        }
+                    // Let the outer lazy stack track each row as filtering
+                    // switches between empty and populated sections.
+                    ForEach(rows) { row in
+                        rowView(row)
                     }
                 }
             }

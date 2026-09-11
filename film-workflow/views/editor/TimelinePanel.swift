@@ -10,17 +10,20 @@ struct TimelinePanel: View {
     let document: ProjectDocument
     let sequence: SequenceProject?
     let onCreateSequence: () -> Void
+    let previewRevision: String
+    @State private var remotionRevision = 0
 
     @Environment(\.modelContext) private var modelContext
     @Environment(\.undoManager) private var undoManager
     @State private var dropError: String?
     @State private var browserVisible: Bool
 
-    init(state: EditorWindowState, document: ProjectDocument, sequence: SequenceProject?, onCreateSequence: @escaping () -> Void) {
+    init(state: EditorWindowState, document: ProjectDocument, sequence: SequenceProject?, previewRevision: String = "", onCreateSequence: @escaping () -> Void) {
         self.state = state
         self.document = document
         self.sequence = sequence
         self.onCreateSequence = onCreateSequence
+        self.previewRevision = previewRevision
         _browserVisible = State(initialValue: document.panelLayout.effectsBrowserVisible ?? true)
     }
 
@@ -35,6 +38,7 @@ struct TimelinePanel: View {
             .background(Color(nsColor: .controlBackgroundColor))
         }
         .background(Color(nsColor: .textBackgroundColor))
+        .onReceive(NotificationCenter.default.publisher(for: .remotionPreviewChanged)) { _ in remotionRevision += 1 }
     }
 
     private var timelineColumn: some View {
@@ -68,6 +72,7 @@ struct TimelinePanel: View {
                     if let time { state.skim(to: time) } else { state.endSkim() }
                 },
                 resolver: DocumentMediaResolver(document: document, width: sequence.width, height: sequence.height, fps: sequence.fps),
+                previewRevision: previewRevision + ":\(remotionRevision)",
                 onDrop: { item, trackID, time in
                     Task { await insert(item, on: trackID, at: time, into: sequence) }
                 },

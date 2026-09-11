@@ -20,18 +20,17 @@ struct FootageBrowserView: View {
     var onSkim: (FootageCell, Double?) -> Void = { _, _ in }
 
     var onSeek: (FootageCell, Double) -> Void = { _, _ in }
+    /// Collapsed, only the header row stays in view; the split above keeps
+    /// the pane's height so expanding returns it to where it was.
+    var isExpanded = true
+    var onToggle: () -> Void = {}
+
+    /// The header's fixed height, which is all that remains of a collapsed pane.
+    static let headerHeight: CGFloat = 28
 
     var body: some View {
         VStack(spacing: 0) {
-            HStack {
-                Text(title).font(.caption.weight(.semibold)).foregroundStyle(.secondary)
-                Spacer()
-                Text("\(cells.count)").font(.caption).foregroundStyle(.tertiary)
-            }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 6)
-            .background(.bar)
-            Divider()
+            header
             if cells.isEmpty {
                 StudioEmptyState(title: "No footage yet", symbol: "rectangle.stack",
                                  message: "Import media or generate footage, then drag it to the timeline.")
@@ -51,6 +50,30 @@ struct FootageBrowserView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private var header: some View {
+        Button(action: onToggle) {
+            HStack(spacing: 6) {
+                Image(systemName: "chevron.right")
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                    .rotationEffect(.degrees(isExpanded ? 90 : 0))
+                Text(title).font(.caption.weight(.semibold)).foregroundStyle(.secondary).lineLimit(1)
+                Spacer()
+                Text("\(cells.count)").font(.caption).foregroundStyle(.tertiary)
+            }
+            .padding(.horizontal, 10)
+            .frame(height: Self.headerHeight)
+            .background(.bar)
+            .overlay(alignment: .bottom) { Divider() }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help(isExpanded ? "Collapse footage" : "Expand footage")
+        .accessibilityLabel(title)
+        .accessibilityValue(isExpanded ? "Expanded" : "Collapsed")
+        .accessibilityIdentifier("toggle-footage-browser")
     }
 }
 
@@ -78,7 +101,6 @@ struct FootageCellView: View {
     var body: some View {
         content
             .padding(4)
-            .background(isSelected ? Color.accentColor.opacity(0.12) : .clear, in: RoundedRectangle(cornerRadius: 8))
             .contentShape(Rectangle())
             .onTapGesture(perform: onSelect)
             // Select on press, not on release: a drag source swallows taps

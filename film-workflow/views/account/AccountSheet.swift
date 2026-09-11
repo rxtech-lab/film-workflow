@@ -1,5 +1,4 @@
 import RxAuthSwift
-import RxAuthSwiftUI
 import SwiftUI
 
 struct AccountSheet: View {
@@ -26,6 +25,7 @@ struct AccountDetailContent: View {
     @State private var auth = AuthManager.shared
     @State private var balance = CreditBalanceStore.shared
     @State private var usage = UsageHistoryStore.shared
+    @State private var navigation = AppNavigation.shared
     @State private var confirmSignOut = false
     @State private var refreshError: String?
 
@@ -42,23 +42,16 @@ struct AccountDetailContent: View {
                     .padding(24)
                 }
                 .task { await refresh() }
-            } else if let manager = auth.oauthManager {
-                RxSignInView(
-                    manager: manager,
-                    appearance: RxSignInAppearance(
-                        title: "Sign in to RxLab",
-                        subtitle: "Manage credits and subscription usage.",
-                    ),
-                    style: .native,
-                    onAuthSuccess: { Task { await CreditBalanceStore.shared.refresh() } }
-                )
+            } else if auth.isRestoring {
+                AccountRestorationView(auth: auth)
             } else {
+                // Credentials are collected in `SignInSheet`, never inline here.
                 ContentUnavailableView {
-                    Label("Sign in to RxLab", systemImage: "person.crop.circle")
+                    Label("Account Not Signed In", systemImage: "person.crop.circle.badge.xmark")
                 } description: {
-                    Text("Use your account to manage credits and subscription usage.")
+                    Text("Sign in to your RxLab account to manage credits and subscription usage.")
                 } actions: {
-                    Button("Sign in") { Task { await auth.signIn() } }
+                    Button("Sign In…") { navigation.requestSignIn() }
                         .buttonStyle(.borderedProminent)
                 }
             }

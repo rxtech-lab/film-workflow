@@ -32,6 +32,10 @@ final class AppNavigation {
 
     var settingsSection: SettingsSection = .account
 
+    /// Bumped by `requestSignIn()`. The active window's `signInSheetPresenter`
+    /// watches it and raises the sign-in sheet.
+    private(set) var signInRequestCount = 0
+
     /// What the app is currently showing, so the agent window can follow along.
     ///
     /// Set by each tab as its project selection changes. Only ever used to seed
@@ -66,5 +70,10 @@ final class AppNavigation {
     func showAccountSettings() {
         settingsSection = .account
         pendingSettingsFocus = nil
+    }
+
+    /// Asks the active window to present the dedicated sign-in sheet.
+    func requestSignIn() {
+        signInRequestCount += 1
     }
 }

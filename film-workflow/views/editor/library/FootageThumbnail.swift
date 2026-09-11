@@ -12,6 +12,7 @@ struct FootageThumbnail: View {
     let duration: TimeInterval?
     var isStill = false
     var isSelected = false
+    var cornerRadius: CGFloat = 6
 
     @State private var image: CGImage?
 
@@ -40,7 +41,7 @@ struct FootageThumbnail: View {
                 }
                 .accessibilityHidden(true)
             }
-            .clipShape(RoundedRectangle(cornerRadius: 6))
+            .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
             .overlay(alignment: .bottomTrailing) {
                 if let duration, duration.isFinite, duration > 0 {
                     badge(Text(DurationLabel.short(duration)))
@@ -49,7 +50,7 @@ struct FootageThumbnail: View {
                 }
             }
             .overlay {
-                RoundedRectangle(cornerRadius: 6)
+                RoundedRectangle(cornerRadius: cornerRadius)
                     .strokeBorder(isSelected ? Color.accentColor : .clear, lineWidth: 2)
             }
             .task(id: Request(thumbnail: thumbnailURL, video: videoURL)) {

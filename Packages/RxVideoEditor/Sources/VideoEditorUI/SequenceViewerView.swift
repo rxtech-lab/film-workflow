@@ -42,7 +42,7 @@ public struct SequenceViewerView: View {
     }
 
     private var transport: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: 6) {
             Menu {
                 Button("Go to Start") { controller.pause(); controller.seek(to: 0) }
                 Button("Go to End") { controller.pause(); controller.seek(to: controller.duration) }
@@ -62,7 +62,7 @@ public struct SequenceViewerView: View {
             .keyboardShortcut(.space, modifiers: [])
             .help(controller.isPlaying ? "Pause" : "Play")
             Text(Timecode.string(seconds: controller.currentTime, fps: fps))
-                .font(.system(size: 19, weight: .light, design: .monospaced))
+                .font(.system(size: 17, weight: .light, design: .monospaced))
                 .fixedSize()
 
             Button { controller.step(frames: 1) } label: { Image(systemName: "forward.frame.fill") }

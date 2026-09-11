@@ -17,7 +17,10 @@ struct FootageViewer: View {
     var skimFraction: Double? = nil
 
     var player: FootagePlayer
+    var document: ProjectDocument? = nil
     @State private var fitsViewer = true
+    @State private var previewRevision = 0
+    private struct LoadRequest: Hashable { let cell: FootageCell; let revision: Int }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -29,17 +32,24 @@ struct FootageViewer: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             transport
         }
-        .task(id: cell.id) { await player.load(cell) }
+        .task(id: LoadRequest(cell: cell, revision: previewRevision)) { await player.load(cell, document: document) }
         .onChange(of: skimFraction, initial: true) { _, fraction in
             if let fraction { player.skim(toFraction: fraction) } else { player.endSkim() }
         }
         .onDisappear { player.unload() }
+        .onReceive(NotificationCenter.default.publisher(for: .remotionPreviewChanged)) { note in
+            if let directory = note.userInfo?["directory"] as? URL, directory.standardizedFileURL == cell.previewDirectory {
+                previewRevision += 1
+            }
+        }
     }
 
     @ViewBuilder
     private var stage: some View {
         switch cell.kind {
-        case .video, .remotion:
+        case .remotion, .captions:
+            TimelineLayeredPreviewView(controller: player.generatedPreview) { AnyView(RemotionPlayerWebView(playback: $0)) }
+        case .video:
             FootagePlayerLayerView(player: player.player, fitsViewer: fitsViewer)
         case .image:
             if let url = cell.mediaURL, let image = NSImage(contentsOf: url) {
@@ -61,8 +71,6 @@ struct FootageViewer: View {
                         .padding(.horizontal, 24)
                 }
             }
-        case .captions:
-            unavailable("No Preview", symbol: "captions.bubble")
         }
     }
 
@@ -70,7 +78,7 @@ struct FootageViewer: View {
         ContentUnavailableView(title, systemImage: symbol).foregroundStyle(.white)
     }
 
-    private var isPlayable: Bool { cell.kind == .video || cell.kind == .audio || cell.kind == .remotion }
+    private var isPlayable: Bool { cell.previewSource?.canScrub == true }
 
     private var header: some View {
         HStack(spacing: 10) {
@@ -102,13 +110,17 @@ struct FootageViewer: View {
         .padding(.horizontal, 12)
         .frame(height: 34)
         .background(.bar)
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("viewer.header")
     }
 
     private var transport: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: 6) {
             Menu {
                 Toggle("Fit to Viewer", isOn: $fitsViewer)
+                if cell.kind == .captions || cell.kind == .remotion {
+                    Button("Reload Preview") { previewRevision += 1 }
+                }
                 if isPlayable {
                     Toggle("Mute", isOn: Binding(get: { player.player.isMuted }, set: { player.player.isMuted = $0 }))
                     Divider()
@@ -147,6 +159,7 @@ struct FootageViewer: View {
         .padding(.horizontal, 10)
         .frame(height: 40)
         .background(.bar)
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("viewer.transport")
     }
 
@@ -178,7 +191,7 @@ private struct FootagePlaybackPosition: View {
 
     var body: some View {
         Text(Timecode.string(seconds: player.currentTime, fps: max(1, Int(player.frameRate.rounded()))))
-            .font(.system(size: 19, weight: .light, design: .monospaced))
+            .font(.system(size: 17, weight: .light, design: .monospaced))
             .monospacedDigit()
             .fixedSize()
             .accessibilityIdentifier("viewer.timecode")
@@ -189,10 +202,17 @@ private struct FootagePlaybackPosition: View {
 @MainActor
 @Observable
 final class FootagePlayer {
-    let player = AVPlayer()
-    private(set) var currentTime: TimeInterval = 0
-    private(set) var duration: TimeInterval = 0
-    private(set) var isPlaying = false
+    private let mediaPlayer = AVPlayer()
+    let generatedTransport: TimelinePlayerController
+    let generatedPreview: TimelinePreviewController
+    private(set) var usesGeneratedPreview = false
+    private var nativeCurrentTime: TimeInterval = 0
+    private var nativeDuration: TimeInterval = 0
+    private var nativeIsPlaying = false
+    var player: AVPlayer { usesGeneratedPreview ? generatedTransport.player : mediaPlayer }
+    var currentTime: TimeInterval { usesGeneratedPreview ? generatedTransport.currentTime : nativeCurrentTime }
+    var duration: TimeInterval { usesGeneratedPreview ? max(nativeDuration, generatedTransport.duration) : nativeDuration }
+    var isPlaying: Bool { usesGeneratedPreview ? generatedTransport.isPlaying : nativeIsPlaying }
     private(set) var loadedCellID: UUID?
     private(set) var frameRate: Double = 30
     @ObservationIgnored private var pendingPosition: (cellID: UUID, fraction: Double)?
@@ -204,7 +224,7 @@ final class FootagePlayer {
     private var resumeAfterScrub = false
     /// Where playback sat when skimming began, so the frame comes back once
     /// the pointer leaves the footage.
-    @ObservationIgnored private var restingTime: TimeInterval?
+    private var restingTime: TimeInterval?
     /// The skimmed position as a share of the length. Kept across a reload
     /// so a take that is still opening lands on the right frame.
     @ObservationIgnored private var skimFraction: Double?
@@ -216,6 +236,9 @@ final class FootagePlayer {
     @ObservationIgnored private var isScrubbing = false
 
     init() {
+        let transport = TimelinePlayerController()
+        generatedTransport = transport
+        generatedPreview = TimelinePreviewController(transport: transport)
         player.actionAtItemEnd = .pause
         timeObserver = player.addPeriodicTimeObserver(forInterval: CMTime(value: 1, timescale: 30), queue: .main) { [weak self] time in
             Task { @MainActor [weak self] in
@@ -226,7 +249,7 @@ final class FootagePlayer {
                     self.suppressedCallbackCount += 1
                     return
                 }
-                self.currentTime = max(0, CMTimeGetSeconds(time))
+                self.nativeCurrentTime = max(0, CMTimeGetSeconds(time))
             }
         }
         endObserver = NotificationCenter.default.addObserver(forName: AVPlayerItem.didPlayToEndTimeNotification, object: nil, queue: .main) { [weak self] note in
@@ -234,36 +257,59 @@ final class FootagePlayer {
             Task { @MainActor [weak self] in
                 guard let self, let current = self.player.currentItem, ended == ObjectIdentifier(current) else { return }
                 self.log.info("item-ended uiTime=\(self.currentTime) duration=\(self.duration)")
-                self.isPlaying = false
-                self.currentTime = self.duration
+                self.nativeIsPlaying = false
+                self.nativeCurrentTime = self.duration
             }
         }
     }
 
-    func load(_ cell: FootageCell) async {
+    func load(_ cell: FootageCell, document: ProjectDocument? = nil) async {
         unload()
         let generation = loadGeneration
         loadedCellID = cell.id
+        nativeDuration = cell.duration ?? 0
+        if let document, cell.kind == .remotion || cell.kind == .captions {
+            usesGeneratedPreview = true
+            frameRate = Double(max(1, cell.previewFPS))
+            let width = cell.drag.naturalWidth ?? 1920
+            let height = cell.drag.naturalHeight ?? 1080
+            let clip = Clip(id: cell.id, source: cell.drag.source, start: 0, duration: max(0.1, duration),
+                            sourceDuration: duration, text: cell.captionStyle)
+            var tracks = [Track(kind: cell.kind == .captions ? .overlay : .video, name: cell.title, clips: [clip])]
+            if cell.captionAudioURL != nil {
+                let source = ClipSource(id: "library-caption-audio", kind: .audio, displayName: cell.title)
+                tracks.append(Track(kind: .audio, name: "Source audio", clips: [Clip(source: source, start: 0, duration: max(0.1, duration))]))
+            }
+            let timeline = Timeline(width: width, height: height, fps: max(1, Int(frameRate)), tracks: tracks)
+            generatedPreview.load(timeline, resolver: LibraryFootagePreviewResolver(document: document, width: width, height: height,
+                                                                                   fps: max(1, Int(frameRate)), captionAudio: cell.captionAudioURL))
+            applyRequestedPosition(for: cell.id)
+            return
+        }
         guard cell.kind == .video || cell.kind == .audio || cell.kind == .remotion, let url = cell.mediaURL else { return }
         log.info("load kind=\(String(describing: cell.kind), privacy: .public)")
         startDiagnostics()
-        duration = cell.duration ?? 0
+        nativeDuration = cell.duration ?? 0
         let asset = AVURLAsset(url: url)
         player.replaceCurrentItem(with: AVPlayerItem(asset: asset))
         let natural = await MediaDurationCache.duration(of: url)
         guard !Task.isCancelled, loadGeneration == generation else { return }
-        if let natural { duration = natural }
-        if let pending = pendingPosition, pending.cellID == cell.id {
-            pendingPosition = nil
-            seek(to: pending.fraction * duration)
-        }
-        if let skimFraction { skim(toFraction: skimFraction) }
+        if let natural { nativeDuration = natural }
+        applyRequestedPosition(for: cell.id)
         if cell.kind == .video || cell.kind == .remotion,
            let track = try? await asset.loadTracks(withMediaType: .video).first,
            let rate = try? await track.load(.nominalFrameRate), rate > 0,
            !Task.isCancelled, loadGeneration == generation {
             frameRate = Double(rate)
         }
+    }
+
+    private func applyRequestedPosition(for cellID: UUID) {
+        if let pending = pendingPosition, pending.cellID == cellID {
+            pendingPosition = nil
+            seek(to: pending.fraction * duration)
+        }
+        if let skimFraction { skim(toFraction: skimFraction) }
     }
 
     /// A click commits the skimmed frame, including when its media is still opening.
@@ -286,6 +332,9 @@ final class FootagePlayer {
     }
 
     func unload() {
+        generatedPreview.unload()
+        generatedTransport.unload()
+        usesGeneratedPreview = false
         loadGeneration = UUID()
         loadedCellID = nil
         frameRate = 30
@@ -296,36 +345,39 @@ final class FootagePlayer {
         diagnosticsTask = nil
         player.pause()
         player.replaceCurrentItem(with: nil)
-        isPlaying = false
+        nativeIsPlaying = false
         restingTime = nil
-        currentTime = 0
-        duration = 0
+        nativeCurrentTime = 0
+        nativeDuration = 0
     }
 
     func play() {
-        guard player.currentItem != nil else { return }
         restingTime = nil
         skimFraction = nil
+        if usesGeneratedPreview { generatedTransport.play(); return }
+        guard player.currentItem != nil else { return }
         if duration > 0, currentTime >= duration - 0.05 {
-            currentTime = 0
+            nativeCurrentTime = 0
             player.seek(to: .zero)
         }
         log.info("play uiTime=\(self.currentTime) actualTime=\(self.player.currentTime().seconds)")
         player.play()
-        isPlaying = true
+        nativeIsPlaying = true
     }
 
     func pause() {
+        if usesGeneratedPreview { generatedTransport.pause(); return }
         log.info("pause scrubbing=\(self.isScrubbing) uiTime=\(self.currentTime)")
         player.pause()
-        isPlaying = false
+        nativeIsPlaying = false
     }
 
     func togglePlay() { isPlaying ? pause() : play() }
 
     func seek(to time: TimeInterval) {
         guard time.isFinite else { return }
-        currentTime = min(max(0, time), max(0, duration))
+        if usesGeneratedPreview { generatedTransport.seek(to: min(max(0, time), duration)); return }
+        nativeCurrentTime = min(max(0, time), max(0, duration))
         player.seek(to: CMTime(seconds: currentTime, preferredTimescale: 600), toleranceBefore: .zero, toleranceAfter: .zero)
     }
 
@@ -351,7 +403,7 @@ final class FootagePlayer {
     func skim(toFraction fraction: Double) {
         guard fraction.isFinite else { return }
         skimFraction = min(max(0, fraction), 1)
-        guard player.currentItem != nil, duration > 0, !isPlaying else { return }
+        guard (usesGeneratedPreview || player.currentItem != nil), duration > 0, !isPlaying else { return }
         if restingTime == nil { restingTime = currentTime }
         seek(to: skimFraction! * duration)
     }

@@ -13,4 +13,7 @@ nonisolated struct RenderedModifierMediaResolver: MediaResolver {
     func thumbnail(for source: ClipSource, at time: TimeInterval) async -> CGImage? {
         await fallback.thumbnail(for: source, at: time)
     }
+    func libraryPreview(for source: ClipSource) async -> LibPreviewSource? {
+        await fallback.libraryPreview(for: source)
+    }
 }

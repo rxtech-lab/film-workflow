@@ -66,9 +66,9 @@ struct LibraryItemCard: View {
         }
         .padding(5)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(isSelected ? Color.accentColor.opacity(0.14) : .clear, in: RoundedRectangle(cornerRadius: 9))
         .contentShape(Rectangle())
-        .accessibilityElement(children: .combine)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel([row.name, duration.map(DurationLabel.short)].compactMap { $0 }.joined(separator: ", "))
         .accessibilityAddTraits(isSelected ? [.isSelected, .isButton] : [.isButton])
         .accessibilityIdentifier("library.item.\(row.id.id.uuidString)")
         .help("\(row.name)\n\(row.subtitle)")

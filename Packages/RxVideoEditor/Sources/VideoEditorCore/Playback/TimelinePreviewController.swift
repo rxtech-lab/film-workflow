@@ -173,8 +173,10 @@ public final class TimelinePreviewController {
         loadTask = Task { @MainActor in
             defer { previousResolver?.release() }
             do {
+                try Task.checkCancellation()
                 var resolved: [String: TimelinePreviewSource] = [:]
                 for clip in timeline.allClips where resolved[clip.source.id] == nil {
+                    try Task.checkCancellation()
                     resolved[clip.source.id] = try await resolver.preview(clip.source)
                     try Task.checkCancellation()
                 }

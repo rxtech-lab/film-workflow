@@ -37,6 +37,7 @@ public struct SequenceTimelineView: View {
     @State private var modifierDropTrackID: UUID?
 
     let resolver: (any MediaResolver)?
+    let previewRevision: String
     /// Called with the dropped item, the track and the snapped drop time.
     let onDrop: (FootageDragItem, UUID, TimeInterval) -> Void
     /// Called with every clip to delete in one edit; nil removes them directly.
@@ -84,6 +85,7 @@ public struct SequenceTimelineView: View {
     private let headerWidth: CGFloat = 64
     private let rulerHeight: CGFloat = 20
     private let laneHeight: CGFloat = 52
+    private let clipTitleHeight: CGFloat = 14
     private let snapTolerancePixels: Double = 8
 
     public init(
@@ -94,6 +96,7 @@ public struct SequenceTimelineView: View {
         skimming: Binding<Bool> = .constant(false),
         onSkim: ((TimeInterval?) -> Void)? = nil,
         resolver: (any MediaResolver)? = nil,
+        previewRevision: String = "",
         onDrop: @escaping (FootageDragItem, UUID, TimeInterval) -> Void,
         onDeleteClips: ((Set<UUID>) -> Void)? = nil,
         onDeselect: (() -> Void)? = nil,
@@ -109,6 +112,7 @@ public struct SequenceTimelineView: View {
         _skimming = skimming
         self.onSkim = onSkim
         self.resolver = resolver
+        self.previewRevision = previewRevision
         self.onDrop = onDrop
         self.onDeleteClips = onDeleteClips
         self.onDeselect = onDeselect
@@ -569,6 +573,7 @@ public struct SequenceTimelineView: View {
         let duration = item.defaultClipDuration
         let width = max(4, CGFloat(duration * pixelsPerSecond))
         let inset: CGFloat = 3
+        let thumbnailHeight = clipThumbnailHeight(clipHeight: laneHeight - inset * 2, footerHeight: 14)
         let tint: Color = allowed ? .accentColor : .red
         let startLabel = Timecode.string(seconds: start, fps: timeline.fps)
         let endLabel = Timecode.string(seconds: start + duration, fps: timeline.fps)
@@ -579,10 +584,10 @@ public struct SequenceTimelineView: View {
                 Image(decorative: image, scale: 1)
                     .resizable()
                     .aspectRatio(contentMode: .fill)
-                    .frame(width: max(0, min(width - 8, 70)), height: laneHeight - inset * 2 - 4)
+                    .frame(width: max(0, min(width - 8, 70)), height: thumbnailHeight)
                     .clipShape(RoundedRectangle(cornerRadius: 3))
                     .padding(.leading, 4)
-                    .padding(.top, 2)
+                    .padding(.top, clipTitleHeight)
                     .opacity(0.8)
             }
             Text(allowed ? item.source.displayName : placementHint(for: item.source.kind))
@@ -593,7 +598,7 @@ public struct SequenceTimelineView: View {
                 .padding(.top, 3)
                 .frame(maxWidth: .infinity, alignment: .topLeading)
                 .background(alignment: .topLeading) {
-                    Rectangle().fill(.black.opacity(0.35)).frame(height: 14)
+                    Rectangle().fill(.black.opacity(0.35)).frame(height: clipTitleHeight)
                 }
             HStack(spacing: 4) {
                 Text(startLabel)
@@ -644,6 +649,11 @@ public struct SequenceTimelineView: View {
 
     // MARK: - Clips
 
+    private func clipThumbnailHeight(clipHeight: CGFloat, footerHeight: CGFloat) -> CGFloat {
+        // Keep pictures below the title and above the waveform or drop timecodes.
+        min(clipHeight * 0.7, max(0, clipHeight - clipTitleHeight - footerHeight))
+    }
+
     private func clipView(_ clip: Clip, on track: Track) -> some View {
         let isSelected = selectedClipIDs.contains(clip.id)
         let isDragging = dragState.clipID == clip.id
@@ -656,20 +666,29 @@ public struct SequenceTimelineView: View {
         let displayedClip = isDragging ? (dragState.previewClip ?? clip) : clip
         let showsSpeed = TimelineClipInteraction.showsSpeedOverlay(for: clip) || (isDragging && dragState.mode.isRetiming)
         let waveformHeight = TimelineClipInteraction.waveformHeight(for: clip.source.kind)
+        let thumbnailHeight = clipThumbnailHeight(clipHeight: laneHeight - inset * 2, footerHeight: waveformHeight)
         let waveformTop: CGFloat? = waveformHeight > 0 ? laneHeight - inset * 2 - waveformHeight : nil
         let adjustingVolume = isDragging && dragState.mode == .volume
         let volumeLit = adjustingVolume || hoveredVolumeClipID == clip.id
 
-        return ZStack(alignment: .leading) {
+        return ZStack(alignment: .topLeading) {
             RoundedRectangle(cornerRadius: 5)
                 .fill(clip.source.kind.clipColor.opacity(isSelected ? 1 : 0.85))
             if let image = thumbnails[clip.source.id] {
                 Image(decorative: image, scale: 1)
                     .resizable()
                     .aspectRatio(contentMode: .fill)
-                    .frame(width: max(0, min(width - 8, 70)), height: laneHeight - inset * 2 - 4)
+                    .frame(width: max(0, min(width - 8, 70)), height: thumbnailHeight)
                     .clipShape(RoundedRectangle(cornerRadius: 3))
                     .padding(.leading, 4)
+                    .padding(.top, clipTitleHeight)
+            }
+            if let resolver {
+                TimelineClipFilmstrip(clip: displayedClip, resolver: resolver, revision: previewRevision,
+                                      width: max(1, width - 4), height: thumbnailHeight)
+                    .padding(.horizontal, 2)
+                    .clipShape(RoundedRectangle(cornerRadius: 3))
+                    .padding(.top, clipTitleHeight)
             }
             if clip.source.kind.hasAudio, let resolver {
                 ClipWaveformView(
@@ -701,6 +720,7 @@ public struct SequenceTimelineView: View {
                     .padding(.horizontal, 6)
                     .padding(.top, 2)
                     .frame(maxWidth: .infinity, alignment: .leading)
+                    .frame(height: clipTitleHeight, alignment: .top)
                     .background(.black.opacity(0.35))
                 Spacer(minLength: 0)
             }
@@ -771,6 +791,9 @@ public struct SequenceTimelineView: View {
         )
         .gesture(clipGesture(clip, on: track, width: width, waveformTop: waveformTop))
         .offset(x: x, y: y)
+        // The clip being edited draws above its neighbours and the transition
+        // chips so its readout stays visible at a shared edge.
+        .zIndex(isDragging ? 2 : 0)
         .contextMenu {
             // Destructive items act on the whole selection when this clip is part of it.
             let targets = selectedClipIDs.contains(clip.id) ? selectedClipIDs : [clip.id]
@@ -847,6 +870,8 @@ public struct SequenceTimelineView: View {
         return Text(text)
             .font(.system(size: 9, weight: .semibold, design: .monospaced))
             .foregroundStyle(.white)
+            .lineLimit(1)
+            .fixedSize()
             .padding(.horizontal, 5)
             .padding(.vertical, 2)
             .background(.black.opacity(0.7), in: RoundedRectangle(cornerRadius: 3))

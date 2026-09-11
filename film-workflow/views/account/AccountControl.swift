@@ -7,7 +7,7 @@ struct AccountControl: View {
 
     let placement: Placement
     @Environment(\.openSettings) private var openSettings
-    @State private var auth = AuthManager.shared
+    @State var auth = AuthManager.shared
     @State private var balance = CreditBalanceStore.shared
     @State private var navigation = AppNavigation.shared
 
@@ -51,10 +51,19 @@ struct AccountControl: View {
                 }
             }
             .help("Account")
+        } else if auth.isRestoring {
+            HStack(spacing: 8) {
+                ProgressView().controlSize(.small)
+                if placement != .toolbar {
+                    Text("Restoring account…")
+                    Spacer()
+                }
+            }
+            .accessibilityLabel("Restoring account…")
+            .help("Restoring account…")
         } else {
             Button {
-                navigation.showAccountSettings()
-                openSettings()
+                navigation.requestSignIn()
             } label: {
                 if placement == .toolbar {
                     Label("Sign in", systemImage: "person.crop.circle")
@@ -92,8 +101,12 @@ struct AccountCommands: Commands {
                 Button("Add Credits…") { balance.openTopUp() }
                 Divider()
                 Button("Sign Out") { Task { await auth.signOut() } }
+            } else if auth.isRestoring {
+                Button("Restoring account…") {}.disabled(true)
+                Button("Retry") { Task { await auth.checkExistingAuth() } }.disabled(auth.isLoading)
+                Button("Sign Out") { Task { await auth.signOut() } }
             } else {
-                Button("Sign In…") { navigation.showAccountSettings(); openSettings() }
+                Button("Sign In…") { navigation.requestSignIn() }
             }
         }
     }

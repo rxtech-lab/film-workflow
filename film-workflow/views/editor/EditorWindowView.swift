@@ -91,7 +91,9 @@ struct EditorWindowView: View {
                         .background(Color(nsColor: .controlBackgroundColor))
                 }
                 .frame(minHeight: 300, idealHeight: geometry.size.height * 0.68, maxHeight: .infinity)
-                TimelinePanel(state: state, document: document, sequence: currentSequence, onCreateSequence: { create(.sequence, nil) })
+                TimelinePanel(state: state, document: document, sequence: currentSequence,
+                              previewRevision: index.rows().map { "\($0.id.id):\($0.updatedAt.timeIntervalSinceReferenceDate)" }.joined(separator: ":"),
+                              onCreateSequence: { create(.sequence, nil) })
                     .frame(minHeight: 190, idealHeight: geometry.size.height * 0.32, maxHeight: .infinity)
                     .background(PersistedPanelSplit(document: document, panel: .editorRows))
             }

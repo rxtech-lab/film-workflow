@@ -99,6 +99,26 @@ struct ProjectDocumentTests {
         await other.close()
     }
 
+    @Test("Footage pane visibility persists with the workspace")
+    func footagePaneVisibilityPersists() async throws {
+        let url = temporaryPackage()
+        defer { try? FileManager.default.removeItem(at: url) }
+        let document = try ProjectDocument.create(at: url)
+        #expect(document.panelLayout.footageBrowserVisible == nil)
+        document.setPanelSizes([310, 209], for: .libraryRows)
+        document.setFootageBrowserVisible(false)
+        await document.close()
+
+        let reopened = try ProjectDocument.open(url)
+        #expect(reopened.panelLayout.footageBrowserVisible == false)
+        #expect(reopened.panelLayout.sizes(for: .libraryRows) == [310, 209])
+        reopened.setFootageBrowserVisible(true)
+        await reopened.close()
+        let again = try ProjectDocument.open(url)
+        #expect(again.panelLayout.footageBrowserVisible == true)
+        await again.close()
+    }
+
     @Test("An unreadable workspace does not prevent opening the film")
     func invalidPanelLayoutFallsBack() async throws {
         let url = temporaryPackage()
