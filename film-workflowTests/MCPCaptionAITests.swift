@@ -1,4 +1,5 @@
 import Foundation
+import RxAgentSDK
 import SwiftData
 import Testing
 
@@ -539,22 +540,79 @@ struct MCPCaptionAITests {
         #expect(AgentToolPolicy.toolNames(policy: .direct).contains("caption_update_segment"))
     }
 
-    @Test("Every exposed tool converts to a usable OpenAI function definition")
-    func toolsConvertToOpenAIDefinitions() {
-        let definitions = AgentToolPolicy.openAIToolDefinitions(policy: .review)
-        #expect(!definitions.isEmpty)
-        #expect(definitions.allSatisfy { !$0.name.isEmpty && !$0.description.isEmpty })
-        // A JSON Schema object is what the function-calling API requires.
-        #expect(definitions.allSatisfy { $0.parametersSchema["type"] as? String == "object" })
+    @Test("Every exposed tool advertises a usable JSON Schema")
+    func toolsAdvertiseJSONSchema() {
+        // The agent no longer converts these itself — the SDK's in-process
+        // clients read them over MCP and the CLI agents read them from the
+        // server directly — but a descriptor with no object schema is unusable
+        // to every one of those paths.
+        let descriptors = AgentToolPolicy.descriptors(policy: .review)
+        #expect(!descriptors.isEmpty)
+        #expect(descriptors.allSatisfy { !$0.name.isEmpty && !$0.description.isEmpty })
+        #expect(descriptors.allSatisfy { $0.inputSchema["type"] as? String == "object" })
+    }
+
+    /// The write policy has to survive the trip into the SDK, in both spellings:
+    /// an in-process client sees `caption_export`, a CLI agent sees
+    /// `mcp__film_workflow__caption_export`, and the same policy must govern
+    /// both. Withholding a tool in only one of them would be a silent hole.
+    @Test("The write policy scopes both spellings of a tool name")
+    func policyScopesBothSpellings() {
+        let policy = AgentWritePolicy.review
+        let request = AgentSendRequest(
+            threadID: AgentThreadID(),
+            prompt: "x",
+            workingDirectory: URL(filePath: "/tmp"),
+            mcpServers: [.http(
+                name: AgentMCPBridge.serverKey,
+                url: URL(string: "http://127.0.0.1:1/mcp")!
+            )],
+            allowedTools: AgentToolPolicy.toolNames(policy: policy),
+            disallowedTools: Array(AgentToolPolicy.withheldNames(policy: policy))
+        )
+
+        // Allowed, whichever way it is spelled.
+        #expect(request.permitsTool(named: "caption_export"))
+        #expect(request.permitsTool(named: "mcp__film_workflow__caption_export"))
+
+        // Withheld under `.review`, whichever way it is spelled.
+        #expect(!request.permitsTool(named: "caption_update_segment"))
+        #expect(!request.permitsTool(named: "mcp__film_workflow__caption_update_segment"))
+
+        // Withheld under every policy.
+        #expect(!request.permitsTool(named: "delete_project"))
+
+        // And nothing outside the app's own surface is reachable at all.
+        #expect(!request.permitsTool(named: "Bash"))
+        #expect(!request.permitsTool(named: "Write"))
     }
 
     @Test("Command-line agents are given the same tools, MCP-prefixed")
     func cliToolNamesMatchThePolicy() {
         #if os(macOS)
-            let prefixed = AgentMCPBridge.prefixedToolNames(policy: .review)
-            #expect(prefixed.count == AgentToolPolicy.toolNames(policy: .review).count)
-            #expect(prefixed.allSatisfy { $0.hasPrefix("mcp__film_workflow__") })
+            let policy = AgentWritePolicy.review
+            let allowed = AgentToolPolicy.toolNames(policy: policy)
+            let request = AgentSendRequest(
+                threadID: AgentThreadID(),
+                prompt: "x",
+                workingDirectory: URL(filePath: "/tmp"),
+                mcpServers: [.http(
+                    name: AgentMCPBridge.serverKey,
+                    url: URL(string: "http://127.0.0.1:1/mcp")!
+                )],
+                allowedTools: allowed,
+                disallowedTools: Array(AgentToolPolicy.withheldNames(policy: policy))
+            )
+
+            let argument = ClaudeCodeClient.allowedToolArgument(for: request, preapproved: [])
+            let prefixed = argument.filter { $0.hasPrefix("mcp__film_workflow__") }
+
+            #expect(prefixed.count == allowed.count)
             #expect(!prefixed.contains("mcp__film_workflow__caption_update_segment"))
+            #expect(!argument.contains("mcp__film_workflow__delete_project"))
+            // Claude's own filesystem tools are never pre-approved here.
+            #expect(!argument.contains("Read"))
+            #expect(!argument.contains("Bash"))
         #endif
     }
 }

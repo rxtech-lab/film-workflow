@@ -1,6 +1,15 @@
 {
-  "originHash" : "d66b60a41c1b3d1e7a3ebd362ff4f43d28fd776b050f83249ceb25197577bf68",
+  "originHash" : "fa94b94b5d8bc738c17cdd5c3963f393218f42a3c67b832f85729c7a9469ce61",
   "pins" : [
+    {
+      "identity" : "rxagentsdk",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/rxtech-lab/RxAgentSDK",
+      "state" : {
+        "branch" : "main",
+        "revision" : "796ba1b12b9f85910eabe62719df0f59830e2a89"
+      }
+    },
     {
       "identity" : "rxauthswift",
       "kind" : "remoteSourceControl",

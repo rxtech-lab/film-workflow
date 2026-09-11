@@ -1,46 +1,6 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
-    "Restoring account…" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "正在恢复账户…"
-          }
-        }
-      }
-    },
-    "Couldn’t connect to your account. Retrying automatically." : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "无法连接到你的账户，正在自动重试。"
-          }
-        }
-      }
-    },
-    "Retry Now" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "立即重试"
-          }
-        }
-      }
-    },
-    "Your session expired. Please sign in again." : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "你的登录会话已过期，请重新登录。"
-          }
-        }
-      }
-    },
     "" : {
       "localizations" : {
         "zh-Hans" : {
@@ -455,9 +415,6 @@
           }
         }
       }
-    },
-    "^[%lld message](inflect: true) queued" : {
-
     },
     "+ %@" : {
       "localizations" : {
@@ -1012,6 +969,7 @@
 
     },
     "Ask for a change…" : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -2102,7 +2060,14 @@
 
     },
     "Couldn’t connect to your account. Retrying automatically." : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法连接到你的账户，正在自动重试。"
+          }
+        }
+      }
     },
     "Couldn’t edit" : {
 
@@ -2276,9 +2241,6 @@
 
     },
     "Delete Clips" : {
-
-    },
-    "Delete every message in this thread" : {
 
     },
     "Delete Group" : {
@@ -3236,9 +3198,6 @@
           }
         }
       }
-    },
-    "Fold older turns into the summary now" : {
-
     },
     "Folk" : {
       "localizations" : {
@@ -5947,9 +5906,6 @@
         }
       }
     },
-    "Queue this message" : {
-
-    },
     "R&B" : {
       "localizations" : {
         "zh-Hans" : {
@@ -6439,7 +6395,14 @@
       }
     },
     "Restoring account…" : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在恢复账户…"
+          }
+        }
+      }
     },
     "Resume" : {
 
@@ -6478,7 +6441,14 @@
       }
     },
     "Retry Now" : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "立即重试"
+          }
+        }
+      }
     },
     "Retry Preview" : {
 
@@ -6624,6 +6594,7 @@
       }
     },
     "Running…" : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -6958,6 +6929,7 @@
       }
     },
     "Send" : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -6966,9 +6938,6 @@
           }
         }
       }
-    },
-    "Send all as one" : {
-
     },
     "Senior Female" : {
       "localizations" : {
@@ -7487,9 +7456,6 @@
     "Start a New One" : {
 
     },
-    "Start a new thread" : {
-
-    },
     "Start a thread to work with the agent." : {
 
     },
@@ -7632,9 +7598,6 @@
           }
         }
       }
-    },
-    "Stop the running turn" : {
-
     },
     "Stop Waiting" : {
 
@@ -9167,9 +9130,6 @@
         }
       }
     },
-    "Working…" : {
-
-    },
     "Write %@ in a translated caption and it becomes the wording set here. Change the wording and every caption using the placeholder updates — no re-translation. A language left blank falls back to the spelling above." : {
 
     },
@@ -9247,7 +9207,14 @@
 
     },
     "Your session expired. Please sign in again." : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "你的登录会话已过期，请重新登录。"
+          }
+        }
+      }
     },
     "Youthful" : {
       "localizations" : {

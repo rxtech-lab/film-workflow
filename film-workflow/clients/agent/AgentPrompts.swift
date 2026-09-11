@@ -1,28 +1,32 @@
 import Foundation
+import RxAgentSDK
 import SwiftData
 
-/// System prompts for the agent window.
+/// The agent window's instructions, as an `AgentContext`.
 ///
-/// One prompt shared by every backend — the in-process loop and both CLI agents
-/// see the same instructions, so behaviour doesn't drift depending on which
-/// engine answered.
+/// One context shared by every engine — the in-process clients and both CLI
+/// agents see the same instructions, so behaviour doesn't drift depending on
+/// which engine answered. The SDK renders it into `--append-system-prompt` for
+/// Claude, a prompt prefix for Codex and ACP, and a `system` message for the
+/// in-process clients.
+///
+/// Nothing here replays the conversation any more: `Agent` carries the
+/// transcript in `AgentSendRequest.history` and its own rolling summary, so the
+/// `turn(instruction:summary:recentTurns:)` builder this replaces is gone.
 @MainActor
 enum AgentPrompts {
 
-    /// The whole system prompt for a turn.
-    ///
     /// `toolNames` is passed in rather than derived here so the prompt can never
     /// promise a tool the policy is withholding.
-    static func system(
+    static func context(
         target: AgentTarget,
         toolNames: [String],
         policy: AgentWritePolicy,
-        context: ModelContext,
+        context modelContext: ModelContext,
         toolNamePrefix: String = ""
-    ) -> String {
-        var parts: [String] = []
-
-        parts.append("""
+    ) -> AgentContext {
+        AgentContext {
+            """
             You are the assistant inside Film Studio, a macOS app for making \
             short films: music, narration, captions, generated images and \
             Remotion video compositions.
@@ -31,41 +35,43 @@ enum AgentPrompts {
             files on disk and do not run shell commands — the only exception is \
             the Remotion tools below, which edit one project's composition \
             source through the app. Everything you need is in the tools.
-            """)
+            """
 
-        parts.append(AgentTargetResolver.promptBlock(for: target, context: context))
-        if let doc = ProjectDocumentController.shared.document(forContainer: context.container) {
-            parts.append("""
+            AgentTargetResolver.promptBlock(for: target, context: modelContext)
+
+            if let doc = ProjectDocumentController.shared.document(
+                forContainer: modelContext.container
+            ) {
+                """
                 The open film is "\(doc.displayName)" (document id \(doc.id.uuidString)); \
                 tools act on it unless you pass `document` to address another open film.
-                """)
-        }
+                """
+            }
 
-        if !toolNames.isEmpty {
-            let listed = toolNames.map { "- \(toolNamePrefix)\($0)" }.joined(separator: "\n")
-            parts.append("""
+            if !toolNames.isEmpty {
+                """
                 Tools available to you:
-                \(listed)
-                """)
-        }
+                \(toolNames.map { "- \(toolNamePrefix)\($0)" }.joined(separator: "\n"))
+                """
+            }
 
-        parts.append("""
+            """
             Work in the app, not in prose. If the user asks for a change, make \
             it with a tool rather than describing what they could do. Prefer \
             searching over listing everything — caption_search_segments before \
             caption_list_segments, get_project before list_projects when you \
             already know the id.
-            """)
+            """
 
-        #if os(macOS)
-            if toolNames.contains(where: { $0.hasPrefix("remotion_") }) {
-                parts.append(RemotionMCPHandlers.authoringInstructions)
-            }
-        #endif
+            #if os(macOS)
+                if toolNames.contains(where: { $0.hasPrefix("remotion_") }) {
+                    RemotionMCPHandlers.authoringInstructions
+                }
+            #endif
 
-        switch policy {
-        case .review:
-            parts.append("""
+            switch policy {
+            case .review:
+                """
                 Captions are under review control: \(toolNamePrefix)caption_propose_edits \
                 is the only way to change one, and it queues your changes for \
                 the user to approve. It covers wording, splits and merges, \
@@ -75,52 +81,36 @@ enum AgentPrompts {
                 whole language. Never claim you have changed a caption — say \
                 what you have proposed. Everything else you do takes effect \
                 immediately.
-                """)
-        case .direct:
-            parts.append("""
+                """
+            case .direct:
+                """
                 Your changes take effect immediately, including caption edits. \
                 Be careful with anything that replaces existing work, and say \
                 what you changed.
-                """)
-        }
+                """
+            }
 
-        parts.append("""
+            """
             Keep your final reply short — a couple of sentences saying what you \
             did. The user can see the tool calls, so don't narrate them.
-            """)
-
-        return parts.joined(separator: "\n\n")
+            """
+        }
     }
 
-    /// The turn itself: rolling summary, recent turns, then the new instruction.
-    ///
-    /// The project's contents are deliberately **not** inlined. A tool-calling
-    /// agent should fetch what it needs, which is what makes a long transcript
-    /// or a large composition workable at all.
-    static func turn(
-        instruction: String,
-        summary: String,
-        recentTurns: [AgentChatTurn]
-    ) -> String {
+    /// The instruction handed to whichever engine compacts a thread's history.
+    static func summarizationInstruction(existing: String, transcript: String) -> String {
         var parts: [String] = []
-        if !summary.isEmpty {
-            parts.append("Earlier in this conversation:\n\(summary)")
+        if !existing.isEmpty {
+            parts.append("The conversation so far has been summarized as:\n\(existing)")
         }
-        for turn in recentTurns {
-            parts.append("\(turn.role.capitalized): \(turn.content)")
-        }
-        parts.append("Request: \(instruction)")
+        parts.append("""
+            Summarize the conversation below in at most three sentences, folding \
+            in the summary above if there is one. Keep decisions, identifiers \
+            and anything still outstanding. Drop pleasantries. Reply with the \
+            summary only.
+
+            \(transcript)
+            """)
         return parts.joined(separator: "\n\n")
-    }
-}
-
-/// One replayed conversation turn.
-nonisolated struct AgentChatTurn: Sendable, Hashable {
-    var role: String
-    var content: String
-
-    init(role: String, content: String) {
-        self.role = role
-        self.content = content
     }
 }
