@@ -154,6 +154,15 @@ final class EditorWindowState {
     /// The footage cell under the pointer while the browser is skimmed, so
     /// the viewer can show it without changing what is selected.
     private(set) var footageSkim: FootageSkim?
+    /// Shared with filmstrip indicators; only those small views observe its clock.
+    let footagePlayer = FootagePlayer()
+
+    func seekFootage(_ item: LibraryItemID, cellID: UUID, fraction: Double) {
+        endFootageSkim()
+        select(item)
+        setCurrentVersion(cellID, for: item)
+        footagePlayer.commitPosition(fraction: fraction, cellID: cellID)
+    }
 
     /// Shows `cellID` of `item` at `fraction` (0...1) of its length in the
     /// viewer. Always on, unlike timeline skimming, because a pass over a
@@ -162,7 +171,7 @@ final class EditorWindowState {
     /// part; sequences, captions and Remotion projects have viewers of
     /// their own.
     func skimFootage(_ item: LibraryItemID, cellID: UUID, fraction: Double) {
-        guard !player.isPlaying, fraction.isFinite else { return }
+        guard !player.isPlaying, !footagePlayer.isPlaying, fraction.isFinite else { return }
         switch item.kind {
         case .image, .video, .music, .narration, .imported: break
         case .sequence, .caption, .remotion: return

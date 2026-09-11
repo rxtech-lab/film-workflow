@@ -8,6 +8,9 @@ struct LibraryItemCard: View {
     let footage: FootageCell?
     let payload: FootageDragPayload?
     let isSelected: Bool
+    var player: FootagePlayer?
+    var onSkim: (Double?) -> Void = { _ in }
+    var onSeek: (Double) -> Void = { _ in }
 
     @State private var loadedDuration: TimeInterval?
 
@@ -32,14 +35,16 @@ struct LibraryItemCard: View {
 
     private var content: some View {
         VStack(alignment: .leading, spacing: 5) {
-            FootageThumbnail(
-                thumbnailURL: footage?.thumbnailURL,
-                videoURL: footage?.kind == .video ? footage?.mediaURL : nil,
-                icon: footage?.kind.symbolName ?? row.id.kind.systemImage,
-                duration: duration,
-                isStill: footage?.kind == .image,
-                isSelected: isSelected
-            )
+            Group {
+                if let footage {
+                    FootageFilmstrip(cell: footage, duration: duration, isSelected: isSelected,
+                                     player: player, onSkim: onSkim, onSeek: onSeek)
+                } else {
+                    FootageThumbnail(thumbnailURL: nil, icon: row.id.kind.systemImage,
+                                     duration: nil, isSelected: isSelected)
+                        .frame(width: FilmstripLayout.posterWidth, height: FilmstripLayout.height)
+                }
+            }
             .overlay(alignment: .topLeading) {
                 if row.versions.count > 1 {
                     Label("\(row.versions.count)", systemImage: "square.stack")

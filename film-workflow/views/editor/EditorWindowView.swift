@@ -81,10 +81,10 @@ struct EditorWindowView: View {
                                  onRename: beginRenaming, onDelete: { pendingDeletion = $0 },
                                  onExport: { exportingRemotion = index.remotion($0.id.id) },
                                  onShowVersions: { versionsTarget = LibraryVersionsTarget(item: $0.id, versionID: $1) })
-                        .frame(minWidth: 240, idealWidth: 280, maxWidth: 420, maxHeight: .infinity)
+                        .frame(minWidth: 240, idealWidth: geometry.size.width / 3, maxWidth: .infinity, maxHeight: .infinity)
                         .background(.regularMaterial)
                     ViewerPanel(index: index, state: state, document: document, sequence: currentSequence, onRetryModifierPreview: reloadPlayer)
-                        .frame(minWidth: 360, idealWidth: 800, maxWidth: .infinity, maxHeight: .infinity)
+                        .frame(minWidth: 320, idealWidth: max(320, geometry.size.width * 2 / 3 - 320), maxWidth: .infinity, maxHeight: .infinity)
                         .background(PersistedPanelSplit(document: document, panel: .editorColumns))
                     InspectorPanel(index: index, state: state, document: document, sequence: currentSequence, onRender: beginRender)
                         .frame(minWidth: 300, idealWidth: 320, maxWidth: 460, maxHeight: .infinity)

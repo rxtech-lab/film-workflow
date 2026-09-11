@@ -15,7 +15,23 @@ struct ViewerPanel: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            StudioPanelHeader(title: "Viewer", symbol: "play.rectangle")
+            if shownItem?.kind == .sequence || shownItem?.kind == .caption || shownItem == nil {
+                HStack {
+                    if let sequence {
+                        Text("\(sequence.width)×\(sequence.height) · \(sequence.fps)p")
+                            .foregroundStyle(.secondary)
+                        Spacer(minLength: 8)
+                        Label(sequence.name, systemImage: "film").lineLimit(1)
+                    } else {
+                        Label("Viewer", systemImage: "play.rectangle")
+                    }
+                    Spacer(minLength: 0)
+                }
+                .font(.caption)
+                .padding(.horizontal, 12)
+                .frame(height: 34)
+                .background(.bar)
+            }
             viewerContent
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
@@ -39,7 +55,8 @@ struct ViewerPanel: View {
                             name: index.name(of: item) ?? cell.title,
                             versions: cells,
                             onSelectVersion: { state.setCurrentVersion($0, for: item) },
-                            skimFraction: state.footageSkim?.fraction
+                            skimFraction: state.footageSkim?.fraction,
+                            player: state.footagePlayer
                         )
                     } else {
                         StudioEmptyState(title: "Nothing to preview yet", symbol: item.kind.systemImage,

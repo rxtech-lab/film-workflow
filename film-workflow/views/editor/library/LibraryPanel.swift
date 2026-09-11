@@ -66,7 +66,13 @@ struct LibraryPanel: View {
                     currentVersion: { currentVersion(for: $0) },
                     onSelectVersion: selectVersion,
                     dragPayload: dragPayload,
-                    footage: currentFootage
+                    footage: currentFootage,
+                    player: state.footagePlayer,
+                    onSkim: { item, cell, fraction in
+                        if let fraction { state.skimFootage(item, cellID: cell.id, fraction: fraction) }
+                        else { state.endFootageSkim() }
+                    },
+                    onSeek: { item, cell, fraction in state.seekFootage(item, cellID: cell.id, fraction: fraction) }
                 )
             }
             .frame(maxWidth: .infinity, minHeight: 180, maxHeight: .infinity)
@@ -82,12 +88,16 @@ struct LibraryPanel: View {
                     if let item = state.selection { state.setCurrentVersion(cell.id, for: item) }
                 },
                 onDeselect: { state.select(nil) },
+                player: state.footagePlayer,
                 onSkim: { cell, fraction in
                     if let fraction, let item = state.selection {
                         state.skimFootage(item, cellID: cell.id, fraction: fraction)
                     } else {
                         state.endFootageSkim()
                     }
+                },
+                onSeek: { cell, fraction in
+                    if let item = state.selection { state.seekFootage(item, cellID: cell.id, fraction: fraction) }
                 }
             )
             .frame(maxWidth: .infinity, minHeight: 150, idealHeight: 200, maxHeight: .infinity)

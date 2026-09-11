@@ -16,10 +16,12 @@ struct FootageViewer: View {
     /// Nil when the pointer is not over its cell.
     var skimFraction: Double? = nil
 
-    @State private var player = FootagePlayer()
+    var player: FootagePlayer
+    @State private var fitsViewer = true
 
     var body: some View {
         VStack(spacing: 0) {
+            header
             ZStack {
                 Color.black
                 stage
@@ -38,10 +40,10 @@ struct FootageViewer: View {
     private var stage: some View {
         switch cell.kind {
         case .video, .remotion:
-            FootagePlayerLayerView(player: player.player)
+            FootagePlayerLayerView(player: player.player, fitsViewer: fitsViewer)
         case .image:
             if let url = cell.mediaURL, let image = NSImage(contentsOf: url) {
-                Image(nsImage: image).resizable().aspectRatio(contentMode: .fit).padding(12)
+                Image(nsImage: image).resizable().aspectRatio(contentMode: fitsViewer ? .fit : .fill).clipped()
             } else {
                 unavailable("Image Unavailable", symbol: "photo")
             }
@@ -70,61 +72,82 @@ struct FootageViewer: View {
 
     private var isPlayable: Bool { cell.kind == .video || cell.kind == .audio || cell.kind == .remotion }
 
+    private var header: some View {
+        HStack(spacing: 10) {
+            Text(detail)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .help(detail)
+            Spacer(minLength: 0)
+            Label(name, systemImage: cell.kind.symbolName)
+                .font(.callout.weight(.medium))
+                .lineLimit(1)
+                .truncationMode(.middle)
+                .layoutPriority(1)
+            Spacer(minLength: 0)
+            Menu {
+                Picker("Version", selection: Binding(get: { cell.id }, set: onSelectVersion)) {
+                    ForEach(versions) { version in Text(version.title).tag(version.id) }
+                }
+            } label: {
+                Text(cell.title == name ? String(localized: "Original") : cell.title)
+                    .lineLimit(1).truncationMode(.middle)
+            }
+            .frame(maxWidth: 150)
+            .disabled(versions.count < 2)
+            .help("Choose footage version")
+            .accessibilityLabel("Footage version")
+        }
+        .padding(.horizontal, 12)
+        .frame(height: 34)
+        .background(.bar)
+        .accessibilityIdentifier("viewer.header")
+    }
+
     private var transport: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: 8) {
+            Menu {
+                Toggle("Fit to Viewer", isOn: $fitsViewer)
+                if isPlayable {
+                    Toggle("Mute", isOn: Binding(get: { player.player.isMuted }, set: { player.player.isMuted = $0 }))
+                    Divider()
+                    Button("Go to Start") { player.pause(); player.seek(to: 0) }
+                    Button("Go to End") { player.pause(); player.seek(to: player.duration) }
+                }
+            } label: { Image(systemName: "slider.horizontal.3") }
+            .menuStyle(.borderlessButton)
+            .fixedSize()
+            .help("Viewer tools")
+            .accessibilityLabel("Viewer tools")
+            Spacer(minLength: 0)
             if isPlayable {
-                Button { player.pause(); player.seek(to: 0) } label: { Image(systemName: "backward.end.fill") }
-                    .help("Go to start")
+                Button { player.pause(); player.step(frames: -1) } label: { Image(systemName: "backward.frame.fill") }
+                    .help("Previous frame")
                 Button { player.togglePlay() } label: {
                     Image(systemName: player.isPlaying ? "pause.fill" : "play.fill").frame(width: 16)
                 }
                 .keyboardShortcut(.space, modifiers: [])
                 .help(player.isPlaying ? "Pause" : "Play")
-                Button { player.pause(); player.seek(to: player.duration) } label: { Image(systemName: "forward.end.fill") }
-                    .help("Go to end")
-
+                .accessibilityIdentifier("viewer.play")
                 FootagePlaybackPosition(player: player)
-
-                Text(DurationLabel.precise(player.duration))
-                    .font(.system(.callout, design: .monospaced))
-                    .foregroundStyle(.secondary)
-                    .frame(width: 72, alignment: .trailing)
+                Button { player.pause(); player.step(frames: 1) } label: { Image(systemName: "forward.frame.fill") }
+                    .help("Next frame")
             } else {
-                Image(systemName: cell.kind == .image ? "photo" : "captions.bubble").foregroundStyle(.secondary)
-                Text(cell.kind == .image ? "Still" : "Captions").font(.callout).foregroundStyle(.secondary)
-                Spacer(minLength: 0)
+                Text("Still").font(.callout).foregroundStyle(.secondary)
             }
-            Divider().frame(height: 16)
-            Menu {
-                Picker("Version", selection: Binding(
-                    get: { cell.id },
-                    set: { onSelectVersion($0) }
-                )) {
-                    ForEach(versions) { version in
-                        Text(version.title).tag(version.id)
-                    }
-                }
-            } label: {
-                Text(cell.title)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
+            Spacer(minLength: 0)
+            if isPlayable { AudioLevelMeterView(player: player.player) }
+            Button { NSApp.keyWindow?.toggleFullScreen(nil) } label: {
+                Image(systemName: "arrow.up.left.and.arrow.down.right")
             }
-            .fixedSize(horizontal: false, vertical: true)
-            .frame(maxWidth: 260, alignment: .leading)
-            .disabled(versions.count < 2)
-            .help("Choose footage version")
-            .accessibilityLabel("Footage version")
-            Text(detail)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
-                .truncationMode(.middle)
-                .layoutPriority(1)
+            .help("Toggle full screen")
         }
         .buttonStyle(.borderless)
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
+        .padding(.horizontal, 10)
+        .frame(height: 40)
         .background(.bar)
+        .accessibilityIdentifier("viewer.transport")
     }
 
     /// Length and size of what is on screen.
@@ -132,6 +155,7 @@ struct FootageViewer: View {
         var parts: [String] = []
         let seconds = player.duration > 0 ? player.duration : (cell.duration ?? 0)
         if seconds > 0 { parts.append(DurationLabel.short(seconds)) }
+        if cell.kind == .video, player.frameRate > 0 { parts.append("\(player.frameRate.formatted(.number.precision(.fractionLength(0...2))))p") }
         if let w = cell.drag.naturalWidth, let h = cell.drag.naturalHeight, w > 0, h > 0 { parts.append("\(w)×\(h)") }
         if cell.kind == .image { parts.append(String(localized: "Holds \(Int(FootageDragItem.defaultStillDuration)) s on the timeline")) }
         return parts.joined(separator: " · ")
@@ -153,22 +177,11 @@ private struct FootagePlaybackPosition: View {
     let player: FootagePlayer
 
     var body: some View {
-        HStack(spacing: 12) {
-            Text(DurationLabel.precise(player.currentTime))
-                .font(.system(.callout, design: .monospaced))
-                .frame(width: 72, alignment: .leading)
-
-            AudioLevelMeterView(player: player.player)
-
-            Slider(
-                value: Binding(get: { player.currentTime }, set: { player.scrub(to: $0) }),
-                in: 0...max(0.1, player.duration)
-            ) { editing in
-                if !editing { player.endScrub() }
-            }
-            .controlSize(.small)
-            .disabled(player.duration <= 0)
-        }
+        Text(Timecode.string(seconds: player.currentTime, fps: max(1, Int(player.frameRate.rounded()))))
+            .font(.system(size: 19, weight: .light, design: .monospaced))
+            .monospacedDigit()
+            .fixedSize()
+            .accessibilityIdentifier("viewer.timecode")
     }
 }
 
@@ -180,6 +193,11 @@ final class FootagePlayer {
     private(set) var currentTime: TimeInterval = 0
     private(set) var duration: TimeInterval = 0
     private(set) var isPlaying = false
+    private(set) var loadedCellID: UUID?
+    private(set) var frameRate: Double = 30
+    @ObservationIgnored private var pendingPosition: (cellID: UUID, fraction: Double)?
+    @ObservationIgnored private var loadGeneration = UUID()
+    var playbackFraction: Double { duration > 0 ? (restingTime ?? currentTime) / duration : 0 }
 
     private var timeObserver: Any?
     private var endObserver: NSObjectProtocol?
@@ -224,17 +242,55 @@ final class FootagePlayer {
 
     func load(_ cell: FootageCell) async {
         unload()
+        let generation = loadGeneration
+        loadedCellID = cell.id
         guard cell.kind == .video || cell.kind == .audio || cell.kind == .remotion, let url = cell.mediaURL else { return }
         log.info("load kind=\(String(describing: cell.kind), privacy: .public)")
         startDiagnostics()
         duration = cell.duration ?? 0
-        player.replaceCurrentItem(with: AVPlayerItem(url: url))
-        if let natural = await MediaDurationCache.duration(of: url) { duration = natural }
-        guard !Task.isCancelled, let skimFraction else { return }
-        skim(toFraction: skimFraction)
+        let asset = AVURLAsset(url: url)
+        player.replaceCurrentItem(with: AVPlayerItem(asset: asset))
+        let natural = await MediaDurationCache.duration(of: url)
+        guard !Task.isCancelled, loadGeneration == generation else { return }
+        if let natural { duration = natural }
+        if let pending = pendingPosition, pending.cellID == cell.id {
+            pendingPosition = nil
+            seek(to: pending.fraction * duration)
+        }
+        if let skimFraction { skim(toFraction: skimFraction) }
+        if cell.kind == .video || cell.kind == .remotion,
+           let track = try? await asset.loadTracks(withMediaType: .video).first,
+           let rate = try? await track.load(.nominalFrameRate), rate > 0,
+           !Task.isCancelled, loadGeneration == generation {
+            frameRate = Double(rate)
+        }
+    }
+
+    /// A click commits the skimmed frame, including when its media is still opening.
+    func commitPosition(fraction: Double, cellID: UUID) {
+        guard fraction.isFinite else { return }
+        let clamped = min(max(0, fraction), 1)
+        skimFraction = nil
+        restingTime = nil
+        pause()
+        if loadedCellID == cellID, duration > 0 {
+            pendingPosition = nil
+            seek(to: clamped * duration)
+        } else {
+            pendingPosition = (cellID, clamped)
+        }
+    }
+
+    func step(frames: Int) {
+        seek(to: currentTime + Double(frames) / max(1, frameRate))
     }
 
     func unload() {
+        loadGeneration = UUID()
+        loadedCellID = nil
+        frameRate = 30
+        resumeAfterScrub = false
+        isScrubbing = false
         log.info("unload uiTime=\(self.currentTime)")
         diagnosticsTask?.cancel()
         diagnosticsTask = nil
@@ -248,6 +304,8 @@ final class FootagePlayer {
 
     func play() {
         guard player.currentItem != nil else { return }
+        restingTime = nil
+        skimFraction = nil
         if duration > 0, currentTime >= duration - 0.05 {
             currentTime = 0
             player.seek(to: .zero)
@@ -271,7 +329,7 @@ final class FootagePlayer {
         player.seek(to: CMTime(seconds: currentTime, preferredTimescale: 600), toleranceBefore: .zero, toleranceAfter: .zero)
     }
 
-    /// Slider drags pause playback and resume when the thumb is released.
+    /// Scrubbing pauses playback and resume when the thumb is released.
     func scrub(to time: TimeInterval) {
         if !isScrubbing {
             log.info("scrub-begin wasPlaying=\(self.isPlaying) target=\(time)")
@@ -291,6 +349,7 @@ final class FootagePlayer {
     /// the position playback had. Ignored while playing, so a pass of the
     /// pointer never interrupts a take that is being listened to.
     func skim(toFraction fraction: Double) {
+        guard fraction.isFinite else { return }
         skimFraction = min(max(0, fraction), 1)
         guard player.currentItem != nil, duration > 0, !isPlaying else { return }
         if restingTime == nil { restingTime = currentTime }
@@ -350,6 +409,7 @@ final class FootagePlayer {
 /// Hosts an `AVPlayerLayer` without the system controls.
 private struct FootagePlayerLayerView: NSViewRepresentable {
     let player: AVPlayer
+    var fitsViewer = true
 
     func makeNSView(context: Context) -> FootagePlayerHostView {
         let view = FootagePlayerHostView()
@@ -359,6 +419,7 @@ private struct FootagePlayerLayerView: NSViewRepresentable {
 
     func updateNSView(_ nsView: FootagePlayerHostView, context: Context) {
         if nsView.playerLayer.player !== player { nsView.playerLayer.player = player }
+        nsView.playerLayer.videoGravity = fitsViewer ? .resizeAspect : .resizeAspectFill
     }
 }
 

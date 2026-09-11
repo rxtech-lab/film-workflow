@@ -77,7 +77,9 @@ struct PersistedPanelSplit: NSViewRepresentable {
             guard available > 0,
                   split.arrangedSubviews.allSatisfy({ $0.frame.width > 0 && $0.frame.height > 0 }) else { return }
             restored = true
-            guard let saved = document.panelLayout.sizes(for: panel),
+            let defaults: [Double]? = panel == .editorColumns && split.arrangedSubviews.count == 3
+                ? [Double(available / 3), Double(available * 2 / 3 - 320), 320] : nil
+            guard let saved = document.panelLayout.sizes(for: panel) ?? defaults,
                   saved.count == split.arrangedSubviews.count else { return }
             restoring = true
             defer { restoring = false }

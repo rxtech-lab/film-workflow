@@ -4,7 +4,7 @@ import UniformTypeIdentifiers
 import VideoEditorCore
 import VideoEditorUI
 
-/// Collapsible folders containing a responsive grid of footage cards.
+/// Collapsible folders containing duration-scaled, wrapping footage strips.
 struct LibraryGrid: View {
     let rows: [LibraryRow]
     let groups: [ProjectGroup]
@@ -28,10 +28,12 @@ struct LibraryGrid: View {
     /// What a row drags: its current version as footage, with a thumbnail for the drag card.
     let dragPayload: (LibraryRow) -> FootageDragPayload?
     let footage: (LibraryItemID) -> FootageCell?
+    var player: FootagePlayer?
+    var onSkim: (LibraryItemID, FootageCell, Double?) -> Void = { _, _, _ in }
+    var onSeek: (LibraryItemID, FootageCell, Double) -> Void = { _, _, _ in }
 
     @State private var collapsed: Set<UUID> = []
     @State private var ungroupedCollapsed = false
-    private let columns = [GridItem(.adaptive(minimum: 100), spacing: 8)]
 
     var body: some View {
         ScrollView {
@@ -64,7 +66,7 @@ struct LibraryGrid: View {
                         .background(.quaternary.opacity(0.35), in: RoundedRectangle(cornerRadius: 8))
                         .modifier(LibraryGroupDropTarget(groupID: group?.id, onMove: move))
                 } else {
-                    LazyVGrid(columns: columns, alignment: .leading, spacing: 8) {
+                    LazyVStack(alignment: .leading, spacing: 12) {
                         ForEach(rows) { row in
                             rowView(row)
                         }
@@ -77,7 +79,14 @@ struct LibraryGrid: View {
     }
 
     private func rowView(_ row: LibraryRow) -> some View {
-        LibraryItemCard(row: row, footage: footage(row.id), payload: dragPayload(row), isSelected: selection == row.id)
+        LibraryItemCard(row: row, footage: footage(row.id), payload: dragPayload(row), isSelected: selection == row.id,
+                        player: player,
+                        onSkim: { fraction in
+                            if let cell = footage(row.id) { onSkim(row.id, cell, fraction) }
+                        },
+                        onSeek: { fraction in
+                            if let cell = footage(row.id) { onSeek(row.id, cell, fraction) }
+                        })
         .modifier(LibraryGroupDropTarget(groupID: row.groupID, onMove: move))
         .onTapGesture { selection = row.id }
         .simultaneousGesture(DragGesture(minimumDistance: 0).onChanged { _ in

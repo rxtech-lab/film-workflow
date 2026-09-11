@@ -42,9 +42,17 @@ public struct SequenceViewerView: View {
     }
 
     private var transport: some View {
-        HStack(spacing: 12) {
-            Button { controller.pause(); controller.seek(to: 0) } label: { Image(systemName: "backward.end.fill") }
-                .help("Go to start")
+        HStack(spacing: 8) {
+            Menu {
+                Button("Go to Start") { controller.pause(); controller.seek(to: 0) }
+                Button("Go to End") { controller.pause(); controller.seek(to: controller.duration) }
+                Divider()
+                Toggle("Mute", isOn: Binding(get: { controller.player.isMuted }, set: { controller.player.isMuted = $0 }))
+            } label: { Image(systemName: "slider.horizontal.3") }
+            .menuStyle(.borderlessButton)
+            .fixedSize()
+            .help("Viewer tools")
+            Spacer(minLength: 0)
             Button { controller.step(frames: -1) } label: { Image(systemName: "backward.frame.fill") }
                 .help("Previous frame")
             Button { controller.togglePlay() } label: {
@@ -53,27 +61,22 @@ public struct SequenceViewerView: View {
             }
             .keyboardShortcut(.space, modifiers: [])
             .help(controller.isPlaying ? "Pause" : "Play")
+            Text(Timecode.string(seconds: controller.currentTime, fps: fps))
+                .font(.system(size: 19, weight: .light, design: .monospaced))
+                .fixedSize()
+
             Button { controller.step(frames: 1) } label: { Image(systemName: "forward.frame.fill") }
                 .help("Next frame")
-            Button { controller.pause(); controller.seek(to: controller.duration) } label: { Image(systemName: "forward.end.fill") }
-                .help("Go to end")
-
-            Text(Timecode.string(seconds: controller.currentTime, fps: fps))
-                .font(.system(.callout, design: .monospaced))
-                .frame(width: 104, alignment: .leading)
-
-            AudioLevelMeterView(player: controller.player)
-
             Spacer(minLength: 0)
-
-            Text(Timecode.string(seconds: controller.duration, fps: fps))
-                .font(.system(.callout, design: .monospaced))
-                .foregroundStyle(.secondary)
-                .frame(width: 104, alignment: .trailing)
+            AudioLevelMeterView(player: controller.player)
+            Button { NSApp.keyWindow?.toggleFullScreen(nil) } label: {
+                Image(systemName: "arrow.up.left.and.arrow.down.right")
+            }
+            .help("Toggle full screen")
         }
         .buttonStyle(.borderless)
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
+        .padding(.horizontal, 10)
+        .frame(height: 40)
         .background(.bar)
     }
 }

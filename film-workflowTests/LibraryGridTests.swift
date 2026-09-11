@@ -27,7 +27,7 @@ struct LibraryGridTests {
         return [element] + children.flatMap { descendants($0, depth: depth + 1) }
     }
 
-    @Test("Cards adapt to panel width, display posters and durations, select, and collapse with their folder")
+    @Test("Filmstrips wrap with panel width, display posters and durations, select, and collapse with their folder")
     func layoutAndSelection() async throws {
         NSApp.accessibilitySetValue(true, forAttribute: .init(rawValue: "AXEnhancedUserInterface"))
         let posterURL = FileManager.default.temporaryDirectory.appendingPathComponent("LibraryPoster-\(UUID()).png")
@@ -45,10 +45,10 @@ struct LibraryGridTests {
             LibraryRow(id: .init(kind: .imported, id: UUID()), name: name, subtitle: "1920×1080",
                        updatedAt: Date(), groupID: group.id, dragItem: nil, versions: [])
         }
-        let cells = Dictionary(uniqueKeysWithValues: rows.map { row in
+        let cells = Dictionary(uniqueKeysWithValues: rows.enumerated().map { index, row in
             (row.id, FootageCell(id: row.id.id, title: row.name, subtitle: row.subtitle,
                                 footage: Footage(clipSource: .init(id: row.id.id.uuidString, kind: .video, displayName: row.name),
-                                                 thumbnailURL: posterURL, storedDuration: 83)))
+                                                 thumbnailURL: posterURL, storedDuration: [25, 45, 12][index])))
         })
         let selection = Selection()
         let grid = LibraryGrid(rows: rows, groups: [group],
@@ -86,10 +86,10 @@ struct LibraryGridTests {
             let first = cards[0].accessibilityFrame()
             let second = cards[1].accessibilityFrame()
             let third = cards[2].accessibilityFrame()
-            #expect(first.width >= 100 && second.minX > first.minX)
-            #expect(abs(first.minY - second.minY) < 1)
-            #expect(width == 240 ? third.minY < first.minY : abs(third.minY - first.minY) < 1)
-            #expect(cards[0].accessibilityLabel()?.contains("1:23") == true)
+            #expect(first.width >= 200 && abs(second.minX - first.minX) < 1)
+            #expect(second.minY < first.minY && third.minY < second.minY)
+            #expect(width == 240 ? second.height > first.height + 60 : abs(second.height - first.height) < 1)
+            #expect(cards[0].accessibilityLabel()?.contains("0:25") == true)
             #expect(cards[0].accessibilityPerformPress())
             #expect(selection.item == rows[0].id)
 

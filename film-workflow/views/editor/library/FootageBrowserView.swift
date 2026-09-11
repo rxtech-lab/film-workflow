@@ -16,9 +16,10 @@ struct FootageBrowserView: View {
     let onDeselect: () -> Void
     /// The cell under the pointer and how far across it the pointer is
     /// (0...1), or nil once the pointer leaves the cell.
+    var player: FootagePlayer?
     var onSkim: (FootageCell, Double?) -> Void = { _, _ in }
 
-    private let columns = [GridItem(.adaptive(minimum: 96), spacing: 8)]
+    var onSeek: (FootageCell, Double) -> Void = { _, _ in }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -36,10 +37,11 @@ struct FootageBrowserView: View {
                                  message: "Import media or generate footage, then drag it to the timeline.")
             } else {
                 ScrollView {
-                    LazyVGrid(columns: columns, spacing: 4) {
+                    LazyVStack(alignment: .leading, spacing: 12) {
                         ForEach(cells) { cell in
                             FootageCellView(cell: cell, libraryItem: libraryItem, isSelected: cell.id == selectedID,
-                                            onSelect: { onSelect(cell) }, onSkim: { onSkim(cell, $0) })
+                                            onSelect: { onSelect(cell) }, onSkim: { onSkim(cell, $0) },
+                                            player: player, onSeek: { onSeek(cell, $0) })
                         }
                     }
                     .padding(4)
@@ -59,17 +61,11 @@ struct FootageCellView: View {
     var onSelect: () -> Void = {}
     var onSkim: (Double?) -> Void = { _ in }
 
+    var player: FootagePlayer?
+    var onSeek: (Double) -> Void = { _ in }
+
     @State private var loadedDuration: TimeInterval?
-    /// Where the pointer is across the poster, in points, while it is over it.
-    @State private var skimX: CGFloat?
-
     private var duration: TimeInterval? { cell.duration ?? loadedDuration }
-
-    /// Stills and captions have nothing to skim through; unrendered takes
-    /// have no file to play.
-    private var skimmable: Bool {
-        (cell.kind == .video || cell.kind == .audio) && cell.mediaURL != nil
-    }
 
     /// The payload carries the length once it is known, so the timeline can
     /// draw the clip at its true size while it is still being dragged.
@@ -85,7 +81,6 @@ struct FootageCellView: View {
             .background(isSelected ? Color.accentColor.opacity(0.12) : .clear, in: RoundedRectangle(cornerRadius: 8))
             .contentShape(Rectangle())
             .onTapGesture(perform: onSelect)
-            .onChange(of: skimmable) { _, on in if !on { skimX = nil } }
             // Select on press, not on release: a drag source swallows taps
             // unless the mouse stays perfectly still, and a press is what a
             // drag begins with anyway.
@@ -97,11 +92,8 @@ struct FootageCellView: View {
 
     private var content: some View {
         VStack(alignment: .leading, spacing: 4) {
-            FootageThumbnail(thumbnailURL: cell.thumbnailURL,
-                             videoURL: cell.kind == .video ? cell.mediaURL : nil,
-                             icon: cell.kind.symbolName, duration: duration,
-                             isStill: cell.kind == .image, isSelected: isSelected)
-                .overlay { if skimmable { skimmer } }
+            FootageFilmstrip(cell: cell, duration: duration, isSelected: isSelected,
+                             player: player, onSkim: onSkim, onSeek: onSeek)
             Text(cell.title).font(.caption).lineLimit(1)
             Text(cell.subtitle).font(.caption2).foregroundStyle(.secondary).lineLimit(1)
         }
@@ -115,36 +107,4 @@ struct FootageCellView: View {
         }
     }
 
-    /// Tracks the pointer across the poster and marks where it is. A drag
-    /// already carries the take somewhere; skimming then would fight it.
-    private var skimmer: some View {
-        GeometryReader { geometry in
-            ZStack(alignment: .leading) {
-                Color.clear
-                if let skimX {
-                    Rectangle()
-                        .fill(.white)
-                        .frame(width: 1)
-                        .shadow(color: .black.opacity(0.6), radius: 1)
-                        .offset(x: skimX)
-                }
-            }
-            .contentShape(Rectangle())
-            .onContinuousHover(coordinateSpace: .local) { phase in
-                switch phase {
-                case .active(let point):
-                    guard FootageDragSession.shared.item == nil else { return }
-                    let width = max(1, geometry.size.width)
-                    let x = min(max(0, point.x), width)
-                    skimX = x
-                    onSkim(x / width)
-                case .ended:
-                    skimX = nil
-                    onSkim(nil)
-                }
-            }
-        }
-        .clipShape(RoundedRectangle(cornerRadius: 6))
-        .accessibilityHidden(true)
-    }
 }

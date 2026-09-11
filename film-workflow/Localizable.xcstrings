@@ -251,6 +251,9 @@
         }
       }
     },
+    "%@, footage preview" : {
+
+    },
     "%@: %@" : {
       "localizations" : {
         "en" : {
@@ -399,6 +402,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%lld%%"
+          }
+        }
+      }
+    },
+    "%lld×%lld · %lldp" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$lld×%2$lld · %3$lldp"
           }
         }
       }
@@ -3153,6 +3166,9 @@
     "First frame" : {
 
     },
+    "Fit to Viewer" : {
+
+    },
     "Flute" : {
       "localizations" : {
         "zh-Hans" : {
@@ -3576,10 +3592,10 @@
         }
       }
     },
-    "Go to end" : {
+    "Go to End" : {
 
     },
-    "Go to start" : {
+    "Go to Start" : {
 
     },
     "Google" : {
@@ -4618,6 +4634,9 @@
         }
       }
     },
+    "Mute" : {
+
+    },
     "My provider permits automated movie exports" : {
 
     },
@@ -4785,6 +4804,9 @@
 
     },
     "New Thread" : {
+
+    },
+    "Next frame" : {
 
     },
     "No Caption Project" : {
@@ -5758,6 +5780,9 @@
           }
         }
       }
+    },
+    "Previous frame" : {
+
     },
     "Project name" : {
       "localizations" : {
@@ -8083,6 +8108,9 @@
         }
       }
     },
+    "Toggle full screen" : {
+
+    },
     "Tool rounds per turn: %lld" : {
 
     },
@@ -8754,6 +8782,9 @@
       }
     },
     "Viewer" : {
+
+    },
+    "Viewer tools" : {
 
     },
     "Violin" : {
