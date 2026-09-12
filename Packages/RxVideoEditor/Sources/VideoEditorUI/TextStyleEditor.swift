@@ -1,4 +1,6 @@
 import AppKit
+import Combine
+import CoreText
 import SwiftUI
 import VideoEditorCore
 
@@ -13,19 +15,30 @@ public struct TextStyleEditor: View {
         _style = style
     }
 
-    private static let families: [String] = NSFontManager.shared.availableFontFamilies.sorted {
-        $0.localizedCaseInsensitiveCompare($1) == .orderedAscending
+    /// Re-read whenever a font is registered or removed in this process, so a
+    /// font installed from the marketplace shows up without a relaunch.
+    @State private var families: [String] = TextStyleEditor.currentFamilies()
+
+    private static func currentFamilies() -> [String] {
+        NSFontManager.shared.availableFontFamilies.sorted {
+            $0.localizedCaseInsensitiveCompare($1) == .orderedAscending
+        }
     }
+
+    private static let fontsChanged = Notification.Name(kCTFontManagerRegisteredFontsChangedNotification as String)
 
     public var body: some View {
         Picker("Font", selection: $style.fontName) {
-            if !Self.families.contains(style.fontName) {
+            if !families.contains(style.fontName) {
                 Text(style.fontName).tag(style.fontName)
                 Divider()
             }
-            ForEach(Self.families, id: \.self) { family in
+            ForEach(families, id: \.self) { family in
                 Text(family).tag(family)
             }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: Self.fontsChanged).receive(on: RunLoop.main)) { _ in
+            families = Self.currentFamilies()
         }
         slider("Size", $style.fontSize, in: 0.02...0.12)
         HStack {

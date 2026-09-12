@@ -5,36 +5,20 @@ import SwiftData
 import UniformTypeIdentifiers
 import VideoEditorCore
 
-/// Sequences (timelines) and the footage that goes on them, for agents.
+/// Sequences — the film's timelines — and the clips on them, for agents.
+/// Footage itself is listed by `MCPLibraryHandlers.footage_list`; the
+/// `sourceId` it returns is what goes on a track here.
 @MainActor
 enum MCPSequenceHandlers {
     static let descriptors: [MCPToolDescriptor] = [
         MCPToolDescriptor(
-            name: "footage_list",
-            description: "Every piece of footage in the film that can go on a timeline, with the `source_id` sequence tools take (e.g. `video:<uuid>`, `music:<uuid>`, `remotion:<uuid>`, `caption:<uuid>`, `imported:<uuid>`). Remotion sources are rendered automatically when a sequence renders.",
-            inputSchema: ["type": "object", "properties": [String: Any](), "additionalProperties": false]
-        ),
-        MCPToolDescriptor(
-            name: "import_media",
-            description: "Bring a video, audio or image file from disk into the film as imported footage. Returns its source_id.",
-            inputSchema: [
-                "type": "object",
-                "properties": [
-                    "path": ["type": "string", "description": "Absolute path of the file."] as [String: Any],
-                    "copy": ["type": "boolean", "description": "Copy into the film package (default true) or reference in place."] as [String: Any],
-                    "name": ["type": "string", "description": "Display name; defaults to the file name."] as [String: Any],
-                ],
-                "required": ["path"]
-            ]
-        ),
-        MCPToolDescriptor(
             name: "sequence_list",
-            description: "List the film's sequences (timelines) with size, frame rate, duration and render count.",
+            description: "The film's sequences (timelines) with size, frame rate, duration, clip count and how many renders each has. Sequences also appear in footage_list as kind `sequence`; their id is the `sequence_id` these tools take.",
             inputSchema: ["type": "object", "properties": [String: Any](), "additionalProperties": false]
         ),
         MCPToolDescriptor(
             name: "sequence_create",
-            description: "Create a sequence. Returns its id and the default tracks (T1 overlay, V1 video, A1/A2 audio).",
+            description: "Create a sequence in the library. Returns its id and the default tracks (T1 overlay, V1 video, A1/A2 audio). Rename or resize it later with footage_update.",
             inputSchema: [
                 "type": "object",
                 "properties": [
@@ -68,12 +52,12 @@ enum MCPSequenceHandlers {
         ),
         MCPToolDescriptor(
             name: "sequence_add_clip",
-            description: "Place footage on a track. Video/remotion/image go on a `video` track, music/narration on an `audio` track, captions on the `overlay` track. Omit `start` to append after the track's last clip; omit `duration` to use the footage's natural length (stills default to 5 s).",
+            description: "Put one take on a track as a clip. `source_id` is a `sourceId` from footage_list or footage_get — the newest take of an item, or a specific one with include_versions. Video, images and Remotion compositions go on a `video` track, music and narration on an `audio` track, captions on the `overlay` track. Omit `start` to append after the track's last clip; omit `duration` to use the take's natural length (stills default to 5 s).",
             inputSchema: [
                 "type": "object",
                 "properties": [
                     "sequence_id": ["type": "string"] as [String: Any],
-                    "source_id": ["type": "string", "description": "From footage_list."] as [String: Any],
+                    "source_id": ["type": "string", "description": "A `sourceId` from footage_list or footage_get, e.g. `video:<uuid>`, `music:<uuid>`, `remotion:<uuid>`, `caption:<uuid>`, `imported:<uuid>`."] as [String: Any],
                     "track": ["type": "string", "description": "Track name such as V1, A1, T1, or a track id. Defaults to the first track that accepts the footage."] as [String: Any],
                     "start": ["type": "number", "description": "Seconds on the timeline."] as [String: Any],
                     "duration": ["type": "number", "description": "Seconds."] as [String: Any],
@@ -98,7 +82,7 @@ enum MCPSequenceHandlers {
         ),
         MCPToolDescriptor(
             name: "sequence_render",
-            description: "Render a sequence, by default as a new mp4 version inside the film. Remotion clips without a current render are rendered first. Slow: minutes for long sequences.",
+            description: "Render a sequence, by default as a new mp4 version kept inside the film (footage_get on the sequence lists them). Remotion clips whose source changed since their last render are rendered first. Slow: minutes for long sequences.",
             inputSchema: [
                 "type": "object",
                 "properties": [
@@ -118,7 +102,7 @@ enum MCPSequenceHandlers {
         ),
         MCPToolDescriptor(
             name: "sequence_renders",
-            description: "The rendered versions of a sequence, newest first, with file paths.",
+            description: "The rendered versions of a sequence, newest first, with file paths on disk.",
             inputSchema: [
                 "type": "object",
                 "properties": ["sequence_id": ["type": "string"] as [String: Any]],
@@ -133,8 +117,6 @@ enum MCPSequenceHandlers {
 
     static func handle(name: String, arguments: [String: Any], context: ModelContext) async throws -> [String: Any] {
         switch name {
-        case "footage_list": return try footageList(context: context)
-        case "import_media": return try await importMedia(arguments, context: context)
         case "sequence_list": return try sequenceList(context: context)
         case "sequence_create": return try sequenceCreate(arguments, context: context)
         case "sequence_get": return try sequenceGet(arguments, context: context)
@@ -147,80 +129,6 @@ enum MCPSequenceHandlers {
         }
     }
 
-    // MARK: - Footage
-
-    private static func footageList(context: ModelContext) throws -> [String: Any] {
-        let index = LibraryIndex(
-            music: try context.fetch(FetchDescriptor<MusicProject>()),
-            narrations: try context.fetch(FetchDescriptor<NarrativeProject>()),
-            captions: try context.fetch(FetchDescriptor<CaptionProject>()),
-            images: try context.fetch(FetchDescriptor<ImageGenProject>()),
-            videos: try context.fetch(FetchDescriptor<VideoGenProject>()),
-            remotions: try context.fetch(FetchDescriptor<RemotionProject>()),
-            imported: try context.fetch(FetchDescriptor<ImportedAsset>()),
-            sequences: []
-        )
-        var items: [[String: Any]] = []
-        for row in index.rows() where row.id.kind != .sequence {
-            for cell in index.footage(for: row.id) {
-                var entry: [String: Any] = [
-                    "source_id": cell.drag.source.id,
-                    "kind": cell.drag.source.kind.rawValue,
-                    "project": row.name,
-                    "project_kind": row.id.kind.rawValue,
-                    "title": cell.title,
-                    "subtitle": cell.subtitle,
-                ]
-                if let d = cell.drag.duration { entry["duration"] = d }
-                items.append(entry)
-            }
-        }
-        return MCPToolRegistry.jsonResult(items)
-    }
-
-    private static func importMedia(_ arguments: [String: Any], context: ModelContext) async throws -> [String: Any] {
-        guard let path = arguments["path"] as? String else { throw MCPToolError.invalidArguments("missing path") }
-        let url = URL(fileURLWithPath: path)
-        guard FileManager.default.fileExists(atPath: url.path) else { throw MCPToolError.invalidArguments("no file at \(path)") }
-        guard let kind = MediaImportSheet.kind(of: url) else { throw MCPToolError.invalidArguments("not a video, audio or image file") }
-        let copy = (arguments["copy"] as? Bool) ?? true
-        let storage = ProjectStorage.forContainer(context.container)
-        let asset = ImportedAsset(name: (arguments["name"] as? String) ?? url.deletingPathExtension().lastPathComponent, kind: kind, originalPath: url.path)
-        do {
-            if copy {
-                asset.relativePath = try storage.copyFile(from: url, kind: .imported, fallbackExtension: kind == .image ? "png" : "mp4")
-            } else {
-                asset.bookmarkData = try url.bookmarkData()
-            }
-        } catch {
-            throw MCPToolError.underlying(error)
-        }
-        let mediaURL = asset.relativePath.map(storage.absoluteURL(for:)) ?? url
-        switch kind {
-        case .video:
-            if let probed = await VideoThumbnailer.probe(url: mediaURL) {
-                asset.width = probed.width; asset.height = probed.height; asset.durationSeconds = probed.duration
-            }
-            asset.thumbnailFilePath = await VideoThumbnailer.generate(for: mediaURL, storage: storage)
-        case .audio:
-            let seconds = CMTimeGetSeconds(AVURLAsset(url: mediaURL).duration)
-            asset.durationSeconds = seconds.isFinite ? seconds : 0
-        case .image:
-            if let image = NSImage(contentsOf: mediaURL) { asset.width = Int(image.size.width); asset.height = Int(image.size.height) }
-        }
-        context.insert(asset)
-        try context.save()
-        return MCPToolRegistry.jsonResult([
-            "source_id": DocumentMediaResolver.sourceID(.imported, asset.id),
-            "id": asset.id.uuidString,
-            "kind": kind.rawValue,
-            "duration": asset.durationSeconds,
-            "width": asset.width,
-            "height": asset.height,
-            "stored": copy ? "copied" : "referenced",
-        ] as [String: Any])
-    }
-
     // MARK: - Sequences
 
     private static func fetchSequence(_ arguments: [String: Any], context: ModelContext) throws -> SequenceProject {
@@ -228,7 +136,7 @@ enum MCPSequenceHandlers {
             throw MCPToolError.invalidArguments("missing or malformed sequence_id")
         }
         guard let sequence = try context.fetch(FetchDescriptor<SequenceProject>(predicate: #Predicate { $0.id == id })).first else {
-            throw MCPToolError.projectNotFound(raw)
+            throw MCPToolError.notFound(raw)
         }
         return sequence
     }
@@ -270,7 +178,7 @@ enum MCPSequenceHandlers {
         return MCPToolRegistry.jsonResult(timelineJSON(sequence, context: context))
     }
 
-    private static func timelineJSON(_ sequence: SequenceProject, context: ModelContext) -> [String: Any] {
+    static func timelineJSON(_ sequence: SequenceProject, context: ModelContext) -> [String: Any] {
         var payload = summary(sequence, context: context)
         if let data = try? JSONEncoder().encode(sequence.timeline),
            let object = try? JSONSerialization.jsonObject(with: data) {
@@ -308,7 +216,7 @@ enum MCPSequenceHandlers {
     private static func sequenceAddClip(_ arguments: [String: Any], context: ModelContext) async throws -> [String: Any] {
         let sequence = try fetchSequence(arguments, context: context)
         guard let sourceID = arguments["source_id"] as? String, let (prefix, uuid) = DocumentMediaResolver.parse(sourceID) else {
-            throw MCPToolError.invalidArguments("missing or malformed source_id; use footage_list")
+            throw MCPToolError.invalidArguments("missing or malformed source_id; use the sourceId from footage_list")
         }
         guard let document = ProjectDocumentController.shared.document(forContainer: context.container) else {
             throw MCPToolError.invalidArguments("the film is not open in a window")
@@ -324,7 +232,7 @@ enum MCPSequenceHandlers {
         case .caption: kind = .captions
         case .imported:
             let asset = try context.fetch(FetchDescriptor<ImportedAsset>(predicate: #Predicate { $0.id == uuid })).first
-            guard let asset else { throw MCPToolError.projectNotFound(sourceID) }
+            guard let asset else { throw MCPToolError.notFound(sourceID) }
             kind = asset.kindEnum == .image ? .image : (asset.kindEnum == .audio ? .audio : .video)
             displayName = asset.name
         }
@@ -507,7 +415,7 @@ enum MCPSequenceHandlers {
         return MCPToolRegistry.jsonResult(SequenceRenderService.renders(for: sequence, context: context).map(renderJSON))
     }
 
-    private static func renderJSON(_ r: SequenceRender) -> [String: Any] {
+    static func renderJSON(_ r: SequenceRender) -> [String: Any] {
         [
             "id": r.id.uuidString,
             "version": r.versionNumber,

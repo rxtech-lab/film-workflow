@@ -20,7 +20,11 @@ generated media. See `docs/document-package.md`.
 - Render: Remotion clips are rendered first, then the sequence exports as a new
   version in the film or to a folder, with codec, audio, resolution and format options
 - An embedded MCP server and agent window that can build and render films
-  (`footage_list`, `sequence_add_clip`, `sequence_render`, …)
+  (`footage_list`, `sequence_add_clip`, `sequence_render`, …). See
+  `docs/agent-tools.md`.
+- A Marketplace window (⌘⌥M) for installing footage, music, sound effects,
+  fonts, transitions, effects and Remotion prompts published from the
+  website's admin page; paid items are bought with credits. See `docs/marketplace.md`.
 
 ## Project Structure
 
@@ -40,7 +44,7 @@ generated media. See `docs/document-package.md`.
 
 ## Getting Started
 
-1. Open `film-workflow.xcodeproj` in Xcode and run the macOS target.
+1. Keep an `RxAgentSDK` checkout beside this repository (`../RxAgentSDK`); the Xcode project uses it as a local package so SDK chat fixes are included in the app build. Open `film-workflow.xcodeproj` in Xcode and run the macOS target.
 2. Create a film from the Welcome window (**New Film…**).
 3. Add footage with the **New** menu, set parameters in the inspector and click **Generate**.
 4. Create a **Sequence**, drag footage onto its timeline, and click **Render**.

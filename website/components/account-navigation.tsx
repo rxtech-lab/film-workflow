@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { CreditCard, Gauge, ReceiptText, Sparkles } from "lucide-react";
+import { CreditCard, Gauge, ReceiptText, Sparkles, Store } from "lucide-react";
 
 const links = [
   { href: "/dashboard", label: "Dashboard", icon: Gauge },
@@ -12,12 +12,17 @@ const links = [
   { href: "/models", label: "Models", icon: Sparkles },
 ] as const;
 
-export function AccountNavigation() {
+const adminLinks = [
+  { href: "/admin/marketplace", label: "Marketplace", icon: Store },
+] as const;
+
+export function AccountNavigation({ isAdmin = false }: { isAdmin?: boolean }) {
   const pathname = usePathname();
+  const visible = isAdmin ? [...links, ...adminLinks] : links;
 
   return (
     <nav className="mt-6 grid gap-1" aria-label="Account">
-      {links.map(({ href, label, icon: Icon }) => {
+      {visible.map(({ href, label, icon: Icon }) => {
         const isSelected = pathname === href || pathname.startsWith(`${href}/`);
 
         return (

@@ -53,6 +53,16 @@ struct AgentThreadView: View {
             reviewSheet(row)
         }
         .task { await controller.prepare(thread: thread, context: modelContext) }
+        // The SDK composer hands the draft straight to the agent, so nothing
+        // re-runs `configure` at send time. An engine or model pick has to be
+        // applied the moment it is made, or the thread keeps answering on
+        // whatever was resolved when it first appeared.
+        .onChange(of: thread.backendRaw) { _, _ in
+            Task { await controller.prepare(thread: thread, context: modelContext) }
+        }
+        .onChange(of: thread.modelOverridesJSON) { _, _ in
+            Task { await controller.prepare(thread: thread, context: modelContext) }
+        }
         .onAppear { controller.markSeen(threadID) }
         .onChange(of: controller.isRunning(threadID)) { _, streaming in
             guard !streaming else { return }
@@ -77,14 +87,21 @@ struct AgentThreadView: View {
                 }
             },
             accessories: {
+                // The composer lays accessories out in a row, so these read as
+                // two chips side by side: engine (and model), then thinking.
                 AgentEngineMenu(thread: thread)
+                AgentThinkingMenu(thread: thread)
             }
         )
         .agentTheme(.filmStudio)
-        // The engine picker lives under the field, in `accessories`. The SDK's
-        // own header would put a second one at the top of the window — and its
-        // chrome is the only opaque band in an otherwise transparent surface.
+        // The engine and thinking pickers live under the field, in `accessories`.
+        // The SDK's own header would put a second set at the top of the window —
+        // and its chrome is the only opaque band in an otherwise transparent
+        // surface.
         .agentToolbar(.hidden)
+        // A burst of lookups folds into one "N tool calls" chip so the answer
+        // isn't buried under the investigation that produced it.
+        .agentToolCallCollapse(.consecutive(minimum: 2))
     }
 
     private var placeholder: some View {
@@ -93,11 +110,11 @@ struct AgentThreadView: View {
                 .font(.callout)
             Text("""
             “merge captions 12 and 13”, “make the title yellow and slow the fade”, \
-            “list my projects”, “export the captions as SRT”.
+            “put the narration under the video and render it”, “export the captions as SRT”.
             """)
             .font(.caption)
             .foregroundStyle(.secondary)
-            Text("Type @ to pick a project, / for commands.")
+            Text("Type @ to pick footage, / for commands.")
                 .font(.caption2)
                 .foregroundStyle(.tertiary)
         }
@@ -123,11 +140,13 @@ struct AgentThreadView: View {
         .padding(.horizontal, 12)
         .padding(.vertical, 6)
         .background(Color.orange.opacity(0.12))
+        .background(.background)
+        .overlay(alignment: .bottom) { Divider() }
     }
 
     // MARK: - Completions
 
-    /// `/` commands and `@` project mentions, as SDK completion sources.
+    /// `/` commands and `@` footage mentions, as SDK completion sources.
     private var completionSources: [AgentCompletionSource] {
         [
             AgentCompletionSource(trigger: "/") { query in
@@ -154,11 +173,11 @@ struct AgentThreadView: View {
                     .prefix(12)
                     .map { option in
                         AgentCompletionItem(
-                            id: "\(option.kind.rawValue):\(option.projectUUID.uuidString)",
+                            id: option.id,
                             label: option.name,
-                            detail: option.kind.rawValue,
+                            detail: option.kindName,
                             systemImage: option.kind.systemImage,
-                            insertion: "@\(option.kind.rawValue):\(option.name)"
+                            insertion: option.token
                         )
                     }
             },
@@ -168,7 +187,7 @@ struct AgentThreadView: View {
     private func run(_ command: AgentSlashCommand) {
         switch command {
         case .new:
-            let fresh = AgentThread(target: thread.target)
+            let fresh = AgentThread.startingFromLastPick(target: thread.target)
             modelContext.insert(fresh)
         case .clear:
             showClearConfirm = true

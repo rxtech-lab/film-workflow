@@ -54,13 +54,25 @@ export type AppUser = {
 export const isDevelopmentBypass =
   process.env.NODE_ENV !== "production" && process.env.DEV_BYPASS_AUTH === "true";
 
+/** `DEV_BYPASS_ROLES=user,admin` lets a local run reach the admin pages. */
+function developmentBypassRoles() {
+  const configured = process.env.DEV_BYPASS_ROLES?.split(",").map((role) => role.trim()).filter(Boolean) ?? [];
+  return configured.length > 0 ? configured : ["user"];
+}
+
+export const ADMIN_ROLE = "admin";
+
+export function isAdmin(user: Pick<AppUser, "roles">) {
+  return user.roles.includes(ADMIN_ROLE);
+}
+
 export async function getCurrentUser(): Promise<AppUser | null> {
   if (isDevelopmentBypass) {
     return {
       id: "local-development-user",
       name: "Local founder",
       email: "founder@local.test",
-      roles: ["user"],
+      roles: developmentBypassRoles(),
       isDevelopmentBypass: true,
     };
   }
@@ -78,6 +90,13 @@ export async function getCurrentUser(): Promise<AppUser | null> {
 export async function requirePageUser() {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
+  return user;
+}
+
+/** Admin pages send a signed-in non-admin back to the dashboard rather than showing a 403. */
+export async function requireAdminPageUser() {
+  const user = await requirePageUser();
+  if (!isAdmin(user)) redirect("/dashboard");
   return user;
 }
 

@@ -20,13 +20,13 @@ struct MCPDocumentRoutingTests {
         return try JSONSerialization.jsonObject(with: Data(text.utf8))
     }
 
-    @Test("Every tool schema carries a document argument; list_documents reports open films")
+    @Test("Every tool schema carries a film argument; film_list reports open films")
     func schemasAndListing() async throws {
         let tools = MCPToolRegistry.allDescriptors()
-        #expect(tools.contains { $0.name == "list_documents" })
-        for tool in tools where tool.name != "list_documents" {
+        #expect(tools.contains { $0.name == "film_list" })
+        for tool in tools where tool.name != "film_list" {
             let props = tool.inputSchema["properties"] as? [String: Any]
-            #expect(props?["document"] != nil, "\(tool.name) lacks document")
+            #expect(props?["film"] != nil, "\(tool.name) lacks film")
         }
 
         let urlA = temporaryPackage("Alpha"), urlB = temporaryPackage("Beta")
@@ -47,32 +47,32 @@ struct MCPDocumentRoutingTests {
         try a.container.mainContext.save()
         try b.container.mainContext.save()
 
-        let listed = try decoded(try await MCPToolRegistry.invoke(name: "list_documents", arguments: [:], container: nil)) as? [[String: Any]]
+        let listed = try decoded(try await MCPToolRegistry.invoke(name: "film_list", arguments: [:], container: nil)) as? [[String: Any]]
         #expect(listed?.contains { $0["name"] as? String == "Alpha" } == true)
         #expect(listed?.contains { $0["name"] as? String == "Beta" } == true)
 
-        // Default routes to the active film; `document` overrides; "*" spans both.
+        // Default routes to the active film; `film` overrides; "*" spans both.
         let fromActive = try decoded(try await MCPToolRegistry.invoke(
-            name: "list_projects", arguments: ["type": "music"], container: a.container)) as? [[String: Any]]
+            name: "footage_list", arguments: ["kind": "music"], container: a.container)) as? [[String: Any]]
         #expect(fromActive?.map { $0["name"] as? String } == ["In Alpha"])
 
         let fromBeta = try decoded(try await MCPToolRegistry.invoke(
-            name: "list_projects", arguments: ["type": "music", "document": "Beta"], container: a.container)) as? [[String: Any]]
+            name: "footage_list", arguments: ["kind": "music", "film": "Beta"], container: a.container)) as? [[String: Any]]
         #expect(fromBeta?.map { $0["name"] as? String } == ["In Beta"])
 
         let byID = try decoded(try await MCPToolRegistry.invoke(
-            name: "list_projects", arguments: ["type": "music", "document": b.id.uuidString], container: nil)) as? [[String: Any]]
+            name: "footage_list", arguments: ["kind": "music", "film": b.id.uuidString], container: nil)) as? [[String: Any]]
         #expect(byID?.map { $0["name"] as? String } == ["In Beta"])
 
         let all = try decoded(try await MCPToolRegistry.invoke(
-            name: "list_projects", arguments: ["type": "music", "document": "*"], container: nil)) as? [[String: Any]]
-        #expect(Set(all?.compactMap { $0["documentName"] as? String } ?? []) == ["Alpha", "Beta"])
+            name: "footage_list", arguments: ["kind": "music", "film": "*"], container: nil)) as? [[String: Any]]
+        #expect(Set(all?.compactMap { $0["filmName"] as? String } ?? []) == ["Alpha", "Beta"])
 
         await #expect(throws: MCPToolError.self) {
-            _ = try await MCPToolRegistry.invoke(name: "list_projects", arguments: ["type": "music", "document": "Nope"], container: nil)
+            _ = try await MCPToolRegistry.invoke(name: "footage_list", arguments: ["kind": "music", "film": "Nope"], container: nil)
         }
         await #expect(throws: MCPToolError.self) {
-            _ = try await MCPToolRegistry.invoke(name: "list_projects", arguments: ["type": "music"], container: nil)
+            _ = try await MCPToolRegistry.invoke(name: "footage_list", arguments: ["kind": "music"], container: nil)
         }
 
         await controller.close(a)

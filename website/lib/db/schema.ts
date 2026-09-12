@@ -1,4 +1,14 @@
-import { index, integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import {
+  bigint,
+  index,
+  integer,
+  jsonb,
+  pgEnum,
+  pgTable,
+  text,
+  timestamp,
+  uniqueIndex,
+} from "drizzle-orm/pg-core";
 
 export type AiUsageSnapshot = {
   inputTokens?: number;
@@ -15,20 +25,22 @@ export type AiUsageSnapshot = {
   totalTokens?: number;
 };
 
-export type Capability =
-  | "chat"
-  | "image"
-  | "speech"
-  | "music"
-  | "transcription"
-  | "translation";
+export const capabilityEnum = pgEnum("capability", ["chat", "image", "speech", "music", "transcription", "translation"]);
+export type Capability = (typeof capabilityEnum.enumValues)[number];
 
-export type UnitKind =
-  | "tokens"
-  | "images"
-  | "characters"
-  | "audio_seconds"
-  | "audio_minutes";
+export const unitKindEnum = pgEnum("unit_kind", ["tokens", "images", "characters", "audio_seconds", "audio_minutes"]);
+export type UnitKind = (typeof unitKindEnum.enumValues)[number];
+
+export const fundingScopeEnum = pgEnum("funding_scope", ["user", "platform"]);
+export const usageStatusEnum = pgEnum("usage_status", ["pending", "settled", "needs_review"]);
+export const platformEnum = pgEnum("platform", ["macos", "ios"]);
+export const jobStatusEnum = pgEnum("job_status", ["queued", "running", "succeeded", "failed", "cancelled"]);
+
+function timestamps() {
+  return {
+    createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).notNull(),
+  };
+}
 
 /**
  * What each provider call actually cost.
@@ -37,56 +49,154 @@ export type UnitKind =
  * points at the hold it issued. This table is the provider-side detail behind
  * those charges, which rx-subscription does not track.
  */
-export const usageEvents = sqliteTable("usage_events", {
+export const usageEvents = pgTable("usage_events", {
   id: text("id").primaryKey(),
   userId: text("user_id"),
   reservationId: text("reservation_id"),
-  fundingScope: text("funding_scope", { enum: ["user", "platform"] }).notNull(),
+  fundingScope: fundingScopeEnum("funding_scope").notNull(),
   provider: text("provider").notNull(),
   feature: text("feature").notNull(),
-  capability: text("capability", { enum: ["chat", "image", "speech", "music", "transcription", "translation"] }).notNull(),
-  unitKind: text("unit_kind", { enum: ["tokens", "images", "characters", "audio_seconds", "audio_minutes"] }),
+  capability: capabilityEnum("capability").notNull(),
+  unitKind: unitKindEnum("unit_kind"),
   unitCount: integer("unit_count"),
   model: text("model"),
   externalId: text("external_id"),
-  usage: text("usage", { mode: "json" }).$type<AiUsageSnapshot | null>(),
+  usage: jsonb("usage").$type<AiUsageSnapshot | null>(),
   providerCredits: integer("provider_credits"),
-  costNanoUsd: integer("cost_nano_usd").notNull(),
+  costNanoUsd: bigint("cost_nano_usd", { mode: "number" }).notNull(),
   chargedPoints: integer("charged_points").notNull().default(0),
-  status: text("status", { enum: ["pending", "settled", "needs_review"] }).notNull(),
+  status: usageStatusEnum("status").notNull(),
   idempotencyKey: text("idempotency_key").notNull().unique(),
-  createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
-  settledAt: integer("settled_at", { mode: "timestamp_ms" }),
+  ...timestamps(),
+  settledAt: timestamp("settled_at", { withTimezone: true, mode: "date" }),
 }, (table) => [
   index("usage_events_user_created_idx").on(table.userId, table.createdAt),
   index("usage_events_user_capability_idx").on(table.userId, table.capability, table.createdAt),
   index("usage_events_external_idx").on(table.provider, table.externalId),
 ]);
 
-export const deviceSessions = sqliteTable("device_sessions", {
+export const deviceSessions = pgTable("device_sessions", {
   id: text("id").primaryKey(),
   userId: text("user_id").notNull(),
-  platform: text("platform", { enum: ["macos", "ios"] }).notNull(),
+  platform: platformEnum("platform").notNull(),
   appVersion: text("app_version"),
   deviceName: text("device_name"),
-  lastSeenAt: integer("last_seen_at", { mode: "timestamp_ms" }).notNull(),
-  createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
+  lastSeenAt: timestamp("last_seen_at", { withTimezone: true, mode: "date" }).notNull(),
+  ...timestamps(),
 }, (table) => [index("device_sessions_user_seen_idx").on(table.userId, table.lastSeenAt)]);
 
-export const aiJobs = sqliteTable("ai_jobs", {
+export const aiJobs = pgTable("ai_jobs", {
   id: text("id").primaryKey(),
   userId: text("user_id").notNull(),
   reservationId: text("reservation_id"),
-  capability: text("capability", { enum: ["chat", "image", "speech", "music", "transcription", "translation"] }).notNull(),
-  status: text("status", { enum: ["queued", "running", "succeeded", "failed", "cancelled"] }).notNull(),
-  requestJson: text("request_json", { mode: "json" }).$type<Record<string, unknown>>().notNull(),
-  // Keep the original SQL column name for migration compatibility; it stores an
-  // S3 object key now, never a provider-specific URL.
-  resultObjectKey: text("result_blob_url"),
-  resultMeta: text("result_meta", { mode: "json" }).$type<Record<string, unknown> | null>(),
+  capability: capabilityEnum("capability").notNull(),
+  status: jobStatusEnum("status").notNull(),
+  requestJson: jsonb("request_json").$type<Record<string, unknown>>().notNull(),
+  resultObjectKey: text("result_object_key"),
+  resultMeta: jsonb("result_meta").$type<Record<string, unknown> | null>(),
   errorCode: text("error_code"),
   errorMessage: text("error_message"),
   progressPercent: integer("progress_percent").notNull().default(0),
-  createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
-  updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull(),
+  ...timestamps(),
+  updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" }).notNull(),
 }, (table) => [index("ai_jobs_user_created_idx").on(table.userId, table.createdAt)]);
+
+// MARK: - Marketplace
+
+export const marketplaceKindEnum = pgEnum("marketplace_kind", [
+  "footage",
+  "remotion_prompt",
+  "audio",
+  "sound_effect",
+  "font",
+  "transition",
+  "effect",
+]);
+export type MarketplaceKind = (typeof marketplaceKindEnum.enumValues)[number];
+
+export const marketplaceItemStatusEnum = pgEnum("marketplace_item_status", ["draft", "published"]);
+export type MarketplaceItemStatus = (typeof marketplaceItemStatusEnum.enumValues)[number];
+
+/** Kind-specific facts the app needs before it downloads the content file. */
+export type MarketplaceItemMetadata = {
+  /** Footage, audio and preview video. */
+  durationSeconds?: number;
+  width?: number;
+  height?: number;
+  /** Fonts: the family name the text style picker should select. */
+  fontFamily?: string;
+  /** Effects and transitions: a summary of the CIFilter descriptor. */
+  descriptor?: { filterName: string; parameterCount: number };
+  /** Remotion prompts: the first lines, for the card. */
+  promptExcerpt?: string;
+  tags?: string[];
+};
+
+/**
+ * A shelf inside one kind ("nature" footage, "lo-fi" music). `slug` is the
+ * string the app filters and groups by on the wire; `name` is what people see.
+ * Admins create these from the item form; items reference them by id so a
+ * rename never touches the items.
+ */
+export const marketplaceCategories = pgTable("marketplace_categories", {
+  id: text("id").primaryKey(),
+  kind: marketplaceKindEnum("kind").notNull(),
+  slug: text("slug").notNull(),
+  name: text("name").notNull(),
+  ...timestamps(),
+  updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" }).notNull(),
+}, (table) => [
+  uniqueIndex("marketplace_categories_kind_slug_idx").on(table.kind, table.slug),
+]);
+
+/**
+ * One purchasable asset. Preview media are public R2 objects; the content
+ * object is only ever handed out as a short-lived download URL after the
+ * purchase check, so its key never reaches the wire.
+ */
+export const marketplaceItems = pgTable("marketplace_items", {
+  id: text("id").primaryKey(),
+  kind: marketplaceKindEnum("kind").notNull(),
+  categoryId: text("category_id").notNull().references(() => marketplaceCategories.id, { onDelete: "restrict" }),
+  title: text("title").notNull(),
+  description: text("description").notNull().default(""),
+  pricePoints: integer("price_points").notNull().default(0),
+  previewImageKey: text("preview_image_key"),
+  previewVideoKey: text("preview_video_key"),
+  contentKey: text("content_key"),
+  contentFilename: text("content_filename"),
+  contentSizeBytes: bigint("content_size_bytes", { mode: "number" }),
+  contentType: text("content_type"),
+  metadata: jsonb("metadata").$type<MarketplaceItemMetadata>().notNull().default({}),
+  status: marketplaceItemStatusEnum("status").notNull().default("draft"),
+  createdBy: text("created_by").notNull(),
+  ...timestamps(),
+  updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" }).notNull(),
+  publishedAt: timestamp("published_at", { withTimezone: true, mode: "date" }),
+}, (table) => [
+  index("marketplace_items_status_kind_idx").on(table.status, table.kind, table.createdAt),
+  index("marketplace_items_kind_category_idx").on(table.kind, table.categoryId),
+]);
+
+/**
+ * A user's entitlement to one item. Free items get a row with zero points so
+ * the download check is the same either way. `(user_id, item_id)` is unique,
+ * which is what makes a retried purchase land on the existing row instead of
+ * charging twice.
+ */
+export const marketplacePurchases = pgTable("marketplace_purchases", {
+  id: text("id").primaryKey(),
+  userId: text("user_id").notNull(),
+  itemId: text("item_id").notNull().references(() => marketplaceItems.id, { onDelete: "restrict" }),
+  pointsCharged: integer("points_charged").notNull(),
+  reservationId: text("reservation_id"),
+  idempotencyKey: text("idempotency_key").notNull().unique(),
+  ...timestamps(),
+}, (table) => [
+  uniqueIndex("marketplace_purchases_user_item_idx").on(table.userId, table.itemId),
+  index("marketplace_purchases_user_created_idx").on(table.userId, table.createdAt),
+]);
+
+export type MarketplaceCategoryRow = typeof marketplaceCategories.$inferSelect;
+export type MarketplaceItemRow = typeof marketplaceItems.$inferSelect;
+export type MarketplacePurchaseRow = typeof marketplacePurchases.$inferSelect;

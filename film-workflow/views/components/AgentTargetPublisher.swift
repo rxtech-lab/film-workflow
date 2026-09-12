@@ -3,8 +3,8 @@ import SwiftUI
 /// Publishes what a tab is currently showing, so the agent window can follow.
 ///
 /// This is the "follows context" half of the system-wide window: a thread
-/// started while you are looking at a caption project already knows which
-/// project you mean, without you having to pick it again. It only ever seeds a
+/// started while a captions item is selected already knows which item you
+/// mean, without you having to pick it again. It only ever seeds a
 /// **new** thread — existing threads keep their own target, so switching tabs
 /// can never retarget work already running.
 private struct AgentTargetPublisher: ViewModifier {
@@ -24,8 +24,7 @@ extension View {
         modifier(AgentTargetPublisher(target: target))
     }
 
-    /// Convenience for the four tabs whose projects have no explicit id and are
-    /// addressed by `MCPProjectHandlers.stableID`.
+    /// Convenience for views that hold a kind and an optional item id.
     func publishesAgentTarget(
         kind: AgentTargetKind,
         projectUUID: UUID?

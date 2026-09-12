@@ -114,7 +114,7 @@ Cross-constraints:
 
 `VeoModelFamily.clamp(_:)` enforces all of this. The parameters form calls it on
 every model and resolution change, and `applyVideoFields` calls it after an MCP
-`update_project` has applied every key — an agent can set fields in any order, so
+`footage_update` has applied every key — an agent can set fields in any order, so
 the combination is only legal once they have all landed.
 
 ## Option vocabulary
@@ -214,9 +214,10 @@ memory. Deleting a project or a clip removes the mp4 and its thumbnail.
 
 ## MCP surface
 
-- `list_projects` / `get_project` / `create_project` / `update_project` /
-  `delete_project` / `duplicate_project` / `move_project` accept `type: "video"`.
-- `update_project` fields: `name`, `prompt`, `negativePrompt`, `googleModel`,
+- `footage_list` / `footage_get` / `footage_create` / `footage_update` /
+  `footage_delete` / `footage_duplicate` / `footage_move` handle video items
+  (`kind: "video"`).
+- `footage_update` fields: `name`, `prompt`, `negativePrompt`, `googleModel`,
   `googleAspectRatio`, `googleResolution`, `googleDuration`,
   `googlePersonGeneration`, `googleNumberOfVideos`, `googleGenerateAudio`,
   `useSeed`, `seed`. Unrecognised enum values are ignored, not raised.

@@ -8,7 +8,7 @@ public enum ModifierSample {
 
     public static func image(_ item: ModifierDragItem, progress: Double = 0.5, parameters: ModifierParameters? = nil, effectAmount: Double = 1) -> CIImage? {
         guard let a = first, let b = second else { return nil }
-        let catalog = ModifierCatalog.standard
+        let catalog = ModifierCatalog.current
         if item.kind == .effect, let effect = catalog.effect(item.definitionID) {
             let rendered = effect.render(a, parameters: parameters ?? effect.defaults)
             return effectAmount >= 1 ? rendered : CrossDissolve().render(from: a, to: rendered, progress: effectAmount, parameters: [:])

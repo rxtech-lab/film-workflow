@@ -12,7 +12,7 @@ export async function GET(request: Request) {
     const [ledger, usage, grouped] = await Promise.all([
       getLedger({ user, page: Number.isSafeInteger(requestedPage) && requestedPage > 0 ? requestedPage : 1 }),
       db.select().from(usageEvents).where(and(eq(usageEvents.userId, user.id), eq(usageEvents.status, "settled"))).orderBy(desc(usageEvents.createdAt)).limit(20),
-      db.select({ capability: usageEvents.capability, points: sql<number>`coalesce(sum(${usageEvents.chargedPoints}), 0)` }).from(usageEvents).where(and(eq(usageEvents.userId, user.id), eq(usageEvents.status, "settled"))).groupBy(usageEvents.capability),
+      db.select({ capability: usageEvents.capability, points: sql<number>`coalesce(sum(${usageEvents.chargedPoints}), 0)`.mapWith(Number) }).from(usageEvents).where(and(eq(usageEvents.userId, user.id), eq(usageEvents.status, "settled"))).groupBy(usageEvents.capability),
     ]);
     // The ledger moved to rx-subscription, but the desktop app reads the field
     // names the local table used, so they are kept on the wire.

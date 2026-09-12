@@ -12,6 +12,7 @@ struct LibraryGrid: View {
     let onMove: (LibraryItemID, UUID?) -> Void
     let onCreate: (FootageKind, UUID?) -> Void
     let onImport: () -> Void
+    @Environment(\.openWindow) private var openWindow
     let onCreateGroup: () -> Void
     let onRenameGroup: (ProjectGroup) -> Void
     let onDeleteGroup: (ProjectGroup) -> Void
@@ -173,6 +174,9 @@ struct LibraryGrid: View {
     private func creationMenu(groupID: UUID?) -> some View {
         Button(action: onImport) {
             Label("Import Media…", systemImage: "square.and.arrow.down")
+        }
+        Button { openWindow(id: MarketplaceWindowID.value) } label: {
+            Label("From Marketplace…", systemImage: "storefront")
         }
         Divider()
         Menu("New") {

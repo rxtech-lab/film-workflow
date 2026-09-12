@@ -69,54 +69,64 @@ struct ProjectGroupTests {
         #expect(try context.fetch(FetchDescriptor<RemotionProject>()).count == 1)
     }
 
-    @Test("MCP creates groups, assigns projects, filters lists, and ungroups")
-    func mcpGroupLifecycle() async throws {
+    @Test("MCP creates folders, files items in them, filters lists, and unfiles")
+    func mcpFolderLifecycle() async throws {
         let container = try makeContainer()
         let context = ModelContext(container)
 
-        let createGroupResult = try await MCPProjectHandlers.handle(
-            name: "create_project_group",
+        let createFolderResult = try await MCPLibraryHandlers.handle(
+            name: "folder_create",
             arguments: ["name": "Trailer"],
             context: context
         )
-        let groupPayload = try #require(try decoded(createGroupResult) as? [String: Any])
-        let groupID = try #require(groupPayload["id"] as? String)
+        let folderPayload = try #require(try decoded(createFolderResult) as? [String: Any])
+        let folderID = try #require(folderPayload["id"] as? String)
 
-        let createProjectResult = try await MCPProjectHandlers.handle(
-            name: "create_project",
+        let createResult = try await MCPLibraryHandlers.handle(
+            name: "footage_create",
             arguments: [
-                "type": "music",
+                "kind": "music",
                 "name": "Trailer score",
-                "group_id": groupID,
+                "folder_id": folderID,
             ],
             context: context
         )
-        let projectPayload = try #require(try decoded(createProjectResult) as? [String: Any])
-        let projectID = try #require(projectPayload["id"] as? String)
-        #expect(projectPayload["groupId"] as? String == groupID)
+        let itemPayload = try #require(try decoded(createResult) as? [String: Any])
+        let itemID = try #require(itemPayload["id"] as? String)
+        #expect(itemPayload["folderId"] as? String == folderID)
+        #expect(itemPayload["kind"] as? String == "music")
+        #expect(itemPayload["name"] as? String == "Trailer score")
+        // The id is the library's own, not a hash of the persistent identifier.
+        let music = try #require(context.fetch(FetchDescriptor<MusicProject>()).first)
+        #expect(itemID == music.id.uuidString)
 
-        let groupedList = try await MCPProjectHandlers.handle(
-            name: "list_projects",
-            arguments: ["type": "music", "group_id": groupID],
+        let filedList = try await MCPLibraryHandlers.handle(
+            name: "footage_list",
+            arguments: ["kind": "music", "folder_id": folderID],
             context: context
         )
-        let groupedItems = try #require(try decoded(groupedList) as? [[String: Any]])
-        #expect(groupedItems.count == 1)
+        let filedItems = try #require(try decoded(filedList) as? [[String: Any]])
+        #expect(filedItems.count == 1)
 
-        _ = try await MCPProjectHandlers.handle(
-            name: "move_project_to_group",
-            arguments: ["type": "music", "id": projectID, "group_id": NSNull()],
+        _ = try await MCPLibraryHandlers.handle(
+            name: "footage_move",
+            arguments: ["footage_id": itemID, "folder_id": NSNull()],
             context: context
         )
 
-        let ungroupedList = try await MCPProjectHandlers.handle(
-            name: "list_projects",
-            arguments: ["type": "music", "group_id": NSNull()],
+        let looseList = try await MCPLibraryHandlers.handle(
+            name: "footage_list",
+            arguments: ["kind": "music", "folder_id": NSNull()],
             context: context
         )
-        let ungroupedItems = try #require(try decoded(ungroupedList) as? [[String: Any]])
-        #expect(ungroupedItems.count == 1)
-        #expect(ungroupedItems.first?["groupId"] is NSNull)
+        let looseItems = try #require(try decoded(looseList) as? [[String: Any]])
+        #expect(looseItems.count == 1)
+        #expect(looseItems.first?["folderId"] is NSNull)
+
+        let folders = try #require(try decoded(try await MCPLibraryHandlers.handle(
+            name: "folder_list", arguments: [:], context: context
+        )) as? [[String: Any]])
+        #expect(folders.first?["itemCount"] as? Int == 0)
     }
 
     @Test("MCP destructive tools require explicit confirmation")
@@ -126,20 +136,20 @@ struct ProjectGroupTests {
         let music = MusicProject(name: "Keep me")
         context.insert(music)
         try context.save()
-        let id = MCPProjectHandlers.stableID(of: music).uuidString
+        let id = music.id.uuidString
 
         await #expect(throws: MCPToolError.self) {
-            _ = try await MCPProjectHandlers.handle(
-                name: "delete_project",
-                arguments: ["type": "music", "id": id, "confirm": false],
+            _ = try await MCPLibraryHandlers.handle(
+                name: "footage_delete",
+                arguments: ["footage_id": id, "confirm": false],
                 context: context
             )
         }
         #expect(try context.fetch(FetchDescriptor<MusicProject>()).count == 1)
 
-        _ = try await MCPProjectHandlers.handle(
-            name: "delete_project",
-            arguments: ["type": "music", "id": id, "confirm": true],
+        _ = try await MCPLibraryHandlers.handle(
+            name: "footage_delete",
+            arguments: ["footage_id": id, "confirm": true],
             context: context
         )
         #expect(try context.fetch(FetchDescriptor<MusicProject>()).isEmpty)

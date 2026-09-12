@@ -79,7 +79,7 @@ struct RemotionNativeWorkflowTests {
         let url = FileManager.default.temporaryDirectory.appendingPathComponent("NativeRemotion-" + UUID().uuidString).appendingPathExtension("rxfilmstudio")
         defer { try? FileManager.default.removeItem(at: url) }
         let document = try ProjectDocument.create(at: url)
-        let result = try await MCPToolRegistry.invoke(name: "create_project", arguments: ["type":"remotion", "name":"Native Test"], container: document.container)
+        let result = try await MCPToolRegistry.invoke(name: "footage_create", arguments: ["kind":"remotion", "name":"Native Test"], container: document.container)
         let content = try #require(result["content"] as? [[String: Any]])
         let text = try #require(content.first?["text"] as? String)
         let summary = try #require(JSONSerialization.jsonObject(with: Data(text.utf8)) as? [String: Any])

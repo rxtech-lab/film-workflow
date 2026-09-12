@@ -1,5 +1,6 @@
 import CoreImage
 import Foundation
+import os
 
 public enum ModifierValue: Codable, Hashable, Sendable {
     case number(Double)
@@ -96,17 +97,54 @@ public struct ModifierDragItem: Codable, Hashable, Sendable {
     public init(kind: ModifierKind, definitionID: String) { self.kind = kind; self.definitionID = definitionID }
 }
 
-/// An immutable catalog: new definitions only need registration here, not inspector switches.
+/// An immutable catalog value. `standard` is what ships in the binary;
+/// `installed` is what the host loaded from disk; `current` is the two merged
+/// and is what every consumer reads.
 public struct ModifierCatalog: Sendable {
     public let effects: [any EffectProtocol]
     public let transitions: [any TransitionProtocol]
-    public init(effects: [any EffectProtocol], transitions: [any TransitionProtocol]) {
-        self.effects = effects; self.transitions = transitions
+    /// Definition ID → a still the browser shows instead of a synthesized sample. Installed definitions only.
+    public let previewURLs: [String: URL]
+
+    public init(effects: [any EffectProtocol], transitions: [any TransitionProtocol], previewURLs: [String: URL] = [:]) {
+        self.effects = effects; self.transitions = transitions; self.previewURLs = previewURLs
     }
     public static let standard = ModifierCatalog(
         effects: [BrightnessContrast(), Saturation(), GaussianBlur()],
         transitions: [CrossDissolve(), FadeThroughColor(), DirectionalWipe()]
     )
+    public static let empty = ModifierCatalog(effects: [], transitions: [])
+
+    /// Posted after `setInstalled`, on whatever thread called it.
+    public static let didChangeNotification = Notification.Name("ModifierCatalog.didChange")
+
+    private struct Registry: Sendable { var installed = ModifierCatalog.empty; var current = ModifierCatalog.standard }
+    private static let registry = OSAllocatedUnfairLock(initialState: Registry())
+
+    /// Definitions the host loaded at runtime.
+    public static var installed: ModifierCatalog { registry.withLock { $0.installed } }
+    /// Built-ins plus installed definitions. Merged once per `setInstalled`, so
+    /// reading it on the render path costs a lock and a copy of two arrays.
+    public static var current: ModifierCatalog { registry.withLock { $0.current } }
+
+    public static func setInstalled(_ catalog: ModifierCatalog) {
+        registry.withLock { registry in
+            registry.installed = catalog
+            registry.current = standard.merging(catalog)
+        }
+        NotificationCenter.default.post(name: didChangeNotification, object: nil)
+    }
+
+    /// `other` wins on a shared ID; everything else is appended in order.
+    public func merging(_ other: ModifierCatalog) -> ModifierCatalog {
+        let effectIDs = Set(other.effects.map(\.id)), transitionIDs = Set(other.transitions.map(\.id))
+        return ModifierCatalog(
+            effects: effects.filter { !effectIDs.contains($0.id) } + other.effects,
+            transitions: transitions.filter { !transitionIDs.contains($0.id) } + other.transitions,
+            previewURLs: previewURLs.merging(other.previewURLs) { $1 }
+        )
+    }
+
     public func effect(_ id: String) -> (any EffectProtocol)? { effects.first { $0.id == id } }
     public func transition(_ id: String) -> (any TransitionProtocol)? { transitions.first { $0.id == id } }
     public func definition(_ item: ModifierDragItem) -> (any ModifierDefinition)? {

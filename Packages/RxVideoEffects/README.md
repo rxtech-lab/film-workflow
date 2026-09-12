@@ -10,8 +10,15 @@ A macOS effects catalog with no dependency on application models or
 
 `EffectProtocol` and `TransitionProtocol` pair stable identifiers, names,
 descriptions and parameter descriptors with Core Image rendering. Register new
-definitions in `ModifierCatalog.standard`; the browser and inspector resolve
-their controls from the same descriptors. `TransitionProtocol.renderEdge` has
+built-in definitions in `ModifierCatalog.standard`; the browser and inspector
+resolve their controls from the same descriptors. Definitions can also be
+loaded at runtime: `CIFilterModifierDescriptor` decodes a JSON file naming a
+built-in Core Image filter and its controls, `CIFilterEffect` /
+`CIFilterTransition` render it, and the host passes the loaded set to
+`ModifierCatalog.setInstalled`. Consumers read `ModifierCatalog.current`, the
+built-ins merged with what is installed, and can watch
+`ModifierCatalog.didChangeNotification`. A `previewURLs` entry lets an installed
+definition show its own still in the browser instead of a synthesized sample. `TransitionProtocol.renderEdge` has
 a default transparent-input implementation; Fade through Color overrides it.
 Transition inputs must share an extent and use premultiplied alpha.
 
