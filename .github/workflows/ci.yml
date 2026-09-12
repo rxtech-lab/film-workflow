@@ -33,3 +33,41 @@ jobs:
 
       - name: Test effects package
         run: swift test --package-path Packages/RxVideoEffects --no-parallel
+
+  sign-macos:
+    name: Sign macOS App
+    # Runs the release signing path (Developer ID archive + Sparkle re-sign)
+    # on every PR so entitlement / profile / script drift fails here instead
+    # of on the tagged release build. Nothing is notarized, uploaded or
+    # deployed — that stays in build.yaml.
+    if: github.event_name == 'pull_request'
+    runs-on: self-hosted
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Setup Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+
+      - name: Import code signing certificate
+        uses: apple-actions/import-codesign-certs@v7
+        with:
+          p12-file-base64: ${{ secrets.BUILD_CERTIFICATE_BASE64 }}
+          p12-password: ${{ secrets.P12_PASSWORD }}
+
+      - name: Install provisioning profile
+        run: ./scripts/ci/install-provisioning-profile.sh
+        env:
+          MACOS_PROVISIONING_PROFILE_BASE64: ${{ secrets.MACOS_PROVISIONING_PROFILE_BASE64 }}
+
+      - name: Build archive
+        run: ./scripts/ci/archive.sh
+        env:
+          SIGNING_CERTIFICATE_NAME: ${{ secrets.SIGNING_CERTIFICATE_NAME }}
+          BUILD_NUMBER: ${{ github.run_number }}
+
+      - name: Sign Sparkle
+        run: ./scripts/ci/sign-sparkle.sh
+        env:
+          SIGNING_CERTIFICATE_NAME: ${{ secrets.SIGNING_CERTIFICATE_NAME }}

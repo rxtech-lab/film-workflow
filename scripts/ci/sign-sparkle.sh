@@ -57,13 +57,13 @@ sign "$SPARKLE_FRAMEWORK"
 
 # Capture the entitlements xcodebuild embedded in the archive BEFORE re-signing
 # the app. `codesign --force` without --entitlements drops them, which would
-# strip the JIT / unsigned-executable-memory exceptions the embedded Bun runtime
-# needs — the app would then crash the moment it renders anything.
+# silently strip com.apple.developer.associated-domains and break passkey
+# sign-in — codesign itself would not complain.
 ENTITLEMENTS_PLIST="${RUNNER_TEMP:-/tmp}/film-workflow.entitlements.plist"
 codesign -d --entitlements "$ENTITLEMENTS_PLIST" --xml "$APP_PATH" 2>/dev/null
 
 if [ ! -s "$ENTITLEMENTS_PLIST" ]; then
-  echo "Error: failed to extract entitlements from the archived app; aborting rather than shipping an app that cannot run Bun"
+  echo "Error: failed to extract entitlements from the archived app; aborting rather than shipping an app with no entitlements"
   exit 1
 fi
 
@@ -76,14 +76,19 @@ codesign --force --options runtime --timestamp --entitlements "$ENTITLEMENTS_PLI
 codesign --force --options runtime --timestamp --entitlements "$ENTITLEMENTS_PLIST" \
   --sign "${SIGNING_CERTIFICATE_NAME}" "$APP_PATH"
 
-# Verify the resealed app kept the entitlements Bun depends on.
-RESEALED_ENTITLEMENTS="$(codesign -d --entitlements - --xml "$APP_PATH" 2>/dev/null)"
-for key in com.apple.security.cs.allow-jit com.apple.security.cs.disable-library-validation; do
-  if ! printf '%s' "$RESEALED_ENTITLEMENTS" | grep -q "$key"; then
-    echo "Error: $key entitlement missing after re-signing"
-    exit 1
-  fi
-done
+# Verify the resealed app carries exactly the entitlements the archive had.
+# Diffing the whole plist (rather than grepping for a hardcoded key list)
+# means the check tracks film-workflow.entitlements instead of drifting from
+# it — the previous list still demanded the JIT entitlements the removed Bun
+# runtime needed and failed every release after they were dropped.
+RESEALED_PLIST="${RUNNER_TEMP:-/tmp}/film-workflow.resealed-entitlements.plist"
+codesign -d --entitlements "$RESEALED_PLIST" --xml "$APP_PATH" 2>/dev/null
+
+if ! diff <(/usr/bin/plutil -convert xml1 -o - "$ENTITLEMENTS_PLIST") \
+          <(/usr/bin/plutil -convert xml1 -o - "$RESEALED_PLIST"); then
+  echo "Error: entitlements changed after re-signing (archived vs resealed diff above)"
+  exit 1
+fi
 
 # A bad nested signature only surfaces at notarization otherwise, minutes later.
 codesign --verify --deep --strict --verbose=2 "$APP_PATH"

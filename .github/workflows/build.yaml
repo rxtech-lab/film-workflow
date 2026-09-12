@@ -41,64 +41,10 @@ jobs:
           p12-file-base64: ${{ secrets.BUILD_CERTIFICATE_BASE64 }}
           p12-password: ${{ secrets.P12_PASSWORD }}
 
-      # The app's com.apple.developer.associated-domains entitlement (passkey
-      # sign-in) is a restricted entitlement: codesign only accepts it when a
-      # provisioning profile authorising it is embedded in the bundle. The
-      # secret holds a base64 Developer ID profile for rxlab.film-workflow.
       - name: Install provisioning profile
+        run: ./scripts/ci/install-provisioning-profile.sh
         env:
           MACOS_PROVISIONING_PROFILE_BASE64: ${{ secrets.MACOS_PROVISIONING_PROFILE_BASE64 }}
-          # Must match PROVISIONING_PROFILE_SPECIFIER[sdk=macosx*] on the
-          # film-workflow target's Release config in project.pbxproj.
-          EXPECTED_PROFILE_NAME: FilmStudio
-          PRODUCT_BUNDLE_ID: rxlab.film-workflow
-        run: |
-          if [ -z "$MACOS_PROVISIONING_PROFILE_BASE64" ]; then
-            echo "::error::MACOS_PROVISIONING_PROFILE_BASE64 is required."
-            exit 1
-          fi
-
-          PROFILE_PATH="$RUNNER_TEMP/film-workflow.provisionprofile"
-          PROFILE_PLIST="$RUNNER_TEMP/film-workflow-profile.plist"
-          PROFILE_DIR="$HOME/Library/MobileDevice/Provisioning Profiles"
-
-          mkdir -p "$PROFILE_DIR"
-          printf '%s' "$MACOS_PROVISIONING_PROFILE_BASE64" | base64 -D > "$PROFILE_PATH"
-          openssl cms -inform DER -verify -noverify -in "$PROFILE_PATH" -out "$PROFILE_PLIST"
-
-          PROFILE_UUID=$(/usr/libexec/PlistBuddy -c "Print UUID" "$PROFILE_PLIST")
-          PROFILE_NAME=$(/usr/libexec/PlistBuddy -c "Print Name" "$PROFILE_PLIST")
-
-          cp "$PROFILE_PATH" "$PROFILE_DIR/$PROFILE_UUID.provisionprofile"
-          echo "Installed provisioning profile: $PROFILE_NAME ($PROFILE_UUID)"
-
-          # xcodebuild matches the profile by name, so the secret's profile and
-          # PROVISIONING_PROFILE_SPECIFIER in project.pbxproj must agree. Fail
-          # here with the actual name rather than 200 lines into the archive log.
-          if [ "$PROFILE_NAME" != "$EXPECTED_PROFILE_NAME" ]; then
-            echo "::error::Profile is named '$PROFILE_NAME' but project.pbxproj pins PROVISIONING_PROFILE_SPECIFIER to '$EXPECTED_PROFILE_NAME'. Update one to match the other."
-            exit 1
-          fi
-
-          # The profile has to cover this bundle id and carry the restricted
-          # entitlement, otherwise codesign rejects the app at the end of a
-          # multi-minute archive.
-          PROFILE_APP_ID=$(/usr/libexec/PlistBuddy -c "Print Entitlements:com.apple.application-identifier" "$PROFILE_PLIST" 2>/dev/null || true)
-          if [ "${PROFILE_APP_ID#*.}" != "$PRODUCT_BUNDLE_ID" ]; then
-            echo "::error::Profile covers '${PROFILE_APP_ID:-<none>}', not '$PRODUCT_BUNDLE_ID'."
-            exit 1
-          fi
-
-          if ! /usr/libexec/PlistBuddy -c "Print Entitlements:com.apple.developer.associated-domains" "$PROFILE_PLIST" >/dev/null 2>&1; then
-            echo "::error::Profile lacks com.apple.developer.associated-domains. Enable Associated Domains on the App ID, then regenerate the profile."
-            exit 1
-          fi
-
-          # Developer ID profiles provision all devices; a Development or App
-          # Store profile here would not match the Developer ID signing identity.
-          if ! /usr/libexec/PlistBuddy -c "Print ProvisionsAllDevices" "$PROFILE_PLIST" >/dev/null 2>&1; then
-            echo "::warning::Profile does not look like a Developer ID profile (no ProvisionsAllDevices)."
-          fi
 
       - name: Bump version
         run: |
@@ -110,37 +56,10 @@ jobs:
           ./scripts/ci/update-version.sh "${RELEASE_VERSION}"
 
       - name: Build archive
-        run: |
-          gem install xcpretty
-          # CURRENT_PROJECT_VERSION is overridden per-build so every release has
-          # a unique build number (github.run_number) without committing churn
-          # to project.pbxproj. Sparkle uses it as the update ordering key.
-          #
-          # Manual signing with a Developer ID identity. The profile is pinned
-          # to the app target's Release build settings in project.pbxproj
-          # (PROVISIONING_PROFILE_SPECIFIER), NOT passed on the command line: a
-          # command-line PROVISIONING_PROFILE* applies to every target in the
-          # graph — including the SPM package targets, which don't support
-          # provisioning profiles — and fails the archive. CODE_SIGN_STYLE and
-          # CODE_SIGN_IDENTITY stay global: the package targets sign with the
-          # identity but need no profile.
-          set -o pipefail
-          xcodebuild -destination platform=macOS \
-            -project film-workflow.xcodeproj \
-            -scheme film-workflow \
-            -configuration Release \
-            -archivePath output/output.xcarchive \
-            CODE_SIGN_IDENTITY="${{ secrets.SIGNING_CERTIFICATE_NAME }}" \
-            CODE_SIGN_STYLE=Manual \
-            OTHER_CODE_SIGN_FLAGS="--options=runtime --timestamp" \
-            CURRENT_PROJECT_VERSION=${{ github.run_number }} \
-            archive 2>&1 | tee xcodebuild-archive.log | xcpretty || {
-              status=${PIPESTATUS[0]}
-              echo "::group::Full xcodebuild output (archive failed)"
-              cat xcodebuild-archive.log
-              echo "::endgroup::"
-              exit "$status"
-            }
+        run: ./scripts/ci/archive.sh
+        env:
+          SIGNING_CERTIFICATE_NAME: ${{ secrets.SIGNING_CERTIFICATE_NAME }}
+          BUILD_NUMBER: ${{ github.run_number }}
 
       - name: Sign Sparkle
         run: ./scripts/ci/sign-sparkle.sh
