@@ -1,5 +1,6 @@
 import AVFoundation
 import AVKit
+import Combine
 import SwiftUI
 
 /// Scene id for the marketplace window, shared by the scene declaration and
@@ -236,6 +237,7 @@ struct MarketplaceItemCard: View {
     let isInstalled: Bool
     let onOpen: () -> Void
     @State private var isHovering = false
+    @State private var isVideoReady = false
 
     var body: some View {
         Button(action: onOpen) {
@@ -244,9 +246,12 @@ struct MarketplaceItemCard: View {
                     ZStack {
                         MarketplacePreviewImage(url: item.previewImageUrl, kind: item.kind)
                         if isHovering, let video = item.previewVideoUrl {
-                            MarketplaceHoverVideo(url: video)
-                                .transition(.opacity)
-                                .accessibilityLabel("Preview video")
+                            MarketplaceHoverVideo(url: video) {
+                                withAnimation(.easeInOut(duration: 0.3)) { isVideoReady = true }
+                            }
+                            .opacity(isVideoReady ? 1 : 0)
+                            .transition(.opacity)
+                            .accessibilityLabel("Preview video")
                         }
                     }
                     .aspectRatio(16 / 9, contentMode: .fit)
@@ -282,6 +287,10 @@ struct MarketplaceItemCard: View {
         }
         .buttonStyle(.plain)
         .onHover { hovering in
+            // Reset on the way in so the video starts hidden and fades over the
+            // cover once it is ready; on the way out the removal transition owns
+            // the fade, so leaving the flag alone keeps that crossfade smooth.
+            if hovering { isVideoReady = false }
             withAnimation(.easeInOut(duration: 0.15)) { isHovering = hovering }
         }
         .accessibilityElement(children: .combine)
@@ -293,6 +302,8 @@ struct MarketplaceItemCard: View {
 /// appears and torn down when it goes away, so nothing plays off-screen.
 struct MarketplaceHoverVideo: NSViewRepresentable {
     let url: URL
+    /// Called on the main actor once the first frame is playable.
+    var onReady: () -> Void = {}
 
     func makeCoordinator() -> Coordinator { Coordinator() }
 
@@ -301,12 +312,12 @@ struct MarketplaceHoverVideo: NSViewRepresentable {
         view.controlsStyle = .none
         view.videoGravity = .resizeAspectFill
         view.showsFullScreenToggleButton = false
-        context.coordinator.attach(url: url, to: view)
+        context.coordinator.attach(url: url, to: view, onReady: onReady)
         return view
     }
 
     func updateNSView(_ view: AVPlayerView, context: Context) {
-        if context.coordinator.url != url { context.coordinator.attach(url: url, to: view) }
+        if context.coordinator.url != url { context.coordinator.attach(url: url, to: view, onReady: onReady) }
     }
 
     static func dismantleNSView(_ view: AVPlayerView, coordinator: Coordinator) {
@@ -319,13 +330,18 @@ struct MarketplaceHoverVideo: NSViewRepresentable {
         private(set) var url: URL?
         private var player: AVPlayer?
         private var loopObserver: NSObjectProtocol?
+        private var statusObservation: NSKeyValueObservation?
 
-        func attach(url: URL, to view: AVPlayerView) {
+        func attach(url: URL, to view: AVPlayerView, onReady: @escaping () -> Void) {
             detach()
             self.url = url
             let player = AVPlayer(url: url)
             player.isMuted = true
             player.actionAtItemEnd = .none
+            statusObservation = player.currentItem?.observe(\.status, options: [.initial, .new]) { item, _ in
+                guard item.status == .readyToPlay else { return }
+                Task { @MainActor in onReady() }
+            }
             loopObserver = NotificationCenter.default.addObserver(forName: .AVPlayerItemDidPlayToEndTime, object: player.currentItem, queue: .main) { [weak player] _ in
                 player?.seek(to: .zero)
                 player?.play()
@@ -338,6 +354,8 @@ struct MarketplaceHoverVideo: NSViewRepresentable {
         func detach() {
             if let loopObserver { NotificationCenter.default.removeObserver(loopObserver) }
             loopObserver = nil
+            statusObservation?.invalidate()
+            statusObservation = nil
             player?.pause()
             player = nil
             url = nil
@@ -382,6 +400,121 @@ struct MarketplacePreviewImage: View {
     }
 }
 
+/// The detail preview: shows the cover art with a play button, crossfades into
+/// the preview video once it is ready to play, and crossfades back to the cover
+/// when the video reaches the end.
+struct MarketplacePreviewPlayer: View {
+    let item: MarketplaceItem
+
+    @State private var player: AVPlayer?
+    @State private var isShowingVideo = false
+    @State private var isPreparing = false
+    @State private var prepareTask: Task<Void, Never>?
+    @State private var teardownTask: Task<Void, Never>?
+
+    /// One duration for both directions so the two crossfades feel symmetric.
+    private static let crossfade: Double = 0.35
+
+    var body: some View {
+        ZStack {
+            MarketplacePreviewImage(url: item.previewImageUrl, kind: item.kind)
+                .blur(radius: isShowingVideo ? 6 : 0)
+                .scaleEffect(isShowingVideo ? 1.04 : 1)
+            if isShowingVideo, let player {
+                VideoPlayer(player: player)
+                    .transition(.opacity.combined(with: .scale(scale: 1.04)))
+                    .accessibilityLabel("Preview video")
+            }
+            if !isShowingVideo, item.previewVideoUrl != nil {
+                playButton.transition(.opacity.combined(with: .scale(scale: 0.8)))
+            }
+        }
+        .animation(.easeInOut(duration: Self.crossfade), value: isShowingVideo)
+        .onReceive(NotificationCenter.default.publisher(for: .AVPlayerItemDidPlayToEndTime)) { note in
+            guard let finished = note.object as? AVPlayerItem, finished === player?.currentItem else { return }
+            stop(animated: true)
+        }
+        .onChange(of: item.previewVideoUrl) { _, _ in stop(animated: false) }
+        .onDisappear { stop(animated: false) }
+    }
+
+    private var playButton: some View {
+        Button(action: start) {
+            ZStack {
+                Circle().fill(.black.opacity(0.5)).frame(width: 56, height: 56)
+                if isPreparing {
+                    ProgressView().controlSize(.small).tint(.white)
+                } else {
+                    Image(systemName: "play.fill").font(.title2).foregroundStyle(.white)
+                }
+            }
+            .contentShape(Circle())
+        }
+        .buttonStyle(.plain)
+        .disabled(isPreparing)
+        .accessibilityLabel("Play preview")
+        .accessibilityIdentifier("marketplace-preview-play")
+    }
+
+    private func start() {
+        guard let url = item.previewVideoUrl, prepareTask == nil else { return }
+        teardownTask?.cancel()
+        teardownTask = nil
+        isPreparing = true
+        let player = AVPlayer(url: url)
+        player.actionAtItemEnd = .pause
+        prepareTask = Task { @MainActor in
+            // Only swap the video in once it has a frame, so the crossfade never
+            // lands on a black rectangle while the stream buffers.
+            let isReady = await waitUntilReady(player.currentItem)
+            guard !Task.isCancelled else { return }
+            prepareTask = nil
+            isPreparing = false
+            guard isReady else { return }
+            withAnimation(.easeInOut(duration: Self.crossfade)) {
+                self.player = player
+                isShowingVideo = true
+            }
+            player.play()
+        }
+    }
+
+    private func stop(animated: Bool) {
+        prepareTask?.cancel()
+        prepareTask = nil
+        isPreparing = false
+        player?.pause()
+        guard animated else {
+            teardownTask?.cancel()
+            teardownTask = nil
+            isShowingVideo = false
+            player = nil
+            return
+        }
+        withAnimation(.easeInOut(duration: Self.crossfade)) { isShowingVideo = false }
+        // Keep the player alive until the fade-out finishes, otherwise the layer
+        // blanks out before the cover has faded back in.
+        teardownTask = Task { @MainActor in
+            try? await Task.sleep(for: .seconds(Self.crossfade + 0.05))
+            guard !Task.isCancelled, !isShowingVideo else { return }
+            player = nil
+            teardownTask = nil
+        }
+    }
+
+    private func waitUntilReady(_ playerItem: AVPlayerItem?) async -> Bool {
+        guard let playerItem else { return false }
+        for await status in playerItem.publisher(for: \.status).values {
+            switch status {
+            case .readyToPlay: return true
+            case .failed: return false
+            default: continue
+            }
+        }
+        return false
+    }
+}
+
 /// The detail sheet: reads the live item from the store so the action row
 /// tracks purchase and install state while it is open.
 struct MarketplaceItemSheet: View {
@@ -420,7 +553,6 @@ struct MarketplaceItemDetail: View {
     let isSignedIn: Bool
     let hasActiveFilm: Bool
     let onAddToFilm: () -> Void
-    @State private var player: AVPlayer?
     @State private var navigation = AppNavigation.shared
 
     private var isInstalled: Bool { store.isInstalled(item.id) }
@@ -430,7 +562,7 @@ struct MarketplaceItemDetail: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
-                preview
+                MarketplacePreviewPlayer(item: item)
                     .aspectRatio(16 / 9, contentMode: .fit)
                     .clipShape(RoundedRectangle(cornerRadius: 10))
                 VStack(alignment: .leading, spacing: 6) {
@@ -455,17 +587,6 @@ struct MarketplaceItemDetail: View {
                 }
             }
             .padding(20)
-        }
-        .onAppear { if let url = item.previewVideoUrl { player = AVPlayer(url: url) } }
-        .onDisappear { player?.pause(); player = nil }
-    }
-
-    @ViewBuilder
-    private var preview: some View {
-        if let player {
-            VideoPlayer(player: player).accessibilityLabel("Preview video")
-        } else {
-            MarketplacePreviewImage(url: item.previewImageUrl, kind: item.kind)
         }
     }
 

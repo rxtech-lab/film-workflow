@@ -9,7 +9,7 @@ import Observation
 @MainActor
 @Observable
 public final class TimelinePlayerController {
-    public let player = AVPlayer()
+    public let player: AVPlayer
     public private(set) var currentTime: TimeInterval = 0
     public private(set) var duration: TimeInterval = 0
     public private(set) var isPlaying = false
@@ -31,7 +31,13 @@ public final class TimelinePlayerController {
     private var loadGeneration = 0
     private var audioTrackIDs: [UUID: CMPersistentTrackID] = [:]
 
-    public init() {
+    public convenience init() {
+        self.init(player: AVPlayer())
+    }
+
+    /// Allows tests to control transport timing without opening an audio device.
+    init(player: AVPlayer) {
+        self.player = player
         player.actionAtItemEnd = .pause
         timeObserver = player.addPeriodicTimeObserver(
             forInterval: CMTime(value: 1, timescale: 60),
