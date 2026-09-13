@@ -20,6 +20,7 @@ enum ImportedAssetKind: String, Codable, CaseIterable {
 @Model
 final class ImportedAsset: GroupableProject {
     var id: UUID = UUID()
+    var marketplaceItemId: String?
     var name: String
     var createdAt: Date
     var updatedAt: Date

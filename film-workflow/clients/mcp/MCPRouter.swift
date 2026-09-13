@@ -97,6 +97,7 @@ enum MCPRouter {
             return mcpSuccessJSON(idLiteral: idLiteral, result: result)
 
         case "tools/list":
+            _ = await MarketplaceAuthoringService.shared.refreshAccess()
             let tools = MCPToolRegistry.allDescriptors()
             let result: [String: Any] = [
                 "tools": tools.map(\.dictionary)

@@ -12,17 +12,19 @@ enum MarketplaceInstaller {
         case .footage, .audio, .soundEffect:
             guard let kind = manifest.kind.importedAssetKind else { throw MarketplaceError.notAddable(manifest.kind) }
             let asset = try await MediaImporter.importCopy(url: contentURL, kind: kind, name: manifest.title, groupID: groupID, storage: document.storage, context: context)
+            asset.marketplaceItemId = manifest.itemID
             try context.save()
             return LibraryItemID(kind: .imported, id: asset.id)
         case .remotionPrompt:
             let prompt = (try? String(contentsOf: contentURL, encoding: .utf8)) ?? ""
             let project = RemotionProject(name: manifest.title)
+            project.marketplaceItemId = manifest.itemID
             project.groupID = groupID
             project.prompt = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
             context.insert(project)
             try context.save()
             return LibraryItemID(kind: .remotion, id: project.id)
-        case .font, .transition, .effect:
+        case .font, .transition, .effect, .projectTemplate:
             throw MarketplaceError.notAddable(manifest.kind)
         }
     }

@@ -1,3 +1,4 @@
+import AppKit
 import SwiftData
 import SwiftUI
 import VideoEditorCore
@@ -61,6 +62,7 @@ struct LibraryPanel: View {
                         .accessibilityIdentifier("library.tab")
                     }
                 }
+                .simultaneousGesture(TapGesture().onEnded { dismissTextFieldFocus() })
                 HStack(spacing: 6) {
                     TextField("Filter", text: $searchText)
                         .textFieldStyle(.roundedBorder)
@@ -85,20 +87,22 @@ struct LibraryPanel: View {
                     switch tab {
                     case .library: libraryGrid
                     case .marketplace:
-                        LibraryMarketplaceGrid(rows: marketplaceRows, groups: groups, onAdd: addMarketplaceItem,
+                        LibraryMarketplaceGrid(rows: marketplaceRows, groups: groups, taxonomy: marketplace?.taxonomy ?? .builtIn,
+                                               onAdd: addMarketplaceItem,
                                                onReveal: { marketplace?.revealInFinder($0.id) },
                                                onOpenMarketplace: { openWindow(id: MarketplaceWindowID.value) })
+                            .task { await marketplace?.loadTaxonomy() }
                     }
                 }
                 // Clicking away from the filter gives up the caret, the way it
                 // does for a field elsewhere on macOS. Simultaneous so the
                 // grid's own selection and drag gestures still see the click.
-                .simultaneousGesture(TapGesture().onEnded { filterFocused = false })
+                .simultaneousGesture(TapGesture().onEnded { dismissTextFieldFocus() })
             }
             .frame(maxWidth: .infinity, minHeight: 180, maxHeight: .infinity)
         } footage: {
             footageBrowser
-                .simultaneousGesture(TapGesture().onEnded { filterFocused = false })
+                .simultaneousGesture(TapGesture().onEnded { dismissTextFieldFocus() })
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .task(id: rows.map(\.id)) { await warmDurations() }
@@ -133,6 +137,23 @@ struct LibraryPanel: View {
         } message: {
             Text(marketplaceError ?? "")
         }
+    }
+
+    /// Hands back the caret when the user clicks in the library.
+    ///
+    /// Clearing `filterFocused` only covers this panel's own field, and the
+    /// field the user was typing in is often somewhere else — an inspector, an
+    /// inline rename — so the window's first responder goes too. Only when it
+    /// is text being edited: anything else there (the timeline, a list) is
+    /// holding key handling the click should leave alone.
+    private func dismissTextFieldFocus() {
+        filterFocused = false
+        let window = NSApp.keyWindow
+        // Anything editing text is an input client — the field editor a
+        // TextField types into, and SwiftUI's own text views, whose classes
+        // are not public.
+        guard let responder = window?.firstResponder, responder is any NSTextInputClient else { return }
+        window?.makeFirstResponder(nil)
     }
 
     private var libraryGrid: some View {
@@ -223,14 +244,15 @@ struct LibraryPanel: View {
     }
 
     /// Versions that are footage become the preview and drag payload; a
-    /// caption transcript is activated on the project; renders open the sheet.
+    /// caption transcript is activated on the project; sequence renders, which
+    /// the footage strip does not list, open the sheet.
     private func selectVersion(_ row: LibraryRow, _ versionID: UUID) {
         switch row.id.kind {
-        case .music, .narration, .image, .video:
+        case .music, .narration, .image, .video, .remotion:
             state.setCurrentVersion(versionID, for: row.id)
         case .caption:
             if let p = index.caption(row.id.id) { _ = CaptionTranscriptionService.activateVersion(versionID, in: p) }
-        case .sequence, .remotion, .imported:
+        case .sequence, .imported:
             onShowVersions(row, versionID)
         }
     }

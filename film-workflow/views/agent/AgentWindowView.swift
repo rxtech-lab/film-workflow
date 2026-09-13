@@ -120,10 +120,14 @@ struct AgentWindowView: View {
             }
         }
         .task {
-            if threads.isEmpty { newThread() }
+            if let requested = navigation.pendingAgentThreadID { selectedThreadID = requested; navigation.pendingAgentThreadID = nil }
+            else if threads.isEmpty { newThread() }
         }
         .task(id: documentController.activeDocument?.id) {
             reloadProjects()
+        }
+        .onChange(of: navigation.pendingAgentThreadID) { _, id in
+            if let id { selectedThreadID = id; navigation.pendingAgentThreadID = nil }
         }
         .onChange(of: selectedThreadID) { _, newValue in
             guard let newValue else { return }

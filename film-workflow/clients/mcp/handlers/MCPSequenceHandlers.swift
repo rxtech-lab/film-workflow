@@ -208,6 +208,8 @@ enum MCPSequenceHandlers {
                 }
             }
         }
+        rebuilt.transitions = timeline.transitions
+        try rebuilt.validateModifiers(requireDefinitions: true)
         sequence.timeline = rebuilt
         try context.save()
         return MCPToolRegistry.jsonResult(timelineJSON(sequence, context: context))
@@ -218,7 +220,7 @@ enum MCPSequenceHandlers {
         guard let sourceID = arguments["source_id"] as? String, let (prefix, uuid) = DocumentMediaResolver.parse(sourceID) else {
             throw MCPToolError.invalidArguments("missing or malformed source_id; use the sourceId from footage_list")
         }
-        guard let document = ProjectDocumentController.shared.document(forContainer: context.container) else {
+        guard let document = ProjectDocumentController.shared.document(forContainer: context.container) ?? MarketplaceAuthoringService.shared.document(forContainer: context.container) else {
             throw MCPToolError.invalidArguments("the film is not open in a window")
         }
         let resolver = DocumentMediaResolver(document: document, width: sequence.width, height: sequence.height, fps: sequence.fps)
@@ -321,7 +323,7 @@ enum MCPSequenceHandlers {
 
     private static func sequenceRender(_ arguments: [String: Any], context: ModelContext) async throws -> [String: Any] {
         let sequence = try fetchSequence(arguments, context: context)
-        guard let document = ProjectDocumentController.shared.document(forContainer: context.container) else {
+        guard let document = ProjectDocumentController.shared.document(forContainer: context.container) ?? MarketplaceAuthoringService.shared.document(forContainer: context.container) else {
             throw MCPToolError.invalidArguments("the film is not open in a window")
         }
         var options = TimelineExporter.Options()

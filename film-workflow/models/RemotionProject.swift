@@ -4,6 +4,7 @@ import SwiftData
 @Model
 final class RemotionProject: GroupableProject {
     var id: UUID
+    var marketplaceItemId: String?
     var name: String
     var createdAt: Date
     var updatedAt: Date

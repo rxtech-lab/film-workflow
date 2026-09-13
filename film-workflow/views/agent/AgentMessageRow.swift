@@ -49,6 +49,16 @@ struct AgentMessageRow: View {
     @ViewBuilder
     private func messageRow(_ message: RxAgentSDK.AgentMessage) -> some View {
         VStack(alignment: .leading, spacing: 6) {
+            if !message.attachments.isEmpty {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        ForEach(message.attachments) { attachment in
+                            AgentAttachmentPreview(attachment: attachment)
+                        }
+                    }
+                }
+                .defaultScrollAnchor(message.role == .user ? .trailing : .leading)
+            }
             ForEach(segments(of: message.blocks)) { segment in
                 switch segment {
                 case .block(let block):
@@ -151,7 +161,7 @@ struct AgentMessageRow: View {
             run = []
         }
         for block in blocks {
-            if case .toolCall(let call) = block, proposalRow(for: call) == nil {
+            if case .toolCall(let call) = block, proposalRow(for: call) == nil, marketplaceCard(for: call) == nil {
                 run.append(call)
             } else {
                 flush()
@@ -185,7 +195,9 @@ struct AgentMessageRow: View {
 
     @ViewBuilder
     private func toolRow(_ call: AgentToolCall) -> some View {
-        if let row = proposalRow(for: call) {
+        if let payload = marketplaceCard(for: call) {
+            MarketplaceChatCard(payload: payload, showPublishButton: payload.showPublishButton ?? true)
+        } else if let row = proposalRow(for: call) {
             proposalCard(row)
         } else {
             HStack(spacing: 0) {
@@ -194,6 +206,15 @@ struct AgentMessageRow: View {
                 Spacer(minLength: 0)
             }
         }
+    }
+
+    /// Item data from reads and writes stays in the normal tool result. Only
+    /// the explicit presentation tool can surface a marketplace card, including
+    /// when replaying older transcripts or receiving namespaced CLI tool names.
+    private func marketplaceCard(for call: AgentToolCall) -> MarketplaceCardPayload? {
+        guard MCPToolName.bare(call.name) == "show_marketplace_item",
+              call.isComplete, !call.isError else { return nil }
+        return MarketplaceCardPayload.decode(call.result)
     }
 
     /// The persisted proposal row this call produced, if it produced one.

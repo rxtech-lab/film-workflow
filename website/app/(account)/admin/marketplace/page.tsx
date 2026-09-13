@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowLeft, ArrowRight, Plus } from "lucide-react";
+import { ArrowLeft, ArrowRight, Plus, Tags } from "lucide-react";
 import { deleteItemAction, togglePublishAction } from "@/lib/marketplace/actions";
 import { listAllItemsForAdmin } from "@/lib/marketplace/repository";
 import { marketplaceKindLabels } from "@/lib/marketplace/schema";
@@ -20,7 +20,10 @@ export default async function AdminMarketplacePage({ searchParams }: { searchPar
           <h1 className="mt-2 text-4xl font-semibold">Marketplace</h1>
           <p className="mt-3 max-w-2xl text-muted">Footage, prompts, sounds, fonts and effects the app can install. Drafts stay invisible until published.</p>
         </div>
-        <Link href="/admin/marketplace/new" className="inline-flex items-center gap-2 rounded-full bg-accent px-4 py-2 text-sm font-medium text-black"><Plus size={14} /> New item</Link>
+        <div className="flex items-center gap-3">
+          <Link href="/admin/marketplace/taxonomy" className="inline-flex items-center gap-2 rounded-full border border-line px-4 py-2 text-sm hover:bg-elevated"><Tags size={14} /> Sidebar</Link>
+          <Link href="/admin/marketplace/new" className="inline-flex items-center gap-2 rounded-full bg-accent px-4 py-2 text-sm font-medium text-black"><Plus size={14} /> New item</Link>
+        </div>
       </div>
       <div className="mt-8 overflow-hidden rounded-2xl border border-line bg-surface">
         <table className="w-full text-left text-sm">

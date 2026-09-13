@@ -1,0 +1,1 @@
+ALTER TYPE "public"."marketplace_kind" ADD VALUE 'project_template';
