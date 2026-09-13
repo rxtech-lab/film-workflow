@@ -53,6 +53,47 @@ enum BackendImageClient {
             ),
             idempotencyKey: "image:\(UUID().uuidString)"
         )
+        return try decode(response)
+    }
+
+    /// One image from a prompt alone, for tools that have no project to read
+    /// parameters from — the Remotion image tool.
+    ///
+    /// `transparent` is only meaningful to the gateway's OpenAI-style models;
+    /// the server ignores it for Google ones, and the caller reports whether
+    /// it took (see `RemotionTools.generateImage`).
+    static func generate(
+        prompt: String,
+        model: String,
+        transparent: Bool,
+        format: ImageFormat
+    ) async throws -> ImageGenResult {
+        let trimmedModel = model.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedModel.isEmpty else { throw BackendError.badRequest("Select a subscription image model.") }
+        let catalog = (try? await BackendModelCatalog.shared.models(capability: .image)) ?? []
+        let provider = catalog.first { $0.id == trimmedModel }?.provider
+        let googleStyle = provider == "google"
+            || (provider == nil && trimmedModel.lowercased().contains("imagen"))
+        let response: Response = try await BackendClient.shared.post(
+            "api/v1/ai/images",
+            body: Request(
+                model: trimmedModel,
+                prompt: prompt,
+                n: 1,
+                aspectRatio: nil,
+                resolution: nil,
+                size: nil,
+                quality: nil,
+                format: googleStyle ? nil : format.rawValue,
+                compression: nil,
+                background: googleStyle || !transparent ? nil : "transparent"
+            ),
+            idempotencyKey: "image:\(UUID().uuidString)"
+        )
+        return try decode(response)
+    }
+
+    private static func decode(_ response: Response) throws -> ImageGenResult {
         guard let image = response.images.first,
               let data = Data(base64Encoded: image.b64Json)
         else { throw BackendError.decoding(ImageGenError.noImageInResponse) }

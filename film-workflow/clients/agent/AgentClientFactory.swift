@@ -20,9 +20,9 @@ enum AgentClientFactory {
     /// The SDK client id for an engine.
     ///
     /// Not `AgentClientID.openAICompatible` for both OpenAI-shaped engines:
-    /// BYOK and the subscription gateway are *different clients* in the SDK's
-    /// sense, and sharing an id would collapse their per-thread session and
-    /// model state into one bucket.
+    /// the user's endpoint and the subscription gateway are *different
+    /// clients* in the SDK's sense, and sharing an id would collapse their
+    /// per-thread session and model state into one bucket.
     static func clientID(for backend: AgentBackend) -> AgentClientID {
         switch backend {
         case .appleIntelligence: .foundationModels
@@ -59,7 +59,7 @@ enum AgentClientFactory {
             return OpenAIChatClient(
                 id: clientID(for: backend),
                 displayName: backend.engineLabel,
-                configuration: byokConfiguration(config: config)
+                configuration: openAICompatibleConfiguration(config: config)
             )
 
         case .subscription:
@@ -103,8 +103,8 @@ enum AgentClientFactory {
 
     // MARK: - OpenAI-compatible configurations
 
-    /// Bring-your-own-key: a plain endpoint, streamed.
-    private static func byokConfiguration(config: AppConfig?) -> OpenAIChatClient.Configuration {
+    /// The user's own OpenAI-compatible endpoint: a plain URL, streamed.
+    private static func openAICompatibleConfiguration(config: AppConfig?) -> OpenAIChatClient.Configuration {
         let endpoint = (config?.openAIEndpoint ?? "")
             .trimmingCharacters(in: .whitespacesAndNewlines)
         let key = (config?.openAIKey ?? "").trimmingCharacters(in: .whitespacesAndNewlines)

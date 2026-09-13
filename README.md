@@ -40,7 +40,7 @@ generated media. See `docs/document-package.md`.
 ## Requirements
 
 - macOS 26.2 or later with Xcode 26
-- Provider keys in Settings, or an RxLab subscription
+- An RxLab account with credits; optionally your own OpenAI-compatible endpoint for chat
 
 ## Getting Started
 

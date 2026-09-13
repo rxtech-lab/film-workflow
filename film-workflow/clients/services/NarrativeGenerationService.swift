@@ -39,20 +39,11 @@ enum NarrativeGenerationService {
                 notes: project.notes,
                 context: project.context
             )
-            let response: GeminiTTSResponse
-            switch try AIRoute.resolve(config, for: .speech) {
-            case .subscription:
-                response = try await BackendSpeechClient.generateGemini(
-                    transcript: transcript,
-                    speakers: project.speakers
-                )
-            case .byok:
-                response = try await GeminiTTSClient.generate(
-                    transcript: transcript,
-                    speakers: project.speakers,
-                    apiKey: config.googleAIKey
-                )
-            }
+            try AIRoute.requireSubscription()
+            let response = try await BackendSpeechClient.generateGemini(
+                transcript: transcript,
+                speakers: project.speakers
+            )
             // Write the (potentially large) audio off the main actor so the UI doesn't freeze.
             let audioData = response.audioData
             let storage = ProjectStorage.forContainer(context.container)
@@ -81,25 +72,13 @@ enum NarrativeGenerationService {
             // the off-main TTS client, so SSML building, network, and stitching never touch the UI.
             let speakers = project.speakers
             let paragraphs = project.paragraphs
-            let response: AzureTTSResponse
-            switch try AIRoute.resolve(config, for: .speech) {
-            case .subscription:
-                response = try await BackendSpeechClient.generateAzure(
-                    speakers: speakers,
-                    paragraphs: paragraphs,
-                    format: project.azureOutputFormatEnum,
-                    onProgress: onProgress
-                )
-            case .byok:
-                response = try await AzureTTSClient.generate(
-                    speakers: speakers,
-                    paragraphs: paragraphs,
-                    apiKey: config.azureSpeechKey,
-                    endpoint: config.azureSpeechEndpoint,
-                    format: project.azureOutputFormatEnum,
-                    onProgress: onProgress
-                )
-            }
+            try AIRoute.requireSubscription()
+            let response = try await BackendSpeechClient.generateAzure(
+                speakers: speakers,
+                paragraphs: paragraphs,
+                format: project.azureOutputFormatEnum,
+                onProgress: onProgress
+            )
             // Write the (potentially large) audio off the main actor so the UI doesn't freeze.
             let audioData = response.audioData
             let fileExtension = response.fileExtension

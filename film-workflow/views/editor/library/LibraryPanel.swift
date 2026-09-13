@@ -27,6 +27,7 @@ struct LibraryPanel: View {
     @State private var filter: FootageKind?
     @State private var searchText = ""
     @State private var marketplaceError: String?
+    @FocusState private var filterFocused: Bool
     /// Set once the user toggles the pane; until then the document's saved state applies.
     @State private var footageToggled: Bool?
 
@@ -64,6 +65,8 @@ struct LibraryPanel: View {
                     TextField("Filter", text: $searchText)
                         .textFieldStyle(.roundedBorder)
                         .controlSize(.small)
+                        .focused($filterFocused)
+                        .onExitCommand { filterFocused = false }
                     // Marketplace items are sectioned by kind already.
                     if tab == .library {
                         Picker("Kind", selection: $filter) {
@@ -78,20 +81,45 @@ struct LibraryPanel: View {
                     }
                 }
                 .padding(8)
-                switch tab {
-                case .library: libraryGrid
-                case .marketplace:
-                    LibraryMarketplaceGrid(rows: marketplaceRows, groups: groups, onAdd: addMarketplaceItem,
-                                           onReveal: { marketplace?.revealInFinder($0.id) },
-                                           onOpenMarketplace: { openWindow(id: MarketplaceWindowID.value) })
+                Group {
+                    switch tab {
+                    case .library: libraryGrid
+                    case .marketplace:
+                        LibraryMarketplaceGrid(rows: marketplaceRows, groups: groups, onAdd: addMarketplaceItem,
+                                               onReveal: { marketplace?.revealInFinder($0.id) },
+                                               onOpenMarketplace: { openWindow(id: MarketplaceWindowID.value) })
+                    }
                 }
+                // Clicking away from the filter gives up the caret, the way it
+                // does for a field elsewhere on macOS. Simultaneous so the
+                // grid's own selection and drag gestures still see the click.
+                .simultaneousGesture(TapGesture().onEnded { filterFocused = false })
             }
             .frame(maxWidth: .infinity, minHeight: 180, maxHeight: .infinity)
         } footage: {
             footageBrowser
+                .simultaneousGesture(TapGesture().onEnded { filterFocused = false })
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .task(id: rows.map(\.id)) { await warmDurations() }
+        // A new window's initial focus goes to its first text field, which puts
+        // the caret in this filter before anyone asked for it. Handing it back
+        // leaves the panel unfocused without disabling the field — a click into
+        // it still focuses normally.
+        //
+        // Watched for a moment rather than checked once: that focus is assigned
+        // as the window becomes key, which can land either side of this view's
+        // appearance. The window is short enough that it can't catch a real
+        // click, and it closes as soon as focus has been handed back.
+        .task {
+            for _ in 0..<5 {
+                if filterFocused {
+                    filterFocused = false
+                    return
+                }
+                try? await Task.sleep(for: .milliseconds(50))
+            }
+        }
         .contextMenu {
             Button(action: onImport) {
                 Label("Import Media…", systemImage: "square.and.arrow.down")

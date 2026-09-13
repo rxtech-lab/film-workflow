@@ -226,10 +226,26 @@ memory. Deleting a project or a clip removes the mp4 and its thumbnail.
 - `video_generate`, `video_job_status`, `video_resume` under
   `MCPGenerateHandlers`.
 
-## Future
+## On the server
 
-`docs/subscription-plan.md` plans an `AICapability` routing enum
-(`chat`, `image`, `voice`, `caption`, `music`). A `case video` slots in
-alongside them: `VideoGenerationService.generate(project:context:config:)` keeps
-the same façade signature every other service uses, so routing would branch at
-the top of `start` without touching the client or the views.
+Generation runs on the RxFilm backend; the app holds no Google key.
+
+- `POST api/v1/ai/videos` validates the request, reserves credits, submits
+  `predictLongRunning` to Veo and returns `202` with a job id. It never waits —
+  a Veo run outlives any one function invocation.
+- `GET api/v1/jobs/{id}` is where the job actually finishes. A poll that finds
+  the operation still running only advances the progress estimate. The poll that
+  finds it done takes an optimistic lock (progress jumps to 90) so exactly one
+  of several concurrent clients downloads the clip, stores it, and settles the
+  hold; the others see 90% until it lands. A transient failure hands the lock
+  back for the next poll to retry.
+- `lib/ai/veo.ts` mirrors `VeoModelFamily`: every parameter the selected family
+  rejects is omitted rather than defaulted, on both sides of the wire.
+- Pricing is per second of output (`video_seconds`), tiered by resolution for
+  the Veo 3.1 family. An unpriced id is dropped from the catalog rather than
+  billed at a sibling's rate.
+
+On the app side `BackendVideoClient` replaces the direct Veo client;
+`VideoGenProject.pendingJobID` now holds the backend job id, so a quit mid-run
+still resumes. A pending id left over from a bring-your-own-key build is a
+Google operation name (`models/…`) and is discarded with an explanation.

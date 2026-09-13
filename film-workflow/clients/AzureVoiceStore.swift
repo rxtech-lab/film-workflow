@@ -57,31 +57,12 @@ final class AzureVoiceStore {
         lastError = nil
         defer { isLoading = false }
 
-        let config: AppConfig
         do {
-            config = try AppConfig.loadFromKeychain()
-        } catch {
-            lastError = "Unable to read credentials: \(error.localizedDescription)"
-            return
-        }
-
-        do {
-            let fetched: [AzureVoice]
-            if config.usesSubscription {
-                fetched = try await BackendClient.shared.get(
-                    "api/v1/ai/voices",
-                    query: [URLQueryItem(name: "provider", value: "azure")]
-                )
-            } else {
-                guard !config.azureSpeechKey.isEmpty, !config.azureSpeechEndpoint.isEmpty else {
-                    lastError = "Add your Azure Speech key and endpoint in Settings."
-                    return
-                }
-                fetched = try await AzureTTSClient.fetchVoices(
-                    apiKey: config.azureSpeechKey,
-                    endpoint: config.azureSpeechEndpoint
-                )
-            }
+            try AIRoute.requireSubscription()
+            let fetched: [AzureVoice] = try await BackendClient.shared.get(
+                "api/v1/ai/voices",
+                query: [URLQueryItem(name: "provider", value: "azure")]
+            )
             voices = sorted(fetched)
             saveDiskCache(voices)
         } catch {

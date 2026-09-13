@@ -10,7 +10,7 @@ optionally a preview video, and a price in credits (0 = free).
 - The **What's New** sheet introduces Marketplace and the RxFilm subscription
   service once per feature card. Reopen it from **RxFilmStudio → What's New…**;
   **Explore Marketplace** closes the sheet and opens the catalog.
-- Browse by kind and category with the filter chips above the grid; search filters the grid. Click a card to open its detail sheet; hovering a card with a video preview plays it in place, muted.
+- Browse by kind in the navigation sidebar; the selected kind's categories appear below with item counts. The sidebar can be resized or hidden, and search filters the grid. Click a card to open its detail sheet; hovering a card with a video preview plays it in place, muted.
 - Signed-out users can browse. Buying and installing need an RxLab account.
 - **Buy** charges the price through rx-subscription in one hold-and-settle; a
   retried purchase re-attaches to the same hold and row, so nothing is charged
@@ -49,7 +49,7 @@ optionally a preview video, and a price in credits (0 = free).
 | `MarketplaceDownloader` | Download task with progress, straight to disk |
 | `MarketplaceInstaller` | "Add to Film" per kind, through `MediaImporter` |
 | `InstalledModifierLoader`, `MarketplaceFonts` | Post-install registration for effects/transitions and fonts |
-| `MarketplaceWindowView` (`views/marketplace/`) | Filter bar, grid with hover-autoplay cards, detail sheet with `VideoPlayer` preview; `#Preview`s run on a canned transport |
+| `MarketplaceWindowView` (`views/marketplace/`) | `NavigationSplitView` category sidebar, grid with hover-autoplay cards, detail sheet with `VideoPlayer` preview; `#Preview`s run on a canned transport |
 
 ## On the website
 

@@ -1,5 +1,14 @@
 # Accounts + Credits Subscription — Design Plan
 
+> **Update (2026-09): bring-your-own-key has been removed.** Everything below
+> describes the two-mode design as originally shipped. There is no longer a
+> `CredentialMode` toggle: image, speech, music, transcription and video all run
+> on the RxFilm server, and the only credential left on the device is an
+> *optional* OpenAI-compatible endpoint that adds a second chat engine
+> (`AgentBackend.openAICompatible`) for the agent window and the caption AI
+> tasks. On-device Whisper transcription is unaffected. Keep this document for
+> the billing, metering and auth design, which is unchanged.
+
 ## Context
 
 RxFilm Studio is BYOK today: `film-workflow/config/AppConfig.swift` holds 12 fields (Google AI key, Azure Speech key/endpoint, OpenAI-compatible endpoint/key, plus model ids) in the macOS/iOS Keychain under service `com.rxlab.film-workflow`, and every AI client takes `apiKey:`/`endpoint:` as a parameter. That blocks anyone who doesn't already have provider accounts, and it means we capture no revenue.

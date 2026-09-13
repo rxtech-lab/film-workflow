@@ -1,7 +1,8 @@
 import "server-only";
 
 import { gatewayModels, imageNanoUsdPerUnit, isChatModel, isImageModel, tokenPricing, type GatewayModel } from "@/lib/ai/gateway-models";
-import { googleImageMode, googleModels, type GoogleModel } from "@/lib/ai/google-models";
+import { googleImageMode, googleModels, googleVideoMode, type GoogleModel } from "@/lib/ai/google-models";
+import { veoPriceId, type VideoResolution } from "@/lib/ai/veo";
 import { NANO_USD_PER_POINT } from "@/lib/billing/config";
 import { exactUnitPrice, unitPrice } from "@/lib/billing/unit-pricing";
 import type { Capability, UnitKind } from "@/lib/db/schema";
@@ -35,9 +36,10 @@ export const DIRECT_MODEL_CATALOG: readonly CatalogModel[] = [
   unitModel({ id: "lyria-3-pro-preview", provider: "google", displayName: "Lyria 3 Pro", capability: "music" }, "audio_seconds"),
   unitModel({ id: "whisper-1", provider: "openai", displayName: "Whisper", capability: "transcription" }, "audio_minutes"),
   unitModel({ id: "azure-fast-transcription", provider: "azure", displayName: "Azure Fast Transcription", capability: "transcription" }, "audio_minutes"),
+  unitModel({ id: "gemini-2.5-flash", provider: "google", displayName: "Gemini 2.5 Flash (diarized)", capability: "transcription" }, "audio_minutes"),
 ] as const;
 
-const CAPABILITY_ORDER: Capability[] = ["chat", "image", "speech", "music", "transcription", "translation"];
+const CAPABILITY_ORDER: Capability[] = ["chat", "image", "speech", "music", "transcription", "translation", "video"];
 
 /**
  * Per-image price from the hand-maintained table, for gateway models the
@@ -135,8 +137,47 @@ function googleImageEntry(model: GoogleModel): CatalogModel | null {
   };
 }
 
-/** Live Google AI Studio image models — Imagen plus the Gemini image family, called on Google directly. */
-async function googleImageCatalog(): Promise<CatalogModel[]> {
+/** What Google bills when the request names no resolution. */
+const DEFAULT_VIDEO_RESOLUTION: VideoResolution = "720p";
+
+/**
+ * The per-second price row for a Veo model. Resolution-tiered families are
+ * keyed `model:resolution`; flat-priced ones fall through to a bare row. Exact
+ * matches only, so a newly listed Veo id is dropped from the catalog rather
+ * than billed at a sibling's rate.
+ */
+export function googleVideoPrice(id: string, resolution?: string | null) {
+  const base = veoPriceId(googlePriceId(id));
+  const tier = (resolution?.trim() || DEFAULT_VIDEO_RESOLUTION).toLowerCase();
+  return exactUnitPrice("google", `${base}:${tier}`, "video_seconds")
+    ?? exactUnitPrice("google", base, "video_seconds");
+}
+
+function googleVideoEntry(model: GoogleModel): CatalogModel | null {
+  if (!googleVideoMode(model)) return null;
+  // The picker quotes the default resolution; the route bills the one requested.
+  const price = googleVideoPrice(model.id);
+  if (!price) return null;
+  return {
+    id: model.id,
+    provider: "google",
+    displayName: model.displayName?.trim() || model.id,
+    capability: "video",
+    estimate: { unit: "video_seconds", pointsPerUnit: Math.ceil(price.nanoUsdPerUnit / NANO_USD_PER_POINT) },
+  };
+}
+
+/**
+ * Live Google AI Studio models called on Google directly: Imagen plus the
+ * Gemini image family, and Veo. One list fetch feeds both capabilities.
+ *
+ * One model can be listed under several ids sharing a display name — "Nano
+ * Banana Pro" is `gemini-3-pro-image`, `gemini-3-pro-image-preview` and
+ * `nano-banana-pro-preview` — which would put three identical rows in the
+ * picker. Collapse by name within each capability, keeping the id that reads
+ * as canonical: GA over preview, then the shortest.
+ */
+async function googleCatalog(): Promise<CatalogModel[]> {
   let models: GoogleModel[];
   try {
     models = await googleModels();
@@ -144,17 +185,13 @@ async function googleImageCatalog(): Promise<CatalogModel[]> {
     console.error("Google model list unavailable", { cause: cause instanceof Error ? cause.message : "UNKNOWN_ERROR" });
     return [];
   }
-  // One model can be listed under several ids sharing a display name — "Nano
-  // Banana Pro" is `gemini-3-pro-image`, `gemini-3-pro-image-preview` and
-  // `nano-banana-pro-preview` — which would put three identical rows in the
-  // picker. Collapse by name, keeping the id that reads as canonical: GA over
-  // preview, then the shortest.
   const canonical = new Map<string, CatalogModel>();
   for (const model of models) {
-    const entry = googleImageEntry(model);
+    const entry = googleImageEntry(model) ?? googleVideoEntry(model);
     if (!entry) continue;
-    const previous = canonical.get(entry.displayName);
-    if (!previous || preferredId(entry.id, previous.id) === entry.id) canonical.set(entry.displayName, entry);
+    const key = `${entry.capability}:${entry.displayName}`;
+    const previous = canonical.get(key);
+    if (!previous || preferredId(entry.id, previous.id) === entry.id) canonical.set(key, entry);
   }
   return [...canonical.values()];
 }
@@ -165,10 +202,10 @@ function preferredId(a: string, b: string) {
   return a.length <= b.length ? a : b;
 }
 
-/** The full catalog: live gateway models, live Google image models, and the direct non-image models, deduped and sorted the way the desktop pickers sort. */
+/** The full catalog: live gateway models, live Google image and video models, and the direct hand-priced models, deduped and sorted the way the desktop pickers sort. */
 export async function modelCatalog(): Promise<CatalogModel[]> {
-  const [gatewayList, googleImages] = await Promise.all([gatewayCatalog(), googleImageCatalog()]);
-  const direct = [...googleImages, ...DIRECT_MODEL_CATALOG];
+  const [gatewayList, google] = await Promise.all([gatewayCatalog(), googleCatalog()]);
+  const direct = [...google, ...DIRECT_MODEL_CATALOG];
   const claimed = new Set(direct.map((model) => `${model.capability}:${model.id}`));
   const gateway = gatewayList
     // A gateway id whose bare name is already served directly (`google/imagen-4.0-generate-001`
