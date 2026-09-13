@@ -555,6 +555,16 @@
         }
       }
     },
+    "A world of creative assets for your next film." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "为你的下一部影片，探索丰富的创意素材。"
+          }
+        }
+      }
+    },
     "Account" : {
 
     },
@@ -1393,6 +1403,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "明亮"
+          }
+        }
+      }
+    },
+    "Browse footage, music, sound effects, fonts, transitions, effects and Remotion prompts." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "浏览视频素材、音乐、音效、字体、转场、特效和 Remotion 提示词。"
           }
         }
       }
@@ -3246,6 +3266,16 @@
     "Expanded" : {
 
     },
+    "Explore Marketplace" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "探索素材市场"
+          }
+        }
+      }
+    },
     "Export" : {
       "localizations" : {
         "zh-Hans" : {
@@ -3350,6 +3380,16 @@
         }
       }
     },
+    "Feature %lld of %lld" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "第 %1$lld 项功能，共 %2$lld 项"
+          }
+        }
+      }
+    },
     "Fender Rhodes Piano" : {
       "localizations" : {
         "zh-Hans" : {
@@ -3392,6 +3432,16 @@
     },
     "Filter" : {
 
+    },
+    "Find your next inspiration" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "发现新的灵感"
+          }
+        }
+      }
     },
     "Firm" : {
       "localizations" : {
@@ -3928,6 +3978,16 @@
         }
       }
     },
+    "Got it" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "知道了"
+          }
+        }
+      }
+    },
     "Granularity" : {
       "localizations" : {
         "zh-Hans" : {
@@ -4251,6 +4311,16 @@
         }
       }
     },
+    "Install once. Create in any film." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "一次安装，多部影片随心创作。"
+          }
+        }
+      }
+    },
     "Install this item first." : {
       "localizations" : {
         "zh-Hans" : {
@@ -4368,6 +4438,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "JSON"
+          }
+        }
+      }
+    },
+    "Keep assets in your shared library and add installed media to any film." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "将素材保存在共享素材库中，并将已安装的媒体添加到任意影片。"
           }
         }
       }
@@ -4771,6 +4851,16 @@
         }
       }
     },
+    "Marketplace is here" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "素材市场现已上线"
+          }
+        }
+      }
+    },
     "Mature" : {
       "localizations" : {
         "zh-Hans" : {
@@ -5153,6 +5243,16 @@
     },
     "New Folder…" : {
 
+    },
+    "New in RxFilmStudio" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "RxFilmStudio 新功能"
+          }
+        }
+      }
     },
     "New Narrative" : {
       "extractionState" : "stale",
@@ -6113,6 +6213,9 @@
           }
         }
       }
+    },
+    "Play preview" : {
+
     },
     "Play the audio, then set each caption's start and end as you hear it." : {
       "extractionState" : "stale",
@@ -7110,6 +7213,16 @@
         }
       }
     },
+    "RxFilm subscription service" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "RxFilm 订阅服务"
+          }
+        }
+      }
+    },
     "RxFilmStudio" : {
 
     },
@@ -7737,6 +7850,16 @@
     },
     "Sign in to your RxLab account to manage credits and subscription usage." : {
 
+    },
+    "Sign in with RxLab and choose RxFilm credits in AI Provider settings. Use credits for supported AI models and paid marketplace assets." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "使用 RxLab 账号登录，在 AI 提供商设置中选择 RxFilm 积分，即可用积分使用支持的 AI 模型并购买市场中的付费素材。"
+          }
+        }
+      }
     },
     "Sign In…" : {
 
@@ -9549,6 +9672,26 @@
     },
     "What to keep out of the shot. Optional." : {
 
+    },
+    "What's New" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "新功能"
+          }
+        }
+      }
+    },
+    "What's New…" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "新功能…"
+          }
+        }
+      }
     },
     "When nudging" : {
       "localizations" : {

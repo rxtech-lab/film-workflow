@@ -7,6 +7,9 @@ optionally a preview video, and a price in credits (0 = free).
 
 ## In the app
 
+- The **What's New** sheet introduces Marketplace and the RxFilm subscription
+  service once per feature card. Reopen it from **RxFilmStudio → What's New…**;
+  **Explore Marketplace** closes the sheet and opens the catalog.
 - Browse by kind and category with the filter chips above the grid; search filters the grid. Click a card to open its detail sheet; hovering a card with a video preview plays it in place, muted.
 - Signed-out users can browse. Buying and installing need an RxLab account.
 - **Buy** charges the price through rx-subscription in one hold-and-settle; a

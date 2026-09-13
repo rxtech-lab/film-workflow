@@ -61,6 +61,7 @@ struct film_workflowApp: App {
         WindowGroup(id: EditorWindowID.value, for: URL.self) { $url in
             EditorWindowRoot(documentURL: url)
                 .signInSheetPresenter()
+                .whatsNewSheetPresenter(automatically: url != nil)
                 .task { await Self.bootstrapServices() }
         }
         .windowStyle(.hiddenTitleBar)
@@ -104,6 +105,12 @@ struct film_workflowApp: App {
                 }
             }
             CommandGroup(after: .appInfo) {
+                Button("What's New…") {
+                    WhatsNewStore.shared.requestPresentation()
+                    if NSApp.keyWindow == nil {
+                        openWindow(id: WelcomeWindowID.value)
+                    }
+                }
                 Button("Check for Updates...") {
                     updateService.checkForUpdates()
                 }
@@ -125,6 +132,7 @@ struct film_workflowApp: App {
         Window("Welcome to RxFilmStudio", id: WelcomeWindowID.value) {
             WelcomeWindowView()
                 .signInSheetPresenter()
+                .whatsNewSheetPresenter(automatically: true)
                 .task { await Self.bootstrapServices() }
         }
         .windowStyle(.hiddenTitleBar)
@@ -139,6 +147,7 @@ struct film_workflowApp: App {
             AgentWindowView()
                 .environment(AgentController.shared)
                 .signInSheetPresenter()
+                .whatsNewSheetPresenter()
                 // Nothing inside the agent window paints a ground of its own,
                 // so the window supplies one: a material rather than a solid
                 // fill, which is what makes the panel read as glass over
@@ -153,12 +162,14 @@ struct film_workflowApp: App {
         Window("Marketplace", id: MarketplaceWindowID.value) {
             MarketplaceWindowView()
                 .signInSheetPresenter()
+                .whatsNewSheetPresenter()
         }
         .defaultSize(width: 1160, height: 720)
 
         Settings {
             SettingsView()
                 .signInSheetPresenter()
+                .whatsNewSheetPresenter()
         }
     }
 }
