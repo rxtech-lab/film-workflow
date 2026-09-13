@@ -9,9 +9,12 @@ nonisolated enum MarketplaceKind: String, Codable, CaseIterable, Identifiable, S
     case font
     case transition
     case effect
+    case projectTemplate = "project_template"
 
     var id: String { rawValue }
 
+    /// What the sidebar shows when the backend has no label for this kind —
+    /// see `MarketplaceTaxonomy`, which is where the app reads them from now.
     var displayName: String {
         switch self {
         case .footage: return String(localized: "Footage")
@@ -21,9 +24,12 @@ nonisolated enum MarketplaceKind: String, Codable, CaseIterable, Identifiable, S
         case .font: return String(localized: "Fonts")
         case .transition: return String(localized: "Transitions")
         case .effect: return String(localized: "Effects")
+        case .projectTemplate: return String(localized: "Project Templates")
         }
     }
 
+    /// The fallback SF Symbol, used when the backend has none or names one
+    /// this macOS cannot draw.
     var systemImage: String {
         switch self {
         case .footage: return "film"
@@ -33,6 +39,7 @@ nonisolated enum MarketplaceKind: String, Codable, CaseIterable, Identifiable, S
         case .font: return "textformat"
         case .transition: return "arrow.left.arrow.right.square"
         case .effect: return "wand.and.stars"
+        case .projectTemplate: return "rectangle.stack.badge.play"
         }
     }
 
@@ -41,7 +48,7 @@ nonisolated enum MarketplaceKind: String, Codable, CaseIterable, Identifiable, S
         switch self {
         case .footage: return .video
         case .audio, .soundEffect: return .audio
-        case .remotionPrompt, .font, .transition, .effect: return nil
+        case .remotionPrompt, .font, .transition, .effect, .projectTemplate: return nil
         }
     }
 
@@ -49,7 +56,7 @@ nonisolated enum MarketplaceKind: String, Codable, CaseIterable, Identifiable, S
     var addsToFilm: Bool {
         switch self {
         case .footage, .audio, .soundEffect, .remotionPrompt: return true
-        case .font, .transition, .effect: return false
+        case .font, .transition, .effect, .projectTemplate: return false
         }
     }
 
@@ -75,6 +82,14 @@ nonisolated struct MarketplaceItemMetadata: Codable, Hashable, Sendable {
     var descriptor: Descriptor?
     var promptExcerpt: String?
     var tags: [String]?
+    var preview: Preview?
+    var template: ProjectTemplateSummary?
+    struct Preview: Codable, Hashable, Sendable {
+        var durationSeconds: Double?
+        var width: Int?
+        var height: Int?
+        var mock: Bool?
+    }
 
     init(durationSeconds: Double? = nil, width: Int? = nil, height: Int? = nil, fontFamily: String? = nil,
          descriptor: Descriptor? = nil, promptExcerpt: String? = nil, tags: [String]? = nil) {
@@ -88,7 +103,10 @@ nonisolated struct MarketplaceItemMetadata: Codable, Hashable, Sendable {
 nonisolated struct MarketplaceItem: Codable, Identifiable, Hashable, Sendable {
     let id: String
     let kind: MarketplaceKind
+    /// The category slug.
     let category: String
+    /// What the category is called; nil from a server that predates the field.
+    let categoryName: String?
     let title: String
     let description: String
     let pricePoints: Int
@@ -105,20 +123,34 @@ nonisolated struct MarketplaceItem: Codable, Identifiable, Hashable, Sendable {
     /// Free items never need a purchase row; paid ones need `owned`.
     var isEntitled: Bool { isFree || owned }
 
-    init(id: String, kind: MarketplaceKind, category: String, title: String, description: String = "", pricePoints: Int = 0,
+    /// The category as the card should print it.
+    var categoryLabel: String { categoryName ?? category }
+
+    init(id: String, kind: MarketplaceKind, category: String, categoryName: String? = nil, title: String, description: String = "", pricePoints: Int = 0,
          previewImageUrl: URL? = nil, previewVideoUrl: URL? = nil, contentFilename: String? = nil, contentSizeBytes: Int64? = nil,
          contentType: String? = nil, metadata: MarketplaceItemMetadata = .init(), owned: Bool = false, publishedAt: String? = nil) {
-        self.id = id; self.kind = kind; self.category = category; self.title = title; self.description = description
+        self.id = id; self.kind = kind; self.category = category; self.categoryName = categoryName; self.title = title; self.description = description
         self.pricePoints = pricePoints; self.previewImageUrl = previewImageUrl; self.previewVideoUrl = previewVideoUrl
         self.contentFilename = contentFilename; self.contentSizeBytes = contentSizeBytes; self.contentType = contentType
         self.metadata = metadata; self.owned = owned; self.publishedAt = publishedAt
     }
 }
 
-nonisolated struct MarketplaceCategoryCount: Codable, Hashable, Sendable {
+/// One category shelf: the slug the catalog filters on plus how the sidebar
+/// should draw it. `name` and `icon` come from the backend; both are optional
+/// so a server that predates them still decodes.
+nonisolated struct MarketplaceCategoryCount: Codable, Hashable, Identifiable, Sendable {
     let kind: MarketplaceKind
+    /// The slug, e.g. `lo-fi-beats`.
     let category: String
+    var name: String?
+    /// An SF Symbol name; resolve it through `MarketplaceSymbol` before drawing.
+    var icon: String?
     let count: Int
+
+    var id: String { "\(kind.rawValue)/\(category)" }
+    /// The backend's name, falling back to the slug an older server sends.
+    var displayName: String { name ?? category }
 }
 
 nonisolated struct MarketplaceCatalogPage: Codable, Sendable {
@@ -202,5 +234,17 @@ nonisolated enum MarketplaceError: LocalizedError, Equatable {
         case .fontRegistrationFailed(let name): return String(localized: "The font \(name) could not be registered.")
         case .notInstalled: return String(localized: "Install this item first.")
         }
+    }
+}
+
+extension MarketplaceError {
+    /// True when a failure is only a cancelled task or request — the user typed
+    /// another character, changed the filter, or closed the window. Nothing went
+    /// wrong, so these must never reach `lastError`.
+    nonisolated static func isCancellation(_ error: Error) -> Bool {
+        if error is CancellationError { return true }
+        if let urlError = error as? URLError { return urlError.code == .cancelled }
+        let error = error as NSError
+        return error.domain == NSURLErrorDomain && error.code == NSURLErrorCancelled
     }
 }

@@ -7,7 +7,8 @@ import { listPurchases } from "@/lib/marketplace/repository";
 export async function GET(request: Request) {
   try {
     const user = await requireApiUser(request);
-    const rows = await listPurchases(user.id);
+    const version = new URL(request.url).searchParams.get("catalog_version");
+    const rows = (await listPurchases(user.id)).filter(({ item }) => version === "2" || item.kind !== "project_template");
     const purchases = await Promise.all(rows.map(async ({ purchase, item }) => ({
       id: purchase.id,
       item: await toWireItem(item, true),

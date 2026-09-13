@@ -198,5 +198,6 @@ final class AuthManager {
         defer { isLoading = false }
         await oauthManager?.logout()
         CreditBalanceStore.shared.clear()
+        MarketplaceAuthoringService.shared.clearAccess()
     }
 }

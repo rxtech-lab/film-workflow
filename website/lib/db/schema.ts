@@ -111,6 +111,7 @@ export const marketplaceKindEnum = pgEnum("marketplace_kind", [
   "font",
   "transition",
   "effect",
+  "project_template",
 ]);
 export type MarketplaceKind = (typeof marketplaceKindEnum.enumValues)[number];
 
@@ -130,19 +131,40 @@ export type MarketplaceItemMetadata = {
   /** Remotion prompts: the first lines, for the card. */
   promptExcerpt?: string;
   tags?: string[];
+  preview?: { durationSeconds?: number; width?: number; height?: number; mock?: boolean };
+  template?: import("@/lib/marketplace/template").TemplateSummary;
 };
+
+/**
+ * How one kind presents itself in the app's marketplace sidebar. One row per
+ * `marketplace_kind` value, seeded with the labels and symbols the app used to
+ * compile in; the app reads them off the wire so a rename or a new icon needs
+ * no release. `icon` is an SF Symbol name, and the app falls back to its own
+ * default when the running OS does not have the symbol.
+ */
+export const marketplaceKinds = pgTable("marketplace_kinds", {
+  kind: marketplaceKindEnum("kind").primaryKey(),
+  label: text("label").notNull(),
+  icon: text("icon").notNull(),
+  /** Sidebar order, low first; ties break on label. */
+  sortOrder: integer("sort_order").notNull().default(0),
+  ...timestamps(),
+  updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" }).notNull(),
+});
 
 /**
  * A shelf inside one kind ("nature" footage, "lo-fi" music). `slug` is the
  * string the app filters and groups by on the wire; `name` is what people see.
  * Admins create these from the item form; items reference them by id so a
- * rename never touches the items.
+ * rename never touches the items. `icon` is an SF Symbol name, same contract
+ * as `marketplace_kinds.icon`.
  */
 export const marketplaceCategories = pgTable("marketplace_categories", {
   id: text("id").primaryKey(),
   kind: marketplaceKindEnum("kind").notNull(),
   slug: text("slug").notNull(),
   name: text("name").notNull(),
+  icon: text("icon").notNull().default("folder"),
   ...timestamps(),
   updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" }).notNull(),
 }, (table) => [
@@ -197,6 +219,7 @@ export const marketplacePurchases = pgTable("marketplace_purchases", {
   index("marketplace_purchases_user_created_idx").on(table.userId, table.createdAt),
 ]);
 
+export type MarketplaceKindRow = typeof marketplaceKinds.$inferSelect;
 export type MarketplaceCategoryRow = typeof marketplaceCategories.$inferSelect;
 export type MarketplaceItemRow = typeof marketplaceItems.$inferSelect;
 export type MarketplacePurchaseRow = typeof marketplacePurchases.$inferSelect;

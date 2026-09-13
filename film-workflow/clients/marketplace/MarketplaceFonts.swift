@@ -27,6 +27,11 @@ nonisolated enum MarketplaceFonts {
         return CTFontDescriptorCopyAttribute(first, kCTFontFamilyNameAttribute) as? String
     }
 
+    static func postScriptName(of url: URL) -> String? {
+        guard let descriptors = CTFontManagerCreateFontDescriptorsFromURL(url as CFURL) as? [CTFontDescriptor], let first = descriptors.first else { return nil }
+        return CTFontDescriptorCopyAttribute(first, kCTFontNameAttribute) as? String
+    }
+
     /// Registers every installed font item. Returns how many succeeded.
     @discardableResult
     static func registerInstalled(root: URL = FileStorage.marketplaceDir) -> Int {

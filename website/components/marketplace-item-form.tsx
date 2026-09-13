@@ -1,5 +1,6 @@
 "use client";
 
+import { TemplateEditor, emptyTemplate } from "./project-template-editor";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, useTransition } from "react";
 import {
@@ -11,12 +12,19 @@ import {
   publishItem,
   removeAsset,
   saveDescriptor,
+  saveContent,
   updateItem,
 } from "@/lib/marketplace/actions";
 import {
+  fieldsForKind,
+  layoutForKind,
+  marketplaceFormSchema,
+  type FormField,
+} from "@/lib/marketplace/form-schema";
+import {
   allowedExtensions,
+  DEFAULT_CATEGORY_ICON,
   marketplaceKindLabels,
-  marketplaceKinds,
   slugify,
   type AssetRole,
   type ItemInput,
@@ -46,54 +54,8 @@ const label = "block text-xs font-medium text-muted";
 const primary = "rounded-full bg-accent px-4 py-2 text-sm font-medium text-black disabled:opacity-40";
 const secondary = "rounded-full border border-line px-4 py-2 text-sm hover:bg-elevated disabled:opacity-40";
 
-/**
- * What each kind needs from the admin. `content: null` means the content file
- * is a CIFilter descriptor edited in place rather than uploaded; preview
- * video only makes sense for kinds that look like something.
- */
-type KindLayout = {
-  content: { title: string; hint: string } | null;
-  previewImageHint: string;
-  previewVideo: boolean;
-};
-
-const kindLayouts: Record<MarketplaceKind, KindLayout> = {
-  footage: {
-    content: { title: "Footage file", hint: "MP4 or MOV. Duration and dimensions are read from the file." },
-    previewImageHint: "The still on the card. Aim for a frame from the clip.",
-    previewVideo: true,
-  },
-  remotion_prompt: {
-    content: { title: "Prompt file", hint: "Markdown or plain text. The first lines become the card excerpt." },
-    previewImageHint: "A render of what the prompt produces.",
-    previewVideo: true,
-  },
-  audio: {
-    content: { title: "Music file", hint: "MP3, WAV, M4A or AAC. Duration is read from the file." },
-    previewImageHint: "Cover art for the card.",
-    previewVideo: false,
-  },
-  sound_effect: {
-    content: { title: "Sound file", hint: "MP3, WAV, M4A or AAC. Duration is read from the file." },
-    previewImageHint: "Cover art for the card.",
-    previewVideo: false,
-  },
-  font: {
-    content: { title: "Font file", hint: "TTF or OTF." },
-    previewImageHint: "A specimen: the alphabet or a sample line set in the font.",
-    previewVideo: false,
-  },
-  transition: {
-    content: null,
-    previewImageHint: "A frame mid-transition.",
-    previewVideo: true,
-  },
-  effect: {
-    content: null,
-    previewImageHint: "A frame with the effect applied.",
-    previewVideo: true,
-  },
-};
+/** The one description of this form; the Mac app fetches the same thing over HTTP. */
+const formSchema = marketplaceFormSchema();
 
 const slotTitles: Record<AssetRole, string> = { "preview-image": "preview image", "preview-video": "preview video", content: "content file" };
 
@@ -102,10 +64,6 @@ const uploadOrder: AssetRole[] = ["content", "preview-image", "preview-video"];
 const descriptorTemplate = (kind: MarketplaceKind) => kind === "transition"
   ? JSON.stringify({ format: 1, id: "mp.bars-swipe", kind: "transition", name: "Bars Swipe", summary: "Sliding bars reveal the next clip.", filter: "CIBarsSwipeTransition", progressKey: "inputTime", progressCurve: "linear", inputs: { from: "inputImage", to: "inputTargetImage" }, parameters: [{ id: "angle", title: "Angle", filterKey: "inputAngle", control: { type: "number", min: 0, max: 6.283, step: 0.01 }, default: 3.14 }, { id: "width", title: "Bar Width", filterKey: "inputWidth", control: { type: "number", min: 2, max: 300, step: 1 }, default: 30, scale: "shortSide" }] }, null, 2)
   : JSON.stringify({ format: 1, id: "mp.vignette", kind: "effect", name: "Vignette", summary: "Darken the corners of the picture.", filter: "CIVignette", parameters: [{ id: "intensity", title: "Intensity", filterKey: "inputIntensity", control: { type: "number", min: 0, max: 1, step: 0.01 }, default: 0.5 }, { id: "radius", title: "Radius", filterKey: "inputRadius", control: { type: "number", min: 0, max: 2, step: 0.01 }, default: 1 }] }, null, 2);
-
-function isDescriptorKind(kind: MarketplaceKind) {
-  return kindLayouts[kind].content === null;
-}
 
 function errorMessage(cause: unknown, fallback: string) {
   return cause instanceof Error ? cause.message : fallback;
@@ -131,9 +89,13 @@ export function MarketplaceItemForm({ item, descriptorText, categories: initialC
   const [tags, setTags] = useState((item?.metadata.tags ?? []).join(", "));
   // A new item has no id to upload against yet, so its files wait here until the draft exists.
   const [staged, setStaged] = useState<Partial<Record<AssetRole, File>>>({});
+  const [templateText, setTemplateText] = useState(item?.kind === "project_template" && descriptorText ? descriptorText : JSON.stringify(emptyTemplate));
+  // Kinds whose content is plain text — today the Remotion prompt.
+  const [inlineText, setInlineText] = useState(item?.kind === "remotion_prompt" ? descriptorText : "");
+  const [mockPreview, setMockPreview] = useState(item?.metadata.preview?.mock ?? false);
   const [stagedDescriptor, setStagedDescriptor] = useState(descriptorText || descriptorTemplate(kind));
   const [descriptorEdited, setDescriptorEdited] = useState(Boolean(descriptorText));
-  const layout = kindLayouts[kind];
+  const layout = layoutForKind(formSchema, kind);
   const kindCategories = categories.filter((candidate) => candidate.kind === kind);
 
   function changeKind(next: MarketplaceKind) {
@@ -151,6 +113,25 @@ export function MarketplaceItemForm({ item, descriptorText, categories: initialC
     const parsedTags = tags.split(",").map((tag) => tag.trim()).filter(Boolean);
     metadata.tags = parsedTags.length > 0 ? parsedTags : undefined;
     return { kind, categoryId, title: title.trim(), description: description.trim(), pricePoints, metadata };
+  }
+
+  /** Field id from the schema -> the state it edits. */
+  const values: Record<string, string> = {
+    kind,
+    title,
+    description,
+    pricePoints: String(pricePoints),
+    "metadata.tags": tags,
+    "metadata.fontFamily": fontFamily,
+  };
+
+  function setValue(id: string, next: string) {
+    if (id === "kind") { changeKind(next as MarketplaceKind); return; }
+    if (id === "title") { setTitle(next); return; }
+    if (id === "description") { setDescription(next); return; }
+    if (id === "pricePoints") { setPricePoints(Math.max(0, Math.floor(Number(next) || 0))); return; }
+    if (id === "metadata.tags") { setTags(next); return; }
+    if (id === "metadata.fontFamily") setFontFamily(next);
   }
 
   function run(work: () => Promise<{ ok: true } | { ok: false; error: string }>, success?: string) {
@@ -173,7 +154,11 @@ export function MarketplaceItemForm({ item, descriptorText, categories: initialC
       if (!result.ok) { setError(result.error); return; }
       const created = { id: result.id, kind };
       const failures: string[] = [];
-      if (isDescriptorKind(kind)) {
+      if (layout.content.editor === "template" || layout.content.editor === "text") {
+        const saved = await saveContent(created.id, layout.content.editor === "template" ? templateText : inlineText);
+        if (!saved.ok) failures.push(saved.error);
+      }
+      if (layout.content.editor === "descriptor") {
         setNotice("Saving descriptor…");
         const saved = await saveDescriptor(created.id, stagedDescriptor);
         if (!saved.ok) failures.push(saved.error);
@@ -183,7 +168,7 @@ export function MarketplaceItemForm({ item, descriptorText, categories: initialC
         if (!file) continue;
         setNotice(`Uploading ${slotTitles[role]}…`);
         try {
-          await uploadAsset(created, role, file, (fraction) => setNotice(`Uploading ${slotTitles[role]} ${Math.round(fraction * 100)}%`));
+          await uploadAsset(created, role, file, (fraction) => setNotice(`Uploading ${slotTitles[role]} ${Math.round(fraction * 100)}%`), mockPreview);
         } catch (cause) {
           failures.push(`${slotTitles[role]}: ${errorMessage(cause, "the upload failed.")}`);
         }
@@ -203,29 +188,38 @@ export function MarketplaceItemForm({ item, descriptorText, categories: initialC
 
   return (
     <div className="mt-8 grid gap-6">
-      <section className="rounded-2xl border border-line bg-surface p-6">
-        <h2 className="text-lg font-semibold">Details</h2>
-        <div className="mt-4 grid gap-4 sm:grid-cols-2">
-          <label className={label}>Kind<select className={field} value={kind} onChange={(event) => changeKind(event.target.value as MarketplaceKind)} disabled={pending}>{marketplaceKinds.map((candidate) => <option key={candidate} value={candidate}>{marketplaceKindLabels[candidate]}</option>)}</select></label>
-          <CategoryPicker kind={kind} categories={kindCategories} value={categoryId} onChange={setCategoryId} onCreated={(category) => { setCategories((previous) => [...previous, category]); setCategoryId(category.id); }} onError={setError} disabled={pending} />
-          <label className={`${label} sm:col-span-2`}>Title<input className={field} value={title} onChange={(event) => setTitle(event.target.value)} maxLength={160} disabled={pending} /></label>
-          <label className={`${label} sm:col-span-2`}>Description<textarea className={`${field} min-h-28`} value={description} onChange={(event) => setDescription(event.target.value)} maxLength={4000} disabled={pending} /></label>
-          <label className={label}>Price (credits, 0 = free)<input className={field} type="number" min={0} max={1_000_000} step={1} value={pricePoints} onChange={(event) => setPricePoints(Math.max(0, Math.floor(Number(event.target.value) || 0)))} disabled={pending} /></label>
-          <label className={label}>Tags (comma separated)<input className={field} value={tags} onChange={(event) => setTags(event.target.value)} disabled={pending} /></label>
-          {kind === "font" ? <label className={`${label} sm:col-span-2`}>Font family name<input className={field} value={fontFamily} onChange={(event) => setFontFamily(event.target.value)} placeholder="Exactly as the font reports it, e.g. Inter" disabled={pending} /></label> : null}
-        </div>
-      </section>
+      {formSchema.sections.map((section) => (
+        <section key={section.id} className="rounded-2xl border border-line bg-surface p-6">
+          <h2 className="text-lg font-semibold">{section.title}</h2>
+          {section.help ? <p className="mt-1 text-sm text-muted">{section.help}</p> : null}
+          <div className="mt-4 grid gap-4 sm:grid-cols-2">
+            {fieldsForKind(section, kind).map((schemaField) => schemaField.id === "categoryId"
+              ? <CategoryPicker key={schemaField.id} field={schemaField} kind={kind} categories={kindCategories} value={categoryId} onChange={setCategoryId} onCreated={(category) => { setCategories((previous) => [...previous, category]); setCategoryId(category.id); }} onError={setError} disabled={pending} />
+              : <FormControl key={schemaField.id} field={schemaField} value={values[schemaField.id] ?? ""} onChange={(next) => setValue(schemaField.id, next)} disabled={pending || (Boolean(schemaField.lockedWhenSaved) && Boolean(item))} />)}
+          </div>
+        </section>
+      ))}
 
       <section className="rounded-2xl border border-line bg-surface p-6">
         <h2 className="text-lg font-semibold">{marketplaceKindLabels[kind]} files</h2>
         <p className="mt-1 text-sm text-muted">{item ? "Uploads go straight to storage; each slot is recorded once the file has landed." : "Files are uploaded right after the draft is created."}</p>
         <div className="mt-4 grid gap-5">
-          {layout.content
+          {layout.content.editor === "text"
+            ? <div className="grid gap-2">
+                <div><span className="text-sm font-medium">{layout.content.title}</span><p className="text-xs text-muted">{layout.content.hint}</p></div>
+                <textarea className={`${field} min-h-56`} value={inlineText} onChange={(event) => setInlineText(event.target.value)} disabled={pending} />
+                {item ? <div><button type="button" className={secondary} disabled={pending || !inlineText.trim()} onClick={() => run(() => saveContent(item.id, inlineText), "Saved.")}>Save {layout.content.title.toLowerCase()}</button></div> : null}
+              </div>
+            : null}
+          {layout.content.editor === "template" ? <TemplateEditor text={templateText} onChange={setTemplateText} /> : null}
+          {layout.content.editor === "template" && item ? <button type="button" className={secondary} disabled={pending} onClick={() => run(() => saveContent(item.id, templateText), "Template saved.")}>Save template</button> : null}
+          {layout.mockPreview ? <label className="text-sm"><input type="checkbox" checked={mockPreview} onChange={(event) => setMockPreview(event.target.checked)} /> This preview uses mock images, without original project footage.</label> : null}
+          {layout.content.editor === "upload"
             ? <UploadSlot item={item} kind={kind} role="content" title={layout.content.title} hint={layout.content.hint} staged={staged.content ?? null} onStage={(file) => setStaged((previous) => ({ ...previous, content: file ?? undefined }))} current={item?.contentFilename ? <span className="text-sm">{item.contentFilename}{item.contentSizeBytes ? <span className="text-muted"> · {(item.contentSizeBytes / 1_048_576).toFixed(1)} MB</span> : null}</span> : null} onError={setError} disabled={pending} />
-            : <DescriptorEditor item={item} text={stagedDescriptor} onChange={(text) => { setStagedDescriptor(text); setDescriptorEdited(true); }} onError={setError} disabled={pending} />}
-          <UploadSlot item={item} kind={kind} role="preview-image" title="Preview image" hint={layout.previewImageHint} staged={staged["preview-image"] ?? null} onStage={(file) => setStaged((previous) => ({ ...previous, "preview-image": file ?? undefined }))} current={item?.previewImageUrl ? <PreviewStill src={item.previewImageUrl} /> : null} onError={setError} disabled={pending} />
+            : layout.content.editor === "descriptor" ? <DescriptorEditor item={item} text={stagedDescriptor} onChange={(text) => { setStagedDescriptor(text); setDescriptorEdited(true); }} onError={setError} disabled={pending} /> : null}
+          <UploadSlot item={item} kind={kind} role="preview-image" title={layout.previewImage.title} hint={layout.previewImage.hint} staged={staged["preview-image"] ?? null} onStage={(file) => setStaged((previous) => ({ ...previous, "preview-image": file ?? undefined }))} current={item?.previewImageUrl ? <PreviewStill src={item.previewImageUrl} /> : null} onError={setError} disabled={pending} />
           {layout.previewVideo
-            ? <UploadSlot item={item} kind={kind} role="preview-video" title="Preview video" hint="Optional. A short clip the app plays on the detail page." staged={staged["preview-video"] ?? null} onStage={(file) => setStaged((previous) => ({ ...previous, "preview-video": file ?? undefined }))} current={item?.previewVideoUrl ? <video src={item.previewVideoUrl} className="h-24 rounded-lg" muted controls /> : null} onError={setError} disabled={pending} />
+            ? <UploadSlot item={item} kind={kind} role="preview-video" mockPreview={mockPreview} title={layout.previewVideo.title} hint={layout.previewVideo.hint} staged={staged["preview-video"] ?? null} onStage={(file) => setStaged((previous) => ({ ...previous, "preview-video": file ?? undefined }))} current={item?.previewVideoUrl ? <video src={item.previewVideoUrl} className="h-24 rounded-lg" controls /> : null} onError={setError} disabled={pending} />
             : null}
         </div>
       </section>
@@ -243,7 +237,9 @@ export function MarketplaceItemForm({ item, descriptorText, categories: initialC
   );
 }
 
-function CategoryPicker({ kind, categories, value, onChange, onCreated, onError, disabled }: {
+function CategoryPicker({ field: schemaField, kind, categories, value, onChange, onCreated, onError, disabled }: {
+  schemaField?: never;
+  field: FormField;
   kind: MarketplaceKind;
   categories: MarketplaceCategory[];
   value: string;
@@ -256,7 +252,7 @@ function CategoryPicker({ kind, categories, value, onChange, onCreated, onError,
 
   return (
     <div>
-      <label className={label}>Category
+      <label className={label}>{schemaField.title}
         <div className="mt-1 flex gap-2">
           <select className={`${field} mt-0`} value={value} onChange={(event) => onChange(event.target.value)} disabled={disabled}>
             <option value="">{categories.length === 0 ? `No ${marketplaceKindLabels[kind].toLowerCase()} categories yet` : "Choose…"}</option>
@@ -283,6 +279,7 @@ function NewCategoryDialog({ kind, onClose, onCreated, onError }: {
 }) {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const [name, setName] = useState("");
+  const [icon, setIcon] = useState("");
   const [error, setError] = useState("");
   const [pending, startTransition] = useTransition();
   const slug = slugify(name);
@@ -297,7 +294,7 @@ function NewCategoryDialog({ kind, onClose, onCreated, onError }: {
     setError("");
     onError("");
     startTransition(async () => {
-      const result = await createCategory({ kind, name });
+      const result = await createCategory({ kind, name, icon: icon.trim() || undefined });
       if (!result.ok) { setError(result.error); return; }
       onCreated(result.category);
     });
@@ -331,6 +328,7 @@ function NewCategoryDialog({ kind, onClose, onCreated, onError }: {
           />
         </label>
         <p className="mt-2 min-h-4 text-xs text-muted">{slug ? <>Slug: <span className="font-mono">{slug}</span></> : name ? "The name needs at least one letter or digit." : null}</p>
+        <IconField value={icon} onChange={setIcon} disabled={pending} />
         {error ? <p className="mt-3 text-sm text-red-400" role="alert">{error}</p> : null}
         <div className="mt-6 flex justify-end gap-2">
           <button type="button" className={secondary} onClick={() => dialogRef.current?.close()} disabled={pending}>Cancel</button>
@@ -339,6 +337,56 @@ function NewCategoryDialog({ kind, onClose, onCreated, onError }: {
       </form>
     </dialog>
   );
+}
+
+/**
+ * The SF Symbol a sidebar row draws. macOS resolves the name, so the field
+ * takes it as text and the app falls back to its own symbol when the name
+ * means nothing to the running system.
+ */
+export function IconField({ value, onChange, disabled, className }: {
+  value: string;
+  onChange: (icon: string) => void;
+  disabled: boolean;
+  className?: string;
+}) {
+  return (
+    <label className={`${label} mt-4 ${className ?? ""}`}>Icon (SF Symbol)
+      <input
+        className={field}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        placeholder={DEFAULT_CATEGORY_ICON}
+        maxLength={80}
+        spellCheck={false}
+        autoCapitalize="none"
+        disabled={disabled}
+      />
+      <span className="mt-1 block text-xs text-muted">Name it as SF Symbols does, e.g. <span className="font-mono">music.note</span>. Blank means <span className="font-mono">{DEFAULT_CATEGORY_ICON}</span>.</span>
+    </label>
+  );
+}
+
+/**
+ * One schema field. The schema says what it is called, what it accepts and
+ * which kinds it belongs to; this only decides which control draws it.
+ */
+function FormControl({ field: schemaField, value, onChange, disabled }: {
+  field: FormField;
+  value: string;
+  onChange: (value: string) => void;
+  disabled: boolean;
+}) {
+  const wide = schemaField.type === "multiline" || schemaField.type === "text";
+  const help = schemaField.help ? <span className="mt-1 block text-xs font-normal text-muted">{schemaField.help}</span> : null;
+  const control = schemaField.type === "multiline"
+    ? <textarea className={`${field} min-h-28`} value={value} onChange={(event) => onChange(event.target.value)} maxLength={schemaField.maxLength} disabled={disabled} />
+    : schemaField.type === "select"
+      ? <select className={field} value={value} onChange={(event) => onChange(event.target.value)} disabled={disabled}>{(schemaField.options ?? []).map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select>
+      : schemaField.type === "number"
+        ? <input className={field} type="number" min={schemaField.min} max={schemaField.max} step={1} value={value} onChange={(event) => onChange(event.target.value)} disabled={disabled} />
+        : <input className={field} value={value} onChange={(event) => onChange(event.target.value)} placeholder={schemaField.placeholder} maxLength={schemaField.maxLength} disabled={disabled} />;
+  return <label className={`${label}${wide ? " sm:col-span-2" : ""}`}>{schemaField.title}{control}{help}</label>;
 }
 
 /** Admin previews come from R2 with no image loader configured, so this stays a plain img. */
@@ -369,7 +417,7 @@ function readAudioDuration(file: File): Promise<Partial<ItemMetadata>> {
   });
 }
 
-function putWithProgress(url: string, headers: Record<string, string>, file: File, onProgress: (fraction: number) => void) {
+function putWithProgress(url: string, headers: Record<string, string>, file: File, onProgress: (fraction: number) => void = () => {}, mockPreview = false) {
   return new Promise<void>((resolve, reject) => {
     const request = new XMLHttpRequest();
     request.open("PUT", url);
@@ -384,7 +432,7 @@ function putWithProgress(url: string, headers: Record<string, string>, file: Fil
 }
 
 /** Presigned PUT straight to storage, then record the slot with whatever the browser could read from the file. */
-async function uploadAsset(item: { id: string; kind: MarketplaceKind }, role: AssetRole, file: File, onProgress: (fraction: number) => void) {
+async function uploadAsset(item: { id: string; kind: MarketplaceKind }, role: AssetRole, file: File, onProgress: (fraction: number) => void = () => {}, mockPreview = false) {
   const contentType = file.type || "application/octet-stream";
   const authorized = await createUploadUrl({ itemId: item.id, role, filename: file.name, contentType, sizeBytes: file.size });
   if (!authorized.ok) throw new Error(authorized.error);
@@ -392,7 +440,7 @@ async function uploadAsset(item: { id: string; kind: MarketplaceKind }, role: As
   const metadata = role === "preview-video" || (role === "content" && item.kind === "footage")
     ? await readVideoMetadata(file)
     : role === "content" && (item.kind === "audio" || item.kind === "sound_effect") ? await readAudioDuration(file) : {};
-  const finalized = await finalizeUpload({ itemId: item.id, role, filename: file.name, contentType, sizeBytes: file.size, objectKey: authorized.objectKey, metadata });
+  const finalized = await finalizeUpload({ itemId: item.id, role, filename: file.name, contentType, sizeBytes: file.size, objectKey: authorized.objectKey, metadata: role === "preview-video" ? { ...metadata, preview: { mock: mockPreview } } : metadata });
   if (!finalized.ok) throw new Error(finalized.error);
 }
 
@@ -400,7 +448,8 @@ async function uploadAsset(item: { id: string; kind: MarketplaceKind }, role: As
  * One file slot. With a saved item the file uploads as soon as it is picked;
  * without one it is staged and the form uploads it after creating the draft.
  */
-function UploadSlot({ item, kind, role, title, hint, staged, onStage, current, onError, disabled }: {
+function UploadSlot({ item, kind, role, title, hint, staged, onStage, current, onError, disabled, mockPreview = false }: {
+  mockPreview?: boolean;
   item: AdminItemView | null;
   kind: MarketplaceKind;
   role: AssetRole;
@@ -415,18 +464,25 @@ function UploadSlot({ item, kind, role, title, hint, staged, onStage, current, o
   const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
   const [progress, setProgress] = useState<number | null>(null);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [failedFile, setFailedFile] = useState<File | null>(null);
   const [pending, startTransition] = useTransition();
   const accept = allowedExtensions(kind, role).map((extension) => `.${extension}`).join(",");
   const busy = disabled || progress !== null || pending;
 
   async function upload(saved: AdminItemView, file: File) {
     onError("");
+    setUploadError(null);
+    setFailedFile(null);
     setProgress(0);
     try {
-      await uploadAsset(saved, role, file, setProgress);
+      await uploadAsset(saved, role, file, setProgress, mockPreview);
       startTransition(() => router.refresh());
     } catch (cause) {
-      onError(errorMessage(cause, "The upload failed."));
+      const message = errorMessage(cause, "The upload failed.");
+      setUploadError(message);
+      setFailedFile(file);
+      onError(`${title}: ${message}`);
     } finally {
       setProgress(null);
     }
@@ -449,6 +505,10 @@ function UploadSlot({ item, kind, role, title, hint, staged, onStage, current, o
         <button type="button" className={secondary} disabled={busy} onClick={() => inputRef.current?.click()}>{progress !== null ? `Uploading ${Math.round(progress * 100)}%` : shown ? "Replace" : "Choose file"}</button>
         {item && current ? <button type="button" className="text-sm text-muted hover:text-red-400" disabled={busy} onClick={() => startTransition(async () => { const result = await removeAsset(item.id, role); if (!result.ok) onError(result.error); router.refresh(); })}>Remove</button> : null}
         {!item && staged ? <button type="button" className="text-sm text-muted hover:text-red-400" disabled={busy} onClick={() => onStage(null)}>Clear</button> : null}
+        {uploadError ? <div className="w-full space-y-2" role="alert">
+          <p className="text-sm text-red-400">{failedFile?.name}: {uploadError}</p>
+          {item && failedFile ? <button type="button" className={secondary} disabled={busy} onClick={() => void upload(item, failedFile)}>Retry upload</button> : null}
+        </div> : null}
       </div>
     </div>
   );

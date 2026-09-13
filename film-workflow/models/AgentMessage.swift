@@ -14,6 +14,9 @@ final class AgentMessage {
     var id: UUID = UUID()
     var role: String = AgentMessageRole.user.rawValue
     var content: String = ""
+    /// Image bytes travel with the saved user turn, independent of the source
+    /// file or clipboard. Optional so existing transcripts migrate unchanged.
+    @Attribute(.externalStorage) var attachmentsData: Data?
     var createdAt: Date = Date()
 
     var thread: AgentThread?

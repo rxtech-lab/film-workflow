@@ -67,7 +67,7 @@ enum AgentToolPolicy {
     }
 
     static func allows(_ name: String, policy: AgentWritePolicy) -> Bool {
-        !withheldNames(policy: policy).contains(name)
+        !withheldNames(policy: policy).contains(name) && (!MCPMarketplaceHandlers.adminNames.contains(name) || MarketplaceAuthoringService.shared.canAuthor)
     }
 
     // MARK: - Coding-agent tools

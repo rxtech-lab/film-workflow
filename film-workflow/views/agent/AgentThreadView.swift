@@ -80,7 +80,6 @@ struct AgentThreadView: View {
                 set: { controller.setInput($0, for: threadID) }
             ),
             completions: completionSources,
-            onDropFiles: handleDrop,
             row: { item in
                 AgentMessageRow(item: item, thread: thread) { row in
                     reviewingRow = row
@@ -196,16 +195,6 @@ struct AgentThreadView: View {
         case .stop:
             controller.cancel(threadID: threadID)
         }
-    }
-
-    /// Dropped files become paths in the draft — the tools take paths, so
-    /// "transcribe /Users/…/a.mp4" is what the agent can actually act on.
-    private func handleDrop(_ urls: [URL]) -> Bool {
-        let paths = urls.map(\.path).joined(separator: " ")
-        var draft = controller.run(for: threadID).input
-        if !draft.isEmpty, !draft.hasSuffix(" ") { draft += " " }
-        controller.setInput(draft + paths, for: threadID)
-        return true
     }
 
     // MARK: - Review sheet

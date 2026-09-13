@@ -9,6 +9,7 @@ export const marketplaceKinds = [
   "font",
   "transition",
   "effect",
+  "project_template",
 ] as const;
 export type MarketplaceKind = (typeof marketplaceKinds)[number];
 
@@ -20,7 +21,26 @@ export const marketplaceKindLabels: Record<MarketplaceKind, string> = {
   font: "Font",
   transition: "Transition",
   effect: "Effect",
+  project_template: "Project template",
 };
+
+/**
+ * What the app's sidebar shows for a kind before an admin edits it: the
+ * plural label and the SF Symbol the app used to hardcode. These seed
+ * `marketplace_kinds` and stand in for a row that somehow went missing.
+ */
+export const marketplaceKindDefaults: Record<MarketplaceKind, { label: string; icon: string; sortOrder: number }> = {
+  footage: { label: "Footage", icon: "film", sortOrder: 0 },
+  remotion_prompt: { label: "Remotion Prompts", icon: "text.quote", sortOrder: 1 },
+  audio: { label: "Music", icon: "music.note", sortOrder: 2 },
+  sound_effect: { label: "Sound Effects", icon: "waveform", sortOrder: 3 },
+  font: { label: "Fonts", icon: "textformat", sortOrder: 4 },
+  transition: { label: "Transitions", icon: "arrow.left.arrow.right.square", sortOrder: 5 },
+  effect: { label: "Effects", icon: "wand.and.stars", sortOrder: 6 },
+  project_template: { label: "Project Templates", icon: "rectangle.stack.badge.play", sortOrder: 7 },
+};
+
+export const DEFAULT_CATEGORY_ICON = "folder";
 
 export const assetRoles = ["preview-image", "preview-video", "content"] as const;
 export type AssetRole = (typeof assetRoles)[number];
@@ -37,6 +57,7 @@ export const contentExtensions: Record<MarketplaceKind, string[]> = {
   font: ["ttf", "otf"],
   transition: ["json"],
   effect: ["json"],
+  project_template: ["json"],
 };
 
 export function allowedExtensions(kind: MarketplaceKind, role: AssetRole) {
@@ -54,6 +75,11 @@ export function isAllowedFilename(kind: MarketplaceKind, role: AssetRole, filena
   return allowedExtensions(kind, role).includes(fileExtension(filename));
 }
 
+export const previewMetadata = z.object({
+  durationSeconds: z.number().nonnegative().optional(), width: z.number().int().positive().optional(),
+  height: z.number().int().positive().optional(), mock: z.boolean().optional(),
+});
+
 export const itemMetadata = z.object({
   durationSeconds: z.number().nonnegative().optional(),
   width: z.number().int().positive().optional(),
@@ -61,6 +87,7 @@ export const itemMetadata = z.object({
   fontFamily: z.string().max(120).optional(),
   descriptor: z.object({ filterName: z.string().max(80), parameterCount: z.number().int().nonnegative() }).optional(),
   promptExcerpt: z.string().max(400).optional(),
+  preview: previewMetadata.optional(),
   tags: z.array(z.string().min(1).max(40)).max(20).optional(),
 });
 export type ItemMetadata = z.infer<typeof itemMetadata>;
@@ -75,19 +102,51 @@ export function slugify(name: string) {
   return name.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 64);
 }
 
+/**
+ * An SF Symbol name, the shape Apple uses: words joined by dots, sometimes
+ * with digits or a trailing `.fill`. The server cannot know which
+ * symbols the running macOS has, so it only checks the shape and the app
+ * falls back to a default when `Image(systemName:)` finds nothing.
+ */
+const symbolPattern = /^[A-Za-z0-9]+(\.[A-Za-z0-9]+)*$/;
+const symbolMessage = "Use an SF Symbol name, e.g. “music.note”.";
+export const symbolName = z.string().trim().max(80).regex(symbolPattern, symbolMessage);
+/** An icon field an admin may leave blank, which means "keep the default". */
+const optionalIcon = z.string().trim().max(80).refine((icon) => icon === "" || symbolPattern.test(icon), symbolMessage).optional();
+
 export const categoryInput = z.object({
   kind: z.enum(marketplaceKinds),
   name: z.string().trim().min(1).max(64),
   /** Derived from `name` when omitted. */
   slug: categorySlug.optional(),
-}).transform((input) => ({ ...input, slug: input.slug ?? slugify(input.name) }))
+  /** SF Symbol for the sidebar row; blank falls back to `DEFAULT_CATEGORY_ICON`. */
+  icon: optionalIcon,
+}).transform((input) => ({ ...input, slug: input.slug ?? slugify(input.name), icon: input.icon || DEFAULT_CATEGORY_ICON }))
   .refine((input) => input.slug.length > 0, { message: "The name needs at least one letter or digit.", path: ["name"] });
 export type CategoryInput = z.infer<typeof categoryInput>;
 
+/** Renaming or re-iconing an existing category; the slug is what items filter on, so it stays put. */
+export const categoryPatch = z.object({
+  id: z.string().uuid(),
+  name: z.string().trim().min(1).max(64),
+  icon: optionalIcon.transform((icon) => icon || DEFAULT_CATEGORY_ICON),
+});
+export type CategoryPatch = z.infer<typeof categoryPatch>;
+
+/** The label and icon one kind shows in the app sidebar. */
+export const kindPatch = z.object({
+  kind: z.enum(marketplaceKinds),
+  label: z.string().trim().min(1).max(64),
+  icon: optionalIcon.transform((icon) => icon || DEFAULT_CATEGORY_ICON),
+  sortOrder: z.coerce.number().int().min(0).max(999).default(0),
+});
+export type KindPatch = z.infer<typeof kindPatch>;
+
 /** A category as the admin form sees it. */
-export type MarketplaceCategory = { id: string; kind: MarketplaceKind; slug: string; name: string };
+export type MarketplaceCategory = { id: string; kind: MarketplaceKind; slug: string; name: string; icon: string };
 
 export const itemInput = z.object({
+  draftId: z.string().uuid().optional(),
   kind: z.enum(marketplaceKinds),
   categoryId: z.string().uuid("Pick a category."),
   title: z.string().trim().min(1).max(160),
@@ -98,6 +157,7 @@ export const itemInput = z.object({
 export type ItemInput = z.infer<typeof itemInput>;
 
 export const listQuery = z.object({
+  catalog_version: z.coerce.number().int().min(1).max(2).default(1),
   kind: z.enum(marketplaceKinds).optional(),
   /** A category slug. */
   category: z.string().trim().min(1).max(64).optional(),

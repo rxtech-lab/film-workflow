@@ -7,7 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		DF6391F9305698DA0021FF67 /* RxAgentSDK in Frameworks */ = {isa = PBXBuildFile; productRef = DF6391F8305698DA0021FF67 /* RxAgentSDK */; };
+		DF639B703057003B0021FF67 /* RxAgentSDK in Frameworks */ = {isa = PBXBuildFile; productRef = DF639B6F3057003B0021FF67 /* RxAgentSDK */; };
 		DF8C30C03054213400302857 /* appicon.icon in Resources */ = {isa = PBXBuildFile; fileRef = DF8C30BF3054213400302857 /* appicon.icon */; };
 		DF9D8F11302D630100CD3C3D /* RxAuthSwift in Frameworks */ = {isa = PBXBuildFile; productRef = DF9D8F10302D630100CD3C3D /* RxAuthSwift */; };
 		DF9D8F13302D630100CD3C3D /* RxAuthSwiftUI in Frameworks */ = {isa = PBXBuildFile; productRef = DF9D8F12302D630100CD3C3D /* RxAuthSwiftUI */; };
@@ -73,7 +73,7 @@
 				DFCA0001000000000000B001 /* WhisperKit in Frameworks */,
 				DF9D8F13302D630100CD3C3D /* RxAuthSwiftUI in Frameworks */,
 				DFSP0001000000000000C001 /* Sparkle in Frameworks */,
-				DF6391F9305698DA0021FF67 /* RxAgentSDK in Frameworks */,
+				DF639B703057003B0021FF67 /* RxAgentSDK in Frameworks */,
 				DFVE0001000000000000D001 /* VideoEditorCore in Frameworks */,
 				EFE000010000000000000002 /* VideoEffectsUI in Frameworks */,
 				EFE000010000000000000001 /* VideoEffectsCore in Frameworks */,
@@ -149,7 +149,7 @@
 				EFE000020000000000000001 /* VideoEffectsCore */,
 				DFAB0002000000000000D002 /* RxRemotion */,
 				DFVE0005000000000000D005 /* VideoEditorUI */,
-				DF6391F8305698DA0021FF67 /* RxAgentSDK */,
+				DF639B6F3057003B0021FF67 /* RxAgentSDK */,
 			);
 			productName = "film-workflow";
 			productReference = DF4F80FA2F9120D300DE82DA /* film-workflow.app */;
@@ -242,7 +242,7 @@
 				EFE000030000000000000001 /* XCLocalSwiftPackageReference "Packages/RxVideoEffects" */,
 				DFAB0003000000000000D003 /* XCLocalSwiftPackageReference "Packages/RxRemotion" */,
 				DF9D8F0F302D630100CD3C3D /* XCRemoteSwiftPackageReference "RxAuthSwift" */,
-				DF6391F7305698DA0021FF67 /* XCRemoteSwiftPackageReference "RxAgentSDK" */,
+				DF639B6E3057003B0021FF67 /* XCRemoteSwiftPackageReference "RxAgentSDK" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = DF4F80FB2F9120D300DE82DA /* Products */;
@@ -681,12 +681,12 @@
 /* End XCLocalSwiftPackageReference section */
 
 /* Begin XCRemoteSwiftPackageReference section */
-		DF6391F7305698DA0021FF67 /* XCRemoteSwiftPackageReference "RxAgentSDK" */ = {
+		DF639B6E3057003B0021FF67 /* XCRemoteSwiftPackageReference "RxAgentSDK" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/rxtech-lab/RxAgentSDK";
 			requirement = {
-				branch = main;
-				kind = branch;
+				kind = exactVersion;
+				version = 1.0.2;
 			};
 		};
 		DF9D8F0F302D630100CD3C3D /* XCRemoteSwiftPackageReference "RxAuthSwift" */ = {
@@ -694,7 +694,7 @@
 			repositoryURL = "https://github.com/rxtech-lab/RxAuthSwift";
 			requirement = {
 				kind = exactVersion;
-				version = 1.2.1;
+				version = 1.2.2;
 			};
 		};
 		DFC60EA32FAF81D200B99679 /* XCRemoteSwiftPackageReference "textual" */ = {
@@ -716,9 +716,9 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
-		DF6391F8305698DA0021FF67 /* RxAgentSDK */ = {
+		DF639B6F3057003B0021FF67 /* RxAgentSDK */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = DF6391F7305698DA0021FF67 /* XCRemoteSwiftPackageReference "RxAgentSDK" */;
+			package = DF639B6E3057003B0021FF67 /* XCRemoteSwiftPackageReference "RxAgentSDK" */;
 			productName = RxAgentSDK;
 		};
 		DF9D8F10302D630100CD3C3D /* RxAuthSwift */ = {

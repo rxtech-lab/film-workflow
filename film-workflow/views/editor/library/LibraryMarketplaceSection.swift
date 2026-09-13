@@ -50,6 +50,8 @@ struct LibraryMarketplaceRow: Identifiable, Hashable {
 struct LibraryMarketplaceGrid: View {
     let rows: [LibraryMarketplaceRow]
     let groups: [ProjectGroup]
+    /// Section headings, as the backend names and draws each kind.
+    var taxonomy: MarketplaceTaxonomy = .builtIn
     /// Adds the item to the film, into a folder or ungrouped.
     let onAdd: (LibraryMarketplaceRow, UUID?) -> Void
     let onReveal: (LibraryMarketplaceRow) -> Void
@@ -113,8 +115,8 @@ struct LibraryMarketplaceGrid: View {
                 Image(systemName: collapsed.contains(kind) ? "chevron.right" : "chevron.down")
                     .font(.caption2.weight(.semibold))
                     .frame(width: 10)
-                Image(systemName: kind.systemImage)
-                Text(kind.displayName).lineLimit(1)
+                Image(systemName: MarketplaceSymbol.resolve(taxonomy.presentation(for: kind).icon, fallback: kind.systemImage))
+                Text(taxonomy.presentation(for: kind).label).lineLimit(1)
                 Text("\(count)").foregroundStyle(.tertiary)
                 Spacer()
             }
@@ -129,7 +131,7 @@ struct LibraryMarketplaceGrid: View {
     }
 
     private func rowView(_ row: LibraryMarketplaceRow) -> some View {
-        LibraryMarketplaceCard(row: row)
+        LibraryMarketplaceCard(row: row, symbol: MarketplaceSymbol.resolve(taxonomy.presentation(for: row.kind).icon, fallback: row.kind.systemImage))
             .onTapGesture(count: 2) { onAdd(row, nil) }
             .accessibilityAction { onAdd(row, nil) }
             .contextMenu {
@@ -152,10 +154,12 @@ struct LibraryMarketplaceGrid: View {
 /// library card so the two tabs read alike.
 struct LibraryMarketplaceCard: View {
     let row: LibraryMarketplaceRow
+    /// The kind's symbol as the backend names it; nil falls back to the built-in one.
+    var symbol: String?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 5) {
-            FootageThumbnail(thumbnailURL: row.previewURL, videoURL: row.posterVideoURL, icon: row.kind.systemImage,
+            FootageThumbnail(thumbnailURL: row.previewURL, videoURL: row.posterVideoURL, icon: symbol ?? row.kind.systemImage,
                              duration: row.duration, isStill: row.kind == .remotionPrompt)
                 .frame(width: FilmstripLayout.posterWidth, height: FilmstripLayout.height)
             Text(row.title)

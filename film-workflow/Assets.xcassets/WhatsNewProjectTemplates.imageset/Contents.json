@@ -1,0 +1,12 @@
+{
+  "images" : [
+    {
+      "filename" : "project-templates.png",
+      "idiom" : "universal"
+    }
+  ],
+  "info" : {
+    "author" : "xcode",
+    "version" : 1
+  }
+}

@@ -23,7 +23,7 @@ actor MarketplaceClient {
     }
 
     func items(kind: MarketplaceKind?, category: String?, query: String, page: Int) async throws -> MarketplaceCatalogPage {
-        var parameters: [URLQueryItem] = [URLQueryItem(name: "page", value: String(max(1, page)))]
+        var parameters: [URLQueryItem] = [URLQueryItem(name: "page", value: String(max(1, page))), URLQueryItem(name: "catalog_version", value: "2")]
         if let kind { parameters.append(URLQueryItem(name: "kind", value: kind.rawValue)) }
         if let category, !category.isEmpty { parameters.append(URLQueryItem(name: "category", value: category)) }
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -32,6 +32,17 @@ actor MarketplaceClient {
             return try await transport.get("api/v1/marketplace/items", query: parameters)
         } catch BackendError.notSignedIn {
             return try await Self.anonymousGet("api/v1/marketplace/items", query: parameters)
+        }
+    }
+
+    /// The sidebar: kinds with their labels and symbols, categories with theirs.
+    /// Public like the catalog, so a signed-out browse still gets it.
+    func taxonomy() async throws -> MarketplaceTaxonomy {
+        let parameters = [URLQueryItem(name: "catalog_version", value: "2")]
+        do {
+            return try await transport.get("api/v1/marketplace/taxonomy", query: parameters)
+        } catch BackendError.notSignedIn {
+            return try await Self.anonymousGet("api/v1/marketplace/taxonomy", query: parameters)
         }
     }
 
@@ -53,7 +64,7 @@ actor MarketplaceClient {
     }
 
     func purchases() async throws -> [MarketplacePurchaseRecord] {
-        let response: MarketplacePurchasesResponse = try await transport.get("api/v1/marketplace/purchases", query: [])
+        let response: MarketplacePurchasesResponse = try await transport.get("api/v1/marketplace/purchases", query: [URLQueryItem(name: "catalog_version", value: "2")])
         return response.purchases
     }
 
