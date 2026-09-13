@@ -11,17 +11,15 @@ struct CaptionSettingsView: View {
     /// OpenAI-compatible endpoint is actually set up. Refreshed by `loadKeys`.
     @State private var aiConfig: AppConfig?
 
-    @State private var openAITranscriptionModel: String = ""
-    @State private var geminiTranscriptionModel: String = ""
-    @State private var openAIEndpoint: String = ""
-    @State private var openAIKey: String = ""
-    @State private var googleKey: String = ""
+    /// One id shared by every hosted provider, the same field the transcription
+    /// client reads. The picker below only offers models the selected provider
+    /// can actually run.
+    @State private var subscriptionTranscriptionModel: String = ""
 
-    @State private var transcriptionModels: [OpenAIModelInfo] = []
+    @State private var transcriptionModels: [PickableModel] = []
     @State private var isLoadingModels = false
     @State private var modelsError: String?
 
-    @State private var showSavedAlert = false
     @State private var errorMessage: String?
     @State private var showError = false
     @State private var pendingDelete: WhisperModelStore.ModelEntry?
@@ -44,16 +42,11 @@ struct CaptionSettingsView: View {
                 // hidden behind it.
                 whisperSection
                     .id(Anchor.whisper)
-                openAIModelSection
-                geminiModelSection
+                transcriptionModelSection
                 narrativeSection
                 cueSection
                 aiSection
                 translationSection
-
-                Section {
-                    Button("Save") { save() }
-                }
             }
             .formStyle(.grouped)
             // Runs on first appearance too, which is the case that matters: the
@@ -65,6 +58,12 @@ struct CaptionSettingsView: View {
                 withAnimation { proxy.scrollTo(Anchor.whisper, anchor: .top) }
                 navigation.pendingSettingsFocus = nil
             }
+            // No Save button: the model picker commits as soon as it changes.
+            // Everything else here writes through `CaptionSettings` on
+            // assignment, so it is already saved.
+            .task(id: subscriptionTranscriptionModel) {
+                save()
+            }
         }
         .onAppear {
             loadKeys()
@@ -73,11 +72,6 @@ struct CaptionSettingsView: View {
             availability.refresh()
             Task { await modelStore.fetchIfNeeded() }
             Task { await loadTranscriptionModels(forceRefresh: false) }
-        }
-        .alert("Saved", isPresented: $showSavedAlert) {
-            Button("OK") {}
-        } message: {
-            Text("Your caption settings have been saved.")
         }
         .alert("Error", isPresented: $showError) {
             Button("OK") {}
@@ -209,77 +203,55 @@ struct CaptionSettingsView: View {
         }
     }
 
-    private var openAIModelSection: some View {
-        Section {
-            HStack {
-                Picker("Transcription model", selection: $openAITranscriptionModel) {
-                    if openAITranscriptionModel.isEmpty {
-                        Text("whisper-1 (default)").tag("")
-                    } else if !transcriptionModels.contains(where: { $0.id == openAITranscriptionModel }) {
-                        Text(openAITranscriptionModel).tag(openAITranscriptionModel)
+    /// Model for the hosted transcription providers.
+    ///
+    /// Whisper runs on this device and picks its model in its own section, so
+    /// this one is empty when Whisper is selected.
+    @ViewBuilder
+    private var transcriptionModelSection: some View {
+        if settings.defaultProvider != .whisperLocal {
+            Section {
+                HStack {
+                    Picker("Transcription model", selection: $subscriptionTranscriptionModel) {
+                        Text("Provider default").tag("")
+                        if !subscriptionTranscriptionModel.isEmpty,
+                           !providerModels.contains(where: { $0.id == subscriptionTranscriptionModel }) {
+                            Text(subscriptionTranscriptionModel).tag(subscriptionTranscriptionModel)
+                        }
+                        ForEach(providerModels) { model in
+                            Text(model.pickerLabel).tag(model.id)
+                        }
                     }
-                    ForEach(transcriptionModels) { model in
-                        Text(model.id).tag(model.id)
+
+                    Button {
+                        Task { await loadTranscriptionModels(forceRefresh: true) }
+                    } label: {
+                        if isLoadingModels {
+                            ProgressView().controlSize(.small)
+                        } else {
+                            Image(systemName: "arrow.clockwise")
+                        }
                     }
+                    .disabled(isLoadingModels)
+                    .help("Refresh model list")
                 }
 
-                Button {
-                    Task { await loadTranscriptionModels(forceRefresh: true) }
-                } label: {
-                    if isLoadingModels {
-                        ProgressView().controlSize(.small)
-                    } else {
-                        Image(systemName: "arrow.clockwise")
-                    }
+                if let modelsError {
+                    Text(modelsError)
+                        .font(.caption)
+                        .foregroundStyle(.red)
                 }
-                .disabled(isLoadingModels || !canFetchModels)
-                .help("Refresh model list")
+            } header: {
+                Text("Transcription model")
+            } footer: {
+                Text("""
+                    Runs on the RxFilm server and is billed to your credits. Gemini detects \
+                    speakers but returns no word timings, and its timestamps sometimes need \
+                    the timing fallback.
+                    """)
+                .font(.caption)
+                .foregroundStyle(.secondary)
             }
-
-            TextField("Or type a model id", text: $openAITranscriptionModel)
-                #if os(macOS)
-                .textFieldStyle(.roundedBorder)
-                #else
-                .textInputAutocapitalization(.never)
-                .autocorrectionDisabled(true)
-                #endif
-
-            if let modelsError {
-                Text(modelsError)
-                    .font(.caption)
-                    .foregroundStyle(.red)
-            }
-        } header: {
-            Text("OpenAI-compatible transcription")
-        } footer: {
-            Text("""
-                Uses the endpoint and key from the AI Provider tab. Many gateways list audio models \
-                but don't implement /v1/audio/transcriptions — if you get a 404, use the provider's \
-                own endpoint.
-                """)
-            .font(.caption)
-            .foregroundStyle(.secondary)
-        }
-    }
-
-    private var geminiModelSection: some View {
-        Section {
-            TextField("Gemini model", text: $geminiTranscriptionModel)
-                #if os(macOS)
-                .textFieldStyle(.roundedBorder)
-                #else
-                .textInputAutocapitalization(.never)
-                .autocorrectionDisabled(true)
-                #endif
-        } header: {
-            Text("Gemini transcription")
-        } footer: {
-            Text("""
-                Leave blank to use \(GeminiTranscriptionClient.defaultModel). Gemini detects speakers \
-                but returns no word timings, and its timestamps sometimes need the timing fallback.
-                """)
-            .font(.caption)
-            .foregroundStyle(.secondary)
         }
     }
 
@@ -593,9 +565,18 @@ struct CaptionSettingsView: View {
 
     // MARK: - Derived
 
-    private var canFetchModels: Bool {
-        !openAIEndpoint.trimmingCharacters(in: .whitespaces).isEmpty
-            && !openAIKey.trimmingCharacters(in: .whitespaces).isEmpty
+    /// Catalog entries the selected provider can serve. The catalog names the
+    /// provider the server will call, which is the only reliable way to tell a
+    /// Gemini id from a Whisper one.
+    private var providerModels: [PickableModel] {
+        let provider: String
+        switch settings.defaultProvider {
+        case .gemini: provider = "google"
+        case .azure: provider = "azure"
+        case .openAI: provider = "openai"
+        case .whisperLocal: return []
+        }
+        return transcriptionModels.filter { $0.provider == provider }
     }
 
     /// The picker needs a non-optional selection, and "" means "no fallback".
@@ -615,24 +596,25 @@ struct CaptionSettingsView: View {
     private func loadKeys() {
         guard let config = try? AppConfig.loadFromKeychain() else { return }
         aiConfig = config
-        openAIEndpoint = config.openAIEndpoint
-        openAIKey = config.openAIKey
-        googleKey = config.googleAIKey
-        openAITranscriptionModel = config.openAITranscriptionModel
-        geminiTranscriptionModel = config.geminiTranscriptionModel
+        subscriptionTranscriptionModel = config.subscriptionTranscriptionModel
     }
 
-    /// Writes only the two caption model ids, re-reading everything else from the
+    /// Writes only the transcription model, re-reading everything else from the
     /// Keychain so this form can't clobber the AI Provider tab's fields.
+    ///
+    /// A no-op until `loadKeys` has run, so the autosave that fires with the
+    /// pane's first layout can't write an empty model over a saved one.
     private func save() {
+        guard let loaded = aiConfig else { return }
+        let model = subscriptionTranscriptionModel
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard model != loaded.subscriptionTranscriptionModel else { return }
         do {
-            var config = try AppConfig.loadFromKeychain()
-            config.openAITranscriptionModel = openAITranscriptionModel
-                .trimmingCharacters(in: .whitespacesAndNewlines)
-            config.geminiTranscriptionModel = geminiTranscriptionModel
-                .trimmingCharacters(in: .whitespacesAndNewlines)
-            try config.saveToKeychain()
-            showSavedAlert = true
+            let onDisk = try AppConfig.loadFromKeychain()
+            var config = onDisk
+            config.subscriptionTranscriptionModel = model
+            try config.saveChanges(since: onDisk)
+            aiConfig = config
         } catch {
             errorMessage = error.localizedDescription
             showError = true
@@ -641,14 +623,16 @@ struct CaptionSettingsView: View {
 
     @MainActor
     private func loadTranscriptionModels(forceRefresh: Bool) async {
-        guard canFetchModels else { return }
+        guard AuthManager.shared.isAuthenticated else {
+            modelsError = "Sign in to your RxLab account to load transcription models."
+            return
+        }
         isLoadingModels = true
         modelsError = nil
         defer { isLoadingModels = false }
         do {
-            transcriptionModels = try await OpenAIModelsClient.shared.transcriptionModels(
-                endpoint: openAIEndpoint,
-                apiKey: openAIKey,
+            transcriptionModels = try await BackendModelCatalog.shared.models(
+                capability: .transcription,
                 forceRefresh: forceRefresh
             )
         } catch {

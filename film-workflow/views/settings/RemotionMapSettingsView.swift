@@ -12,7 +12,11 @@ struct RemotionMapSettingsView: View {
     @State private var headerName = "Authorization"
     @State private var credential = ""
     @State private var additionalHeaders: [String: String] = [:]
+    /// Why the tile provider isn't in effect yet, from `RemotionMapSettings.save`.
     @State private var message: String?
+    /// Set once the form has been filled from the stored configuration, so the
+    /// autosave can't write a blank provider over a saved one on first layout.
+    @State private var hasLoaded = false
 
     var body: some View {
         Form {
@@ -41,21 +45,23 @@ struct RemotionMapSettingsView: View {
                     Text("Use a provider licensed for rendering. The public OpenStreetMap tile server is not available for automated exports.")
                         .font(.caption).foregroundStyle(.secondary)
                 }
+                if let message {
+                    Text(message).font(.callout).foregroundStyle(.orange).textSelection(.enabled)
+                }
             }
-            Button("Save Map Settings") {
-                do {
-                    var values = additionalHeaders
-                    if !credential.isEmpty { values[headerName] = credential }
-                    let provider: OpenStreetMapConfiguration? = enabled ? .init(tileURL: tileURL, attribution: attribution,
-                        minimumZoom: minimumZoom, maximumZoom: maximumZoom, allowsExport: allowsExport, headers: values) : nil
-                    try RemotionMapSettings.save(.init(openStreetMap: provider))
-                    message = "Map settings saved. Previews will reload."
-                } catch { message = error.localizedDescription }
-            }
-            if let message { Text(message).font(.callout).textSelection(.enabled) }
         }
         .formStyle(.grouped)
+        // No Save button: edits are committed on a short delay. Keyed on the
+        // whole draft so a fresh keystroke replaces the pending write rather
+        // than adding a Keychain round-trip and a preview reload per character.
+        .task(id: draft) {
+            guard hasLoaded else { return }
+            try? await Task.sleep(for: .milliseconds(600))
+            guard !Task.isCancelled else { return }
+            persist()
+        }
         .onAppear {
+            defer { hasLoaded = true }
             guard let provider = RemotionMapSettings.configuration.openStreetMap else { return }
             enabled = true; tileURL = provider.tileURL; attribution = provider.attribution
             minimumZoom = provider.minimumZoom; maximumZoom = provider.maximumZoom; allowsExport = provider.allowsExport
@@ -63,6 +69,33 @@ struct RemotionMapSettingsView: View {
             if let key = provider.headers.keys.sorted().first {
                 headerName = key; credential = additionalHeaders.removeValue(forKey: key) ?? ""
             }
+        }
+    }
+
+    /// Every field the autosave watches, gathered so `task(id:)` can key on it.
+    private var draft: RemotionConfiguration {
+        // Only the map provider is edited here, so the rest of the stored
+        // configuration is carried over rather than reset to its defaults.
+        var config = RemotionMapSettings.configuration
+        guard enabled else { config.openStreetMap = nil; return config }
+        var values = additionalHeaders
+        if !credential.isEmpty { values[headerName] = credential }
+        config.openStreetMap = .init(tileURL: tileURL, attribution: attribution,
+            minimumZoom: minimumZoom, maximumZoom: maximumZoom, allowsExport: allowsExport, headers: values)
+        return config
+    }
+
+    private func persist() {
+        let config = draft
+        guard config != RemotionMapSettings.configuration else { message = nil; return }
+        do {
+            try RemotionMapSettings.save(config)
+            message = nil
+        } catch {
+            // An incomplete provider fails validation, which is the normal state
+            // halfway through typing a tile URL — so this reads as guidance, not
+            // as a failure, and the stored configuration is left alone.
+            message = error.localizedDescription
         }
     }
 }

@@ -158,22 +158,19 @@ enum RemotionTools {
         filenameHint: String
     ) async throws -> GeneratedImageOutput {
         let imageConfig = (try? AppConfig.loadFromKeychain())
-        let model = imageConfig?.defaultImageModel.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        let endpoint = imageConfig?.openAIEndpoint.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        let key = imageConfig?.openAIKey.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        guard !model.isEmpty, !endpoint.isEmpty, !key.isEmpty else {
+        let model = imageConfig?.subscriptionImageModel.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        guard !model.isEmpty else {
             throw RemotionToolsError.imageGenNotConfigured
         }
 
         let result: ImageGenResult
         do {
-            result = try await ImageGenClient.generateImage(
+            try await MainActor.run { try AIRoute.requireSubscription() }
+            result = try await BackendImageClient.generate(
                 prompt: prompt,
                 model: model,
-                endpoint: endpoint,
-                apiKey: key,
-                format: .png,
-                transparent: transparent
+                transparent: transparent,
+                format: .png
             )
         } catch {
             throw RemotionToolsError.imageGenFailed(
@@ -190,13 +187,23 @@ enum RemotionTools {
         let dest = generatedDir.appendingPathComponent(basename)
         try result.imageData.write(to: dest)
 
-        let transparentApplied = transparent && ImageGenClient.modelLikelySupportsTransparent(model)
+        let transparentApplied = transparent && modelLikelySupportsTransparent(model)
         return GeneratedImageOutput(
             staticName: "generated/\(basename)",
             bytes: result.imageData.count,
             model: model,
             transparentApplied: transparentApplied
         )
+    }
+
+    /// Heuristic: the gpt-image family honors a transparent background;
+    /// dall-e and the Google models do not. Anything unknown is attempted
+    /// and the result reported as applied, so the model can double-check.
+    static func modelLikelySupportsTransparent(_ id: String) -> Bool {
+        let lower = id.lowercased()
+        if lower.contains("dall-e") { return false }
+        if lower.contains("imagen") || lower.contains("gemini") { return false }
+        return true
     }
 
     static func makeImageBasename(hint: String, ext: String, in publicDir: URL) -> String {

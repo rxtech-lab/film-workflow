@@ -742,6 +742,9 @@
         }
       }
     },
+    "Add your own chat model" : {
+
+    },
     "Added to Film" : {
       "localizations" : {
         "zh-Hans" : {
@@ -751,6 +754,9 @@
           }
         }
       }
+    },
+    "Adds a second chat engine to the agent window and the caption AI tasks, billed by that provider rather than your credits. Works with OpenAI, Azure OpenAI, OpenRouter, Ollama, LM Studio, etc. Image, speech, music, transcription and video always run on your subscription. Leave it empty to use the subscription alone." : {
+
     },
     "Adults only" : {
 
@@ -788,9 +794,6 @@
           }
         }
       }
-    },
-    "AI credentials" : {
-
     },
     "AI model" : {
       "localizations" : {
@@ -869,6 +872,7 @@
 
     },
     "All %@" : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -991,6 +995,7 @@
 
     },
     "Apple Intelligence stays on device. The other backends use your provider settings or a CLI you already have installed." : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -999,6 +1004,9 @@
           }
         }
       }
+    },
+    "Apple Intelligence stays on device. The others use your RxFilm subscription, your own OpenAI-compatible endpoint, or a CLI you already have installed." : {
+
     },
     "Apple Maps" : {
 
@@ -1175,6 +1183,7 @@
       }
     },
     "Azure Speech" : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -1756,6 +1765,9 @@
     "Change Sequence Settings" : {
 
     },
+    "Chat model" : {
+
+    },
     "Check for Updates..." : {
 
     },
@@ -2181,6 +2193,7 @@
       }
     },
     "Configure the OpenAI endpoint and API key in Settings." : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -2323,9 +2336,6 @@
     "Credential header (optional)" : {
 
     },
-    "Credential mode" : {
-
-    },
     "Credential value" : {
 
     },
@@ -2393,6 +2403,7 @@
       }
     },
     "Default chat model" : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -2406,6 +2417,7 @@
 
     },
     "Default image model" : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -2414,6 +2426,9 @@
           }
         }
       }
+    },
+    "Default models" : {
+
     },
     "Default provider" : {
       "localizations" : {
@@ -2426,9 +2441,6 @@
       }
     },
     "Default Style" : {
-
-    },
-    "Default video model" : {
 
     },
     "Defaults for new projects" : {
@@ -3138,6 +3150,7 @@
       }
     },
     "Enter your API key" : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -3664,6 +3677,7 @@
       }
     },
     "Gemini model" : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -3684,6 +3698,7 @@
       }
     },
     "Gemini transcription" : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -3913,6 +3928,7 @@
       }
     },
     "Get a Gemini API key →" : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -3923,6 +3939,7 @@
       }
     },
     "Get an Azure Speech key →" : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -3959,6 +3976,7 @@
       }
     },
     "Google AI API Key" : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -4649,6 +4667,7 @@
       }
     },
     "Leave blank to use %@. Gemini detects speakers but returns no word timings, and its timestamps sometimes need the timing fallback." : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -4765,6 +4784,7 @@
       }
     },
     "Loading Voices…" : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -5437,6 +5457,7 @@
       }
     },
     "No OpenAI-compatible endpoint configured yet." : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -5815,6 +5836,7 @@
       }
     },
     "Open Settings…" : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -5865,7 +5887,11 @@
         }
       }
     },
+    "OpenAI-compatible endpoint (optional)" : {
+
+    },
     "OpenAI-compatible LLM" : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -5886,6 +5912,7 @@
       }
     },
     "OpenAI-compatible transcription" : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -5901,10 +5928,14 @@
     "Optional. A first frame animates that image; adding a last frame makes the model interpolate between the two." : {
 
     },
+    "Optional. An OpenAI-compatible endpoint adds a second engine for the agent, caption review and translation, billed by that provider instead of your credits." : {
+
+    },
     "Options follow what the selected model supports." : {
 
     },
     "Or type a model id" : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -6062,6 +6093,7 @@
       }
     },
     "Paste your region (e.g. \"eastus\") or any endpoint URL from the portal — we'll derive the TTS endpoint." : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -6291,9 +6323,6 @@
         }
       }
     },
-    "Prefilled on new video projects. Uses the Google AI API key above." : {
-
-    },
     "Preparing audio…" : {
       "localizations" : {
         "zh-Hans" : {
@@ -6443,6 +6472,9 @@
       }
     },
     "Provider credentials stay on the RxFilm server. Model prices are estimates; actual usage is deducted after each operation." : {
+
+    },
+    "Provider default" : {
 
     },
     "Providers" : {
@@ -6662,6 +6694,7 @@
       }
     },
     "Region or endpoint" : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -6925,7 +6958,7 @@
         }
       }
     },
-    "Required on every request. Subscription mode can spend credits, including through localhost tools." : {
+    "Required on every request, localhost included: the generation tools spend your account's credits." : {
 
     },
     "Required only when bound to all interfaces. Localhost requests skip the check." : {
@@ -6949,9 +6982,6 @@
           }
         }
       }
-    },
-    "Required when bound to all interfaces. Localhost BYOK requests skip the check." : {
-
     },
     "Reset parameters" : {
       "localizations" : {
@@ -7193,6 +7223,9 @@
         }
       }
     },
+    "Runs on the RxFilm server and is billed to your credits. Gemini detects speakers but returns no word timings, and its timestamps sometimes need the timing fallback." : {
+
+    },
     "Russian" : {
       "localizations" : {
         "zh-Hans" : {
@@ -7289,9 +7322,6 @@
         }
       }
     },
-    "Save Map Settings" : {
-
-    },
     "Save To" : {
       "localizations" : {
         "zh-Hans" : {
@@ -7303,6 +7333,7 @@
       }
     },
     "Saved" : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -7667,6 +7698,7 @@
       }
     },
     "Set your AI provider once" : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -7802,10 +7834,14 @@
     "Sign in" : {
 
     },
+    "Sign in on the Account tab and add credits when needed. Images, speech, music, transcription and video all run on the RxFilm server, and each generation deducts its actual usage." : {
+
+    },
     "Sign in on the Account tab before generating" : {
 
     },
     "Sign in on the Account tab, choose RxFilm credits here, and add credits when needed. Each hosted generation deducts its actual usage." : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -7847,6 +7883,9 @@
           }
         }
       }
+    },
+    "Sign in to your RxLab account to load transcription models." : {
+
     },
     "Sign in to your RxLab account to manage credits and subscription usage." : {
 
@@ -8341,6 +8380,7 @@
       }
     },
     "Subscription key" : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -8349,12 +8389,6 @@
           }
         }
       }
-    },
-    "Subscription model" : {
-
-    },
-    "Subscription models" : {
-
     },
     "Switch between transcription runs" : {
 
@@ -8413,6 +8447,7 @@
       }
     },
     "Test Connection" : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -8545,6 +8580,7 @@
       }
     },
     "The endpoint, key and model here are what the agent, caption review and translation all use." : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -9448,12 +9484,6 @@
     "Used as a visual style guide when the agent edits this composition." : {
 
     },
-    "Used by the agent window and by caption AI tasks. Works with OpenAI, Azure OpenAI, OpenRouter, Ollama, LM Studio, etc." : {
-
-    },
-    "Used by the agent's image generation tools. Reuses the OpenAI endpoint and key above." : {
-
-    },
     "Used for splitting, for checking captions against a project's terms, and by the caption assistant. Apple Intelligence runs entirely on this device." : {
       "localizations" : {
         "zh-Hans" : {
@@ -9465,6 +9495,7 @@
       }
     },
     "Uses the endpoint and key from the AI Provider tab. Many gateways list audio models but don't implement /v1/audio/transcriptions — if you get a 404, use the provider's own endpoint." : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -9735,6 +9766,7 @@
       }
     },
     "whisper-1 (default)" : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -9965,10 +9997,8 @@
         }
       }
     },
-    "Your AI settings have been saved to the Keychain." : {
-
-    },
     "Your API key is stored securely in the Keychain." : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -9979,6 +10009,7 @@
       }
     },
     "Your caption settings have been saved." : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -9987,6 +10018,9 @@
           }
         }
       }
+    },
+    "Your key is stored securely in the Keychain." : {
+
     },
     "Your keys have been saved to the Keychain." : {
       "extractionState" : "stale",

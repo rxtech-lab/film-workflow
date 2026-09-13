@@ -3,9 +3,9 @@ import TipKit
 
 enum FilmWorkflowTips {
     struct AIProviderTip: Tip {
-        var title: Text { Text("Set your AI provider once") }
+        var title: Text { Text("Add your own chat model") }
         var message: Text? {
-            Text("The endpoint, key and model here are what the agent, caption review and translation all use.")
+            Text("Optional. An OpenAI-compatible endpoint adds a second engine for the agent, caption review and translation, billed by that provider instead of your credits.")
         }
         var image: Image? { Image(systemName: "sparkles") }
         var options: [any TipOption] { Tips.MaxDisplayCount(1) }
@@ -14,7 +14,7 @@ enum FilmWorkflowTips {
     struct AgentBackendTip: Tip {
         var title: Text { Text("Choose where AI work runs") }
         var message: Text? {
-            Text("Apple Intelligence stays on device. The other backends use your provider settings or a CLI you already have installed.")
+            Text("Apple Intelligence stays on device. The others use your RxFilm subscription, your own OpenAI-compatible endpoint, or a CLI you already have installed.")
         }
         var image: Image? { Image(systemName: "cpu") }
         var options: [any TipOption] { Tips.MaxDisplayCount(1) }
@@ -90,7 +90,7 @@ enum FilmWorkflowTips {
     struct SubscriptionCreditsTip: Tip {
         var title: Text { Text("Use RxFilm credits") }
         var message: Text? {
-            Text("Sign in on the Account tab, choose RxFilm credits here, and add credits when needed. Each hosted generation deducts its actual usage.")
+            Text("Sign in on the Account tab and add credits when needed. Images, speech, music, transcription and video all run on the RxFilm server, and each generation deducts its actual usage.")
         }
         var image: Image? { Image(systemName: "creditcard") }
         var options: [any TipOption] { Tips.MaxDisplayCount(1) }

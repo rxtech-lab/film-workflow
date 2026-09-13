@@ -413,12 +413,14 @@ enum CaptionTranscriptionService {
             // A per-project model wins over the app-wide choice.
             let override = project?.openAITranscriptionModelOverride ?? ""
             return CaptionProviderOptions(
-                model: override.isEmpty ? config.openAITranscriptionModel : override,
+                model: override.isEmpty ? config.subscriptionTranscriptionModel : override,
                 termsHint: hint
             )
         case .gemini:
+            // One subscription field serves every provider; the backend
+            // client swaps in a Gemini id when this one isn't.
             return CaptionProviderOptions(
-                model: config.geminiTranscriptionModel,
+                model: config.subscriptionTranscriptionModel,
                 termsHint: hint
             )
         case .azure:

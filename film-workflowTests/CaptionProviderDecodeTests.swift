@@ -87,29 +87,6 @@ struct CaptionProviderDecodeTests {
         }
     }
 
-    @Test("Azure transcription URL handles regions, full endpoints and the TTS host")
-    func azureURLResolution() {
-        // Bare region.
-        #expect(
-            AzureFastTranscriptionClient.transcriptionURL(from: "eastus")?.absoluteString
-            == "https://eastus.api.cognitive.microsoft.com/speechtotext/transcriptions:transcribe?api-version=2025-10-15"
-        )
-        // A pasted resource endpoint must be honoured verbatim — its first host
-        // label is a resource name, not a region.
-        #expect(
-            AzureFastTranscriptionClient.transcriptionURL(
-                from: "https://my-resource.cognitiveservices.azure.com"
-            )?.host == "my-resource.cognitiveservices.azure.com"
-        )
-        // The TTS host does not serve transcription and must be rewritten.
-        #expect(
-            AzureFastTranscriptionClient.transcriptionURL(
-                from: "https://eastus.tts.speech.microsoft.com/cognitiveservices/v1"
-            )?.host == "eastus.api.cognitive.microsoft.com"
-        )
-        #expect(AzureFastTranscriptionClient.transcriptionURL(from: "") == nil)
-    }
-
     // MARK: - OpenAI
 
     @Test("verbose_json decodes segments and attaches words, converting seconds to ms")
@@ -166,96 +143,6 @@ struct CaptionProviderDecodeTests {
         #expect(throws: CaptionTranscriberError.self) {
             _ = try OpenAITranscriptionClient.decodeVerboseJSON(
                 Data(#"{"text": "", "duration": 1.0}"#.utf8), fallbackDurationMs: 0
-            )
-        }
-    }
-
-    @Test("Transcription endpoint URLs normalize like the models endpoint")
-    func openAIURLResolution() throws {
-        #expect(
-            try OpenAITranscriptionClient
-                .resolveTranscriptionsURL(from: "https://api.openai.com/v1").absoluteString
-            == "https://api.openai.com/v1/audio/transcriptions"
-        )
-        #expect(
-            try OpenAITranscriptionClient
-                .resolveTranscriptionsURL(from: "https://api.openai.com").absoluteString
-            == "https://api.openai.com/v1/audio/transcriptions"
-        )
-        #expect(
-            try OpenAITranscriptionClient
-                .resolveTranscriptionsURL(from: "https://x.dev/v1/audio/transcriptions").absoluteString
-            == "https://x.dev/v1/audio/transcriptions"
-        )
-        // A trailing slash must not produce a double slash.
-        #expect(
-            try OpenAITranscriptionClient
-                .resolveTranscriptionsURL(from: "https://api.openai.com/v1/").absoluteString
-            == "https://api.openai.com/v1/audio/transcriptions"
-        )
-    }
-
-    // MARK: - Vercel AI Gateway
-
-    @Test("Gateway endpoints are detected and rerouted off the /v1 tree")
-    func gatewayEndpointRouting() throws {
-        #expect(OpenAITranscriptionClient.isVercelGatewayEndpoint("https://ai-gateway.vercel.sh/v1"))
-        #expect(OpenAITranscriptionClient.isVercelGatewayEndpoint("https://ai-gateway.vercel.sh"))
-        #expect(!OpenAITranscriptionClient.isVercelGatewayEndpoint("https://api.openai.com/v1"))
-        #expect(!OpenAITranscriptionClient.isVercelGatewayEndpoint(""))
-
-        #expect(
-            try OpenAITranscriptionClient
-                .resolveGatewayTranscriptionURL(from: "https://ai-gateway.vercel.sh/v1")
-                .absoluteString == "https://ai-gateway.vercel.sh/v4/ai/transcription-model"
-        )
-        // A trailing slash or a stray query must not survive into the path.
-        #expect(
-            try OpenAITranscriptionClient
-                .resolveGatewayTranscriptionURL(from: "https://ai-gateway.vercel.sh/v1/?x=1")
-                .absoluteString == "https://ai-gateway.vercel.sh/v4/ai/transcription-model"
-        )
-    }
-
-    /// Verbatim from a live `POST /v4/ai/transcription-model` call — note there
-    /// is no word array anywhere in the protocol.
-    @Test("Gateway transcriptions decode to sentence-level phrases with no words")
-    func decodeGatewayJSON() throws {
-        let json = """
-        {"text":"The quick brown fox jumps over the lazy dog, testing 1-2-3-4-5.",\
-        "segments":[{"text":" The quick brown fox jumps over the lazy dog, testing 1-2-3-4-5.",\
-        "startSecond":0,"endSecond":4.679999828338623}],\
-        "language":"en","durationInSeconds":4.78000020980835,"warnings":[]}
-        """
-        let transcript = try OpenAITranscriptionClient.decodeGatewayJSON(
-            Data(json.utf8), fallbackDurationMs: 0
-        )
-
-        #expect(transcript.phrases.count == 1)
-        #expect(transcript.phrases[0].offsetMs == 0)
-        #expect(transcript.phrases[0].durationMs == 4680)
-        #expect(transcript.phrases[0].words.isEmpty)
-        #expect(transcript.phrases[0].speaker == 0)
-        #expect(transcript.durationMs == 4780)
-        #expect(transcript.detectedLanguage == "en")
-    }
-
-    @Test("A gateway response with no segments falls back to one whole-file phrase")
-    func decodeGatewayTextOnly() throws {
-        let transcript = try OpenAITranscriptionClient.decodeGatewayJSON(
-            Data(#"{"text":"Just the text.","segments":[],"language":"en"}"#.utf8),
-            fallbackDurationMs: 3000
-        )
-        #expect(transcript.phrases.count == 1)
-        #expect(transcript.phrases[0].durationMs == 3000)
-        #expect(transcript.phrases[0].words.isEmpty)
-    }
-
-    @Test("An empty gateway transcription is reported as no speech")
-    func decodeGatewayEmpty() {
-        #expect(throws: CaptionTranscriberError.self) {
-            _ = try OpenAITranscriptionClient.decodeGatewayJSON(
-                Data(#"{"text":"","segments":[]}"#.utf8), fallbackDurationMs: 0
             )
         }
     }
@@ -396,16 +283,8 @@ struct CaptionProviderDecodeTests {
 
     @Test("A per-project OpenAI model wins over the app-wide one")
     @MainActor func openAITranscriptionModelPrecedence() {
-        var config = AppConfig(
-            googleAIKey: "",
-            azureSpeechKey: "",
-            azureSpeechEndpoint: "",
-            openAIEndpoint: "https://api.openai.com/v1",
-            openAIKey: "sk-test",
-            openAIModel: "",
-            defaultImageModel: ""
-        )
-        config.openAITranscriptionModel = "gpt-4o-transcribe"
+        var config = AppConfig()
+        config.subscriptionTranscriptionModel = "gpt-4o-transcribe"
 
         let project = CaptionProject(name: "P")
         let settings = CaptionSettings.shared
@@ -426,12 +305,50 @@ struct CaptionProviderDecodeTests {
         )
 
         // Neither set: left empty so the client's own `whisper-1` default applies.
-        config.openAITranscriptionModel = ""
+        config.subscriptionTranscriptionModel = ""
         project.openAITranscriptionModelOverride = ""
         #expect(
             CaptionTranscriptionService
                 .options(for: .openAI, config: config, settings: settings, project: project)
                 .model.isEmpty
+        )
+    }
+
+    @Test("A configured model is only sent to the provider it belongs to")
+    func transcriptionModelResolution() {
+        let catalog = [
+            PickableModel(id: "whisper-1", provider: "openai", displayName: "Whisper", capability: "transcription", estimate: nil),
+            PickableModel(id: "gemini-2.5-flash", provider: "google", displayName: "Gemini", capability: "transcription", estimate: nil),
+        ]
+
+        // A Gemini id configured app-wide must not be sent to the Whisper route.
+        #expect(
+            BackendTranscriptionClient.resolvedModel(
+                for: "openai", configured: "gemini-2.5-flash",
+                fallback: "whisper-1", catalog: catalog
+            ) == "whisper-1"
+        )
+        // …and the matching provider keeps it.
+        #expect(
+            BackendTranscriptionClient.resolvedModel(
+                for: "google", configured: "gemini-2.5-flash",
+                fallback: "gemini-2.5-flash", catalog: catalog
+            ) == "gemini-2.5-flash"
+        )
+        // An id the catalog has never heard of falls back to the provider's
+        // first catalog entry rather than being sent blind.
+        #expect(
+            BackendTranscriptionClient.resolvedModel(
+                for: "google", configured: "made-up",
+                fallback: "gemini-2.5-flash", catalog: catalog
+            ) == "gemini-2.5-flash"
+        )
+        // With no catalog at all, an id that looks like the provider's is kept.
+        #expect(
+            BackendTranscriptionClient.resolvedModel(
+                for: "google", configured: "gemini-3-pro",
+                fallback: "gemini-2.5-flash", catalog: []
+            ) == "gemini-3-pro"
         )
     }
 

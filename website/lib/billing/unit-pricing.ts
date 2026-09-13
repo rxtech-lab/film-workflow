@@ -38,6 +38,31 @@ export const UNIT_PRICES: readonly UnitPrice[] = [
   { provider: "openai", model: "gpt-image-1:high", unit: "images", nanoUsdPerUnit: 167_000_000, source: "https://developers.openai.com/api/docs/models/gpt-image-1", reviewedAt: "2026-08-13" },
   { provider: "openai", model: "gpt-image-1*", unit: "images", nanoUsdPerUnit: 42_000_000, source: "https://developers.openai.com/api/docs/models/gpt-image-1", reviewedAt: "2026-08-13" },
   { provider: "openai", model: "whisper-1", unit: "audio_minutes", nanoUsdPerUnit: 6_000_000, source: "https://developers.openai.com/api/docs/models/whisper-1", reviewedAt: "2026-08-13" },
+  // Gemini transcription is billed by Google per token, not per minute. Audio
+  // tokenizes at ~32 tokens/second = 1,920 tokens/minute; at Gemini 2.5 Flash's
+  // $1.00 per 1M audio-input tokens that is $0.00192/min. The diarized JSON
+  // reply runs ~300 output tokens per minute of speech at $2.50 per 1M, another
+  // $0.00075/min. Total $0.00267/min, stored as 2,670,000 nano-USD per minute.
+  { provider: "google", model: "gemini-2.5-flash", unit: "audio_minutes", nanoUsdPerUnit: 2_670_000, source: "https://ai.google.dev/gemini-api/docs/pricing", reviewedAt: "2026-09-13" },
+  // Veo is priced per second of output, audio included. Veo 3.1 tiers by
+  // resolution, so those rows are keyed `model:resolution` with no bare row —
+  // an unpriced tier fails closed, like Gemini images. Ids carry no `-preview`
+  // suffix (see `googlePriceId`) and no `-001` build: the price row names the
+  // family, and the route strips the trailing build number before lookup.
+  { provider: "google", model: "veo-3.1-generate:720p", unit: "video_seconds", nanoUsdPerUnit: 400_000_000, source: "https://ai.google.dev/gemini-api/docs/pricing", reviewedAt: "2026-09-13" },
+  { provider: "google", model: "veo-3.1-generate:1080p", unit: "video_seconds", nanoUsdPerUnit: 400_000_000, source: "https://ai.google.dev/gemini-api/docs/pricing", reviewedAt: "2026-09-13" },
+  { provider: "google", model: "veo-3.1-generate:4k", unit: "video_seconds", nanoUsdPerUnit: 600_000_000, source: "https://ai.google.dev/gemini-api/docs/pricing", reviewedAt: "2026-09-13" },
+  { provider: "google", model: "veo-3.1-fast-generate:720p", unit: "video_seconds", nanoUsdPerUnit: 100_000_000, source: "https://ai.google.dev/gemini-api/docs/pricing", reviewedAt: "2026-09-13" },
+  { provider: "google", model: "veo-3.1-fast-generate:1080p", unit: "video_seconds", nanoUsdPerUnit: 120_000_000, source: "https://ai.google.dev/gemini-api/docs/pricing", reviewedAt: "2026-09-13" },
+  { provider: "google", model: "veo-3.1-fast-generate:4k", unit: "video_seconds", nanoUsdPerUnit: 300_000_000, source: "https://ai.google.dev/gemini-api/docs/pricing", reviewedAt: "2026-09-13" },
+  { provider: "google", model: "veo-3.1-lite-generate:720p", unit: "video_seconds", nanoUsdPerUnit: 50_000_000, source: "https://ai.google.dev/gemini-api/docs/pricing", reviewedAt: "2026-09-13" },
+  { provider: "google", model: "veo-3.1-lite-generate:1080p", unit: "video_seconds", nanoUsdPerUnit: 80_000_000, source: "https://ai.google.dev/gemini-api/docs/pricing", reviewedAt: "2026-09-13" },
+  // Veo 3 and Veo 2 have left the public pricing page; these are the last
+  // published flat rates (Veo 3 with audio $0.40/s, Veo 3 Fast $0.15/s, Veo 2
+  // $0.35/s) and stay bare rows because neither family tiered by resolution.
+  { provider: "google", model: "veo-3.0-generate", unit: "video_seconds", nanoUsdPerUnit: 400_000_000, source: "https://ai.google.dev/gemini-api/docs/pricing", reviewedAt: "2026-09-13" },
+  { provider: "google", model: "veo-3.0-fast-generate", unit: "video_seconds", nanoUsdPerUnit: 150_000_000, source: "https://ai.google.dev/gemini-api/docs/pricing", reviewedAt: "2026-09-13" },
+  { provider: "google", model: "veo-2.0-generate", unit: "video_seconds", nanoUsdPerUnit: 350_000_000, source: "https://ai.google.dev/gemini-api/docs/pricing", reviewedAt: "2026-09-13" },
   { provider: "google", model: "gemini-3.1-flash-tts-preview", unit: "audio_seconds", nanoUsdPerUnit: 500_000, source: "https://ai.google.dev/gemini-api/docs/pricing", reviewedAt: "2026-08-13" },
   { provider: "google", model: "lyria-3-pro-preview", unit: "audio_seconds", nanoUsdPerUnit: 444_445, minimumUnits: 180, source: "https://cloud.google.com/gemini-enterprise-agent-platform/generative-ai/pricing", reviewedAt: "2026-08-13" },
   { provider: "azure", model: "azure-neural-tts", unit: "characters", nanoUsdPerUnit: 16_000, source: "https://azure.microsoft.com/pricing/details/cognitive-services/speech-services/", reviewedAt: "2026-08-13" },

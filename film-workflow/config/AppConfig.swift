@@ -1,20 +1,6 @@
 import Foundation
 import Security
 
-nonisolated enum CredentialMode: String, Codable, CaseIterable, Sendable, Identifiable {
-    case byok
-    case subscription
-
-    var id: String { rawValue }
-
-    var displayName: String {
-        switch self {
-        case .byok: "Bring your own keys"
-        case .subscription: "RxFilm credits"
-        }
-    }
-}
-
 nonisolated enum KeychainError: LocalizedError {
     case itemNotFound
     case duplicateItem
@@ -35,20 +21,20 @@ nonisolated enum KeychainError: LocalizedError {
     }
 }
 
-nonisolated struct AppConfig: Codable, Sendable {
-    var googleAIKey: String
-    var azureSpeechKey: String
-    var azureSpeechEndpoint: String
-    var openAIEndpoint: String
-    var openAIKey: String
-    var openAIModel: String
-    var defaultImageModel: String
-    /// Veo model id prefilled on new video projects. Empty means "ask the user".
-    var defaultVideoModel: String = ""
-    /// Model id for the OpenAI-compatible `/v1/audio/transcriptions` endpoint.
-    var openAITranscriptionModel: String = ""
-    /// Gemini model used for multimodal transcription.
-    var geminiTranscriptionModel: String = ""
+/// Settings that live in the Keychain.
+///
+/// Every AI capability except chat runs through the RxFilm subscription, so the
+/// only credential kept here is the optional OpenAI-compatible endpoint that
+/// adds an extra chat engine. The rest are model choices — not secrets, but
+/// they were always stored alongside the keys and moving them would only
+/// lose people's settings.
+nonisolated struct AppConfig: Codable, Equatable, Sendable {
+    /// OpenAI-compatible base URL for the optional chat engine. Empty means
+    /// the engine is not offered.
+    var openAIEndpoint: String = ""
+    var openAIKey: String = ""
+    /// Default chat model on the OpenAI-compatible endpoint.
+    var openAIModel: String = ""
     /// Passed to `claude --model`. Empty means the CLI's own default.
     ///
     /// Separate from `openAIModel` because they name models in different
@@ -62,92 +48,100 @@ nonisolated struct AppConfig: Codable, Sendable {
     ///
     /// No Claude Code twin: `claude --effort` exists, but nothing here sets it.
     var codexReasoningEffort: String = ""
-    var credentialMode: CredentialMode = .byok
+    /// Subscription model ids, all from `GET /api/v1/models`.
     var subscriptionChatModel: String = ""
     var subscriptionImageModel: String = ""
     var subscriptionTranscriptionModel: String = ""
+    /// Prefilled on new video projects. Empty means "ask the user".
+    var subscriptionVideoModel: String = ""
+
+    init() {}
 
     private static let service = "com.rxlab.film-workflow"
-    private static let googleAccount = "googleAIKey"
-    private static let azureKeyAccount = "azureSpeechKey"
-    private static let azureEndpointAccount = "azureSpeechEndpoint"
     private static let openAIEndpointAccount = "openAIEndpoint"
     private static let openAIKeyAccount = "openAIKey"
     private static let openAIModelAccount = "openAIModel"
-    private static let defaultImageModelAccount = "defaultImageModel"
-    private static let defaultVideoModelAccount = "defaultVideoModel"
-    private static let openAITranscriptionModelAccount = "openAITranscriptionModel"
-    private static let geminiTranscriptionModelAccount = "geminiTranscriptionModel"
     private static let claudeCodeModelAccount = "claudeCodeModel"
     private static let codexModelAccount = "codexModel"
     private static let codexReasoningEffortAccount = "codexReasoningEffort"
-    private static let credentialModeAccount = "credentialMode"
     private static let subscriptionChatModelAccount = "subscriptionChatModel"
     private static let subscriptionImageModelAccount = "subscriptionImageModel"
     private static let subscriptionTranscriptionModelAccount = "subscriptionTranscriptionModel"
+    private static let subscriptionVideoModelAccount = "subscriptionVideoModel"
 
-    var usesSubscription: Bool { credentialMode == .subscription }
+    /// Keychain items from the bring-your-own-key era. Nothing reads them any
+    /// more; `purgeLegacyKeys` deletes them so no secret outlives its use.
+    private static let legacyAccounts = [
+        "googleAIKey",
+        "azureSpeechKey",
+        "azureSpeechEndpoint",
+        "defaultImageModel",
+        "defaultVideoModel",
+        "openAITranscriptionModel",
+        "geminiTranscriptionModel",
+        "credentialMode",
+    ]
+
+    /// Whether the optional OpenAI-compatible chat engine can be offered.
+    var hasOpenAICompatibleChat: Bool {
+        !openAIEndpoint.trimmingCharacters(in: .whitespaces).isEmpty
+            && !openAIKey.trimmingCharacters(in: .whitespaces).isEmpty
+            && !openAIModel.trimmingCharacters(in: .whitespaces).isEmpty
+    }
+
+    /// Every field paired with the Keychain account that holds it, so no save
+    /// path can drop one and a diffing save can name exactly what changed.
+    private static let fields: [(keyPath: WritableKeyPath<AppConfig, String>, account: String)] = [
+        (\.openAIEndpoint, openAIEndpointAccount),
+        (\.openAIKey, openAIKeyAccount),
+        (\.openAIModel, openAIModelAccount),
+        (\.claudeCodeModel, claudeCodeModelAccount),
+        (\.codexModel, codexModelAccount),
+        (\.codexReasoningEffort, codexReasoningEffortAccount),
+        (\.subscriptionChatModel, subscriptionChatModelAccount),
+        (\.subscriptionImageModel, subscriptionImageModelAccount),
+        (\.subscriptionTranscriptionModel, subscriptionTranscriptionModelAccount),
+        (\.subscriptionVideoModel, subscriptionVideoModelAccount),
+    ]
 
     static func loadFromKeychain() throws -> AppConfig {
-        AppConfig(
-            googleAIKey: (try? loadString(account: googleAccount)) ?? "",
-            azureSpeechKey: (try? loadString(account: azureKeyAccount)) ?? "",
-            azureSpeechEndpoint: (try? loadString(account: azureEndpointAccount)) ?? "",
-            openAIEndpoint: (try? loadString(account: openAIEndpointAccount)) ?? "",
-            openAIKey: (try? loadString(account: openAIKeyAccount)) ?? "",
-            openAIModel: (try? loadString(account: openAIModelAccount)) ?? "",
-            defaultImageModel: (try? loadString(account: defaultImageModelAccount)) ?? "",
-            defaultVideoModel: (try? loadString(account: defaultVideoModelAccount)) ?? "",
-            openAITranscriptionModel: (try? loadString(account: openAITranscriptionModelAccount)) ?? "",
-            geminiTranscriptionModel: (try? loadString(account: geminiTranscriptionModelAccount)) ?? "",
-            claudeCodeModel: (try? loadString(account: claudeCodeModelAccount)) ?? "",
-            codexModel: (try? loadString(account: codexModelAccount)) ?? "",
-            codexReasoningEffort: (try? loadString(account: codexReasoningEffortAccount)) ?? "",
-            credentialMode: CredentialMode(rawValue: (try? loadString(account: credentialModeAccount)) ?? "") ?? .byok,
-            subscriptionChatModel: (try? loadString(account: subscriptionChatModelAccount)) ?? "",
-            subscriptionImageModel: (try? loadString(account: subscriptionImageModelAccount)) ?? "",
-            subscriptionTranscriptionModel: (try? loadString(account: subscriptionTranscriptionModelAccount)) ?? ""
-        )
+        var config = AppConfig()
+        for field in fields {
+            config[keyPath: field.keyPath] = (try? loadString(account: field.account)) ?? ""
+        }
+        return config
     }
 
     func saveToKeychain() throws {
-        try Self.saveString(googleAIKey, account: Self.googleAccount)
-        try Self.saveString(azureSpeechKey, account: Self.azureKeyAccount)
-        try Self.saveString(azureSpeechEndpoint, account: Self.azureEndpointAccount)
-        try Self.saveString(openAIEndpoint, account: Self.openAIEndpointAccount)
-        try Self.saveString(openAIKey, account: Self.openAIKeyAccount)
-        try Self.saveString(openAIModel, account: Self.openAIModelAccount)
-        try Self.saveString(defaultImageModel, account: Self.defaultImageModelAccount)
-        try Self.saveString(defaultVideoModel, account: Self.defaultVideoModelAccount)
-        try Self.saveString(openAITranscriptionModel, account: Self.openAITranscriptionModelAccount)
-        try Self.saveString(geminiTranscriptionModel, account: Self.geminiTranscriptionModelAccount)
-        try Self.saveString(claudeCodeModel, account: Self.claudeCodeModelAccount)
-        try Self.saveString(codexModel, account: Self.codexModelAccount)
-        try Self.saveString(codexReasoningEffort, account: Self.codexReasoningEffortAccount)
-        try Self.saveString(credentialMode.rawValue, account: Self.credentialModeAccount)
-        try Self.saveString(subscriptionChatModel, account: Self.subscriptionChatModelAccount)
-        try Self.saveString(subscriptionImageModel, account: Self.subscriptionImageModelAccount)
-        try Self.saveString(subscriptionTranscriptionModel, account: Self.subscriptionTranscriptionModelAccount)
+        for field in Self.fields {
+            try Self.saveString(self[keyPath: field.keyPath], account: field.account)
+        }
     }
 
-    static func deleteFromKeychain() throws {
-        try deleteString(account: googleAccount)
-        try deleteString(account: azureKeyAccount)
-        try deleteString(account: azureEndpointAccount)
-        try deleteString(account: openAIEndpointAccount)
-        try deleteString(account: openAIKeyAccount)
-        try deleteString(account: openAIModelAccount)
-        try deleteString(account: defaultImageModelAccount)
-        try deleteString(account: defaultVideoModelAccount)
-        try deleteString(account: openAITranscriptionModelAccount)
-        try deleteString(account: geminiTranscriptionModelAccount)
-        try deleteString(account: claudeCodeModelAccount)
-        try deleteString(account: codexModelAccount)
-        try deleteString(account: codexReasoningEffortAccount)
-        try deleteString(account: credentialModeAccount)
-        try deleteString(account: subscriptionChatModelAccount)
-        try deleteString(account: subscriptionImageModelAccount)
-        try deleteString(account: subscriptionTranscriptionModelAccount)
+    /// Writes only the fields that differ from `old`.
+    ///
+    /// The settings panes autosave as you type and two of them edit the same
+    /// accounts, so a whole-record write would push one pane's stale copy of a
+    /// field the other pane just changed. Writing only the edits keeps each
+    /// pane to the fields it actually touched.
+    func saveChanges(since old: AppConfig) throws {
+        for field in Self.fields where self[keyPath: field.keyPath] != old[keyPath: field.keyPath] {
+            try Self.saveString(self[keyPath: field.keyPath], account: field.account)
+        }
+    }
+
+    /// Removes provider keys saved by versions that supported bring-your-own-key.
+    ///
+    /// Runs once per install (tracked in UserDefaults) — a Keychain delete is
+    /// cheap, but not free of access prompts, so it is not repeated on every
+    /// launch. Missing items are not an error.
+    static func purgeLegacyKeys() {
+        let flag = "config.legacyKeysPurged.v1"
+        guard !UserDefaults.standard.bool(forKey: flag) else { return }
+        for account in legacyAccounts {
+            try? deleteString(account: account)
+        }
+        UserDefaults.standard.set(true, forKey: flag)
     }
 
     // MARK: - Keychain helpers

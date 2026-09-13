@@ -94,7 +94,10 @@ describe("model catalog", () => {
     expect(image.map((model) => model.id)).not.toContain("bfl/flux-2-flex");
     expect(image.map((model) => model.id)).not.toContain("openai/gpt-image-1-mini");
     expect(await catalogForCapability("speech")).toEqual([expect.objectContaining({ id: "azure-neural-tts" }), expect.objectContaining({ id: "gemini-3.1-flash-tts-preview" })]);
-    expect((await catalogForCapability("transcription")).map((model) => model.id)).toEqual(["azure-fast-transcription", "whisper-1"]);
+    expect((await catalogForCapability("transcription")).map((model) => model.id)).toEqual(["azure-fast-transcription", "gemini-2.5-flash", "whisper-1"]);
+    // Veo comes from Google's own list, never the gateway: the gateway prices
+    // video by a shape this app does not call.
+    expect((await catalogForCapability("video")).map((model) => model.id)).not.toContain("google/veo-3.1-generate-001");
   });
 
   it("keeps the direct Imagen entries instead of their gateway duplicates", async () => {
@@ -129,5 +132,63 @@ describe("model catalog", () => {
     const { catalogForCapability } = await import("@/lib/ai/catalog");
     expect((await catalogForCapability("chat")).map((model) => model.id)).toEqual(["google/gemini-3-flash", "openai/gpt-5.4-mini"]);
     expect((await catalogForCapability("image")).map((model) => model.id)).toContain("openai/gpt-image-1");
+  });
+});
+
+describe("veo rules", () => {
+  it("omits every parameter the model's family rejects", async () => {
+    const { veoRequestBody } = await import("@/lib/ai/veo");
+    const image = { mime_type: "image/png", base64: "AA==" };
+
+    // Veo 3.1 takes one clip only, so numberOfVideos is never sent.
+    const veo31 = veoRequestBody("veo-3.1-generate-preview", {
+      prompt: "a shot", aspectRatio: "16:9", resolution: "1080p", durationSeconds: 8,
+      personGeneration: "allow_adult", numberOfVideos: 2, generateAudio: true, seed: 7,
+      referenceImages: [image],
+    });
+    expect(veo31.body.parameters).toMatchObject({ aspectRatio: "16:9", durationSeconds: 8, resolution: "1080p", generateAudio: true, seed: 7 });
+    expect(veo31.body.parameters).not.toHaveProperty("numberOfVideos");
+    expect(veo31.numberOfVideos).toBe(1);
+    expect(veo31.body.instances[0]).toHaveProperty("referenceImages");
+
+    // Veo 2 has no audio, no seed and no reference images, but does take a count.
+    const veo2 = veoRequestBody("veo-2.0-generate-001", {
+      prompt: "a shot", aspectRatio: "9:16", resolution: "4k", durationSeconds: 5,
+      personGeneration: "dont_allow", numberOfVideos: 5, generateAudio: true, seed: 7,
+      referenceImages: [image],
+    });
+    expect(veo2.body.parameters).not.toHaveProperty("generateAudio");
+    expect(veo2.body.parameters).not.toHaveProperty("seed");
+    // 4k is not a Veo 2 tier, so it is dropped and billed at the default.
+    expect(veo2.body.parameters).not.toHaveProperty("resolution");
+    expect(veo2.resolution).toBe("720p");
+    expect(veo2.body.parameters.numberOfVideos).toBe(2);
+    expect(veo2.body.instances[0]).not.toHaveProperty("referenceImages");
+
+    // 3.1 Lite decides audio for itself and rejects the key.
+    const lite = veoRequestBody("veo-3.1-lite-generate-preview", {
+      prompt: "a shot", aspectRatio: "16:9", durationSeconds: 6,
+      personGeneration: "allow_all", generateAudio: false,
+    });
+    expect(lite.body.parameters).not.toHaveProperty("generateAudio");
+  });
+
+  it("keys prices by the family stem, ignoring preview and build suffixes", async () => {
+    const { veoPriceId } = await import("@/lib/ai/veo");
+    expect(veoPriceId("veo-3.1-generate-preview")).toBe("veo-3.1-generate");
+    expect(veoPriceId("veo-3.1-generate-001")).toBe("veo-3.1-generate");
+    expect(veoPriceId("veo-2.0-generate")).toBe("veo-2.0-generate");
+  });
+
+  it("prices a Veo model by resolution tier and refuses an unlisted id", async () => {
+    stubGatewayFetch();
+    const { googleVideoPrice } = await import("@/lib/ai/catalog");
+    expect(googleVideoPrice("veo-3.1-generate-001", "4k")?.nanoUsdPerUnit).toBe(600_000_000);
+    // No resolution named: billed at the tier Google serves by default.
+    expect(googleVideoPrice("veo-3.1-generate-001")?.nanoUsdPerUnit).toBe(400_000_000);
+    // Flat-priced families fall through to their bare row.
+    expect(googleVideoPrice("veo-2.0-generate-001", "720p")?.nanoUsdPerUnit).toBe(350_000_000);
+    // An id the table has never heard of stays unpriced rather than inheriting a sibling's rate.
+    expect(googleVideoPrice("veo-9.9-generate-001") ?? null).toBeNull();
   });
 });

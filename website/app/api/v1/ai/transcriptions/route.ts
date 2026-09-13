@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { measuredAudioDurationSeconds } from "@/lib/ai/audio-duration";
 import { requireCatalogModel } from "@/lib/ai/catalog";
+import { geminiTranscribe } from "@/lib/ai/gemini-transcription";
 import { aiRouteError, noStoreHeaders, providerError } from "@/lib/ai/http";
 import { withMeteredOperation } from "@/lib/ai/meter";
 import { requireApiUser } from "@/lib/auth/bearer";
@@ -12,7 +13,20 @@ import { deleteObject, getObjectBytes, ownsTranscriptionObject } from "@/lib/sto
 
 export const maxDuration = 300;
 
-type Input = { provider: "openai" | "azure"; model: string; audio: Buffer; mimeType: string; filename: string; language?: string; prompt?: string; diarization?: boolean; maxSpeakers?: number; sourceObjectKey?: string };
+type Provider = "openai" | "azure" | "gemini";
+
+type Input = { provider: Provider; model: string; audio: Buffer; mimeType: string; filename: string; language?: string; prompt?: string; diarization?: boolean; maxSpeakers?: number; sourceObjectKey?: string };
+
+const DEFAULT_MODELS: Record<Provider, string> = { openai: "whisper-1", azure: "azure-fast-transcription", gemini: "gemini-2.5-flash" };
+
+const FEATURES: Record<Provider, string> = { openai: "Transcription · OpenAI", azure: "Transcription · Azure", gemini: "Transcription · Gemini" };
+
+/** Who gets billed for each route. Gemini is Google's own API, priced under `google`. */
+const BILLING_PROVIDERS: Record<Provider, "openai" | "azure" | "google"> = { openai: "openai", azure: "azure", gemini: "google" };
+
+function provider(value: unknown): Provider {
+  return value === "azure" || value === "gemini" ? value : "openai";
+}
 
 async function parseInput(request: Request, userId: string): Promise<Input> {
   const contentType = request.headers.get("content-type") ?? "";
@@ -20,10 +34,10 @@ async function parseInput(request: Request, userId: string): Promise<Input> {
     const form = await request.formData();
     const file = form.get("audio") ?? form.get("file");
     if (!(file instanceof File)) throw new Error("AUDIO_FILE_REQUIRED");
-    const provider = form.get("provider") === "azure" ? "azure" : "openai";
-    return { provider, model: String(form.get("model") || (provider === "azure" ? "azure-fast-transcription" : "whisper-1")), audio: Buffer.from(await file.arrayBuffer()), mimeType: file.type || "application/octet-stream", filename: file.name || "audio", language: String(form.get("language") || ""), prompt: String(form.get("prompt") || ""), diarization: String(form.get("diarization") || "") === "true", maxSpeakers: Number(form.get("max_speakers") || 2) };
+    const selected = provider(form.get("provider"));
+    return { provider: selected, model: String(form.get("model") || DEFAULT_MODELS[selected]), audio: Buffer.from(await file.arrayBuffer()), mimeType: file.type || "application/octet-stream", filename: file.name || "audio", language: String(form.get("language") || ""), prompt: String(form.get("prompt") || ""), diarization: String(form.get("diarization") || "") === "true", maxSpeakers: Number(form.get("max_speakers") || 2) };
   }
-  const schema = z.object({ provider: z.enum(["openai", "azure"]), model: z.string().min(1), object_key: z.string().min(1).max(500), mime_type: z.string().optional(), filename: z.string().optional(), language: z.string().optional(), prompt: z.string().optional(), diarization: z.boolean().optional(), max_speakers: z.number().int().min(1).max(20).optional() });
+  const schema = z.object({ provider: z.enum(["openai", "azure", "gemini"]), model: z.string().min(1), object_key: z.string().min(1).max(500), mime_type: z.string().optional(), filename: z.string().optional(), language: z.string().optional(), prompt: z.string().optional(), diarization: z.boolean().optional(), max_speakers: z.number().int().min(1).max(20).optional() });
   const parsed = schema.parse(await request.json());
   if (!ownsTranscriptionObject(userId, parsed.object_key)) throw new Error("INVALID_UPLOAD_OBJECT");
   const object = await getObjectBytes(parsed.object_key);
@@ -73,12 +87,15 @@ export async function POST(request: Request) {
       await requireCatalogModel(input.model, "transcription");
       if (input.audio.length > 300 * 1024 * 1024) return Response.json({ code: "audio_too_large", error: "Audio exceeds the 300 MB limit." }, { status: 413, headers: noStoreHeaders() });
       const minutes = Math.ceil(measuredAudioDurationSeconds(input.audio, input.mimeType) / 60);
-      const billingModel = input.provider === "azure" ? "azure-fast-transcription" : input.model;
-      const reservePoints = reserveWithMargin(estimateReservationPoints({ provider: input.provider, model: billingModel, unit: "audio_minutes", units: minutes, floorPoints: billingConfig.transcriptionReservationPoints }));
+      const billingModel = input.provider === "azure" ? DEFAULT_MODELS.azure : input.model;
+      const billingProvider = BILLING_PROVIDERS[input.provider];
+      const reservePoints = reserveWithMargin(estimateReservationPoints({ provider: billingProvider, model: billingModel, unit: "audio_minutes", units: minutes, floorPoints: billingConfig.transcriptionReservationPoints }));
       const operationKey = request.headers.get("idempotency-key")?.slice(0, 180) || `transcription:${user.id}:${crypto.randomUUID()}`;
-      const { value } = await withMeteredOperation({ user, feature: `Transcription · ${input.provider === "azure" ? "Azure" : "OpenAI"}`, capability: "transcription", operationKey, reservePoints, run: async (context) => {
-        const body = input.provider === "azure" ? await azure(input) : await openAI(input);
-        const usage = await recordUnitUsage({ context, provider: input.provider, model: billingModel, capability: "transcription", unit: "audio_minutes", units: minutes, eventId: "transcription" });
+      const { value } = await withMeteredOperation({ user, feature: FEATURES[input.provider], capability: "transcription", operationKey, reservePoints, run: async (context) => {
+        const body = input.provider === "azure" ? await azure(input)
+          : input.provider === "gemini" ? await geminiTranscribe({ model: input.model, audio: input.audio, mimeType: input.mimeType, filename: input.filename, language: input.language, prompt: input.prompt, maxSpeakers: input.maxSpeakers })
+          : await openAI(input);
+        const usage = await recordUnitUsage({ context, provider: billingProvider, model: billingModel, capability: "transcription", unit: "audio_minutes", units: minutes, eventId: "transcription" });
         return { body, chargedPoints: usage?.chargedPoints ?? 0 };
       } });
       const balance = await getBalance(user);

@@ -9,7 +9,7 @@ nonisolated enum MarketplaceWindowID {
     static let value = "marketplace"
 }
 
-/// What the filter bar can select: everything, one kind, or one category within a kind.
+/// What the sidebar can select: everything, one kind, or one category within a kind.
 enum MarketplaceSidebarSelection: Hashable {
     case all
     case kind(MarketplaceKind)
@@ -34,7 +34,7 @@ private struct MarketplacePresentedItem: Identifiable {
     let id: String
 }
 
-/// The system-wide marketplace window: one grid with a filter bar on top.
+/// The system-wide marketplace window: a category sidebar alongside the grid.
 /// Clicking a card opens its detail in a sheet; hovering a card with a video
 /// preview plays it in place.
 struct MarketplaceWindowView: View {
@@ -42,6 +42,7 @@ struct MarketplaceWindowView: View {
     @State private var auth = AuthManager.shared
     @State private var documents = ProjectDocumentController.shared
     @State private var selection: MarketplaceSidebarSelection = .all
+    @State private var columnVisibility: NavigationSplitViewVisibility = .all
     @State private var search = ""
     @State private var presented: MarketplacePresentedItem?
     @State private var addedMessage: String?
@@ -51,11 +52,13 @@ struct MarketplaceWindowView: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            filterBar
-            Divider()
+        NavigationSplitView(columnVisibility: $columnVisibility) {
+            sidebar
+                .navigationSplitViewColumnWidth(min: 200, ideal: 230, max: 300)
+        } detail: {
             grid
         }
+        .navigationSplitViewStyle(.balanced)
         .navigationTitle("Marketplace")
         .searchable(text: $search, placement: .toolbar, prompt: "Search the marketplace")
         .toolbar {
@@ -83,43 +86,36 @@ struct MarketplaceWindowView: View {
         .frame(minWidth: 720, minHeight: 520)
     }
 
-    // MARK: - Filter bar
+    // MARK: - Sidebar
 
-    private var filterBar: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 6) {
-                    MarketplaceFilterChip(title: String(localized: "All Items"), systemImage: "square.grid.2x2", isSelected: selection == .all) {
-                        selection = .all
-                    }
-                    ForEach(MarketplaceKind.allCases) { kind in
-                        MarketplaceFilterChip(title: kind.displayName, systemImage: kind.systemImage, isSelected: selection.kind == kind) {
-                            selection = .kind(kind)
-                        }
-                    }
+    private var sidebar: some View {
+        List(selection: Binding<MarketplaceSidebarSelection?>(
+            get: { selection },
+            set: { if let value = $0 { selection = value } }
+        )) {
+            Section {
+                Label("All Items", systemImage: "square.grid.2x2")
+                    .tag(MarketplaceSidebarSelection.all)
+                ForEach(MarketplaceKind.allCases) { kind in
+                    Label(kind.displayName, systemImage: kind.systemImage)
+                        .tag(MarketplaceSidebarSelection.kind(kind))
                 }
-                .padding(.horizontal, 14)
             }
             .accessibilityIdentifier("marketplace-kinds")
+
             if let kind = selection.kind, !categoriesForSelectedKind.isEmpty {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 6) {
-                        MarketplaceFilterChip(title: String(localized: "All \(kind.displayName)"), isSelected: selection.category == nil, compact: true) {
-                            selection = .kind(kind)
-                        }
-                        ForEach(categoriesForSelectedKind, id: \.category) { entry in
-                            MarketplaceFilterChip(title: entry.category, count: entry.count, isSelected: selection.category == entry.category, compact: true) {
-                                selection = .category(kind, entry.category)
-                            }
-                        }
+                Section(kind.displayName) {
+                    ForEach(categoriesForSelectedKind, id: \.category) { entry in
+                        Label(entry.category, systemImage: "folder")
+                            .badge(entry.count)
+                            .tag(MarketplaceSidebarSelection.category(kind, entry.category))
                     }
-                    .padding(.horizontal, 14)
                 }
                 .accessibilityIdentifier("marketplace-categories")
             }
         }
-        .padding(.vertical, 10)
-        .animation(.easeInOut(duration: 0.15), value: categoriesForSelectedKind)
+        .listStyle(.sidebar)
+        .accessibilityIdentifier("marketplace-sidebar")
     }
 
     private var categoriesForSelectedKind: [MarketplaceCategoryCount] {
@@ -198,36 +194,6 @@ struct MarketplaceWindowView: View {
                 store.setLastError(error.localizedDescription)
             }
         }
-    }
-}
-
-/// One pill in the filter bar. Kinds get an icon; categories are compact with a count.
-struct MarketplaceFilterChip: View {
-    let title: String
-    var systemImage: String?
-    var count: Int?
-    let isSelected: Bool
-    var compact = false
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            HStack(spacing: 5) {
-                if let systemImage { Image(systemName: systemImage) }
-                Text(title).lineLimit(1)
-                if let count {
-                    Text(count, format: .number).foregroundStyle(isSelected ? .primary : .secondary).font(.caption2)
-                }
-            }
-            .font(compact ? .caption : .callout)
-            .padding(.horizontal, compact ? 9 : 11)
-            .padding(.vertical, compact ? 4 : 6)
-            .background(Capsule().fill(isSelected ? Color.accentColor.opacity(0.22) : Color.primary.opacity(0.06)))
-            .overlay(Capsule().stroke(isSelected ? Color.accentColor : Color.clear, lineWidth: 1))
-            .contentShape(Capsule())
-        }
-        .buttonStyle(.plain)
-        .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
     }
 }
 

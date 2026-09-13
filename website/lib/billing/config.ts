@@ -17,6 +17,7 @@ export const billingConfig = {
   imageReservationPoints: integerEnvironment("AI_IMAGE_RESERVATION_POINTS", 60, 1),
   speechReservationPoints: integerEnvironment("AI_SPEECH_RESERVATION_POINTS", 30, 1),
   musicReservationPoints: integerEnvironment("AI_MUSIC_RESERVATION_POINTS", 200, 1),
+  videoReservationPoints: integerEnvironment("AI_VIDEO_RESERVATION_POINTS", 400, 1),
   transcriptionReservationPoints: integerEnvironment("AI_TRANSCRIPTION_RESERVATION_POINTS", 30, 1),
   // A hold rx-subscription releases on its own if this app dies mid-generation.
   // Long enough for the slowest video job, short enough that an abandoned one

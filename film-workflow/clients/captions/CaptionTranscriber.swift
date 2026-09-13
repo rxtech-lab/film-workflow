@@ -29,35 +29,11 @@ nonisolated enum CaptionTranscriberError: LocalizedError {
     }
 }
 
-/// One transcription backend.
-///
-/// The repo doesn't use protocols for clients — `NarrativeGenerationService`
-/// switches on the provider enum and calls statics. This keeps that shape while
-/// making the switch a one-line dispatch: the requirements are `static`, so
-/// every implementation stays a stateless `nonisolated struct` with
-/// `@concurrent` statics (the `AzureTTSClient` pattern) and no actor hops.
-nonisolated protocol CaptionTranscriberClient: Sendable {
-    static var provider: CaptionProvider { get }
-
-    static func transcribe(
-        request: CaptionTranscribeRequest,
-        config: AppConfig,
-        options: CaptionProviderOptions,
-        onProgress: (@MainActor @Sendable (CaptionProgress) -> Void)?
-    ) async throws -> CaptionTranscript
-}
-
 nonisolated enum CaptionTranscriberFactory {
-    static func client(for provider: CaptionProvider) -> any CaptionTranscriberClient.Type {
-        switch provider {
-        case .azure: return AzureFastTranscriptionClient.self
-        case .openAI: return OpenAITranscriptionClient.self
-        case .gemini: return GeminiTranscriptionClient.self
-        case .whisperLocal: return WhisperCaptionClient.self
-        }
-    }
-
     /// Runs a provider, forwarding progress on the main actor.
+    ///
+    /// Whisper runs on this device and costs nothing; every other provider is
+    /// the RxFilm server, which holds the provider credentials.
     static func transcribe(
         provider: CaptionProvider,
         request: CaptionTranscribeRequest,
@@ -65,16 +41,17 @@ nonisolated enum CaptionTranscriberFactory {
         options: CaptionProviderOptions,
         onProgress: (@MainActor @Sendable (CaptionProgress) -> Void)? = nil
     ) async throws -> CaptionTranscript {
-        if config.usesSubscription, provider != .whisperLocal {
-            return try await BackendTranscriptionClient.transcribe(
-                provider: provider,
+        if provider == .whisperLocal {
+            return try await WhisperCaptionClient.transcribe(
                 request: request,
                 config: config,
                 options: options,
                 onProgress: onProgress
             )
         }
-        return try await client(for: provider).transcribe(
+        try await MainActor.run { try AIRoute.requireSubscription() }
+        return try await BackendTranscriptionClient.transcribe(
+            provider: provider,
             request: request,
             config: config,
             options: options,

@@ -24,22 +24,12 @@ enum MusicGenerationService {
             imageDataPairs.append((mimeType: mimeType, base64: data.base64EncodedString()))
         }
 
-        let response: LyriaResponse
-        switch try AIRoute.resolve(config, for: .music) {
-        case .subscription:
-            response = try await BackendMusicClient.generate(
-                prompt: prompt,
-                imageDataPairs: imageDataPairs,
-                responseMimeType: project.outputFormatEnum.requestMimeType
-            )
-        case .byok:
-            response = try await LyriaClient.generate(
-                prompt: prompt,
-                imageDataPairs: imageDataPairs,
-                responseMimeType: project.outputFormatEnum.requestMimeType,
-                apiKey: config.googleAIKey
-            )
-        }
+        try AIRoute.requireSubscription()
+        let response = try await BackendMusicClient.generate(
+            prompt: prompt,
+            imageDataPairs: imageDataPairs,
+            responseMimeType: project.outputFormatEnum.requestMimeType
+        )
 
         let ext: String
         switch response.mimeType {

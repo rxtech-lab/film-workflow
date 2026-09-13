@@ -118,35 +118,6 @@ actor OpenAIModelsClient {
             .sorted { $0.id.localizedCaseInsensitiveCompare($1.id) == .orderedAscending }
     }
 
-    func imageModels(
-        endpoint: String,
-        apiKey: String,
-        forceRefresh: Bool = false
-    ) async throws -> [OpenAIModelInfo] {
-        let all = try await models(endpoint: endpoint, apiKey: apiKey, forceRefresh: forceRefresh)
-        return all
-            .filter { $0.isImageModel }
-            .sorted { $0.id.localizedCaseInsensitiveCompare($1.id) == .orderedAscending }
-    }
-
-    /// Transcription models, or **all** models when nothing matches.
-    ///
-    /// Many OpenAI-compatible gateways don't tag audio models at all, so an
-    /// empty filtered list almost always means "we couldn't tell", not "there
-    /// are none". Returning everything lets the user pick the right one instead
-    /// of facing an empty picker.
-    func transcriptionModels(
-        endpoint: String,
-        apiKey: String,
-        forceRefresh: Bool = false
-    ) async throws -> [OpenAIModelInfo] {
-        let all = try await models(endpoint: endpoint, apiKey: apiKey, forceRefresh: forceRefresh)
-        let filtered = all.filter { $0.isTranscriptionModel }
-        let candidates = filtered.isEmpty ? all.filter { !$0.isImageModel } : filtered
-        return candidates
-            .sorted { $0.id.localizedCaseInsensitiveCompare($1.id) == .orderedAscending }
-    }
-
     /// Returns cached models without making a network call. Useful for synchronous UI prefill.
     nonisolated func cachedModels(endpoint: String, apiKey: String) -> [OpenAIModelInfo]? {
         let trimmedEndpoint = endpoint.trimmingCharacters(in: .whitespacesAndNewlines)

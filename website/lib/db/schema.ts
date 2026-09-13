@@ -25,10 +25,10 @@ export type AiUsageSnapshot = {
   totalTokens?: number;
 };
 
-export const capabilityEnum = pgEnum("capability", ["chat", "image", "speech", "music", "transcription", "translation"]);
+export const capabilityEnum = pgEnum("capability", ["chat", "image", "speech", "music", "transcription", "translation", "video"]);
 export type Capability = (typeof capabilityEnum.enumValues)[number];
 
-export const unitKindEnum = pgEnum("unit_kind", ["tokens", "images", "characters", "audio_seconds", "audio_minutes"]);
+export const unitKindEnum = pgEnum("unit_kind", ["tokens", "images", "characters", "audio_seconds", "audio_minutes", "video_seconds"]);
 export type UnitKind = (typeof unitKindEnum.enumValues)[number];
 
 export const fundingScopeEnum = pgEnum("funding_scope", ["user", "platform"]);

@@ -35,8 +35,15 @@ nonisolated enum BackendTranscriptionClient {
         onProgress: (@MainActor @Sendable (CaptionProgress) -> Void)?
     ) async throws -> CaptionTranscript {
         switch provider {
-        case .openAI, .gemini:
+        case .openAI:
             return try await transcribeOpenAI(
+                request: request,
+                config: config,
+                options: options,
+                onProgress: onProgress
+            )
+        case .gemini:
+            return try await transcribeGemini(
                 request: request,
                 config: config,
                 options: options,
@@ -71,8 +78,11 @@ nonisolated enum BackendTranscriptionClient {
         )
         defer { CaptionAudioChunker.cleanUp(chunks) }
 
-        let configured = config.subscriptionTranscriptionModel.trimmingCharacters(in: .whitespacesAndNewlines)
-        let model = configured.isEmpty ? "whisper-1" : configured
+        let model = await resolvedModel(
+            for: "openai",
+            configured: options.model.isEmpty ? config.subscriptionTranscriptionModel : options.model,
+            fallback: OpenAITranscriptionClient.defaultModel
+        )
         var parts: [(transcript: CaptionTranscript, startMs: Int)] = []
 
         for (index, chunk) in chunks.enumerated() {
@@ -108,6 +118,104 @@ nonisolated enum BackendTranscriptionClient {
         guard !merged.phrases.isEmpty else { throw CaptionTranscriberError.noSpeechFound }
         await CreditBalanceStore.shared.refresh()
         return merged
+    }
+
+    /// Gemini diarizes by prompt on the server; the reply is Gemini's own
+    /// envelope, decoded by the same code the direct client used.
+    ///
+    /// Chunked like OpenAI because one server call is capped at five minutes
+    /// of wall time. Speaker numbers restart per chunk — the same limitation
+    /// the OpenAI path has, and the caption AI review is what reconciles it.
+    private static func transcribeGemini(
+        request: CaptionTranscribeRequest,
+        config: AppConfig,
+        options: CaptionProviderOptions,
+        onProgress: (@MainActor @Sendable (CaptionProgress) -> Void)?
+    ) async throws -> CaptionTranscript {
+        await report(onProgress, .preparing(detail: "Checking audio size"))
+        let chunks = try await CaptionAudioChunker.chunk(
+            request.audioURL,
+            durationMs: request.durationMs,
+            sizeBytes: request.sizeBytes
+        )
+        defer { CaptionAudioChunker.cleanUp(chunks) }
+
+        let model = await resolvedModel(
+            for: "google",
+            configured: options.model.isEmpty ? config.subscriptionTranscriptionModel : options.model,
+            fallback: GeminiTranscriptionClient.defaultModel
+        )
+        var parts: [(transcript: CaptionTranscript, startMs: Int)] = []
+
+        for (index, chunk) in chunks.enumerated() {
+            try Task.checkCancellation()
+            await report(onProgress, .transcribing(chunk: index + 1, totalChunks: chunks.count, fraction: nil))
+            var fields: [(name: String, value: String)] = [
+                ("provider", "gemini"),
+                ("model", model),
+                ("max_speakers", String(clampCaptionMaxSpeakers(request.maxSpeakers))),
+            ]
+            if !options.termsHint.isEmpty { fields.append(("prompt", options.termsHint)) }
+            let language = request.languageHint.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !language.isEmpty { fields.append(("language", language)) }
+
+            let data = try await upload(
+                fields: fields,
+                fileName: "audio",
+                audioURL: chunk.url,
+                mimeType: AudioProbe.mimeType(for: chunk.url)
+            )
+            let transcript = try GeminiTranscriptionClient.decode(
+                data,
+                fallbackDurationMs: chunk.durationMs
+            )
+            parts.append((transcript, chunk.startMs))
+        }
+
+        await report(onProgress, .buildingCues)
+        let merged = CaptionAudioChunker.merge(
+            parts,
+            totalDurationMs: request.durationMs,
+            providerName: CaptionProvider.gemini.rawValue
+        )
+        guard !merged.phrases.isEmpty else { throw CaptionTranscriberError.noSpeechFound }
+        await CreditBalanceStore.shared.refresh()
+        return merged
+    }
+
+    /// The model id to send for a provider, given one `subscriptionTranscriptionModel`
+    /// shared by every provider.
+    ///
+    /// The configured id is used when the catalog says it belongs to this
+    /// provider; a Whisper id must not be sent to Gemini just because it is
+    /// what the user last picked. Otherwise the first catalog model for the
+    /// provider, and failing that a known-good default.
+    static func resolvedModel(for provider: String, configured: String, fallback: String) async -> String {
+        let catalog = (try? await BackendModelCatalog.shared.models(capability: .transcription)) ?? []
+        return resolvedModel(for: provider, configured: configured, fallback: fallback, catalog: catalog)
+    }
+
+    nonisolated static func resolvedModel(
+        for provider: String,
+        configured: String,
+        fallback: String,
+        catalog: [PickableModel]
+    ) -> String {
+        let wanted = configured.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !wanted.isEmpty, catalog.contains(where: { $0.id == wanted && $0.provider == provider }) {
+            return wanted
+        }
+        if let first = catalog.first(where: { $0.provider == provider }) {
+            return first.id
+        }
+        // No catalog at all (offline, or never fetched): honor a configured
+        // id that at least looks like this provider's, else the default.
+        if !wanted.isEmpty, catalog.isEmpty {
+            let lower = wanted.lowercased()
+            let looksRight = provider == "google" ? lower.contains("gemini") : !lower.contains("gemini")
+            if looksRight { return wanted }
+        }
+        return fallback
     }
 
     private static func transcribeAzure(

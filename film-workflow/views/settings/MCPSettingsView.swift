@@ -112,9 +112,7 @@ struct MCPSettingsView: View {
             } header: {
                 Text("Bearer token")
             } footer: {
-                Text(requiresToken
-                     ? "Required on every request. Subscription mode can spend credits, including through localhost tools."
-                     : "Required when bound to all interfaces. Localhost BYOK requests skip the check.")
+                Text("Required on every request, localhost included: the generation tools spend your account's credits.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -133,6 +131,18 @@ struct MCPSettingsView: View {
             }
         }
         .formStyle(.grouped)
+        // The port has no Save button either: a valid number commits on a
+        // delay long enough that typing "7712" doesn't restart the server on
+        // "7", "77" and "771" along the way. An out-of-range number is left as
+        // typed until the field is submitted or the pane reopens, so it can
+        // still be corrected without the text snapping back mid-edit.
+        .task(id: portText) {
+            try? await Task.sleep(for: .milliseconds(800))
+            guard !Task.isCancelled else { return }
+            if let port = Int(portText), (1024...65535).contains(port) {
+                settings.basePort = port
+            }
+        }
         .onAppear {
             if portText.isEmpty { portText = String(settings.basePort) }
         }
@@ -150,9 +160,8 @@ struct MCPSettingsView: View {
         return settings.statusMessage
     }
 
-    private var requiresToken: Bool {
-        settings.bindAll || ((try? AppConfig.loadFromKeychain())?.usesSubscription == true)
-    }
+    /// Always: the generation tools spend the signed-in account's credits.
+    private var requiresToken: Bool { true }
 
     private func commitPort() {
         if let n = Int(portText), n >= 1024, n <= 65535 {

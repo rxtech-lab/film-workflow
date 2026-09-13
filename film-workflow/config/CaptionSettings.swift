@@ -190,7 +190,9 @@ final class CaptionSettings {
         self.splitMode = CaptionSplitMode(rawValue: storedSplitMode) ?? .characterLimit
 
         let storedBackend = defaults.string(forKey: Keys.aiBackend) ?? ""
-        self.aiBackend = AgentBackend(rawValue: storedBackend) ?? .appleIntelligence
+        // The subscription is what every account has; Apple Intelligence was
+        // the old default only because it needed no key.
+        self.aiBackend = AgentBackend(rawValue: storedBackend) ?? .subscription
 
         // Both default to on for a *missing* key, so `bool(forKey:)`'s false
         // default can't silently opt an existing user out.

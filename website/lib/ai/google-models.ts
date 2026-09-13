@@ -7,7 +7,7 @@ import "server-only";
  * carry it drives through a request shape that drops Imagen's aspect-ratio and
  * resolution controls. So the image catalog reads Google's own
  * `v1beta/models` — the same endpoint the desktop app's `GoogleModelsClient`
- * consumes for BYOK — and the image route calls AI Studio directly for anything
+ * consumes — and the image route calls AI Studio directly for anything
  * it returns.
  */
 const MODELS_URL = "https://generativelanguage.googleapis.com/v1beta/models";
@@ -27,6 +27,13 @@ export type GoogleImageMode = "predict" | "generateContent";
 let cache: { loadedAt: number; models: GoogleModel[] } | null = null;
 let inFlight: Promise<GoogleModel[]> | null = null;
 
+/** The AI Studio key, shared by the model list, Veo, Gemini transcription and the image route. */
+export function googleApiKey() {
+  const key = process.env.GOOGLE_GENERATIVE_AI_API_KEY?.trim();
+  if (!key) throw new Error("GOOGLE_AI_NOT_CONFIGURED");
+  return key;
+}
+
 function entry(value: unknown): GoogleModel[] {
   if (typeof value !== "object" || value === null) return [];
   const raw = value as Record<string, unknown>;
@@ -41,8 +48,7 @@ function entry(value: unknown): GoogleModel[] {
 }
 
 async function fetchModels(): Promise<GoogleModel[]> {
-  const key = process.env.GOOGLE_GENERATIVE_AI_API_KEY?.trim();
-  if (!key) throw new Error("GOOGLE_AI_NOT_CONFIGURED");
+  const key = googleApiKey();
   const models: GoogleModel[] = [];
   let pageToken: string | null = null;
   // The list is paginated and Imagen sorts late, so a single page can miss it.
@@ -99,4 +105,15 @@ export function googleImageMode(model: GoogleModel): GoogleImageMode | null {
   // the marketing name instead of "image", so both stems have to match.
   if (model.supportedGenerationMethods.includes("generateContent") && (id.includes("image") || id.includes("nano-banana"))) return "generateContent";
   return null;
+}
+
+/**
+ * True when the model is a Veo video model: the only family served over
+ * `predictLongRunning`, and named for it. The method alone is not enough —
+ * Google has parked other long-running experiments behind it — so the id has
+ * to say "veo" too.
+ */
+export function googleVideoMode(model: GoogleModel): "predictLongRunning" | null {
+  const id = model.id.toLowerCase();
+  return model.supportedGenerationMethods.includes("predictLongRunning") && id.includes("veo") ? "predictLongRunning" : null;
 }
