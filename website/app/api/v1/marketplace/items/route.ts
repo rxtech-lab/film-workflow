@@ -13,7 +13,7 @@ export async function GET(request: Request) {
       return Response.json({ code: "bad_request", error: parsed.error.issues[0]?.message ?? "Invalid query." }, { status: 400, headers: noStoreHeaders() });
     }
     const user = await getRequestUser(request).catch(() => null);
-    const [page, categories] = await Promise.all([listPublishedItems(parsed.data), listCategories(parsed.data.kind)]);
+    const [page, categories] = await Promise.all([listPublishedItems(parsed.data), listCategories(parsed.data.kind, parsed.data.catalog_version)]);
     const owned = user ? await ownedItemIds(user.id, page.items.map((item) => item.id)) : new Set<string>();
     const items = await Promise.all(page.items.map((item) => toWireItem(item, owned.has(item.id))));
     return Response.json({
@@ -22,7 +22,7 @@ export async function GET(request: Request) {
       page: page.currentPage,
       page_count: page.pageCount,
       page_size: page.pageSize,
-      categories: categories.map((entry) => ({ kind: entry.kind, category: entry.slug, name: entry.name, count: entry.count })),
+      categories: categories.map((entry) => ({ kind: entry.kind, category: entry.slug, name: entry.name, icon: entry.icon, count: entry.count })),
     }, { headers: noStoreHeaders() });
   } catch (cause) {
     return marketplaceRouteError(cause);

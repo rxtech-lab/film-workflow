@@ -9,11 +9,12 @@ export default async function EditMarketplaceItemPage({ params, searchParams }: 
   const [{ id }, query] = await Promise.all([params, searchParams]);
   const item = await getItem(id);
   if (!item) notFound();
-  const isDescriptor = item.kind === "effect" || item.kind === "transition";
+  // The kinds whose content is text edited in the form rather than an uploaded file.
+  const isInlineContent = ["effect", "transition", "project_template", "remotion_prompt"].includes(item.kind);
   const [previewImageUrl, previewVideoUrl, descriptorText, categories] = await Promise.all([
     previewURL(item.previewImageKey).catch(() => null),
     previewURL(item.previewVideoKey).catch(() => null),
-    isDescriptor && item.contentKey
+    isInlineContent && item.contentKey
       ? getObjectBytes(item.contentKey, marketplaceUploadLimits.content).then(({ bytes }) => bytes.toString("utf8")).catch(() => "")
       : Promise.resolve(""),
     listAllCategories(),

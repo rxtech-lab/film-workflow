@@ -196,7 +196,15 @@ struct LibraryIndex {
             }
         case .remotion:
             guard let p = remotion(item.id) else { return [] }
-            return [FootageCell(id: p.id, title: p.name, subtitle: "\(Int(p.durationSeconds))s · renders on demand", footage: p)]
+            // One cell per render, newest first, so the strip lists the same
+            // versions the card's badge counts. Before the first render there
+            // is nothing on disk, so the project itself stands in and previews
+            // live off its source.
+            let renders = remotionRenders.filter { $0.projectID == p.id }.sorted { $0.versionNumber > $1.versionNumber }
+            guard !renders.isEmpty else {
+                return [FootageCell(id: p.id, title: p.name, subtitle: "\(Int(p.durationSeconds))s · renders on demand", footage: p)]
+            }
+            return renders.map { FootageCell(render: $0, project: p) }
         case .imported:
             guard let a = imported(item.id) else { return [] }
             return [FootageCell(id: a.id, title: a.name, subtitle: a.dimensionsLabel, footage: a, thumbnailURL: a.dragThumbnailURL)]
@@ -224,6 +232,30 @@ struct FootageCell: Identifiable, Hashable {
     let captionAudioURL: URL?
     let previewFPS: Int
     let previewDirectory: URL?
+
+    /// One rendered take of a Remotion project.
+    ///
+    /// The cell plays the render's own file — that is the point of picking a
+    /// version — so it reads as `.video` rather than `.remotion`, which would
+    /// send the viewer back to rendering the live source. What it drags is
+    /// still the project: the timeline renders Remotion for the sequence it
+    /// lands in, so a clip is never pinned to one file.
+    @MainActor
+    init(render: RemotionRender, project: RemotionProject) {
+        self.id = render.id
+        self.title = render.versionLabel
+        self.subtitle = render.dimensionsLabel
+        self.kind = .video
+        self.thumbnailURL = render.thumbnailURL
+        self.mediaURL = render.videoURL
+        self.duration = render.durationSeconds > 0 ? render.durationSeconds : nil
+        self.drag = project.dragItem
+        self.previewSource = nil
+        self.captionStyle = nil
+        self.captionAudioURL = nil
+        self.previewFPS = render.fps
+        self.previewDirectory = nil
+    }
 
     @MainActor
     init(id: UUID, title: String, subtitle: String, footage: some TimelineDraggable, thumbnailURL: URL? = nil) {

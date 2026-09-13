@@ -69,6 +69,11 @@ final class AgentThread {
     @Relationship(deleteRule: .cascade, inverse: \AgentMessage.thread)
     var messages: [AgentMessage] = []
 
+    /// The SDK's message/block order. Tool blocks reference the separate tool
+    /// rows so arriving results update in place without duplicating cards.
+    /// Nil on histories saved before ordered transcript snapshots were added.
+    var transcriptJSON: String?
+
     /// Rolling summary of turns that have been compacted away.
     ///
     /// Older turns are folded into this rather than replayed verbatim; on Apple

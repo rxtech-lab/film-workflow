@@ -35,6 +35,7 @@ final class AppNavigation {
     /// Bumped by `requestSignIn()`. The active window's `signInSheetPresenter`
     /// watches it and raises the sign-in sheet.
     private(set) var signInRequestCount = 0
+    private var handledSignInRequestCount = 0
 
     /// What the app is currently showing, so the agent window can follow along.
     ///
@@ -42,6 +43,7 @@ final class AppNavigation {
     /// a **new** thread — an existing thread keeps whatever it was pointed at,
     /// so switching tabs can't retarget a turn that is already running.
     var currentTarget: AgentTarget = .none
+    var pendingAgentThreadID: UUID?
 
     /// Consumed by the settings view once it has scrolled to the target, so
     /// reopening Settings later doesn't jump around unprompted.
@@ -75,5 +77,18 @@ final class AppNavigation {
     /// Asks the active window to present the dedicated sign-in sheet.
     func requestSignIn() {
         signInRequestCount += 1
+        #if os(macOS)
+        NSApp.activate(ignoringOtherApps: true)
+        let window = NSApp.keyWindow ?? NSApp.mainWindow
+            ?? NSApp.windows.first { $0.isVisible && $0.canBecomeKey && $0.sheetParent == nil }
+        window?.makeKeyAndOrderFront(nil)
+        #endif
+    }
+
+    /// Only one window consumes a request; requests wait while another sheet is open.
+    func consumeSignInRequest() -> Bool {
+        guard handledSignInRequestCount < signInRequestCount else { return false }
+        handledSignInRequestCount = signInRequestCount
+        return true
     }
 }

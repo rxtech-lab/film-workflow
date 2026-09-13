@@ -48,7 +48,7 @@ enum BackendImageClient {
                 size: googleStyle ? nil : customSize,
                 quality: googleStyle ? nil : project.openAIQualityEnum.rawValue,
                 format: googleStyle ? nil : project.openAIFormatEnum.rawValue,
-                compression: googleStyle ? nil : project.openAICompression,
+                compression: !googleStyle && project.openAIFormatEnum.supportsCompression ? project.openAICompression : nil,
                 background: googleStyle ? nil : (project.openAITransparent ? "transparent" : project.openAIBackgroundEnum.rawValue)
             ),
             idempotencyKey: "image:\(UUID().uuidString)"

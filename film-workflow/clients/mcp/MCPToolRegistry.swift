@@ -14,7 +14,9 @@ enum MCPToolRegistry {
     /// All tools, in the order surfaced to clients.
     static func allDescriptors() -> [MCPToolDescriptor] {
         var tools: [MCPToolDescriptor] = []
+        tools.append(showSignInDialogDescriptor)
         tools.append(filmListDescriptor)
+        tools.append(contentsOf: MCPMarketplaceHandlers.descriptors.filter { !MCPMarketplaceHandlers.adminNames.contains($0.name) || MarketplaceAuthoringService.shared.canAuthor })
         tools.append(contentsOf: MCPLibraryHandlers.descriptors)
         tools.append(contentsOf: MCPSequenceHandlers.descriptors)
         tools.append(contentsOf: MCPGenerateHandlers.descriptors)
@@ -23,7 +25,7 @@ enum MCPToolRegistry {
         tools.append(contentsOf: RemotionMCPHandlers.descriptors)
         #endif
         tools.append(contentsOf: MCPPodcastHandlers.descriptors)
-        // Every tool can be pointed at a film other than the active one. Added
+        // Film tools can be pointed at a film other than the active one. Added
         // here rather than in fifty descriptors so the schema cannot drift.
         return tools.map(withFilmArgument)
     }
@@ -31,7 +33,8 @@ enum MCPToolRegistry {
     static let filmArgument = "film"
 
     private static func withFilmArgument(_ tool: MCPToolDescriptor) -> MCPToolDescriptor {
-        guard tool.name != filmListDescriptor.name else { return tool }
+        guard tool.name != filmListDescriptor.name,
+              tool.name != showSignInDialogDescriptor.name else { return tool }
         var schema = tool.inputSchema
         var properties = (schema["properties"] as? [String: Any]) ?? [:]
         properties[filmArgument] = [
@@ -42,9 +45,15 @@ enum MCPToolRegistry {
         return MCPToolDescriptor(name: tool.name, description: tool.description, inputSchema: schema)
     }
 
+    private static let showSignInDialogDescriptor = MCPToolDescriptor(
+        name: "show_sign_in_dialog",
+        description: "Open the app's native RxLab sign-in dialog if the user is not signed in. Use when the user asks to sign in or a tool reports that sign-in is required. No film or arguments are needed. Returns immediately; the user completes sign-in in the dialog. If already signed in, reports that without opening a dialog.",
+        inputSchema: ["type": "object", "properties": [String: Any](), "additionalProperties": false]
+    )
+
     private static let filmListDescriptor = MCPToolDescriptor(
         name: "film_list",
-        description: "The films (.rxfilmstudio documents) open in the app, with the active one flagged. Every other tool acts on the active film unless you pass one of these ids, paths or names as `film`.",
+        description: "The films (.rxfilmstudio documents) open in the app, with the active one flagged. Film tools act on the active film unless you pass one of these ids, paths or names as `film`.",
         inputSchema: ["type": "object", "properties": [String: Any](), "additionalProperties": false]
     )
 
@@ -55,7 +64,7 @@ enum MCPToolRegistry {
         let key = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !key.isEmpty, key != "*" else { return nil }
         let controller = ProjectDocumentController.shared
-        if let uuid = UUID(uuidString: key), let doc = controller.document(id: uuid) { return doc }
+        if let uuid = UUID(uuidString: key), let doc = controller.document(id: uuid) ?? MarketplaceAuthoringService.shared.document(id: uuid) { return doc }
         if let doc = controller.document(for: URL(fileURLWithPath: key)) { return doc }
         if let doc = controller.openDocuments.first(where: { $0.displayName.localizedCaseInsensitiveCompare(key) == .orderedSame }) {
             return doc
@@ -77,8 +86,27 @@ enum MCPToolRegistry {
     static func invoke(
         name: String,
         arguments rawArguments: [String: Any],
-        container defaultContainer: ModelContainer?
+        container defaultContainer: ModelContainer?,
+        auth: AuthManager = .shared
     ) async throws -> [String: Any] {
+        if name == showSignInDialogDescriptor.name {
+            if auth.isAuthenticated {
+                return jsonResult([
+                    "status": "already_signed_in",
+                    "isAuthenticated": true,
+                    "message": "The user is already signed in."
+                ] as [String: Any])
+            }
+            AppNavigation.shared.requestSignIn()
+            return jsonResult([
+                "status": "sign_in_requested",
+                "isAuthenticated": false,
+                "message": "Sign-in dialog requested. Wait for the user to finish signing in before retrying the operation that requires an account."
+            ] as [String: Any])
+        }
+        if MCPMarketplaceHandlers.isMarketplaceTool(name) {
+            return try await MCPMarketplaceHandlers.handle(name: name, arguments: rawArguments, container: defaultContainer)
+        }
         if name == filmListDescriptor.name {
             return jsonResult(ProjectDocumentController.shared.openDocuments.map(filmSummary))
         }

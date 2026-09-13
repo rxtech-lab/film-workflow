@@ -212,6 +212,79 @@ struct AuthSessionRestorationTests {
         await manager.signOut()
     }
 
+    @Test("The sign-in tool opens a native sheet without a film")
+    func signInToolPresentsSheet() async throws {
+        let storage = InMemoryTokenStorage()
+        let manager = makeManager(storage: storage)
+        await manager.checkExistingAuth()
+        #expect(!manager.isAuthenticated)
+        let host = NSHostingView(rootView: Text("Sign-in tool test")
+            .frame(width: 640, height: 720)
+            .signInSheetPresenter(auth: manager))
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 640, height: 720),
+                              styleMask: [.titled, .closable], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        window.contentView = host
+        window.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
+        defer {
+            if let sheet = window.attachedSheet { window.endSheet(sheet) }
+            window.close()
+        }
+        host.layoutSubtreeIfNeeded()
+        try await Task.sleep(for: .milliseconds(300))
+        window.makeKeyAndOrderFront(nil)
+        window.becomeKey()
+        #expect(window.isKeyWindow, "The sign-in test window must be key before invoking the tool")
+
+        let result = try await MCPToolRegistry.invoke(
+            name: "show_sign_in_dialog", arguments: [:], container: nil, auth: manager)
+        let payload = try #require(result["structuredContent"] as? [String: Any])
+        #expect(payload["status"] as? String == "sign_in_requested")
+        #expect(payload["isAuthenticated"] as? Bool == false)
+        for _ in 0..<30 where window.attachedSheet == nil {
+            try await Task.sleep(for: .milliseconds(100))
+        }
+        let windowStates = NSApp.windows.map { ($0.title, $0.isKeyWindow, $0.isVisible, $0.attachedSheet != nil) }
+        let sheet = try #require(window.attachedSheet, "Windows (title, key, visible, sheet): \(windowStates)")
+        #expect(sheet.isVisible)
+
+        // A repeated call keeps the same dialog instead of stacking another one.
+        _ = try await MCPToolRegistry.invoke(
+            name: "show_sign_in_dialog", arguments: [:], container: nil, auth: manager)
+        try await Task.sleep(for: .milliseconds(150))
+        #expect(window.attachedSheet === sheet)
+
+        // Completing sign-in dismisses the dialog, including after a repeated request.
+        AuthSessionURLProtocol.handler = successfulResponse
+        try storage.saveAccessToken("test-access")
+        try storage.saveRefreshToken("test-refresh")
+        try storage.saveExpiresAt(Date().addingTimeInterval(3600))
+        await manager.checkExistingAuth()
+        for _ in 0..<30 where window.attachedSheet != nil {
+            try await Task.sleep(for: .milliseconds(100))
+        }
+        #expect(manager.isAuthenticated)
+        #expect(window.attachedSheet == nil)
+        try await Task.sleep(for: .milliseconds(200))
+        #expect(window.attachedSheet == nil)
+    }
+
+    @Test("The sign-in tool leaves an authenticated session alone")
+    func signInToolSkipsAuthenticatedUser() async throws {
+        AuthSessionURLProtocol.handler = successfulResponse
+        let manager = makeManager(storage: try savedSession())
+        await manager.checkExistingAuth()
+        #expect(manager.isAuthenticated)
+        let requests = AppNavigation.shared.signInRequestCount
+        let result = try await MCPToolRegistry.invoke(
+            name: "show_sign_in_dialog", arguments: [:], container: nil, auth: manager)
+        let payload = try #require(result["structuredContent"] as? [String: Any])
+        #expect(payload["status"] as? String == "already_signed_in")
+        #expect(payload["isAuthenticated"] as? Bool == true)
+        #expect(AppNavigation.shared.signInRequestCount == requests)
+    }
+
     @Test("The account control displays restoration, then the restored account")
     func accountControlRestorationUI() async throws {
         NSApp.accessibilitySetValue(true, forAttribute: .init(rawValue: "AXEnhancedUserInterface"))

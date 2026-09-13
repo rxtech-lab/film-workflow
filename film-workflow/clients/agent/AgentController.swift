@@ -119,6 +119,7 @@ final class AgentController {
     /// changes, because the SDK composer sends without coming back through
     /// this controller.
     func prepare(thread: AgentThread, context: ModelContext) async {
+        _ = await MarketplaceAuthoringService.shared.refreshAccess()
         let container = ProjectDocumentController.shared.document(for: thread)?.container
             ?? ProjectDocumentController.shared.activeDocument?.container
 
@@ -246,12 +247,6 @@ final class AgentController {
         let trimmed = instruction.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
 
-        // Tools act on a film; without one open there is nothing to point them at.
-        guard let container else {
-            setError("Open a film before sending to the agent.", for: threadID)
-            return
-        }
-
         mutate(threadID) {
             $0.input = ""
             $0.errorMessage = nil
@@ -260,6 +255,7 @@ final class AgentController {
 
         Task { @MainActor in
             do {
+                _ = await MarketplaceAuthoringService.shared.refreshAccess()
                 let agent = try await agent(
                     for: thread,
                     context: context,
@@ -340,16 +336,12 @@ final class AgentController {
         let clients = AgentClientFactory.makeClients(config: config)
         guard !clients.isEmpty else { throw CaptionAIError.noBackendAvailable }
 
-        // No film open means no tools to offer. The agent is still built, so
-        // the composer works and `send` can say what is wrong, rather than the
-        // window presenting no input at all.
+        // Catalog and authoring tools also work without an open film.
         var mcpServers: [MCPServerSpec] = []
         #if os(macOS)
-            if let container {
-                let document = ProjectDocumentController.shared.document(forContainer: container)
-                mcpServers.append(try await AgentMCPBridge.acquire(documentID: document?.id))
-                mcpHolds.insert(thread.id)
-            }
+            let document = container.flatMap { ProjectDocumentController.shared.document(forContainer: $0) }
+            mcpServers.append(try await AgentMCPBridge.acquire(documentID: document?.id))
+            mcpHolds.insert(thread.id)
         #endif
 
         let agent = Agent(
@@ -435,12 +427,11 @@ final class AgentController {
         agent.maxToolIterations = AgentSettings.shared.maxIterations
         agent.workingDirectory = workingDirectory(for: thread)
 
-        guard let container else { return }
         agent.context = AgentPrompts.context(
             target: thread.target,
             toolNames: AgentToolPolicy.toolNames(policy: policy),
             policy: policy,
-            context: ModelContext(container),
+            context: container.map { ModelContext($0) },
             // A CLI agent namespaces every MCP tool it discovers; an in-process
             // client speaks MCP itself and sees the bare name. The prompt has to
             // list the names that engine will actually see.
@@ -527,6 +518,7 @@ final class AgentController {
                 $0.errorMessage = nil
                 $0.hasUnseenCompletion = false
             }
+            persistTranscript(thread: thread, context: context)
 
         case .toolCallStarted(let id, let name):
             guard toolRow(callID: id, in: thread) == nil else { return }
@@ -539,13 +531,14 @@ final class AgentController {
                 toolCallId: id
             )
             AgentTranscriptStore.attach(row, to: thread, context: context)
+            persistTranscript(thread: thread, context: context)
 
         case .toolCallInput(let id, let input):
             toolRow(callID: id, in: thread)?.toolArgs = JSONValue.object(input).jsonString
 
         case .toolCallResult(let id, let content, let isError):
             if let row = toolRow(callID: id, in: thread) {
-                row.toolResult = Self.summarize(content)
+                row.toolResult = MCPMarketplaceHandlers.isMarketplaceTool(row.toolName ?? "") ? content : Self.summarize(content)
                 row.toolStatusEnum = isError ? .failed : .ok
                 surfaceProposalIfNeeded(
                     toolName: row.toolName,
@@ -561,6 +554,10 @@ final class AgentController {
                     )
                 }
             }
+            persistTranscript(thread: thread, context: context)
+
+        case .blockEnded, .messageEnded:
+            persistTranscript(thread: thread, context: context)
 
         case .failed(let error):
             setError(error.description, for: threadID)
@@ -577,32 +574,19 @@ final class AgentController {
         }
     }
 
-    /// The SDK owns the assistant's message while it streams, so prose is
-    /// written once at the end of the turn rather than delta by delta.
+    /// Snapshot at block/tool boundaries, avoiding a rewrite for every token
+    /// while keeping completed prose interleaved with the calls around it.
+    private func persistTranscript(thread: AgentThread, context: ModelContext) {
+        guard let agent = agents[thread.id] else { return }
+        AgentTranscriptStore.saveTranscript(from: agent.thread, to: thread, context: context)
+    }
+
     private func persistTurnEnd(thread: AgentThread, context: ModelContext) {
         guard let agent = agents[thread.id] else { return }
 
+        AgentTranscriptStore.saveTranscript(from: agent.thread, to: thread, context: context)
         AgentTranscriptStore.saveSessionIDs(from: agent.thread, to: thread)
         AgentTranscriptStore.saveCompaction(from: agent.thread, to: thread)
-
-        let persisted = Set(thread.orderedMessages.map(\.id))
-        for message in agent.thread.messages where !persisted.contains(message.id) {
-            let text = message.plainText.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !text.isEmpty else { continue }
-            let role: AgentMessageRole = switch message.role {
-            case .user: .user
-            case .assistant: .assistant
-            case .system: .system
-            }
-            AgentTranscriptStore.append(
-                role: role,
-                content: text,
-                id: message.id,
-                createdAt: message.timestamp,
-                to: thread,
-                context: context
-            )
-        }
         thread.updatedAt = Date()
     }
 
@@ -657,6 +641,7 @@ final class AgentController {
             context.delete(message)
         }
         thread.messages = []
+        thread.transcriptJSON = nil
         thread.summary = ""
         // The CLI engines keep their own copy of the history; a resume after
         // clearing would bring back everything the user just deleted.

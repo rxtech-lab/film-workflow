@@ -20,11 +20,11 @@ struct MCPDocumentRoutingTests {
         return try JSONSerialization.jsonObject(with: Data(text.utf8))
     }
 
-    @Test("Every tool schema carries a film argument; film_list reports open films")
+    @Test("Film tool schemas carry a film argument; film_list reports open films")
     func schemasAndListing() async throws {
         let tools = MCPToolRegistry.allDescriptors()
         #expect(tools.contains { $0.name == "film_list" })
-        for tool in tools where tool.name != "film_list" {
+        for tool in tools where tool.name != "film_list" && tool.name != "show_sign_in_dialog" {
             let props = tool.inputSchema["properties"] as? [String: Any]
             #expect(props?["film"] != nil, "\(tool.name) lacks film")
         }

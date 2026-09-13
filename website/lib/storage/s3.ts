@@ -95,12 +95,16 @@ export async function createPresignedUpload(input: {
   contentType: string;
   sizeBytes: number;
   maxBytes?: number;
+  metadata?: Record<string, string>;
 }) {
   const limit = input.maxBytes ?? MAX_UPLOAD_BYTES;
   if (!Number.isInteger(input.sizeBytes) || input.sizeBytes <= 0 || input.sizeBytes > limit) {
     throw new Error("INVALID_UPLOAD_SIZE");
   }
   const storage = config();
+  const metadataHeaders = Object.fromEntries(
+    Object.entries(input.metadata ?? {}).map(([name, value]) => [`x-amz-meta-${name.toLowerCase()}`, value]),
+  );
   const uploadURL = await getSignedUrl(
     s3(),
     new PutObjectCommand({
@@ -108,8 +112,14 @@ export async function createPresignedUpload(input: {
       Key: input.key,
       ContentType: input.contentType,
       ContentLength: input.sizeBytes,
+      Metadata: input.metadata,
     }),
-    { expiresIn: storage.presignTTLSeconds },
+    {
+      expiresIn: storage.presignTTLSeconds,
+      // R2 does not persist metadata hoisted into query parameters. Keep it in
+      // signed PUT headers so finalization can verify the account and slot.
+      unhoistableHeaders: new Set(Object.keys(metadataHeaders)),
+    },
   );
   return {
     uploadURL,
@@ -117,6 +127,7 @@ export async function createPresignedUpload(input: {
     headers: {
       "Content-Type": input.contentType,
       "Content-Length": String(input.sizeBytes),
+      ...metadataHeaders,
     },
     expiresAt: new Date(Date.now() + storage.presignTTLSeconds * 1000),
   };
@@ -158,7 +169,7 @@ export function isMarketplaceObject(itemId: string, key: string) {
   return key.startsWith(marketplacePrefix(itemId)) && !key.includes("..") && !key.includes("\\");
 }
 
-export async function putObject(input: { key: string; body: Buffer; contentType: string }) {
+export async function putObject(input: { key: string; body: Buffer; contentType: string; metadata?: Record<string, string> }) {
   const storage = config();
   await s3().send(new PutObjectCommand({
     Bucket: storage.bucket,
@@ -166,6 +177,7 @@ export async function putObject(input: { key: string; body: Buffer; contentType:
     Body: input.body,
     ContentType: input.contentType,
     ContentLength: input.body.length,
+    Metadata: input.metadata,
   }));
   return { key: input.key, publicURL: publicObjectURL(input.key) };
 }
@@ -198,3 +210,11 @@ export async function objectDownloadURL(key: string) {
 }
 
 export const storageLimits = { maximumUploadBytes: MAX_UPLOAD_BYTES } as const;
+
+/** Bounded inspection used before attaching a marketplace upload. */
+export async function inspectObject(key: string) {
+  const storage = config();
+  const head = await s3().send(new HeadObjectCommand({ Bucket: storage.bucket, Key: key }));
+  const sample = await s3().send(new GetObjectCommand({ Bucket: storage.bucket, Key: key, Range: "bytes=0-511" }));
+  return { metadata: head.Metadata ?? {}, sizeBytes: head.ContentLength ?? 0, contentType: head.ContentType ?? "application/octet-stream", header: await sample.Body?.transformToByteArray() ?? new Uint8Array() };
+}

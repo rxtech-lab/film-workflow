@@ -7,20 +7,27 @@ struct WhatsNewSheet: View {
     let onDismiss: () -> Void
     let onExploreMarketplace: () -> Void
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     @State private var selectedIndex = 0
+    @State private var isMovingForward = true
 
     var body: some View {
         VStack(spacing: 0) {
             header
 
             ScrollView {
-                if features.indices.contains(selectedIndex) {
-                    featureCard(features[selectedIndex])
-                        .id(features[selectedIndex].id)
-                        .onAppear { onSeen(features[selectedIndex]) }
+                ZStack {
+                    if features.indices.contains(selectedIndex) {
+                        featureCard(features[selectedIndex])
+                            .id(features[selectedIndex].id)
+                            .transition(cardTransition)
+                            .onAppear { onSeen(features[selectedIndex]) }
+                    }
                 }
             }
             .scrollBounceBehavior(.basedOnSize)
+            .clipped()
 
             footer
         }
@@ -31,8 +38,41 @@ struct WhatsNewSheet: View {
         }
     }
 
+    /// Cards slide in the direction of travel; Reduce Motion gets a plain cross-fade.
+    private var cardTransition: AnyTransition {
+        guard !reduceMotion else { return .opacity }
+        let incoming: Edge = isMovingForward ? .trailing : .leading
+        let outgoing: Edge = isMovingForward ? .leading : .trailing
+        return .asymmetric(
+            insertion: .move(edge: incoming).combined(with: .opacity),
+            removal: .move(edge: outgoing).combined(with: .opacity)
+        )
+    }
+
+    private func page(to index: Int) {
+        guard features.indices.contains(index), index != selectedIndex else { return }
+        isMovingForward = index > selectedIndex
+        withAnimation(reduceMotion ? .easeInOut(duration: 0.15) : .snappy(duration: 0.3)) {
+            selectedIndex = index
+        }
+    }
+
     private var header: some View {
-        HStack {
+        HStack(spacing: 12) {
+            if selectedIndex > 0 {
+                Button { page(to: selectedIndex - 1) } label: {
+                    Image(systemName: "chevron.left")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(.secondary)
+                        .frame(width: 28, height: 28)
+                        .background(.quaternary, in: Circle())
+                }
+                .buttonStyle(.plain)
+                .help("Back")
+                .accessibilityLabel("Back")
+                .accessibilityIdentifier("whats-new.back")
+            }
+
             VStack(alignment: .leading, spacing: 3) {
                 Text("What's New")
                     .font(.system(size: 12, weight: .semibold))
@@ -118,15 +158,17 @@ struct WhatsNewSheet: View {
                 .accessibilityLabel("Feature \(selectedIndex + 1) of \(features.count)")
             }
             HStack(spacing: 12) {
-                Button("Got it", action: onDismiss)
-                    .buttonStyle(.glass)
-                    .accessibilityIdentifier("whats-new.dismiss")
-
+                // Dismissing early is the close button's job; the last card offers it outright.
                 if selectedIndex < features.count - 1 {
-                    Button("Next") { selectedIndex += 1 }
+                    Button("Next") { page(to: selectedIndex + 1) }
                         .buttonStyle(.glassProminent)
                         .keyboardShortcut(.defaultAction)
+                        .accessibilityIdentifier("whats-new.next")
                 } else {
+                    Button("Got it", action: onDismiss)
+                        .buttonStyle(.glass)
+                        .accessibilityIdentifier("whats-new.dismiss")
+
                     Button(action: onExploreMarketplace) {
                         Label("Explore Marketplace", systemImage: "storefront")
                     }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { categoryInput, descriptorSchema, isAllowedFilename, itemInput, listQuery, parseDescriptor, slugify } from "@/lib/marketplace/schema";
+import { categoryInput, categoryPatch, descriptorSchema, isAllowedFilename, itemInput, kindPatch, listQuery, parseDescriptor, slugify } from "@/lib/marketplace/schema";
 
 const categoryId = "6f1c0d6e-3b2a-4c8e-9d1f-2a3b4c5d6e7f";
 
@@ -14,8 +14,8 @@ const transition = {
 
 describe("marketplace schema", () => {
   it("parses list queries with defaults and bounds", () => {
-    expect(listQuery.parse({})).toEqual({ page: 1 });
-    expect(listQuery.parse({ kind: "font", page: "3", q: " serif " })).toEqual({ kind: "font", page: 3, q: "serif" });
+    expect(listQuery.parse({})).toEqual({ catalog_version: 1, page: 1 });
+    expect(listQuery.parse({ kind: "font", page: "3", q: " serif " })).toEqual({ catalog_version: 1, kind: "font", page: 3, q: "serif" });
     expect(listQuery.safeParse({ kind: "plugin" }).success).toBe(false);
     expect(listQuery.safeParse({ page: "0" }).success).toBe(false);
   });
@@ -30,11 +30,29 @@ describe("marketplace schema", () => {
   it("derives a category slug from the name unless one is given", () => {
     expect(slugify("  Lo-Fi Beats! ")).toBe("lo-fi-beats");
     expect(slugify("日本語")).toBe("");
-    expect(categoryInput.parse({ kind: "audio", name: " Lo-Fi Beats " })).toEqual({ kind: "audio", name: "Lo-Fi Beats", slug: "lo-fi-beats" });
+    expect(categoryInput.parse({ kind: "audio", name: " Lo-Fi Beats " })).toEqual({ kind: "audio", name: "Lo-Fi Beats", slug: "lo-fi-beats", icon: "folder" });
     expect(categoryInput.parse({ kind: "audio", name: "Lo-Fi", slug: "chill" }).slug).toBe("chill");
     expect(categoryInput.safeParse({ kind: "audio", name: "Lo-Fi", slug: "Not A Slug" }).success).toBe(false);
     expect(categoryInput.safeParse({ kind: "audio", name: "!!!" }).success).toBe(false);
     expect(categoryInput.safeParse({ kind: "plugin", name: "x" }).success).toBe(false);
+  });
+
+  it("takes an SF Symbol for a category and falls back to the folder", () => {
+    expect(categoryInput.parse({ kind: "audio", name: "Lo-Fi", icon: "music.note" }).icon).toBe("music.note");
+    expect(categoryInput.parse({ kind: "audio", name: "Lo-Fi", icon: "" }).icon).toBe("folder");
+    expect(categoryInput.safeParse({ kind: "audio", name: "Lo-Fi", icon: "music note" }).success).toBe(false);
+    expect(categoryInput.safeParse({ kind: "audio", name: "Lo-Fi", icon: "music/note" }).success).toBe(false);
+    expect(categoryPatch.parse({ id: categoryId, name: " Lo-Fi ", icon: "waveform" })).toEqual({ id: categoryId, name: "Lo-Fi", icon: "waveform" });
+    expect(categoryPatch.parse({ id: categoryId, name: "Lo-Fi" }).icon).toBe("folder");
+  });
+
+  it("takes a label, symbol and sidebar order for a kind", () => {
+    expect(kindPatch.parse({ kind: "font", label: " Typefaces ", icon: "textformat", sortOrder: "3" }))
+      .toEqual({ kind: "font", label: "Typefaces", icon: "textformat", sortOrder: 3 });
+    expect(kindPatch.parse({ kind: "font", label: "Typefaces" }).sortOrder).toBe(0);
+    expect(kindPatch.safeParse({ kind: "font", label: "" }).success).toBe(false);
+    expect(kindPatch.safeParse({ kind: "plugin", label: "Plugins" }).success).toBe(false);
+    expect(kindPatch.safeParse({ kind: "font", label: "Typefaces", sortOrder: -1 }).success).toBe(false);
   });
 
   it("restricts content files by kind and previews by role", () => {

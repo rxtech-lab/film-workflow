@@ -28,7 +28,7 @@ enum AgentTranscriptStore {
         let sdkThread = RxAgentSDK.AgentThread()
         sdkThread.title = thread.title.isEmpty ? nil : thread.title
         sdkThread.load(
-            messages: thread.orderedMessages.compactMap(message(from:)),
+            messages: messages(from: thread),
             nativeSessionIDs: nativeSessionIDs(for: thread),
             summary: thread.summary,
             compactedMessageIDs: Set(
@@ -36,6 +36,50 @@ enum AgentTranscriptStore {
             )
         )
         return sdkThread
+    }
+
+    private static func messages(from thread: AgentThread) -> [RxAgentSDK.AgentMessage] {
+        let rows = thread.orderedMessages
+        guard let json = thread.transcriptJSON,
+              let snapshot = try? JSONDecoder().decode(TranscriptSnapshot.self, from: Data(json.utf8)),
+              snapshot.version == 1 else {
+            // Old histories contain flattened prose and timestamps only. Keep
+            // that content intact; its original block boundaries are unknown.
+            return rows.compactMap(message(from:))
+        }
+        let rowsByID = Dictionary(rows.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        let toolRows = Dictionary(rows.compactMap { row -> (String, AgentMessage)? in
+            guard row.kindEnum == .tool else { return nil }
+            return (row.toolCallId ?? row.id.uuidString, row)
+        }, uniquingKeysWith: { first, _ in first })
+        var included: Set<UUID> = []
+        var messages: [RxAgentSDK.AgentMessage] = []
+        for saved in snapshot.messages {
+            guard let row = rowsByID[saved.id], row.kindEnum != .proposal else { continue }
+            included.insert(row.id)
+            let blocks = saved.blocks.compactMap { block -> AgentBlock? in
+                switch block {
+                case .text(let id, let text): return .text(id: id, text)
+                case .thinking(let id, let text): return .thinking(id: id, text)
+                case .toolCall(let id):
+                    guard let tool = toolRows[id], let call = message(from: tool)?.toolCalls.first else { return nil }
+                    included.insert(tool.id)
+                    return .toolCall(call)
+                }
+            }
+            messages.append(RxAgentSDK.AgentMessage(id: row.id, role: role(row.roleEnum), blocks: blocks,
+                                                   timestamp: row.createdAt, error: saved.error,
+                                                   attachments: attachments(from: row)))
+        }
+        // Preserve rows saved after the last snapshot (for example, a local
+        // proposal outcome or a tool interrupted before a message boundary).
+        // Never sort the snapshot itself: its explicit order is authoritative.
+        for row in rows where !included.contains(row.id) {
+            guard let extra = message(from: row) else { continue }
+            let position = messages.firstIndex { $0.timestamp > extra.timestamp } ?? messages.endIndex
+            messages.insert(extra, at: position)
+        }
+        return messages
     }
 
     /// Each engine's own native session id, keyed the way the SDK keys them.
@@ -57,12 +101,14 @@ enum AgentTranscriptStore {
     static func message(from row: AgentMessage) -> RxAgentSDK.AgentMessage? {
         switch row.kindEnum {
         case .text:
-            guard !row.content.isEmpty else { return nil }
+            let attachments = attachments(from: row)
+            guard !row.content.isEmpty || !attachments.isEmpty else { return nil }
             return RxAgentSDK.AgentMessage(
                 id: row.id,
                 role: role(row.roleEnum),
                 blocks: [.text(id: row.id, row.content)],
-                timestamp: row.createdAt
+                timestamp: row.createdAt,
+                attachments: attachments
             )
 
         case .tool:
@@ -110,10 +156,9 @@ enum AgentTranscriptStore {
 
     /// Appends a plain row and returns it.
     ///
-    /// `createdAt` is taken from the SDK message when there is one. Rows are
-    /// ordered by it, and a turn's prose is persisted after its tool calls have
-    /// already landed — stamping it with `Date()` would reorder the reloaded
-    /// transcript relative to what the user watched.
+    /// `createdAt` is taken from the SDK message when available. The ordered
+    /// snapshot preserves interleaved blocks; timestamps remain the fallback
+    /// for legacy history and local rows outside the SDK transcript.
     @discardableResult
     static func append(
         role: AgentMessageRole,
@@ -123,6 +168,11 @@ enum AgentTranscriptStore {
         to thread: AgentThread,
         context: ModelContext
     ) -> AgentMessage {
+        if let id, let existing = thread.messages.first(where: { $0.id == id }) {
+            existing.content = content
+            if let createdAt { existing.createdAt = createdAt }
+            return existing
+        }
         let row = AgentMessage(role: role, content: content)
         if let id { row.id = id }
         if let createdAt { row.createdAt = createdAt }
@@ -135,6 +185,51 @@ enum AgentTranscriptStore {
         context.insert(row)
         thread.messages.append(row)
         thread.updatedAt = Date()
+    }
+
+    /// Saves text/thinking/tool references in exactly the order the live SDK
+    /// transcript renders. Flattened text remains available to existing callers,
+    /// but is never used to reconstruct a snapshotted assistant message.
+    static func saveTranscript(from sdkThread: RxAgentSDK.AgentThread, to thread: AgentThread, context: ModelContext) {
+        var rowsByID = Dictionary(thread.messages.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        var saved: [TranscriptSnapshot.Message] = []
+        for message in sdkThread.messages {
+            let row: AgentMessage
+            if let existing = rowsByID[message.id] {
+                row = existing
+            } else {
+                let role: AgentMessageRole = switch message.role {
+                case .user: .user
+                case .assistant: .assistant
+                case .system: .system
+                }
+                row = append(role: role, content: message.plainText, id: message.id,
+                             createdAt: message.timestamp, to: thread, context: context)
+                rowsByID[message.id] = row
+            }
+            if row.kindEnum == .text { row.content = message.plainText }
+            // Sent attachments are immutable. Encode once, rather than copying
+            // image bytes again at every assistant message boundary.
+            if row.attachmentsData == nil, !message.attachments.isEmpty {
+                row.attachmentsData = try? PropertyListEncoder().encode(message.attachments)
+            }
+            let blocks: [TranscriptSnapshot.Block] = message.blocks.map { block in
+                switch block {
+                case .text(let id, let text): return .text(id: id, text)
+                case .thinking(let id, let text): return .thinking(id: id, text)
+                case .toolCall(let call): return .toolCall(id: call.id)
+                }
+            }
+            saved.append(.init(id: message.id, blocks: blocks, error: message.error))
+        }
+        if let data = try? JSONEncoder().encode(TranscriptSnapshot(messages: saved)) {
+            thread.transcriptJSON = String(decoding: data, as: UTF8.self)
+        }
+    }
+
+    private static func attachments(from row: AgentMessage) -> [AgentAttachment] {
+        guard let data = row.attachmentsData else { return [] }
+        return (try? PropertyListDecoder().decode([AgentAttachment].self, from: data)) ?? []
     }
 
     // MARK: - Saving compaction state
@@ -169,5 +264,23 @@ enum AgentTranscriptStore {
             guard thread.providerSessionID(for: backend) != sessionID else { continue }
             thread.setProviderSessionID(sessionID, for: backend)
         }
+    }
+}
+
+/// App-owned encoding, independent of the SDK's non-Codable UI value types.
+private nonisolated struct TranscriptSnapshot: Codable {
+    var version = 1
+    var messages: [Message]
+
+    nonisolated struct Message: Codable {
+        var id: UUID
+        var blocks: [Block]
+        var error: String?
+    }
+
+    nonisolated enum Block: Codable {
+        case text(id: UUID, String)
+        case thinking(id: UUID, String)
+        case toolCall(id: String)
     }
 }

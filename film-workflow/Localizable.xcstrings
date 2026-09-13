@@ -163,6 +163,16 @@
         }
       }
     },
+    "%@ · %@s\n%@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ · %2$@s\n%3$@"
+          }
+        }
+      }
+    },
     "%@ (.%@)" : {
       "localizations" : {
         "en" : {
@@ -175,6 +185,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%@（.%@）"
+          }
+        }
+      }
+    },
+    "%@ (%lld)" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ (%2$lld)"
           }
         }
       }
@@ -393,6 +413,16 @@
         }
       }
     },
+    "%lld shots · %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$lld shots · %2$@"
+          }
+        }
+      }
+    },
     "%lld tool calls" : {
 
     },
@@ -481,6 +511,9 @@
       },
       "shouldTranslate" : false
     },
+    "×" : {
+
+    },
     "−%@" : {
 
     },
@@ -534,6 +567,16 @@
     },
     "A generation is still running at the provider." : {
 
+    },
+    "A head start for your next film." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "让你的下一部影片更快起步。"
+          }
+        }
+      }
     },
     "A Major" : {
       "localizations" : {
@@ -646,6 +689,9 @@
     "Add Credits…" : {
 
     },
+    "Add effect" : {
+
+    },
     "Add Images" : {
       "localizations" : {
         "zh-Hans" : {
@@ -679,6 +725,9 @@
         }
       }
     },
+    "Add Marketplace Item" : {
+
+    },
     "Add Reference Images" : {
 
     },
@@ -691,6 +740,9 @@
           }
         }
       }
+    },
+    "Add Shot" : {
+
     },
     "Add Speaker" : {
       "localizations" : {
@@ -759,6 +811,9 @@
 
     },
     "Adults only" : {
+
+    },
+    "Advanced definition" : {
 
     },
     "Agent" : {
@@ -883,6 +938,9 @@
       }
     },
     "All %lld rendered for this size" : {
+
+    },
+    "All Categories" : {
 
     },
     "All interfaces (0.0.0.0)" : {
@@ -1054,6 +1112,16 @@
         }
       }
     },
+    "Apply a template to a new sequence in your current film, then refine the edit." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在当前影片的新序列中应用模板，再继续完善剪辑。"
+          }
+        }
+      }
+    },
     "Apply Caption Style" : {
 
     },
@@ -1219,6 +1287,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "B小调"
+          }
+        }
+      }
+    },
+    "Back" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "上一页"
           }
         }
       }
@@ -1436,6 +1514,16 @@
         }
       }
     },
+    "Browse Marketplace templates with a video style, ordered shots and editing guidance." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在市场中探索包含影像风格、分镜顺序和剪辑指导的项目模板。"
+          }
+        }
+      }
+    },
     "Browse the marketplace" : {
       "localizations" : {
         "zh-Hans" : {
@@ -1452,6 +1540,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "递进"
+          }
+        }
+      }
+    },
+    "Build a new sequence" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "创建新序列"
           }
         }
       }
@@ -1492,6 +1590,9 @@
           }
         }
       }
+    },
+    "Buy · %lld credits" : {
+
     },
     "Buy for %@ credits" : {
 
@@ -1739,6 +1840,9 @@
         }
       }
     },
+    "Categories belong to one kind, so this one only shows up for %@." : {
+
+    },
     "Cello" : {
       "localizations" : {
         "zh-Hans" : {
@@ -1813,6 +1917,9 @@
         }
       }
     },
+    "Choose a category" : {
+
+    },
     "Choose a chat model in Settings › AI Provider, or pick one from the engine menu below the composer." : {
       "extractionState" : "stale",
       "localizations" : {
@@ -1823,6 +1930,9 @@
           }
         }
       }
+    },
+    "Choose a Marketplace Item" : {
+
     },
     "Choose a Narration" : {
       "localizations" : {
@@ -1898,7 +2008,25 @@
         }
       }
     },
+    "Choose an effect or transition" : {
+
+    },
+    "Choose an item" : {
+
+    },
+    "Choose Cover…" : {
+
+    },
+    "Choose File…" : {
+
+    },
+    "Choose Film Footage" : {
+
+    },
     "Choose footage version" : {
+
+    },
+    "Choose Preview Video…" : {
 
     },
     "Choose where AI work runs" : {
@@ -2223,6 +2351,9 @@
         }
       }
     },
+    "Continue with Agent" : {
+
+    },
     "Copied" : {
       "localizations" : {
         "zh-Hans" : {
@@ -2305,7 +2436,16 @@
         }
       }
     },
+    "Couldn’t load your items" : {
+
+    },
     "Couldn’t Open Film" : {
+
+    },
+    "Couldn’t open the editor" : {
+
+    },
+    "Couldn’t play this preview. Try again." : {
 
     },
     "Couldn’t Refresh Account" : {
@@ -2330,7 +2470,19 @@
     "Create a film or open an existing one.\nYour recent films will appear here." : {
 
     },
+    "Create an item, prepare its content and previews, then publish it to the marketplace." : {
+
+    },
     "Create Composition & Start Studio" : {
+
+    },
+    "Create from Current Film with Agent" : {
+
+    },
+    "Create Item" : {
+
+    },
+    "Create Marketplace Item" : {
 
     },
     "Credential header (optional)" : {
@@ -2351,6 +2503,9 @@
           }
         }
       }
+    },
+    "Cut" : {
+
     },
     "D Major" : {
       "localizations" : {
@@ -2463,6 +2618,9 @@
         }
       }
     },
+    "Delete “%@”?" : {
+
+    },
     "Delete %@" : {
 
     },
@@ -2488,6 +2646,12 @@
 
     },
     "Delete Paragraph" : {
+
+    },
+    "Delete Permanently" : {
+
+    },
+    "Delete permanently?" : {
 
     },
     "Delete Section" : {
@@ -2649,6 +2813,9 @@
         }
       }
     },
+    "Describe what to generate" : {
+
+    },
     "Describe what you want in plain language; the agent operates the projects for you." : {
       "extractionState" : "stale",
       "localizations" : {
@@ -2796,6 +2963,12 @@
     "Downloading video…" : {
 
     },
+    "Draft" : {
+
+    },
+    "Drafts" : {
+
+    },
     "Drag an effect onto this clip to get started." : {
 
     },
@@ -2910,7 +3083,6 @@
       }
     },
     "Edit" : {
-      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -2941,6 +3113,9 @@
       }
     },
     "Edit Clip" : {
+
+    },
+    "Edit Marketplace Item" : {
 
     },
     "Edit shortcode parameters" : {
@@ -2976,6 +3151,9 @@
         }
       }
     },
+    "Editing guidance" : {
+
+    },
     "Editor" : {
       "localizations" : {
         "zh-Hans" : {
@@ -2985,6 +3163,9 @@
           }
         }
       }
+    },
+    "Effect name" : {
+
     },
     "Effects" : {
 
@@ -3525,6 +3706,15 @@
     "Footage pane height" : {
 
     },
+    "Footage the user should provide" : {
+
+    },
+    "Footage title" : {
+
+    },
+    "Footage to provide" : {
+
+    },
     "Footage version" : {
 
     },
@@ -3578,6 +3768,9 @@
           }
         }
       }
+    },
+    "FPS" : {
+
     },
     "Frame Rate" : {
       "localizations" : {
@@ -3664,6 +3857,9 @@
           }
         }
       }
+    },
+    "Gathering footage" : {
+
     },
     "Gemini" : {
       "extractionState" : "stale",
@@ -3771,7 +3967,16 @@
         }
       }
     },
+    "Generate Content…" : {
+
+    },
+    "Generate Cover…" : {
+
+    },
     "Generate footage from the inspector, then play it here." : {
+
+    },
+    "Generate Preview" : {
 
     },
     "Generate with AI…" : {
@@ -4142,7 +4347,13 @@
         }
       }
     },
+    "How this item is used" : {
+
+    },
     "https://provider.example/{z}/{x}/{y}.png" : {
+
+    },
+    "Icon" : {
 
     },
     "If the configured port is in use, the next free port (up to base+9) will be used instead. The actual port is shown below." : {
@@ -4264,6 +4475,9 @@
 
     },
     "Importing…" : {
+
+    },
+    "In progress" : {
 
     },
     "Include timestamps" : {
@@ -4690,6 +4904,9 @@
         }
       }
     },
+    "Length seconds" : {
+
+    },
     "Let other tools drive this app" : {
       "localizations" : {
         "zh-Hans" : {
@@ -4762,6 +4979,9 @@
     "Loading subscription catalog…" : {
 
     },
+    "Loading the form…" : {
+
+    },
     "Loading the Studio preview…" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -4793,6 +5013,9 @@
           }
         }
       }
+    },
+    "Loading your items…" : {
+
     },
     "Loading…" : {
       "localizations" : {
@@ -4855,7 +5078,26 @@
         }
       }
     },
+    "Make it yours with the agent" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "与智能体一起打造你的作品"
+          }
+        }
+      }
+    },
     "Manage credits and subscription usage." : {
+
+    },
+    "Manage Items" : {
+
+    },
+    "Manage Marketplace Items" : {
+
+    },
+    "Manage your drafts and published items." : {
 
     },
     "MapKit maps are ready to use in Remotion compositions." : {
@@ -4877,6 +5119,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "素材市场现已上线"
+          }
+        }
+      }
+    },
+    "Marketplace items" : {
+
+    },
+    "Marketplace source" : {
+
+    },
+    "Match your footage to each shot and get help generating missing clips." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "为每个镜头匹配你的素材，并让智能体协助生成缺少的片段。"
           }
         }
       }
@@ -4933,6 +5191,9 @@
           }
         }
       }
+    },
+    "Media" : {
+
     },
     "Melancholic" : {
       "localizations" : {
@@ -5044,7 +5305,6 @@
       }
     },
     "Move Down" : {
-      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -5074,7 +5334,6 @@
       }
     },
     "Move Up" : {
-      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -5126,6 +5385,9 @@
       }
     },
     "Mute" : {
+
+    },
+    "My Marketplace" : {
 
     },
     "My provider permits automated movie exports" : {
@@ -5231,6 +5493,16 @@
         }
       }
     },
+    "Needed: %@ — %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Needed: %1$@ — %2$@"
+          }
+        }
+      }
+    },
     "Negative Prompt" : {
 
     },
@@ -5257,6 +5529,12 @@
           }
         }
       }
+    },
+    "New Category" : {
+
+    },
+    "New Category…" : {
+
     },
     "New Film…" : {
 
@@ -5369,6 +5647,9 @@
     "No Clip Selected" : {
 
     },
+    "No drafts" : {
+
+    },
     "No footage yet" : {
 
     },
@@ -5411,6 +5692,9 @@
           }
         }
       }
+    },
+    "No marketplace items yet" : {
+
     },
     "No metered usage yet." : {
 
@@ -5476,6 +5760,9 @@
           }
         }
       }
+    },
+    "No published items" : {
+
     },
     "No reference images." : {
 
@@ -6038,6 +6325,9 @@
         }
       }
     },
+    "Page %lld" : {
+
+    },
     "Page %lld of %lld" : {
       "localizations" : {
         "zh-Hans" : {
@@ -6386,6 +6676,9 @@
         }
       }
     },
+    "Previews" : {
+
+    },
     "Previous" : {
       "localizations" : {
         "zh-Hans" : {
@@ -6415,6 +6708,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "项目名称"
+          }
+        }
+      }
+    },
+    "Project prompt" : {
+
+    },
+    "Project Templates" : {
+
+    },
+    "Project templates are here" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "项目模板来了"
           }
         }
       }
@@ -6486,6 +6795,12 @@
           }
         }
       }
+    },
+    "Publish" : {
+
+    },
+    "Published" : {
+
     },
     "px" : {
       "localizations" : {
@@ -6785,6 +7100,9 @@
         }
       }
     },
+    "Remove effect" : {
+
+    },
     "Remove punctuation" : {
       "localizations" : {
         "zh-Hans" : {
@@ -6958,6 +7276,9 @@
         }
       }
     },
+    "Required" : {
+
+    },
     "Required on every request, localhost included: the generation tools spend your account's credits." : {
 
     },
@@ -7068,6 +7389,9 @@
           }
         }
       }
+    },
+    "Retry preview" : {
+
     },
     "Retry Preview" : {
 
@@ -7322,6 +7646,9 @@
         }
       }
     },
+    "Save Draft" : {
+
+    },
     "Save To" : {
       "localizations" : {
         "zh-Hans" : {
@@ -7426,6 +7753,9 @@
         }
       }
     },
+    "Search items" : {
+
+    },
     "Search the marketplace" : {
       "localizations" : {
         "zh-Hans" : {
@@ -7435,6 +7765,9 @@
           }
         }
       }
+    },
+    "seconds" : {
+
     },
     "Section Time" : {
       "extractionState" : "stale",
@@ -7635,6 +7968,9 @@
     "Sequence" : {
 
     },
+    "Sequence ready" : {
+
+    },
     "Set" : {
       "localizations" : {
         "zh-Hans" : {
@@ -7739,6 +8075,9 @@
         }
       }
     },
+    "SF Symbol for the sidebar row, e.g. music.note. Blank uses a folder." : {
+
+    },
     "Shifts all later unpinned words by the same amount." : {
       "localizations" : {
         "zh-Hans" : {
@@ -7758,6 +8097,12 @@
           }
         }
       }
+    },
+    "Shot direction and framing" : {
+
+    },
+    "Shot title" : {
+
     },
     "shouting" : {
       "localizations" : {
@@ -8191,6 +8536,9 @@
         }
       }
     },
+    "Start seconds" : {
+
+    },
     "Start time" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -8218,6 +8566,19 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "开始时间为负值。"
+          }
+        }
+      }
+    },
+    "Start with" : {
+
+    },
+    "Start with a shot plan" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "从分镜计划开始"
           }
         }
       }
@@ -8389,6 +8750,9 @@
           }
         }
       }
+    },
+    "Suggested seconds" : {
+
     },
     "Switch between transcription runs" : {
 
@@ -8628,6 +8992,9 @@
     "The generated video file will be permanently deleted." : {
 
     },
+    "The item, its content file and its previews cannot be recovered." : {
+
+    },
     "The model decides where a long caption should break — at a clause boundary, never mid-phrase, and never leaving a stub second line. It leaves a caption alone when no split improves it. The length above is the threshold it works to." : {
       "localizations" : {
         "zh-Hans" : {
@@ -8670,6 +9037,9 @@
           }
         }
       }
+    },
+    "The preview took too long to load. Try again." : {
+
     },
     "The project these changes apply to is no longer available." : {
 
@@ -8822,6 +9192,9 @@
           }
         }
       }
+    },
+    "This removes the item and everything uploaded for it from the marketplace." : {
+
     },
     "This song-structure section will be permanently deleted." : {
 
@@ -9030,6 +9403,12 @@
       }
     },
     "Transition" : {
+
+    },
+    "Transition seconds" : {
+
+    },
+    "Transition to next shot" : {
 
     },
     "Transitions" : {
@@ -9319,6 +9698,9 @@
     "Unpin Thread" : {
 
     },
+    "Unpublish" : {
+
+    },
     "Untitled term" : {
       "localizations" : {
         "zh-Hans" : {
@@ -9370,6 +9752,9 @@
         }
       }
     },
+    "Uploaded preview uses mock images, without original project footage" : {
+
+    },
     "Uploading audio…" : {
       "localizations" : {
         "zh-Hans" : {
@@ -9414,6 +9799,12 @@
           }
         }
       }
+    },
+    "Use Film Footage…" : {
+
+    },
+    "Use in Current Film" : {
+
     },
     "Use Narration…" : {
       "localizations" : {
@@ -9493,6 +9884,9 @@
           }
         }
       }
+    },
+    "Users purchase missing paid items separately." : {
+
     },
     "Uses the endpoint and key from the AI Provider tab. Many gateways list audio models but don't implement /v1/audio/transcriptions — if you get a 404, use the provider's own endpoint." : {
       "extractionState" : "stale",
@@ -9595,6 +9989,9 @@
 
     },
     "Video Parameters" : {
+
+    },
+    "Video style" : {
 
     },
     "Vietnamese" : {
@@ -9702,6 +10099,9 @@
 
     },
     "What to keep out of the shot. Optional." : {
+
+    },
+    "What to provide, how to frame it, and what should happen" : {
 
     },
     "What's New" : {

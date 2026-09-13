@@ -7,6 +7,7 @@ enum MCPServerError: LocalizedError {
     case noPortAvailable(base: Int)
     case bindFailed(String)
     case notConfigured
+    case startupTimedOut
 
     var errorDescription: String? {
         switch self {
@@ -16,13 +17,26 @@ enum MCPServerError: LocalizedError {
             return "MCP listener failed: \(detail)"
         case .notConfigured:
             return "MCP server is not configured."
+        case .startupTimedOut:
+            return "Timed out waiting for the MCP server to start."
         }
     }
 }
 
+/// Keeps listener lifecycle events controllable in startup regression tests.
+@MainActor
+protocol MCPServerListener: AnyObject {
+    var newConnectionHandler: (@Sendable (NWConnection) -> Void)? { get set }
+    var stateUpdateHandler: (@Sendable (NWListener.State) -> Void)? { get set }
+    func start(queue: DispatchQueue)
+    func cancel()
+}
+
+extension NWListener: MCPServerListener {}
+
 /// Embedded MCP HTTP server. Single shared instance bootstrapped by the App.
 ///
-/// Lifecycle: `bootstrap(container:)` is called once on launch — it observes
+/// Lifecycle: `bootstrap()` is called once on launch — it observes
 /// `MCPSettings` and starts/stops/restarts the listener as the user toggles the
 /// settings UI. While running, it accepts incoming TCP connections, parses HTTP/1.1,
 /// and routes `POST /mcp` to `MCPRouter.handle`.
@@ -37,16 +51,29 @@ final class MCPServer {
 
     /// Connection-handling queue. Static so we don't need to thread it through
     /// nonisolated closures.
-    private static let queue = DispatchQueue(
+    private nonisolated static let queue = DispatchQueue(
         label: "com.rxlab.film-workflow.mcp",
         qos: .userInitiated
     )
 
-    private var listener: NWListener?
+    private var listener: (any MCPServerListener)?
+    private var listenerID: UUID?
+    private var startupWaiters: [CheckedContinuation<Void, Never>] = []
+    private var startupTimeoutTask: Task<Void, Never>?
+    private let startupTimeout: Duration
+    private let makeListener: (NWParameters, NWEndpoint.Port) throws -> any MCPServerListener
     private var lastObservedRevision: Int = -1
     private var pollTask: Task<Void, Never>?
 
-    private init() {}
+    init(
+        startupTimeout: Duration = .seconds(10),
+        makeListener: @escaping (NWParameters, NWEndpoint.Port) throws -> any MCPServerListener = {
+            try NWListener(using: $0, on: $1)
+        }
+    ) {
+        self.startupTimeout = startupTimeout
+        self.makeListener = makeListener
+    }
 
     func bootstrap() {
         pollTask?.cancel()
@@ -72,62 +99,93 @@ final class MCPServer {
         }
     }
 
+    /// Returns only once the listener is ready, has failed, or has been stopped.
+    /// Concurrent callers join the same startup instead of replacing its listener.
     func start() async {
-        await stop()
-        let settings = MCPSettings.shared
-        do {
-            let port = try findFreePort(starting: settings.basePort)
-            let params = NWParameters.tcp
-            params.allowLocalEndpointReuse = true
-            params.acceptLocalOnly = !settings.bindAll
-            let listener = try NWListener(
-                using: params,
-                on: NWEndpoint.Port(integerLiteral: UInt16(port))
-            )
-            self.listener = listener
+        guard !isRunning else { return }
+        await withCheckedContinuation { continuation in
+            startupWaiters.append(continuation)
+            guard listener == nil else { return }
 
-            listener.newConnectionHandler = { conn in
-                Self.queue.async {
-                    Self.accept(conn: conn)
+            let settings = MCPSettings.shared
+            let bindAll = settings.bindAll
+            lastError = nil
+            settings.setActualPort(nil, status: "Starting")
+            do {
+                let port = try findFreePort(starting: settings.basePort)
+                let params = NWParameters.tcp
+                params.allowLocalEndpointReuse = true
+                params.acceptLocalOnly = !bindAll
+                let listener = try makeListener(params, NWEndpoint.Port(integerLiteral: UInt16(port)))
+                let id = UUID()
+                self.listener = listener
+                listenerID = id
+
+                listener.newConnectionHandler = { conn in
+                    Self.queue.async { Self.accept(conn: conn) }
                 }
-            }
-            listener.stateUpdateHandler = { state in
-                Task { @MainActor in
-                    switch state {
-                    case .ready:
-                        self.isRunning = true
-                        self.lastError = nil
-                        let displayHost = settings.bindAll ? Self.bestLocalIPv4() ?? "0.0.0.0" : "127.0.0.1"
-                        self.displayURL = "http://\(displayHost):\(port)/mcp"
-                        MCPSettings.shared.setActualPort(port, status: "Running")
-                    case .failed(let err):
-                        self.isRunning = false
-                        self.lastError = err.localizedDescription
-                        self.displayURL = nil
-                        MCPSettings.shared.setActualPort(nil, status: "Failed: \(err.localizedDescription)")
-                    case .cancelled:
-                        self.isRunning = false
-                        self.displayURL = nil
-                        MCPSettings.shared.setActualPort(nil, status: "Stopped")
-                    default:
-                        break
+                listener.stateUpdateHandler = { [weak self] state in
+                    Task { @MainActor in
+                        // Cancellation/readiness callbacks may already be queued
+                        // when stop or restart replaces the listener.
+                        guard let self, self.listenerID == id else { return }
+                        switch state {
+                        case .ready:
+                            self.isRunning = true
+                            self.lastError = nil
+                            let host = bindAll ? Self.bestLocalIPv4() ?? "0.0.0.0" : "127.0.0.1"
+                            self.displayURL = "http://\(host):\(port)/mcp"
+                            settings.setActualPort(port, status: "Running")
+                            self.finishStartup()
+                        case .failed(let error):
+                            self.fail(error)
+                        case .cancelled:
+                            self.stopListener()
+                        default:
+                            break
+                        }
                     }
                 }
+                startupTimeoutTask = Task { @MainActor [weak self, startupTimeout] in
+                    do { try await Task.sleep(for: startupTimeout) }
+                    catch { return }
+                    guard let self, self.listenerID == id, !self.isRunning else { return }
+                    self.fail(MCPServerError.startupTimedOut)
+                }
+                listener.start(queue: Self.queue)
+            } catch {
+                fail(error)
             }
-            listener.start(queue: Self.queue)
-        } catch {
-            isRunning = false
-            lastError = error.localizedDescription
-            MCPSettings.shared.setActualPort(nil, status: "Failed: \(error.localizedDescription)")
         }
     }
 
     func stop() async {
-        listener?.cancel()
+        stopListener()
+    }
+
+    private func stopListener() {
+        let previous = listener
+        listenerID = nil
         listener = nil
+        previous?.cancel()
         isRunning = false
         displayURL = nil
         MCPSettings.shared.setActualPort(nil, status: "Stopped")
+        finishStartup()
+    }
+
+    private func fail(_ error: Error) {
+        stopListener()
+        lastError = error.localizedDescription
+        MCPSettings.shared.setActualPort(nil, status: "Failed: \(error.localizedDescription)")
+    }
+
+    private func finishStartup() {
+        startupTimeoutTask?.cancel()
+        startupTimeoutTask = nil
+        let waiters = startupWaiters
+        startupWaiters.removeAll()
+        for waiter in waiters { waiter.resume() }
     }
 
     func restart() async {

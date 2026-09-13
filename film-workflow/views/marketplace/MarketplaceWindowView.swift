@@ -9,22 +9,18 @@ nonisolated enum MarketplaceWindowID {
     static let value = "marketplace"
 }
 
-/// What the sidebar can select: everything, one kind, or one category within a kind.
+/// The public catalog (everything or one kind), or the current author's items.
+/// Categories live in the content view's dropdown so the sidebar stays flat.
 enum MarketplaceSidebarSelection: Hashable {
     case all
     case kind(MarketplaceKind)
-    case category(MarketplaceKind, String)
+    case mine
 
     var kind: MarketplaceKind? {
         switch self {
-        case .all: return nil
-        case .kind(let kind), .category(let kind, _): return kind
+        case .all, .mine: return nil
+        case .kind(let kind): return kind
         }
-    }
-
-    var category: String? {
-        if case .category(_, let name) = self { return name }
-        return nil
     }
 }
 
@@ -34,7 +30,8 @@ private struct MarketplacePresentedItem: Identifiable {
     let id: String
 }
 
-/// The system-wide marketplace window: a category sidebar alongside the grid.
+/// The system-wide marketplace window: a kind sidebar alongside the grid, with
+/// the selected kind's categories offered as a dropdown above the cards.
 /// Clicking a card opens its detail in a sheet; hovering a card with a video
 /// preview plays it in place.
 struct MarketplaceWindowView: View {
@@ -42,10 +39,17 @@ struct MarketplaceWindowView: View {
     @State private var auth = AuthManager.shared
     @State private var documents = ProjectDocumentController.shared
     @State private var selection: MarketplaceSidebarSelection = .all
+    /// The category slug filtering the grid, or nil for every category in the
+    /// selected kind. Cleared whenever the sidebar selection changes.
+    @State private var category: String?
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
     @State private var search = ""
     @State private var presented: MarketplacePresentedItem?
     @State private var addedMessage: String?
+    @State private var creatingItem = false
+    @State private var managingItems = false
+    @State private var authoring = MarketplaceAuthoringService.shared
+    @State private var authoringRevision = 0
 
     init(store: MarketplaceStore = .shared) {
         _store = State(initialValue: store)
@@ -56,16 +60,26 @@ struct MarketplaceWindowView: View {
             sidebar
                 .navigationSplitViewColumnWidth(min: 200, ideal: 230, max: 300)
         } detail: {
-            grid
+            if selection == .mine, authoring.canAuthor {
+                MarketplaceMyItemsView(query: search, refreshID: authoringRevision,
+                                       onCreate: { creatingItem = true }, onItemsChanged: authoringDidChange)
+                    .id(authoring.userId)
+            } else {
+                grid
+            }
         }
         .navigationSplitViewStyle(.balanced)
         .navigationTitle("Marketplace")
         .searchable(text: $search, placement: .toolbar, prompt: "Search the marketplace")
         .toolbar {
             ToolbarItemGroup(placement: .primaryAction) {
-                Button { Task { await reload() } } label: { Label("Refresh", systemImage: "arrow.clockwise") }
+                Button { authoringRevision += 1; Task { await store.loadTaxonomy(force: true); await reload() } } label: { Label("Refresh", systemImage: "arrow.clockwise") }
                     .help("Reload the catalog")
                     .disabled(store.isLoading)
+                if authoring.canAuthor {
+                    Button("Create Item", systemImage: "plus") { creatingItem = true }.accessibilityIdentifier("marketplace-create-item")
+                    Button("Manage Items", systemImage: "square.and.pencil") { managingItems = true }.accessibilityIdentifier("marketplace-manage-button")
+                }
                 AccountControl(placement: .toolbar)
             }
         }
@@ -73,10 +87,22 @@ struct MarketplaceWindowView: View {
             MarketplaceItemSheet(itemID: presented.id, store: store, isSignedIn: auth.isAuthenticated,
                                  hasActiveFilm: documents.activeDocument != nil, onAddToFilm: addToFilm)
         }
+        .sheet(isPresented: $creatingItem, onDismiss: authoringDidChange) { MarketplaceAuthoringEditor() }
+        .sheet(isPresented: $managingItems, onDismiss: authoringDidChange) { MarketplaceManageItems() }
         .task { await reload() }
-        .onChange(of: selection) { Task { await reload() } }
+        .task { await store.loadTaxonomy() }
+        .task { _ = await authoring.refreshAccess() }
+        .onChange(of: selection) { category = nil; Task { await reload() } }
+        .onChange(of: category) { Task { await reload() } }
         .onChange(of: search) { Task { await reload(debounced: true) } }
-        .onChange(of: auth.isAuthenticated) { Task { await reload() } }
+        .onChange(of: auth.isAuthenticated) { Task { _ = await authoring.refreshAccess(); await reload() } }
+        .onChange(of: authoring.canAuthor) {
+            if !authoring.canAuthor {
+                if selection == .mine { selection = .all }
+                creatingItem = false
+                managingItems = false
+            }
+        }
         .insufficientCreditsAlert(Binding(get: { store.insufficientCredits }, set: { store.insufficientCredits = $0 }))
         .alert("Added to Film", isPresented: Binding(get: { addedMessage != nil }, set: { if !$0 { addedMessage = nil } })) {
             Button("OK") { addedMessage = nil }
@@ -96,22 +122,20 @@ struct MarketplaceWindowView: View {
             Section {
                 Label("All Items", systemImage: "square.grid.2x2")
                     .tag(MarketplaceSidebarSelection.all)
-                ForEach(MarketplaceKind.allCases) { kind in
-                    Label(kind.displayName, systemImage: kind.systemImage)
-                        .tag(MarketplaceSidebarSelection.kind(kind))
+                ForEach(store.taxonomy.kinds) { entry in
+                    Label(entry.label, systemImage: MarketplaceSymbol.resolve(entry.icon, fallback: entry.kind.systemImage))
+                        .badge(entry.count)
+                        .tag(MarketplaceSidebarSelection.kind(entry.kind))
                 }
             }
             .accessibilityIdentifier("marketplace-kinds")
-
-            if let kind = selection.kind, !categoriesForSelectedKind.isEmpty {
-                Section(kind.displayName) {
-                    ForEach(categoriesForSelectedKind, id: \.category) { entry in
-                        Label(entry.category, systemImage: "folder")
-                            .badge(entry.count)
-                            .tag(MarketplaceSidebarSelection.category(kind, entry.category))
-                    }
+            if authoring.canAuthor {
+                Section {
+                    Divider().padding(.vertical, 2)
+                    Label("My Marketplace", systemImage: "person.crop.square")
+                        .tag(MarketplaceSidebarSelection.mine)
+                        .accessibilityIdentifier("marketplace-my-items")
                 }
-                .accessibilityIdentifier("marketplace-categories")
             }
         }
         .listStyle(.sidebar)
@@ -120,12 +144,42 @@ struct MarketplaceWindowView: View {
 
     private var categoriesForSelectedKind: [MarketplaceCategoryCount] {
         guard let kind = selection.kind else { return [] }
-        return store.categories.filter { $0.kind == kind }
+        return store.categories(for: kind)
     }
 
     // MARK: - Grid
 
+    /// The category filter for the selected kind. Only shown when the backend
+    /// actually reports categories for it, so single-category kinds stay clean.
+    @ViewBuilder
+    private var categoryFilter: some View {
+        if let kind = selection.kind, !categoriesForSelectedKind.isEmpty {
+            HStack {
+                Picker(store.label(for: kind), selection: $category) {
+                    Text("All Categories").tag(String?.none)
+                    ForEach(categoriesForSelectedKind) { entry in
+                        Text("\(entry.displayName) (\(entry.count))").tag(String?.some(entry.category))
+                    }
+                }
+                .pickerStyle(.menu)
+                .labelsHidden()
+                .fixedSize()
+                .accessibilityIdentifier("marketplace-category-filter")
+                Spacer()
+            }
+            .padding(.horizontal, 14)
+            .padding(.top, 10)
+        }
+    }
+
     private var grid: some View {
+        VStack(spacing: 0) {
+            categoryFilter
+            gridContent
+        }
+    }
+
+    private var gridContent: some View {
         Group {
             if store.isLoading && store.items.isEmpty {
                 ProgressView("Loading…").frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -143,7 +197,7 @@ struct MarketplaceWindowView: View {
                 ScrollView {
                     LazyVGrid(columns: [GridItem(.adaptive(minimum: 200, maximum: 260), spacing: 14, alignment: .top)], spacing: 14) {
                         ForEach(store.items) { item in
-                            MarketplaceItemCard(item: item, isInstalled: store.isInstalled(item.id)) {
+                            MarketplaceItemCard(item: item, isInstalled: store.isInstalled(item.id), symbol: store.symbol(for: item.kind)) {
                                 presented = MarketplacePresentedItem(id: item.id)
                             }
                         }
@@ -173,14 +227,20 @@ struct MarketplaceWindowView: View {
 
     private func reload(page: Int = 1, debounced: Bool = false) async {
         reloadTask?.cancel()
-        let selection = selection, search = search
+        guard selection != .mine else { return }
+        let selection = selection, category = category, search = search
         let task = Task { @MainActor in
             if debounced { try? await Task.sleep(for: .milliseconds(300)); if Task.isCancelled { return } }
-            await store.load(kind: selection.kind, category: selection.category, query: search, page: page)
+            await store.load(kind: selection.kind, category: category, query: search, page: page)
             if let presented, store.item(presented.id) == nil { self.presented = nil }
         }
         reloadTask = task
         await task.value
+    }
+
+    private func authoringDidChange() {
+        authoringRevision += 1
+        Task { await store.loadTaxonomy(force: true); await reload() }
     }
 
     private func addToFilm(_ item: MarketplaceItem) {
@@ -201,6 +261,8 @@ struct MarketplaceWindowView: View {
 struct MarketplaceItemCard: View {
     let item: MarketplaceItem
     let isInstalled: Bool
+    /// The SF Symbol for the item's kind, already resolved against this Mac.
+    var symbol: String?
     let onOpen: () -> Void
     @State private var isHovering = false
     @State private var isVideoReady = false
@@ -210,7 +272,7 @@ struct MarketplaceItemCard: View {
             VStack(alignment: .leading, spacing: 6) {
                 ZStack(alignment: .topTrailing) {
                     ZStack {
-                        MarketplacePreviewImage(url: item.previewImageUrl, kind: item.kind)
+                        MarketplacePreviewImage(url: item.previewImageUrl, kind: item.kind, symbol: symbol)
                         if isHovering, let video = item.previewVideoUrl {
                             MarketplaceHoverVideo(url: video) {
                                 withAnimation(.easeInOut(duration: 0.3)) { isVideoReady = true }
@@ -241,7 +303,7 @@ struct MarketplaceItemCard: View {
                 }
                 Text(item.title).font(.callout.weight(.medium)).lineLimit(2).multilineTextAlignment(.leading)
                 HStack {
-                    Text(item.category).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                    Text(item.categoryLabel).font(.caption).foregroundStyle(.secondary).lineLimit(1)
                     Spacer()
                     MarketplacePriceBadge(item: item)
                 }
@@ -346,6 +408,8 @@ struct MarketplacePriceBadge: View {
 struct MarketplacePreviewImage: View {
     let url: URL?
     let kind: MarketplaceKind
+    /// The kind's symbol as the backend names it; nil falls back to the built-in one.
+    var symbol: String?
     var body: some View {
         ZStack {
             Rectangle().fill(.quaternary)
@@ -362,12 +426,12 @@ struct MarketplacePreviewImage: View {
         .clipped()
     }
     private var placeholder: some View {
-        Image(systemName: kind.systemImage).font(.title).foregroundStyle(.secondary)
+        Image(systemName: symbol ?? kind.systemImage).font(.title).foregroundStyle(.secondary)
     }
 }
 
 /// The detail preview: shows the cover art with a play button, crossfades into
-/// the preview video once it is ready to play, and crossfades back to the cover
+/// the preview video once playback starts, and crossfades back to the cover
 /// when the video reaches the end.
 struct MarketplacePreviewPlayer: View {
     let item: MarketplaceItem
@@ -375,6 +439,7 @@ struct MarketplacePreviewPlayer: View {
     @State private var player: AVPlayer?
     @State private var isShowingVideo = false
     @State private var isPreparing = false
+    @State private var playbackError: String?
     @State private var prepareTask: Task<Void, Never>?
     @State private var teardownTask: Task<Void, Never>?
 
@@ -386,13 +451,39 @@ struct MarketplacePreviewPlayer: View {
             MarketplacePreviewImage(url: item.previewImageUrl, kind: item.kind)
                 .blur(radius: isShowingVideo ? 6 : 0)
                 .scaleEffect(isShowingVideo ? 1.04 : 1)
-            if isShowingVideo, let player {
+            if let player, let playerItem = player.currentItem {
                 VideoPlayer(player: player)
-                    .transition(.opacity.combined(with: .scale(scale: 1.04)))
+                    // Attach the player while it prepares so AVKit can load and
+                    // render the video underneath the cover.
+                    .opacity(isShowingVideo ? 1 : 0)
+                    .scaleEffect(isShowingVideo ? 1 : 1.04)
+                    .allowsHitTesting(isShowingVideo)
+                    .accessibilityHidden(!isShowingVideo)
                     .accessibilityLabel("Preview video")
+                    .onReceive(player.publisher(for: \.timeControlStatus).receive(on: DispatchQueue.main)) { status in
+                        guard self.player === player, isPreparing, status == .playing else { return }
+                        prepareTask?.cancel()
+                        prepareTask = nil
+                        isPreparing = false
+                        withAnimation(.easeInOut(duration: Self.crossfade)) { isShowingVideo = true }
+                    }
+                    .onReceive(playerItem.publisher(for: \.status).receive(on: DispatchQueue.main)) { status in
+                        guard self.player === player, status == .failed else { return }
+                        fail(playerItem.error?.localizedDescription ?? String(localized: "Couldn’t play this preview. Try again."))
+                    }
             }
             if !isShowingVideo, item.previewVideoUrl != nil {
                 playButton.transition(.opacity.combined(with: .scale(scale: 0.8)))
+            }
+        }
+        .overlay(alignment: .bottom) {
+            if let playbackError {
+                Label(playbackError, systemImage: "exclamationmark.triangle")
+                    .font(.caption)
+                    .padding(10)
+                    .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8))
+                    .padding(12)
+                    .accessibilityIdentifier("marketplace-preview-error")
             }
         }
         .animation(.easeInOut(duration: Self.crossfade), value: isShowingVideo)
@@ -400,7 +491,12 @@ struct MarketplacePreviewPlayer: View {
             guard let finished = note.object as? AVPlayerItem, finished === player?.currentItem else { return }
             stop(animated: true)
         }
-        .onChange(of: item.previewVideoUrl) { _, _ in stop(animated: false) }
+        .onReceive(NotificationCenter.default.publisher(for: .AVPlayerItemFailedToPlayToEndTime)) { note in
+            guard let failed = note.object as? AVPlayerItem, failed === player?.currentItem else { return }
+            let error = note.userInfo?[AVPlayerItemFailedToPlayToEndTimeErrorKey] as? Error
+            fail(error?.localizedDescription ?? String(localized: "Couldn’t play this preview. Try again."))
+        }
+        .onChange(of: item.previewVideoUrl) { _, _ in stop(animated: false); playbackError = nil }
         .onDisappear { stop(animated: false) }
     }
 
@@ -411,14 +507,14 @@ struct MarketplacePreviewPlayer: View {
                 if isPreparing {
                     ProgressView().controlSize(.small).tint(.white)
                 } else {
-                    Image(systemName: "play.fill").font(.title2).foregroundStyle(.white)
+                    Image(systemName: playbackError == nil ? "play.fill" : "arrow.clockwise").font(.title2).foregroundStyle(.white)
                 }
             }
             .contentShape(Circle())
         }
         .buttonStyle(.plain)
         .disabled(isPreparing)
-        .accessibilityLabel("Play preview")
+        .accessibilityLabel(playbackError == nil ? "Play preview" : "Retry preview")
         .accessibilityIdentifier("marketplace-preview-play")
     }
 
@@ -426,23 +522,25 @@ struct MarketplacePreviewPlayer: View {
         guard let url = item.previewVideoUrl, prepareTask == nil else { return }
         teardownTask?.cancel()
         teardownTask = nil
+        playbackError = nil
         isPreparing = true
+        isShowingVideo = false
         let player = AVPlayer(url: url)
         player.actionAtItemEnd = .pause
+        self.player = player
         prepareTask = Task { @MainActor in
-            // Only swap the video in once it has a frame, so the crossfade never
-            // lands on a black rectangle while the stream buffers.
-            let isReady = await waitUntilReady(player.currentItem)
-            guard !Task.isCancelled else { return }
-            prepareTask = nil
-            isPreparing = false
-            guard isReady else { return }
-            withAnimation(.easeInOut(duration: Self.crossfade)) {
-                self.player = player
-                isShowingVideo = true
-            }
-            player.play()
+            do { try await Task.sleep(for: .seconds(20)) } catch { return }
+            guard !Task.isCancelled, self.player === player, isPreparing else { return }
+            fail(String(localized: "The preview took too long to load. Try again."))
         }
+        // Request playback immediately. Waiting for status through an async
+        // publisher before attaching/starting the player could wait forever.
+        player.play()
+    }
+
+    private func fail(_ message: String) {
+        stop(animated: false)
+        playbackError = message
     }
 
     private func stop(animated: Bool) {
@@ -468,17 +566,6 @@ struct MarketplacePreviewPlayer: View {
         }
     }
 
-    private func waitUntilReady(_ playerItem: AVPlayerItem?) async -> Bool {
-        guard let playerItem else { return false }
-        for await status in playerItem.publisher(for: \.status).values {
-            switch status {
-            case .readyToPlay: return true
-            case .failed: return false
-            default: continue
-            }
-        }
-        return false
-    }
 }
 
 /// The detail sheet: reads the live item from the store so the action row
@@ -520,6 +607,8 @@ struct MarketplaceItemDetail: View {
     let hasActiveFilm: Bool
     let onAddToFilm: () -> Void
     @State private var navigation = AppNavigation.shared
+    @State private var templateDefinition: ProjectTemplateDefinition?
+    @Environment(\.openWindow) private var openWindow
 
     private var isInstalled: Bool { store.isInstalled(item.id) }
     private var isBusy: Bool { store.busyItemIDs.contains(item.id) }
@@ -537,14 +626,15 @@ struct MarketplaceItemDetail: View {
                         Spacer()
                         MarketplacePriceBadge(item: item)
                     }
-                    Label(item.kind.displayName, systemImage: item.kind.systemImage).font(.callout).foregroundStyle(.secondary)
-                    Text(item.category).font(.callout).foregroundStyle(.secondary)
+                    Label(store.label(for: item.kind), systemImage: store.symbol(for: item.kind)).font(.callout).foregroundStyle(.secondary)
+                    Text(item.categoryLabel).font(.callout).foregroundStyle(.secondary)
                 }
                 actionRow
                 if !item.description.isEmpty {
                     Text(item.description).font(.body).textSelection(.enabled)
                 }
                 facts
+                if item.kind == .projectTemplate { MarketplaceTemplateDetails(item: item, definition: templateDefinition) }
                 if item.kind == .remotionPrompt, let excerpt = item.metadata.promptExcerpt, !excerpt.isEmpty {
                     GroupBox("Prompt") { Text(excerpt).font(.callout).textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading) }
                 }
@@ -553,6 +643,11 @@ struct MarketplaceItemDetail: View {
                 }
             }
             .padding(20)
+        }
+        .task(id: isInstalled) {
+            if item.kind == .projectTemplate, let manifest = store.manifest(for: item.id) {
+                templateDefinition = try? ProjectTemplateDefinition.decode(Data(contentsOf: manifest.contentURL(in: store.directory(for: manifest))))
+            }
         }
     }
 
@@ -587,6 +682,12 @@ struct MarketplaceItemDetail: View {
                 }
                 .fixedSize()
                 .accessibilityIdentifier("marketplace-installed")
+                if item.kind == .projectTemplate {
+                    Button("Use in Current Film") {
+                        MarketplaceAgentLauncher.start(item: item, instruction: "Use project template \(item.id) in my current film. Inspect my footage, show the template, collect missing footage, and create a new sequence.")
+                        openWindow(id: AgentWindowID.value)
+                    }.buttonStyle(.borderedProminent).disabled(!hasActiveFilm).accessibilityIdentifier("marketplace-use-template")
+                }
                 if item.kind.addsToFilm {
                     Button("Add to Film", action: onAddToFilm)
                         .buttonStyle(.borderedProminent)

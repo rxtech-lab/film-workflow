@@ -11,6 +11,16 @@ struct SubscriptionUser: Codable, Sendable {
     let id: String
     let name: String
     let email: String
+    var roles: [String] = []
+    init(id: String, name: String, email: String, roles: [String] = []) {
+        self.id = id; self.name = name; self.email = email; self.roles = roles
+    }
+    enum CodingKeys: String, CodingKey { case id, name, email, roles }
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(String.self, forKey: .id); name = try c.decode(String.self, forKey: .name)
+        email = try c.decode(String.self, forKey: .email); roles = try c.decodeIfPresent([String].self, forKey: .roles) ?? []
+    }
 }
 
 struct BillingSnapshot: Codable, Sendable {
@@ -33,6 +43,8 @@ struct AccountSnapshot: Codable, Sendable {
 final class CreditBalanceStore {
     static let shared = CreditBalanceStore()
 
+    private(set) var user: SubscriptionUser?
+    var isAdmin: Bool { isSignedIn && user?.roles.contains("admin") == true }
     private(set) var availablePoints = 0
     private(set) var reservedPoints = 0
     private(set) var balancePoints = 0
@@ -64,6 +76,7 @@ final class CreditBalanceStore {
             logger.debug("Refreshing account balance: GET \(BackendConfig.apiBaseURL.absoluteString, privacy: .public)/api/v1/me")
             let snapshot = try await loadAccount()
             try Task.checkCancellation()
+            user = snapshot.user
             apply(snapshot.billing)
         } catch is CancellationError {
             logger.debug("Account balance refresh cancelled")
@@ -89,6 +102,7 @@ final class CreditBalanceStore {
     }
 
     func clear() {
+        user = nil
         balancePoints = 0
         reservedPoints = 0
         availablePoints = 0

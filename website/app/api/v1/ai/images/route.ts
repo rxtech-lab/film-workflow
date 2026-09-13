@@ -100,6 +100,9 @@ async function gatewayImages(input: z.infer<typeof schema>, context: MeteringCon
   const size = input.size && /^\d+x\d+$/.test(input.size)
     ? input.size as `${number}x${number}`
     : undefined;
+  // PNG is the provider default and does not accept lossy compression.
+  // Older app versions send their saved compression value for every format.
+  const supportsCompression = input.format === "jpeg" || input.format === "webp";
   const result = await generateImage({
     model: gateway.image(input.model),
     prompt: input.prompt,
@@ -110,7 +113,7 @@ async function gatewayImages(input: z.infer<typeof schema>, context: MeteringCon
       openai: {
         ...(input.quality ? { quality: input.quality } : {}),
         ...(input.format ? { outputFormat: input.format } : {}),
-        ...(input.compression !== undefined ? { outputCompression: input.compression } : {}),
+        ...(supportsCompression && input.compression !== undefined ? { outputCompression: input.compression } : {}),
         ...(input.background ? { background: input.background } : {}),
       },
     },

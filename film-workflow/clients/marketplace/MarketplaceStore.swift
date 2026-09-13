@@ -19,7 +19,12 @@ final class MarketplaceStore {
     let root: URL
 
     private(set) var items: [MarketplaceItem] = []
-    private(set) var categories: [MarketplaceCategoryCount] = []
+    /// The sidebar the backend describes. Starts as the built-in shape and is
+    /// replaced by `loadTaxonomy()`; a failed load leaves the built-in one up.
+    private(set) var taxonomy: MarketplaceTaxonomy = .builtIn
+    /// True once the backend's version is in hand, so tabs that show up later
+    /// do not each refetch it.
+    private var hasLoadedTaxonomy = false
     private(set) var total = 0
     private(set) var page = 1
     private(set) var pageCount = 1
@@ -52,24 +57,54 @@ final class MarketplaceStore {
 
     // MARK: - Catalog
 
+    /// Identifies the newest load so a superseded one — the request cancelled
+    /// when the filter or the search text changed — neither reports its
+    /// cancellation as a failure nor overwrites the fresher result.
+    private var loadToken = 0
+
     func load(kind: MarketplaceKind?, category: String?, query: String, page: Int = 1) async {
+        loadToken += 1
+        let token = loadToken
         isLoading = true
         lastError = nil
-        defer { isLoading = false }
+        defer { if token == loadToken { isLoading = false } }
         do {
             let result = try await client.items(kind: kind, category: category, query: query, page: page)
+            guard token == loadToken else { return }
             items = result.items.map { item in
                 var item = item
                 if purchasedIDs.contains(item.id) { item.owned = true }
                 return item
             }
-            categories = result.categories
             total = result.total
             self.page = result.page
             pageCount = result.pageCount
         } catch {
+            guard token == loadToken, !MarketplaceError.isCancellation(error) else { return }
             lastError = error.localizedDescription
         }
+    }
+
+    /// Loads the sidebar. Kept apart from `load` because it does not depend on
+    /// the filters and rarely changes, so it is fetched once per launch unless
+    /// `force` says otherwise; a failure keeps the shape already on screen
+    /// rather than emptying the sidebar.
+    func loadTaxonomy(force: Bool = false) async {
+        guard force || !hasLoadedTaxonomy else { return }
+        guard let loaded = try? await client.taxonomy(), !loaded.kinds.isEmpty else { return }
+        taxonomy = loaded
+        hasLoadedTaxonomy = true
+    }
+
+    /// The categories the sidebar lists under one kind.
+    func categories(for kind: MarketplaceKind) -> [MarketplaceCategoryCount] { taxonomy.categories(for: kind) }
+
+    /// The label the backend gives a kind, falling back to the built-in one.
+    func label(for kind: MarketplaceKind) -> String { taxonomy.presentation(for: kind).label }
+
+    /// The SF Symbol the backend gives a kind, resolved against what this Mac can draw.
+    func symbol(for kind: MarketplaceKind) -> String {
+        MarketplaceSymbol.resolve(taxonomy.presentation(for: kind).icon, fallback: kind.systemImage)
     }
 
     func item(_ id: String) -> MarketplaceItem? { items.first { $0.id == id } }
@@ -94,7 +129,7 @@ final class MarketplaceStore {
         } catch {
             if let notice = InsufficientCreditsNotice(error) {
                 insufficientCredits = notice
-            } else {
+            } else if !MarketplaceError.isCancellation(error) {
                 lastError = error.localizedDescription
             }
             return false
@@ -164,7 +199,7 @@ final class MarketplaceStore {
             return true
         } catch {
             try? FileManager.default.removeItem(at: directory)
-            lastError = error.localizedDescription
+            if !MarketplaceError.isCancellation(error) { lastError = error.localizedDescription }
             return false
         }
     }
@@ -181,6 +216,8 @@ final class MarketplaceStore {
             // Written before reload so the loader can see this item's preview.
             try Self.write(manifest, to: directory(for: manifest))
             InstalledModifierLoader.reload(root: root)
+        case .projectTemplate:
+            _ = try ProjectTemplateDefinition.decode(Data(contentsOf: contentURL))
         case .footage, .audio, .soundEffect, .remotionPrompt:
             break
         }

@@ -38,5 +38,28 @@ struct WhatsNewFeature: Identifiable {
                 ),
             ]
         ),
+        WhatsNewFeature(
+            id: "marketplace-project-templates",
+            title: "Project templates are here",
+            subtitle: "A head start for your next film.",
+            imageName: "WhatsNewProjectTemplates",
+            highlights: [
+                Highlight(
+                    icon: "rectangle.stack",
+                    title: "Start with a shot plan",
+                    detail: "Browse Marketplace templates with a video style, ordered shots and editing guidance."
+                ),
+                Highlight(
+                    icon: "sparkles",
+                    title: "Make it yours with the agent",
+                    detail: "Match your footage to each shot and get help generating missing clips."
+                ),
+                Highlight(
+                    icon: "film.stack",
+                    title: "Build a new sequence",
+                    detail: "Apply a template to a new sequence in your current film, then refine the edit."
+                ),
+            ]
+        ),
     ]
 }

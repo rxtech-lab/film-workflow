@@ -263,6 +263,7 @@ struct AgentSDKMigrationTests {
             toolNamePrefix: "mcp__film_workflow__"
         ).renderText()
         #expect(cli.contains("mcp__film_workflow__caption_export"))
+        #expect(cli.contains("call mcp__film_workflow__show_sign_in_dialog"))
 
         // …while an in-process client speaks MCP itself and sees bare names.
         let inProcess = AgentPrompts.context(
@@ -272,6 +273,7 @@ struct AgentSDKMigrationTests {
             context: container.mainContext
         ).renderText()
         #expect(inProcess.contains("- caption_export"))
+        #expect(inProcess.contains("call show_sign_in_dialog"))
         #expect(!inProcess.contains("mcp__film_workflow__caption_export"))
     }
 
@@ -301,6 +303,17 @@ struct AgentSDKMigrationTests {
     }
 
     // MARK: - Tool scoping
+
+    @Test("Sign-in is available under both write policies without a film argument")
+    func signInToolIsAvailable() throws {
+        for policy in AgentWritePolicy.allCases {
+            let descriptor = try #require(AgentToolPolicy.descriptors(policy: policy)
+                .first { $0.name == "show_sign_in_dialog" })
+            let properties = try #require(descriptor.inputSchema["properties"] as? [String: Any])
+            #expect(properties.isEmpty)
+            #expect(AgentToolPolicy.allows(descriptor.name, policy: policy))
+        }
+    }
 
     /// The agent window is not a coding agent. A prompt asking it not to run
     /// shells is a request; the denylist is the guarantee.

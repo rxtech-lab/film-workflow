@@ -16,14 +16,15 @@ struct MarketplaceDecodingTests {
     @Test("A catalog page decodes kinds, previews, price and ownership")
     func catalogPage() throws {
         let json = """
-        {"items":[{"id":"a1","kind":"remotion_prompt","category":"intros","title":"Cold open","description":"Fast cuts.",
+        {"items":[{"id":"a1","kind":"remotion_prompt","category":"intros","category_name":"Intros","title":"Cold open","description":"Fast cuts.",
           "price_points":120,"preview_image_url":"https://cdn.example/a.png","preview_video_url":null,
           "content_filename":"cold-open.md","content_size_bytes":812,"content_type":"text/markdown",
           "metadata":{"promptExcerpt":"Open on black…","tags":["intro","fast"]},"owned":true,"published_at":"2026-09-01T00:00:00.000Z"},
          {"id":"b2","kind":"sound_effect","category":"foley","title":"Door","description":"","price_points":0,"preview_image_url":null,
           "preview_video_url":"https://cdn.example/b.mp4","content_filename":"door.wav","content_size_bytes":null,"content_type":"audio/wav",
           "metadata":{"durationSeconds":1.5},"owned":false,"published_at":null}],
-         "total":2,"page":1,"page_count":1,"page_size":24,"categories":[{"kind":"sound_effect","category":"foley","count":1}]}
+         "total":2,"page":1,"page_count":1,"page_size":24,
+         "categories":[{"kind":"sound_effect","category":"foley","name":"Foley","icon":"waveform","count":1}]}
         """
         let page = try decoder.decode(MarketplaceCatalogPage.self, from: Data(json.utf8))
         #expect(page.items.map(\.kind) == [.remotionPrompt, .soundEffect])
@@ -37,7 +38,12 @@ struct MarketplaceDecodingTests {
         #expect(page.items[1].contentSizeBytes == nil)
         #expect(page.items[1].metadata.durationSeconds == 1.5)
         #expect(page.pageCount == 1)
+        #expect(page.items[0].categoryLabel == "Intros")
+        // An older server sends no name; the slug stands in.
+        #expect(page.items[1].categoryLabel == "foley")
         #expect(page.categories.first?.kind == .soundEffect)
+        #expect(page.categories.first?.displayName == "Foley")
+        #expect(page.categories.first?.icon == "waveform")
     }
 
     @Test("Purchase and download responses decode")
