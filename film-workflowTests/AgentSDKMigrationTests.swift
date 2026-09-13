@@ -81,7 +81,8 @@ struct AgentSDKMigrationTests {
         }
     }
 
-    /// BYOK and the subscription gateway are both OpenAI-shaped, but they are
+    /// The user's own endpoint and the subscription gateway are both
+    /// OpenAI-shaped, but they are
     /// different accounts with different models. Sharing a client id would
     /// collapse their per-thread session and model state into one bucket.
     @Test("The two OpenAI-shaped engines do not share a client id")

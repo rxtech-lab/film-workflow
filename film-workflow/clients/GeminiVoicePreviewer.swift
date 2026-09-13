@@ -42,24 +42,11 @@ final class GeminiVoicePreviewer: NSObject {
             loadingVoice = name
             defer { if loadingVoice == name { loadingVoice = nil } }
             do {
-                let config = try AppConfig.loadFromKeychain()
-                if config.usesSubscription {
-                    data = try await BackendSpeechClient.generateGeminiSample(
-                        voiceName: name,
-                        text: text
-                    )
-                } else {
-                    guard !config.googleAIKey.isEmpty else {
-                        lastError = "Add your Google AI API key in Settings."
-                        return
-                    }
-                    let response = try await GeminiTTSClient.generateSample(
-                        voiceName: name,
-                        apiKey: config.googleAIKey,
-                        text: text
-                    )
-                    data = response.audioData
-                }
+                try AIRoute.requireSubscription()
+                data = try await BackendSpeechClient.generateGeminiSample(
+                    voiceName: name,
+                    text: text
+                )
                 audioCache[key] = data
             } catch {
                 lastError = error.localizedDescription

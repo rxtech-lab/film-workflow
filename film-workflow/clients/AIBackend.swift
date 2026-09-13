@@ -1,49 +1,29 @@
 import Foundation
 
+/// What the subscription catalog groups models by. Mirrors the server's
+/// `capability` enum, minus `translation`, which no picker asks for.
 nonisolated enum AICapability: String, Sendable, CaseIterable {
-    case chat, image, speech, transcription, music
+    case chat, image, speech, transcription, music, video
 }
 
+/// The RxFilm subscription is the only route for every capability except
+/// chat, where an OpenAI-compatible endpoint can also be picked per thread.
 @MainActor
-enum AIRoute: Sendable {
-    case byok
-    case subscription
-
-    /// The subscription route regardless of the configured credential mode, for
-    /// callers that picked it explicitly — the agent window's subscription
-    /// engine, which a BYOK-mode user can still choose per thread.
-    static func requireSubscription() throws -> AIRoute {
+enum AIRoute {
+    /// Throws unless the user is signed in — the one precondition every
+    /// subscription call shares. The server does the real authorization; this
+    /// only turns a guaranteed 401 into a message the user can act on.
+    static func requireSubscription() throws {
         guard AuthManager.shared.isAuthenticated else { throw AIRouteError.notSignedIn }
-        return .subscription
-    }
-
-    static func resolve(_ config: AppConfig, for capability: AICapability) throws -> AIRoute {
-        if config.usesSubscription {
-            guard AuthManager.shared.isAuthenticated else { throw AIRouteError.notSignedIn }
-            return .subscription
-        }
-
-        let configured: Bool
-        switch capability {
-        case .chat: configured = !config.openAIEndpoint.isEmpty && !config.openAIKey.isEmpty && !config.openAIModel.isEmpty
-        case .image: configured = !config.googleAIKey.isEmpty || (!config.openAIEndpoint.isEmpty && !config.openAIKey.isEmpty)
-        case .speech: configured = !config.googleAIKey.isEmpty || (!config.azureSpeechKey.isEmpty && !config.azureSpeechEndpoint.isEmpty)
-        case .transcription: configured = !config.googleAIKey.isEmpty || !config.openAIKey.isEmpty || !config.azureSpeechKey.isEmpty
-        case .music: configured = !config.googleAIKey.isEmpty
-        }
-        guard configured else { throw AIRouteError.missingBYOKConfig(capability) }
-        return .byok
     }
 }
 
 enum AIRouteError: LocalizedError {
     case notSignedIn
-    case missingBYOKConfig(AICapability)
 
     var errorDescription: String? {
         switch self {
         case .notSignedIn: "Sign in to your RxLab account to use subscription credits."
-        case .missingBYOKConfig(let capability): "Configure your own provider credentials for \(capability.rawValue) in Settings."
         }
     }
 }

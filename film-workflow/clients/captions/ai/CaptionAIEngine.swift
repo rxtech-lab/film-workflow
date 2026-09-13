@@ -226,12 +226,17 @@ enum CaptionAIEngineFactory {
             return AppleIntelligenceCaptionEngine()
 
         case .openAICompatible:
-            guard let config else { throw CaptionAIError.noBackendAvailable }
+            guard let config, config.hasOpenAICompatibleChat else {
+                throw CaptionAIError.backendUnavailable(
+                    backend,
+                    "Add an endpoint, key and model in Settings › AI Provider."
+                )
+            }
             return OpenAICaptionEngine(
                 endpoint: config.openAIEndpoint,
                 apiKey: config.openAIKey,
-                model: config.usesSubscription ? config.subscriptionChatModel : config.openAIModel,
-                usesSubscription: config.usesSubscription
+                model: config.openAIModel,
+                usesSubscription: false
             )
 
         case .subscription:

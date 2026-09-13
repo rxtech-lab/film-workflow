@@ -10,27 +10,19 @@ struct ImageInspectorFooter: View {
     @State private var errorMessage: String?
     @State private var showError = false
     @State private var insufficientCredits: InsufficientCreditsNotice?
-    @State private var usesSubscription = false
     @State private var subscriptionImageModel = ""
 
     private var canGenerate: Bool {
         guard !project.prompt.trimmingCharacters(in: .whitespaces).isEmpty else { return false }
-        if usesSubscription {
-            return !project.subscriptionModel.trimmingCharacters(in: .whitespaces).isEmpty
-                || !subscriptionImageModel.trimmingCharacters(in: .whitespaces).isEmpty
-        }
-        if project.providerEnum == .openai && project.openAIModel.trimmingCharacters(in: .whitespaces).isEmpty { return false }
-        if project.providerEnum == .google && project.googleModel.trimmingCharacters(in: .whitespaces).isEmpty { return false }
-        return true
+        return !project.subscriptionModel.trimmingCharacters(in: .whitespaces).isEmpty
+            || !subscriptionImageModel.trimmingCharacters(in: .whitespaces).isEmpty
     }
 
     var body: some View {
         GenerateButton(title: "Generate", isBusy: isGenerating, isEnabled: canGenerate) { Task { await generate() } }
             .padding(10)
             .onAppear {
-                let config = try? AppConfig.loadFromKeychain()
-                usesSubscription = config?.usesSubscription == true
-                subscriptionImageModel = config?.subscriptionImageModel ?? ""
+                subscriptionImageModel = (try? AppConfig.loadFromKeychain())?.subscriptionImageModel ?? ""
             }
             .alert("Error", isPresented: $showError) { Button("OK") {} } message: { Text(errorMessage ?? "An unknown error occurred.") }
             .insufficientCreditsAlert($insufficientCredits)

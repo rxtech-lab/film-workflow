@@ -36,9 +36,9 @@ nonisolated struct AudioProbe {
             // Fall through to the WAV header path below.
         }
 
-        // Gemini TTS output carries a hand-written RIFF header
-        // (`GeminiTTSClient.wrapPCMAsWAV`). AVFoundation reads it fine, but the
-        // header is cheap to parse and costs nothing as a fallback.
+        // Gemini TTS output carries a hand-written RIFF header, written by the
+        // server. AVFoundation reads it fine, but the header is cheap to parse
+        // and costs nothing as a fallback.
         if url.pathExtension.lowercased() == "wav",
            let ms = wavDurationMs(of: url) {
             return ms

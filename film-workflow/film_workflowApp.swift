@@ -39,6 +39,9 @@ struct film_workflowApp: App {
         guard NSClassFromString("XCTestCase") == nil else { return }
         await serviceBootstrap.run {
             MCPServer.shared.bootstrap()
+            // Provider keys from the bring-your-own-key era: nothing reads
+            // them any more, so they should not sit in the Keychain.
+            AppConfig.purgeLegacyKeys()
             // `-skipStartupAuth` lets a debug launch skip the keychain read, whose
             // access prompt would otherwise block an unattended run.
             if !ProcessInfo.processInfo.arguments.contains("-skipStartupAuth") {

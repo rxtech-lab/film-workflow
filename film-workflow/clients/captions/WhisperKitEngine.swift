@@ -252,7 +252,7 @@ nonisolated struct CaptionSettingsSnapshot {
 
 /// Thin adapter so local transcription satisfies the same protocol as the HTTP
 /// providers; all real work lives in the actor.
-nonisolated struct WhisperCaptionClient: CaptionTranscriberClient {
+nonisolated struct WhisperCaptionClient {
     static let provider = CaptionProvider.whisperLocal
 
     static func transcribe(

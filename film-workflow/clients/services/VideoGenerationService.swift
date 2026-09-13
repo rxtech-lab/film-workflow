@@ -32,6 +32,15 @@ enum VideoGenerationService {
         onProgress: VideoProgressHandler? = nil
     ) async throws -> GeneratedVideo? {
         guard let id = project.pendingJobID, !id.isEmpty else { return nil }
+        // A job submitted by a bring-your-own-key build is a Google operation
+        // name, and the server knows nothing about it. Nothing can be
+        // recovered, so stop offering to resume it.
+        guard !id.hasPrefix("models/") else {
+            project.clearPendingJob()
+            project.updatedAt = Date()
+            try? context.save()
+            throw VideoGenError.legacyJob
+        }
         let provider = VideoProvider(rawValue: project.pendingJobProvider ?? "") ?? project.providerEnum
         let job = VideoGenJob(id: id, provider: provider)
         return try await finish(job: job, project: project, context: context, config: config, onProgress: onProgress)
@@ -60,14 +69,16 @@ enum VideoGenerationService {
             throw VideoGenError.missingConfig
         }
 
+        try AIRoute.requireSubscription()
+
         let job: VideoGenJob
         switch project.providerEnum {
         case .google:
-            guard !config.googleAIKey.isEmpty, !project.googleModel.isEmpty else {
+            guard !project.googleModel.isEmpty else {
                 throw VideoGenError.missingConfig
             }
             let family = project.veoFamily
-            job = try await VideoGenClient.startGoogleVeo(
+            job = try await BackendVideoClient.start(
                 prompt: project.prompt,
                 negativePrompt: project.negativePrompt,
                 model: project.googleModel,
@@ -83,7 +94,9 @@ enum VideoGenerationService {
                 referenceImages: family.supportsReferenceImages
                     ? project.googleReferenceImagePaths.compactMap { VideoInputImage(relativePath: $0, storage: storage) }
                     : [],
-                apiKey: config.googleAIKey
+                // Scoped to the project so a retried submit re-attaches to the
+                // credit hold the first attempt took out.
+                idempotencyKey: "video:\(project.id.uuidString):\(UUID().uuidString)"
             )
         }
 
@@ -113,16 +126,11 @@ enum VideoGenerationService {
 
         let result: VideoGenResult
         do {
-            switch job.provider {
-            case .google:
-                guard !config.googleAIKey.isEmpty else { throw VideoGenError.missingConfig }
-                result = try await VideoGenClient.awaitGoogleCompletion(
-                    operationName: job.id,
-                    apiKey: config.googleAIKey,
-                    startedAt: startedAt,
-                    onProgress: onProgress
-                )
-            }
+            result = try await BackendVideoClient.awaitCompletion(
+                jobID: job.id,
+                startedAt: startedAt,
+                onProgress: onProgress
+            )
         } catch let error as VideoGenError {
             // The provider said no — the job will never produce anything, so
             // stop offering to resume it. A timeout is deliberately not in this

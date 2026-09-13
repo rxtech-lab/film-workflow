@@ -20,7 +20,7 @@ struct CaptionProjectParametersView: View {
     @State private var importError: String?
     @State private var renamingSpeaker: CaptionSpeaker?
     @State private var speakerDraft: String = ""
-    @State private var openAIModels: [OpenAIModelInfo] = []
+    @State private var openAIModels: [PickableModel] = []
     @State private var isLoadingOpenAIModels = false
     @State private var openAIModelsError: String?
     /// Cached so the body doesn't hit the Keychain on every redraw — this Form
@@ -255,108 +255,74 @@ struct CaptionProjectParametersView: View {
         return "Default (\(entry.displayName))"
     }
 
-    /// Per-project model for the OpenAI-compatible endpoint, listing only the
-    /// speech-to-text models that endpoint actually advertises.
+    /// Per-project transcription model, listing what the subscription offers
+    /// for the provider this project transcribes with.
     @ViewBuilder
     private var openAITranscriptionModelPicker: some View {
-        if openAIEndpointConfigured {
-            HStack {
-                Picker("Transcription model", selection: $project.openAITranscriptionModelOverride) {
-                    Text(defaultOpenAITranscriptionLabel).tag("")
-                    // Keep a hand-typed or since-removed id selectable, so
-                    // opening this screen can't silently retarget the project.
-                    if !project.openAITranscriptionModelOverride.isEmpty,
-                       !openAIModels.contains(where: { $0.id == project.openAITranscriptionModelOverride }) {
-                        Text(project.openAITranscriptionModelOverride)
-                            .tag(project.openAITranscriptionModelOverride)
-                    }
-                    ForEach(openAIModels) { model in
-                        Text(model.id).tag(model.id)
-                    }
+        HStack {
+            Picker("Transcription model", selection: $project.openAITranscriptionModelOverride) {
+                Text(defaultOpenAITranscriptionLabel).tag("")
+                // Keep a hand-typed or since-removed id selectable, so
+                // opening this screen can't silently retarget the project.
+                if !project.openAITranscriptionModelOverride.isEmpty,
+                   !openAIModels.contains(where: { $0.id == project.openAITranscriptionModelOverride }) {
+                    Text(project.openAITranscriptionModelOverride)
+                        .tag(project.openAITranscriptionModelOverride)
                 }
-
-                Button {
-                    Task { await loadOpenAITranscriptionModels(forceRefresh: true) }
-                } label: {
-                    if isLoadingOpenAIModels {
-                        ProgressView().controlSize(.small)
-                    } else {
-                        Image(systemName: "arrow.clockwise")
-                    }
+                ForEach(openAIModels) { model in
+                    Text(model.pickerLabel).tag(model.id)
                 }
-                .disabled(isLoadingOpenAIModels)
-                .help("Refresh model list")
             }
 
-            if let openAIModelsError {
-                Text(openAIModelsError)
-                    .font(.caption)
-                    .foregroundStyle(.red)
-            }
-        } else {
-            VStack(alignment: .leading, spacing: 8) {
-                Label(
-                    "No OpenAI-compatible endpoint configured yet.",
-                    systemImage: "exclamationmark.triangle"
-                )
-                .font(.callout)
-                .foregroundStyle(.orange)
-
-                // Telling someone where to go is worse than taking them there.
-                Button(action: openAIProviderSettings) {
-                    Label("Open Settings…", systemImage: "gearshape")
+            Button {
+                Task { await loadOpenAITranscriptionModels(forceRefresh: true) }
+            } label: {
+                if isLoadingOpenAIModels {
+                    ProgressView().controlSize(.small)
+                } else {
+                    Image(systemName: "arrow.clockwise")
                 }
-                .buttonStyle(.borderless)
-                .font(.callout)
             }
+            .disabled(isLoadingOpenAIModels)
+            .help("Refresh model list")
+        }
+
+        if let openAIModelsError {
+            Text(openAIModelsError)
+                .font(.caption)
+                .foregroundStyle(.red)
         }
     }
 
     /// `LocalizedStringKey`, not `String`: `Text(someString)` picks the verbatim
     /// initializer and would never be translated.
     private var defaultOpenAITranscriptionLabel: LocalizedStringKey {
-        let global = config?.openAITranscriptionModel ?? ""
+        let global = config?.subscriptionTranscriptionModel ?? ""
         return global.isEmpty
             ? "Default (\(OpenAITranscriptionClient.defaultModel))"
             : "Default (\(global))"
-    }
-
-    /// Assumed true until the Keychain read lands, so the first frame shows the
-    /// picker rather than flashing a "not configured" warning at everyone.
-    private var openAIEndpointConfigured: Bool {
-        guard let config else { return true }
-        return !config.openAIEndpoint.isEmpty && !config.openAIKey.isEmpty
     }
 
     /// What `CaptionTranscriptionService.options(for:)` would resolve to today.
     private var resolvedTranscriptionModel: String {
         let override = project.openAITranscriptionModelOverride
         if !override.isEmpty { return override }
-        let global = config?.openAITranscriptionModel ?? ""
+        let global = config?.subscriptionTranscriptionModel ?? ""
         return global.isEmpty ? OpenAITranscriptionClient.defaultModel : global
     }
 
-    /// Word timings depend on the route and the model, not just the provider.
-    /// The AI Gateway's transcription protocol has no word field at all, and
-    /// OpenAI's `gpt-4o*-transcribe` models don't implement `verbose_json`.
-    /// Where they can't be produced the toggle is hidden rather than offered
-    /// and quietly ignored.
+    /// Word timings depend on the model, not just the provider: OpenAI's
+    /// `gpt-4o*-transcribe` models don't implement `verbose_json`. Where they
+    /// can't be produced the toggle is hidden rather than offered and quietly
+    /// ignored.
     private var supportsWordTimings: Bool {
         guard resolvedProvider.supportsWordTimings else { return false }
         guard resolvedProvider == .openAI else { return true }
-        guard !usesVercelGateway else { return false }
         return OpenAITranscriptionClient.modelSupportsWordTimings(resolvedTranscriptionModel)
     }
 
-    /// Names whichever of the two is responsible, for the footer.
-    private var wordTimingsBlockedBy: String {
-        usesVercelGateway ? "Vercel AI Gateway" : resolvedTranscriptionModel
-    }
-
-    private var usesVercelGateway: Bool {
-        guard let config else { return false }
-        return OpenAITranscriptionClient.isVercelGatewayEndpoint(config.openAIEndpoint)
-    }
+    /// Names what is responsible, for the footer.
+    private var wordTimingsBlockedBy: String { resolvedTranscriptionModel }
 
     private var speakerSection: some View {
         Section {
@@ -450,13 +416,6 @@ struct CaptionProjectParametersView: View {
         #endif
     }
 
-    private func openAIProviderSettings() {
-        AppNavigation.shared.showAIProviderSettings()
-        #if os(macOS)
-            openSettings()
-        #endif
-    }
-
     // MARK: - Model loading
 
     /// Never blocks the screen: a failure leaves the current selection alone and
@@ -464,39 +423,27 @@ struct CaptionProjectParametersView: View {
     @MainActor
     private func loadOpenAITranscriptionModels(forceRefresh: Bool) async {
         // Re-read rather than trusting the cache: the user may have just come
-        // back from Settings with a new endpoint.
+        // back from Settings with a different default.
         config = try? AppConfig.loadFromKeychain()
 
-        guard let config,
-              !config.openAIEndpoint.isEmpty,
-              !config.openAIKey.isEmpty else {
+        guard AuthManager.shared.isAuthenticated else {
             // `String(localized:)` because this lands in a `String?` that
             // `Text` would otherwise render verbatim, untranslated.
             openAIModelsError = String(
-                localized: "Configure the OpenAI endpoint and API key in Settings."
+                localized: "Sign in to your RxLab account to load transcription models."
             )
             return
-        }
-
-        // Draw something immediately from the last fetch instead of an empty
-        // picker while the network call is in flight.
-        if openAIModels.isEmpty,
-           let cached = OpenAIModelsClient.shared.cachedModels(
-               endpoint: config.openAIEndpoint,
-               apiKey: config.openAIKey
-           ) {
-            openAIModels = cached.filter(\.isTranscriptionModel)
         }
 
         isLoadingOpenAIModels = true
         openAIModelsError = nil
         defer { isLoadingOpenAIModels = false }
         do {
-            openAIModels = try await OpenAIModelsClient.shared.transcriptionModels(
-                endpoint: config.openAIEndpoint,
-                apiKey: config.openAIKey,
+            let all = try await BackendModelCatalog.shared.models(
+                capability: .transcription,
                 forceRefresh: forceRefresh
             )
+            openAIModels = all.filter { $0.provider == "openai" }
         } catch {
             openAIModelsError = error.localizedDescription
         }

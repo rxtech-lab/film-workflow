@@ -5,7 +5,7 @@ struct VideoGenProjectParametersView: View {
     @Environment(\.projectStorage) private var storage
     @Bindable var project: VideoGenProject
 
-    @State private var veoModels: [GoogleModelInfo] = []
+    @State private var veoModels: [PickableModel] = []
     @State private var isLoadingModels = false
     @State private var modelsError: String?
 
@@ -89,6 +89,13 @@ struct VideoGenProjectParametersView: View {
             allowsMultipleSelection: true
         ) { handleReferenceImages($0) }
         .onAppear {
+            if project.googleModel.isEmpty {
+                let prefill = (try? AppConfig.loadFromKeychain())?.subscriptionVideoModel ?? ""
+                if !prefill.isEmpty {
+                    project.googleModel = prefill
+                    VeoModelFamily.clamp(project)
+                }
+            }
             Task { await loadVeoModels(forceRefresh: false) }
         }
         .onChange(of: project.googleModel) { _, _ in
@@ -114,7 +121,7 @@ struct VideoGenProjectParametersView: View {
                         Text(project.googleModel).tag(project.googleModel)
                     }
                     ForEach(veoModels) { model in
-                        Text(model.id).tag(model.id)
+                        Text(model.pickerLabel).tag(model.id)
                     }
                 }
 
@@ -385,17 +392,16 @@ struct VideoGenProjectParametersView: View {
 
     @MainActor
     private func loadVeoModels(forceRefresh: Bool) async {
-        guard let config = try? AppConfig.loadFromKeychain(),
-              !config.googleAIKey.isEmpty else {
-            modelsError = "Configure the Google AI API key in Settings."
+        guard AuthManager.shared.isAuthenticated else {
+            modelsError = "Sign in to your RxLab account to load video models."
             return
         }
         isLoadingModels = true
         modelsError = nil
         defer { isLoadingModels = false }
         do {
-            veoModels = try await GoogleModelsClient.shared.veoModels(
-                apiKey: config.googleAIKey,
+            veoModels = try await BackendModelCatalog.shared.models(
+                capability: .video,
                 forceRefresh: forceRefresh
             )
         } catch {

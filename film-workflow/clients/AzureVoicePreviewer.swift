@@ -51,24 +51,11 @@ final class AzureVoicePreviewer: NSObject {
             loadingVoice = name
             defer { if loadingVoice == name { loadingVoice = nil } }
             do {
-                let config = try AppConfig.loadFromKeychain()
-                if config.usesSubscription {
-                    data = try await BackendSpeechClient.generateAzureSample(
-                        voiceName: name,
-                        text: text
-                    )
-                } else {
-                    guard !config.azureSpeechKey.isEmpty, !config.azureSpeechEndpoint.isEmpty else {
-                        lastError = "Add your Azure Speech key and endpoint in Settings."
-                        return
-                    }
-                    data = try await AzureTTSClient.generateSample(
-                        voiceName: name,
-                        apiKey: config.azureSpeechKey,
-                        endpoint: config.azureSpeechEndpoint,
-                        text: text
-                    )
-                }
+                try AIRoute.requireSubscription()
+                data = try await BackendSpeechClient.generateAzureSample(
+                    voiceName: name,
+                    text: text
+                )
                 audioCache[key] = data
             } catch {
                 lastError = error.localizedDescription

@@ -82,7 +82,7 @@ nonisolated enum AgentBackend: String, CaseIterable, Identifiable, Sendable {
         guard let config else { return "" }
         let raw: String
         switch self {
-        case .openAICompatible: raw = config.usesSubscription ? config.subscriptionChatModel : config.openAIModel
+        case .openAICompatible: raw = config.openAIModel
         case .subscription: raw = config.subscriptionChatModel
         case .claudeCode: raw = config.claudeCodeModel
         case .codex: raw = config.codexModel
@@ -200,8 +200,8 @@ nonisolated enum CaptionAIError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .noBackendAvailable:
-            return "No AI engine is set up. Turn on Apple Intelligence, or add an "
-                + "OpenAI-compatible endpoint in Settings › AI Provider."
+            return "No AI engine is set up. Sign in to your RxLab account, turn on "
+                + "Apple Intelligence, or add an OpenAI-compatible endpoint in Settings › AI Provider."
         case .backendUnavailable(_, let reason):
             return reason
         case .emptyResponse:
@@ -345,14 +345,8 @@ final class AgentBackendAvailability {
         case .appleIntelligence:
             return isAppleIntelligenceAvailable
         case .openAICompatible:
-            guard let config else { return false }
-            // In subscription mode this engine already routes to the server, so
-            // it stays selectable there — threads created before the dedicated
-            // subscription engine existed keep working.
-            if config.usesSubscription { return isConfigured(.subscription, config: config) }
-            return !config.openAIEndpoint.trimmingCharacters(in: .whitespaces).isEmpty
-                && !config.openAIKey.trimmingCharacters(in: .whitespaces).isEmpty
-                && !config.openAIModel.trimmingCharacters(in: .whitespaces).isEmpty
+            // Optional: only offered once the user has filled in an endpoint.
+            return config?.hasOpenAICompatibleChat == true
         case .subscription:
             // A thread can pin its own model from the composer, so the account
             // is the only thing that has to be set up here.
@@ -369,9 +363,6 @@ final class AgentBackendAvailability {
         case .appleIntelligence:
             return appleIntelligenceUnavailableReason
         case .openAICompatible:
-            if config?.usesSubscription == true {
-                return "Sign in to your RxLab account on the Account tab."
-            }
             return "Add an endpoint, key and model in Settings › AI Provider."
         case .subscription:
             return "Sign in to your RxLab account on the Account tab."
