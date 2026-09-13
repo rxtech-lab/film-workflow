@@ -1,12 +1,19 @@
 import "server-only";
 
 import { createHash } from "node:crypto";
-import { getCurrentUser, type AppUser } from "@/lib/auth";
+import { getCurrentUser, isAdmin, type AppUser } from "@/lib/auth";
 
 export class UnauthorizedError extends Error {
   constructor() {
     super("Authentication is required");
     this.name = "UnauthorizedError";
+  }
+}
+
+export class ForbiddenError extends Error {
+  constructor() {
+    super("This action requires the admin role");
+    this.name = "ForbiddenError";
   }
 }
 
@@ -76,6 +83,19 @@ export async function requireApiUser(request: Request): Promise<AppUser> {
   const user = await getRequestUser(request);
   if (!user) throw new UnauthorizedError();
   return user;
+}
+
+export async function requireAdminUser(request: Request): Promise<AppUser> {
+  const user = await requireApiUser(request);
+  if (!isAdmin(user)) throw new ForbiddenError();
+  return user;
+}
+
+export function forbiddenResponse() {
+  return Response.json(
+    { code: "forbidden", error: "This action requires the admin role" },
+    { status: 403, headers: { "Cache-Control": "private, no-store" } },
+  );
 }
 
 export function unauthorizedResponse() {

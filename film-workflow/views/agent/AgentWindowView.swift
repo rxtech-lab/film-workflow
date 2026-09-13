@@ -9,9 +9,9 @@ nonisolated enum AgentWindowID {
 
 /// The system-wide agent window.
 ///
-/// One window for the whole app rather than one per project. It follows the
-/// context you came from — opening it while a caption project is selected
-/// starts a thread aimed at that project — but every thread keeps its own
+/// One window for the whole app rather than one per library item. It follows
+/// the context you came from — opening it while a captions item is selected
+/// starts a thread aimed at that item — but every thread keeps its own
 /// target, so retargeting the window never disturbs work already in flight.
 struct AgentWindowView: View {
     @Environment(\.modelContext) private var modelContext
@@ -20,7 +20,7 @@ struct AgentWindowView: View {
     @Query(sort: \AgentThread.updatedAt, order: .reverse)
     private var threads: [AgentThread]
 
-    // Projects live in the active film's store, not in this window's
+    // Library items live in the active film's store, not in this window's
     // container (which only holds threads), so they are fetched rather than
     // queried and refreshed whenever the key film changes.
     @State private var documentController = ProjectDocumentController.shared
@@ -28,7 +28,9 @@ struct AgentWindowView: View {
     @State private var musicProjects: [MusicProject] = []
     @State private var narrativeProjects: [NarrativeProject] = []
     @State private var imageProjects: [ImageGenProject] = []
+    @State private var videoProjects: [VideoGenProject] = []
     @State private var remotionProjects: [RemotionProject] = []
+    @State private var sequences: [SequenceProject] = []
 
     private var documentContext: ModelContext? {
         documentController.activeDocument?.container.mainContext
@@ -94,16 +96,24 @@ struct AgentWindowView: View {
 
             ToolbarSpacer(.fixed)
 
+            // `Label` rather than a bare `Image`: the toolbar shows the icon,
+            // but when the window is narrow these collapse into the overflow
+            // menu, which lists each item by its title — an icon-only button
+            // shows up there as a blank row.
             ToolbarItemGroup {
+                let isPinned = selectedThread?.isPinned == true
                 Button {
                     selectedThread?.isPinned.toggle()
                 } label: {
-                    Image(systemName: selectedThread?.isPinned == true ? "pin.fill" : "pin")
+                    Label(
+                        isPinned ? "Unpin Thread" : "Pin Thread",
+                        systemImage: isPinned ? "pin.fill" : "pin"
+                    )
                 }
                 .disabled(selectedThread == nil)
-                .help(selectedThread?.isPinned == true ? "Unpin this thread" : "Pin this thread")
+                .help(isPinned ? "Unpin this thread" : "Pin this thread")
                 Button(action: newThread) {
-                    Image(systemName: "square.and.pencil")
+                    Label("New Thread", systemImage: "square.and.pencil")
                 }
                 .keyboardShortcut("n", modifiers: [.command, .shift])
                 .help("New thread")
@@ -134,7 +144,7 @@ struct AgentWindowView: View {
             }
             Button("Cancel", role: .cancel) { pendingThreadDeletion = nil }
         } message: { _ in
-            Text("Every message and the saved summary in this thread will be permanently deleted. Projects are not affected.")
+            Text("Every message and the saved summary in this thread will be permanently deleted. The film is not affected.")
         }
     }
 
@@ -212,7 +222,7 @@ struct AgentWindowView: View {
             Button {
                 selectedThread?.target = .none
             } label: {
-                Text("No project")
+                Text("Whole film")
             }
             ForEach(AgentTargetKind.selectable.filter { $0 != .none }, id: \.self) { kind in
                 let options = targetOptions.filter { $0.kind == kind }
@@ -237,7 +247,7 @@ struct AgentWindowView: View {
                 if let name = documentContext.flatMap({ AgentTargetResolver.name(for: target, context: $0) }) {
                     Text(name)
                 } else {
-                    Text("No project")
+                    Text("Whole film")
                 }
             } icon: {
                 Image(systemName: target.kind.systemImage)
@@ -248,11 +258,11 @@ struct AgentWindowView: View {
 
     // MARK: - Targets
 
-    /// Every project the agent can be pointed at.
+    /// Every library item the agent can be pointed at.
     ///
-    /// Ids come from the same helpers MCP uses (`CaptionProject.projectUUID`,
-    /// `RemotionProject.id`, `MCPProjectHandlers.stableID` for the rest), so the
-    /// id shown here is the id the tools accept.
+    /// Ids are the library's own (`id` on the model, `projectUUID` on
+    /// captions) — the same ones `MCPLibraryHandlers` resolves — so the id
+    /// shown here is the id the tools accept.
     private var targetOptions: [AgentTargetOption] {
         var options: [AgentTargetOption] = []
 
@@ -260,28 +270,22 @@ struct AgentWindowView: View {
             AgentTargetOption(kind: .caption, projectUUID: $0.projectUUID, name: $0.name)
         }
         options += musicProjects.map {
-            AgentTargetOption(
-                kind: .music,
-                projectUUID: MCPProjectHandlers.stableID(of: $0),
-                name: $0.name
-            )
+            AgentTargetOption(kind: .music, projectUUID: $0.id, name: $0.name)
         }
         options += narrativeProjects.map {
-            AgentTargetOption(
-                kind: .narrative,
-                projectUUID: MCPProjectHandlers.stableID(of: $0),
-                name: $0.name
-            )
+            AgentTargetOption(kind: .narrative, projectUUID: $0.id, name: $0.name)
         }
         options += imageProjects.map {
-            AgentTargetOption(
-                kind: .imageGen,
-                projectUUID: MCPProjectHandlers.stableID(of: $0),
-                name: $0.name
-            )
+            AgentTargetOption(kind: .imageGen, projectUUID: $0.id, name: $0.name)
+        }
+        options += videoProjects.map {
+            AgentTargetOption(kind: .videoGen, projectUUID: $0.id, name: $0.name)
         }
         options += remotionProjects.map {
             AgentTargetOption(kind: .remotion, projectUUID: $0.id, name: $0.name)
+        }
+        options += sequences.map {
+            AgentTargetOption(kind: .sequence, projectUUID: $0.id, name: $0.name)
         }
 
         return options.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
@@ -292,20 +296,22 @@ struct AgentWindowView: View {
     private func reloadProjects() {
         guard let context = documentContext else {
             captionProjects = []; musicProjects = []; narrativeProjects = []
-            imageProjects = []; remotionProjects = []
+            imageProjects = []; videoProjects = []; remotionProjects = []; sequences = []
             return
         }
         captionProjects = (try? context.fetch(FetchDescriptor<CaptionProject>())) ?? []
         musicProjects = (try? context.fetch(FetchDescriptor<MusicProject>())) ?? []
         narrativeProjects = (try? context.fetch(FetchDescriptor<NarrativeProject>())) ?? []
         imageProjects = (try? context.fetch(FetchDescriptor<ImageGenProject>())) ?? []
+        videoProjects = (try? context.fetch(FetchDescriptor<VideoGenProject>())) ?? []
         remotionProjects = (try? context.fetch(FetchDescriptor<RemotionProject>())) ?? []
+        sequences = (try? context.fetch(FetchDescriptor<SequenceProject>())) ?? []
     }
 
     private func newThread() {
-        // A new thread inherits whatever the app is currently showing; existing
-        // threads keep their own target.
-        let thread = AgentThread(target: navigation.currentTarget)
+        // A new thread inherits whatever the app is currently showing and the
+        // engine/model the user last picked; existing threads keep their own.
+        let thread = AgentThread.startingFromLastPick(target: navigation.currentTarget)
         if let doc = documentController.activeDocument {
             thread.documentID = doc.id
             thread.documentPath = doc.packageURL.path

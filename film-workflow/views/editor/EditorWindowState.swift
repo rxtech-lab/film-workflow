@@ -43,16 +43,10 @@ enum FootageKind: String, CaseIterable, Codable, Identifiable {
         }
     }
 
+    /// The agent target for a selection of this kind. Imported files have no
+    /// parameters to talk about, so selecting one targets the whole film.
     var agentKind: AgentTargetKind? {
-        switch self {
-        case .music: return .music
-        case .narration: return .narrative
-        case .caption: return .caption
-        case .image: return .imageGen
-        case .video: return .videoGen
-        case .remotion: return .remotion
-        case .sequence, .imported: return nil
-        }
+        self == .imported ? nil : AgentTargetKind(footageKind: self)
     }
 
     /// Kinds offered by the New menu.

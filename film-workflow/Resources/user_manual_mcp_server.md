@@ -1,6 +1,6 @@
 # MCP Server
 
-Film Workflow can expose its projects and generators over an HTTP **MCP** endpoint, so your own
+Film Workflow can expose the open film — its library, generators and sequences — over an HTTP **MCP** endpoint, so your own
 tools — an editor, a command-line agent, a script — can drive the app directly.
 
 This is also how the **Claude Code** and **Codex** agent engines talk back to the app.
@@ -55,17 +55,29 @@ Bound to all interfaces, the same command includes the `Authorization` header.
 
 ## What the tools cover
 
-The server exposes the app's own operations. The tool set groups roughly by tab:
+The server exposes the app's own operations, in the editor's own words: a **film** is the open
+document, the **library** holds **footage items** in **folders**, every generation is kept as a
+**take**, and a **sequence** is a timeline cut from those takes. Every tool accepts an optional `film`
+argument (an id, path or name from `film_list`) and otherwise acts on the active window.
 
-**Projects and groups**
+**Film**
 
-`list_projects`, `get_project`, `create_project`, `update_project`, `duplicate_project`,
-`delete_project`, `move_project_to_group`, `list_project_groups`, `create_project_group`,
-`update_project_group`, `delete_project_group`
+`film_list`
+
+**Library and folders**
+
+`footage_list`, `footage_get`, `footage_create`, `footage_update`, `footage_duplicate`,
+`footage_move`, `footage_import`, `footage_delete`, `folder_list`, `folder_create`,
+`folder_rename`, `folder_delete`
+
+Items are addressed by `footage_id`; kinds are `music`, `narration`, `caption`, `image`, `video`,
+`remotion`, `sequence` and `imported`. `footage_list` rows carry a `sourceId` — the newest take —
+that `sequence_add_clip` places on a track.
 
 **Generation**
 
-`music_generate`, `narrative_generate`, `image_generate`
+`music_generate`, `narration_generate`, `image_generate`, `video_generate`, `video_job_status`,
+`video_resume`
 
 **Captions**
 

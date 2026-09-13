@@ -1,4 +1,5 @@
 import AppKit
+import Combine
 import CoreImage
 import SwiftUI
 import UniformTypeIdentifiers
@@ -20,18 +21,34 @@ public struct ModifierThumbnail: View {
     let item: ModifierDragItem
     let parameters: ModifierParameters?
     @State private var hovering = false
+    /// An installed definition's own preview still. Shown at rest; hovering
+    /// switches to the live sample so the animation contract is the same for
+    /// every item.
+    @State private var externalPreview: NSImage?
     private static let context = CIContext(options: [.cacheIntermediates: false])
     public init(item: ModifierDragItem, parameters: ModifierParameters? = nil) { self.item = item; self.parameters = parameters }
+    private var previewURL: URL? { ModifierCatalog.current.previewURLs[item.definitionID] }
     public var body: some View {
-        TimelineView(.animation(minimumInterval: 1 / 24, paused: !hovering)) { clock in
-            let phase = hovering ? clock.date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: 2) / 2 : 0.5
-            let sample = ModifierSample.image(item, progress: phase, parameters: parameters, effectAmount: hovering ? (1 - cos(phase * .pi * 2)) / 2 : 1)
-            if let sample, let image = Self.context.createCGImage(sample, from: sample.extent) {
-                Image(decorative: image, scale: 1).resizable().aspectRatio(16 / 9, contentMode: .fit)
-            } else { Color.gray.aspectRatio(16 / 9, contentMode: .fit) }
+        Group {
+            if let externalPreview, !hovering {
+                Image(nsImage: externalPreview).resizable().aspectRatio(16 / 9, contentMode: .fill).clipped()
+            } else {
+                TimelineView(.animation(minimumInterval: 1 / 24, paused: !hovering)) { clock in
+                    let phase = hovering ? clock.date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: 2) / 2 : 0.5
+                    let sample = ModifierSample.image(item, progress: phase, parameters: parameters, effectAmount: hovering ? (1 - cos(phase * .pi * 2)) / 2 : 1)
+                    if let sample, let image = Self.context.createCGImage(sample, from: sample.extent) {
+                        Image(decorative: image, scale: 1).resizable().aspectRatio(16 / 9, contentMode: .fit)
+                    } else { Color.gray.aspectRatio(16 / 9, contentMode: .fit) }
+                }
+            }
         }
         .clipShape(RoundedRectangle(cornerRadius: 5))
         .onHover { hovering = $0 }
+        .task(id: previewURL) {
+            guard let url = previewURL else { externalPreview = nil; return }
+            let loaded = await Task.detached(priority: .utility) { NSImage(contentsOf: url) }.value
+            externalPreview = loaded
+        }
         .accessibilityLabel(item.kind == .effect ? "Effect preview" : "Transition preview")
     }
 }
@@ -40,9 +57,12 @@ public struct ModifierBrowser: View {
     let onSelect: (ModifierDragItem) -> Void
     @State private var kind: ModifierKind = .effect
     @State private var search = ""
+    /// Bumped when definitions are installed or removed so the grid re-reads the catalog.
+    @State private var catalogGeneration = 0
     public init(onSelect: @escaping (ModifierDragItem) -> Void) { self.onSelect = onSelect }
     private var items: [ModifierDragItem] {
-        let catalog = ModifierCatalog.standard
+        _ = catalogGeneration
+        let catalog = ModifierCatalog.current
         let ids = kind == .effect ? catalog.effects.map(\.id) : catalog.transitions.map(\.id)
         return ids.map { ModifierDragItem(kind: kind, definitionID: $0) }.filter {
             search.isEmpty || catalog.definition($0)?.name.localizedCaseInsensitiveContains(search) == true
@@ -59,7 +79,7 @@ public struct ModifierBrowser: View {
             ScrollView {
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 115), alignment: .top)], spacing: 12) {
                     ForEach(items, id: \.self) { item in
-                        let definition = ModifierCatalog.standard.definition(item)
+                        let definition = ModifierCatalog.current.definition(item)
                         VStack(alignment: .leading, spacing: 4) {
                             ModifierThumbnail(item: item)
                             Text(definition?.name ?? item.definitionID).font(.caption.weight(.medium)).lineLimit(2)
@@ -86,6 +106,7 @@ public struct ModifierBrowser: View {
                 if items.isEmpty { Text("No matching items").foregroundStyle(.secondary).padding() }
             }
         }.padding(10)
+        .onReceive(NotificationCenter.default.publisher(for: ModifierCatalog.didChangeNotification).receive(on: RunLoop.main)) { _ in catalogGeneration += 1 }
     }
 }
 

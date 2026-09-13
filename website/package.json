@@ -18,7 +18,7 @@
     "@ai-sdk/gateway": "3.0.153",
     "@aws-sdk/client-s3": "^3.1109.0",
     "@aws-sdk/s3-request-presigner": "^3.1109.0",
-    "@libsql/client": "0.17.4",
+    "@neondatabase/serverless": "^1.1.0",
     "@rxtech-lab/authjs-rxlab": "1.6.1",
     "ai": "6.0.230",
     "drizzle-orm": "0.45.2",

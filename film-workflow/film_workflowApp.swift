@@ -24,28 +24,33 @@ struct film_workflowApp: App {
         // Audio chunks and multipart bodies staged during transcription can be
         // hundreds of megabytes; a crash mid-run would otherwise leak them.
         FileStorage.clearTemp()
-
+        // Installed marketplace fonts and effects are process-scoped; both are
+        // registered before any editor window can render a caption or open
+        // the effects browser.
+        MarketplaceFonts.registerInstalled()
+        InstalledModifierLoader.reload()
     }
 
-    /// Runs once per window that can start the app. Skipped under XCTest: the
-    /// keychain read behind `checkExistingAuth` can raise a system prompt that
-    /// would stall the test runner before it connects.
-    private static var didBootstrap = false
+    /// Runs once for the app, independently of the window that starts it.
+    /// Skipped under XCTest: the keychain read behind `checkExistingAuth` can
+    /// raise a system prompt that stalls the test runner before it connects.
+    private static let serviceBootstrap = AppServiceBootstrap()
     private static func bootstrapServices() async {
-        guard !didBootstrap, NSClassFromString("XCTestCase") == nil else { return }
-        didBootstrap = true
-        MCPServer.shared.bootstrap()
-        // `-skipStartupAuth` lets a debug launch skip the keychain read, whose
-        // access prompt would otherwise block an unattended run.
-        if !ProcessInfo.processInfo.arguments.contains("-skipStartupAuth") {
-            await AuthManager.shared.checkExistingAuth()
-            if let error = CreditBalanceStore.shared.error {
-                let alert = NSAlert()
-                alert.messageText = String(localized: "Couldn’t Connect to Server")
-                alert.informativeText = error
-                alert.alertStyle = .warning
-                alert.addButton(withTitle: String(localized: "OK"))
-                alert.runModal()
+        guard NSClassFromString("XCTestCase") == nil else { return }
+        await serviceBootstrap.run {
+            MCPServer.shared.bootstrap()
+            // `-skipStartupAuth` lets a debug launch skip the keychain read, whose
+            // access prompt would otherwise block an unattended run.
+            if !ProcessInfo.processInfo.arguments.contains("-skipStartupAuth") {
+                await AuthManager.shared.checkExistingAuth()
+                if let error = CreditBalanceStore.shared.error {
+                    let alert = NSAlert()
+                    alert.messageText = String(localized: "Couldn’t Connect to Server")
+                    alert.informativeText = error
+                    alert.alertStyle = .warning
+                    alert.addButton(withTitle: String(localized: "OK"))
+                    alert.runModal()
+                }
             }
         }
     }
@@ -108,6 +113,10 @@ struct film_workflowApp: App {
                     openWindow(id: AgentWindowID.value)
                 }
                 .keyboardShortcut("0", modifiers: [.command, .option])
+                Button("Marketplace") {
+                    openWindow(id: MarketplaceWindowID.value)
+                }
+                .keyboardShortcut("m", modifiers: [.command, .option])
             }
             MediaImportCommands()
             AccountCommands()
@@ -138,6 +147,14 @@ struct film_workflowApp: App {
         }
         .modelContainer(AppModelContainer.shared)
         .defaultSize(width: 760, height: 720)
+
+        // One marketplace window for the whole app, like the agent window.
+        // Installed items are global; "Add to Film" targets the key film.
+        Window("Marketplace", id: MarketplaceWindowID.value) {
+            MarketplaceWindowView()
+                .signInSheetPresenter()
+        }
+        .defaultSize(width: 1160, height: 720)
 
         Settings {
             SettingsView()

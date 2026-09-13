@@ -85,20 +85,7 @@ struct MediaImportSheet: View {
                     }
                 }
                 let mediaURL = asset.relativePath.map(storage.absoluteURL(for:)) ?? url
-                switch kind {
-                case .video:
-                    if let probed = await VideoThumbnailer.probe(url: mediaURL) {
-                        asset.width = probed.width; asset.height = probed.height; asset.durationSeconds = probed.duration
-                    }
-                    asset.thumbnailFilePath = await VideoThumbnailer.generate(for: mediaURL, storage: storage)
-                case .audio:
-                    let seconds = CMTimeGetSeconds(AVURLAsset(url: mediaURL).duration)
-                    asset.durationSeconds = seconds.isFinite ? seconds : 0
-                case .image:
-                    if let image = NSImage(contentsOf: mediaURL) {
-                        asset.width = Int(image.size.width); asset.height = Int(image.size.height)
-                    }
-                }
+                await MediaImporter.probe(asset, mediaURL: mediaURL, kind: kind, storage: storage)
                 modelContext.insert(asset)
             } catch {
                 errorMessage = "\(url.lastPathComponent): \(error.localizedDescription)"

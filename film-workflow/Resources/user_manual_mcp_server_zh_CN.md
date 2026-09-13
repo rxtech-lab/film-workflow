@@ -1,6 +1,6 @@
 # MCP 服务器
 
-Film Workflow 可以通过 HTTP **MCP** 端点对外暴露它的项目和生成能力，让你自己的工具——编辑器、命令行
+Film Workflow 可以通过 HTTP **MCP** 端点对外暴露当前打开的影片——它的素材库、生成器和序列——让你自己的工具——编辑器、命令行
 智能体、脚本——直接驱动这个应用。
 
 **Claude Code** 和 **Codex** 这两个智能体引擎也正是通过它与应用通信的。
@@ -51,17 +51,28 @@ claude mcp add --transport http film http://127.0.0.1:7711/...
 
 ## 工具覆盖范围
 
-服务器暴露的是应用自身的各项操作，工具集大致按标签页分组：
+服务器暴露的是应用自身的各项操作，用的也是编辑器里的说法：**影片**是当前打开的文档，**素材库**里放着
+分在**文件夹**中的**素材项**，每次生成都会保留为一个**版本**，**序列**则是由这些版本剪成的时间线。每个
+工具都接受可选的 `film` 参数（来自 `film_list` 的 id、路径或名称），未指定时作用于当前活动窗口。
 
-**项目与分组**
+**影片**
 
-`list_projects`、`get_project`、`create_project`、`update_project`、`duplicate_project`、
-`delete_project`、`move_project_to_group`、`list_project_groups`、`create_project_group`、
-`update_project_group`、`delete_project_group`
+`film_list`
+
+**素材库与文件夹**
+
+`footage_list`、`footage_get`、`footage_create`、`footage_update`、`footage_duplicate`、
+`footage_move`、`footage_import`、`footage_delete`、`folder_list`、`folder_create`、
+`folder_rename`、`folder_delete`
+
+素材项通过 `footage_id` 定位；种类为 `music`、`narration`、`caption`、`image`、`video`、`remotion`、
+`sequence` 和 `imported`。`footage_list` 的每一行都带有 `sourceId`——最新的版本——可直接交给
+`sequence_add_clip` 放到轨道上。
 
 **生成**
 
-`music_generate`、`narrative_generate`、`image_generate`
+`music_generate`、`narration_generate`、`image_generate`、`video_generate`、`video_job_status`、
+`video_resume`
 
 **字幕**
 

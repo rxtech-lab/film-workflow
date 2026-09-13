@@ -1,0 +1,1 @@
+ALTER TABLE "marketplace_items" DROP COLUMN "category";

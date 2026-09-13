@@ -40,6 +40,16 @@
     "\"%@\" isn't a glossary term — it will show as written." : {
 
     },
+    "“%@” was added to %@." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "“%@”已添加到 %@。"
+          }
+        }
+      }
+    },
     "\"%@\" will be deleted. Its projects will be kept and moved to Ungrouped." : {
 
     },
@@ -57,7 +67,7 @@
         }
       }
     },
-    "“merge captions 12 and 13”, “make the title yellow and slow the fade”, “list my projects”, “export the captions as SRT”." : {
+    "“merge captions 12 and 13”, “make the title yellow and slow the fade”, “put the narration under the video and render it”, “export the captions as SRT”." : {
 
     },
     "(not generated)" : {
@@ -86,6 +96,16 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "%1$@\n%2$@"
+          }
+        }
+      }
+    },
+    "%@\n%@\nDouble-click to add to this film." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@\n%2$@\n双击以添加到此影片。"
           }
         }
       }
@@ -155,6 +175,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%@（.%@）"
+          }
+        }
+      }
+    },
+    "%@ are installed globally and do not need adding to a film." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ 为全局安装，无需添加到影片。"
           }
         }
       }
@@ -362,6 +392,9 @@
           }
         }
       }
+    },
+    "%lld tool calls" : {
+
     },
     "%lld translation%@" : {
       "localizations" : {
@@ -669,6 +702,46 @@
         }
       }
     },
+    "Add this item to the film in front" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "将此项目添加到当前影片"
+          }
+        }
+      }
+    },
+    "Add to Film" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "添加到影片"
+          }
+        }
+      }
+    },
+    "Add to Folder" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "添加到文件夹"
+          }
+        }
+      }
+    },
+    "Added to Film" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已添加到影片"
+          }
+        }
+      }
+    },
     "Adults only" : {
 
     },
@@ -785,6 +858,16 @@
     "All" : {
 
     },
+    "All %@" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "全部%@"
+          }
+        }
+      }
+    },
     "All %lld rendered for this size" : {
 
     },
@@ -794,6 +877,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "所有网络接口 (0.0.0.0)"
+          }
+        }
+      }
+    },
+    "All Items" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "全部项目"
           }
         }
       }
@@ -1051,6 +1144,26 @@
     "Available credits" : {
 
     },
+    "Available in the caption Text Style font picker." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "可在字幕文本样式的字体选择器中使用。"
+          }
+        }
+      }
+    },
+    "Available in the Effects & Transitions browser." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "可在效果与转场浏览器中使用。"
+          }
+        }
+      }
+    },
     "Azure Speech" : {
       "localizations" : {
         "zh-Hans" : {
@@ -1284,6 +1397,26 @@
         }
       }
     },
+    "Browse footage, sounds, fonts and effects to install" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "浏览可安装的素材、声音、字体和效果"
+          }
+        }
+      }
+    },
+    "Browse the marketplace" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "浏览市场"
+          }
+        }
+      }
+    },
     "Build" : {
       "localizations" : {
         "zh-Hans" : {
@@ -1319,6 +1452,41 @@
     },
     "Builds a starting Composition.tsx from these inputs and launches Studio. Use the agent window to refine it." : {
 
+    },
+    "Buy" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "购买"
+          }
+        }
+      }
+    },
+    "Buy for %@ credits" : {
+
+    },
+    "Buy for %lld credits" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "以 %lld 积分购买"
+          }
+        }
+      }
+    },
+    "Buy this item before installing it." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "安装前请先购买此项目。"
+          }
+        }
+      }
     },
     "By character count" : {
       "localizations" : {
@@ -1381,6 +1549,7 @@
       }
     },
     "Caption" : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -1526,6 +1695,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "休闲"
+          }
+        }
+      }
+    },
+    "Categories" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "分类"
           }
         }
       }
@@ -2056,6 +2236,16 @@
     "Couldn’t add footage" : {
 
     },
+    "Couldn’t Add to Film" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法添加到影片"
+          }
+        }
+      }
+    },
     "Couldn’t Connect to Server" : {
 
     },
@@ -2071,6 +2261,16 @@
     },
     "Couldn’t edit" : {
 
+    },
+    "Couldn’t load the marketplace" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法加载市场"
+          }
+        }
+      }
     },
     "Couldn’t Open Film" : {
 
@@ -2487,6 +2687,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "完成"
+          }
+        }
+      }
+    },
+    "Download" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "下载"
           }
         }
       }
@@ -2997,7 +3207,7 @@
         }
       }
     },
-    "Every message and the saved summary in this thread will be permanently deleted. Projects are not affected." : {
+    "Every message and the saved summary in this thread will be permanently deleted. The film is not affected." : {
 
     },
     "Every thread targets one project" : {
@@ -3130,6 +3340,16 @@
         }
       }
     },
+    "Family" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "字体家族"
+          }
+        }
+      }
+    },
     "Fender Rhodes Piano" : {
       "localizations" : {
         "zh-Hans" : {
@@ -3219,11 +3439,51 @@
         }
       }
     },
+    "Fonts" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "字体"
+          }
+        }
+      }
+    },
+    "Footage" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "素材"
+          }
+        }
+      }
+    },
     "Footage pane height" : {
 
     },
     "Footage version" : {
 
+    },
+    "Footage, music, sound effects and Remotion prompts you install from the Marketplace show up here, ready to add to any film." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "从市场安装的素材、音乐、音效和 Remotion 提示词会显示在这里，可随时添加到任何影片。"
+          }
+        }
+      }
+    },
+    "Footage, music, sound effects, fonts, transitions and Remotion prompts you can install and add to any film. ⌘⌥M opens it any time." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "可安装并添加到任意影片的素材、音乐、音效、字体、转场和 Remotion 提示词。随时按 ⌘⌥M 打开。"
+          }
+        }
+      }
     },
     "Form" : {
       "extractionState" : "stale",
@@ -3272,6 +3532,16 @@
     "Frames at a time" : {
 
     },
+    "Free" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "免费"
+          }
+        }
+      }
+    },
     "French" : {
       "localizations" : {
         "zh-Hans" : {
@@ -3288,6 +3558,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "友好"
+          }
+        }
+      }
+    },
+    "From Marketplace…" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "从市场添加…"
           }
         }
       }
@@ -3961,6 +4241,36 @@
     "Inspector" : {
 
     },
+    "Install" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "安装"
+          }
+        }
+      }
+    },
+    "Install this item first." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "请先安装此项目。"
+          }
+        }
+      }
+    },
+    "Installed" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已安装"
+          }
+        }
+      }
+    },
     "Instrumental" : {
       "localizations" : {
         "zh-Hans" : {
@@ -3991,12 +4301,32 @@
         }
       }
     },
+    "it describes a %@, not a %@." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "它描述的是 %@，而不是 %@。"
+          }
+        }
+      }
+    },
     "Italian" : {
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "意大利语"
+          }
+        }
+      }
+    },
+    "Item unavailable" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "项目不可用"
           }
         }
       }
@@ -4090,6 +4420,17 @@
     },
     "Kind" : {
 
+    },
+    "Kinds" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "类型"
+          }
+        }
+      }
     },
     "Knowledgeable" : {
       "localizations" : {
@@ -4353,6 +4694,16 @@
         }
       }
     },
+    "Loading…" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "加载中…"
+          }
+        }
+      }
+    },
     "Localhost only (127.0.0.1)" : {
       "localizations" : {
         "zh-Hans" : {
@@ -4409,6 +4760,16 @@
     },
     "MapKit maps are ready to use in Remotion compositions." : {
 
+    },
+    "Marketplace" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "市场"
+          }
+        }
+      }
     },
     "Mature" : {
       "localizations" : {
@@ -4698,6 +5059,7 @@
 
     },
     "Narrative" : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -4825,6 +5187,16 @@
     },
     "New Thread" : {
 
+    },
+    "Next" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "下一页"
+          }
+        }
+      }
     },
     "Next frame" : {
 
@@ -4983,9 +5355,6 @@
           }
         }
       }
-    },
-    "No project" : {
-
     },
     "No reference images." : {
 
@@ -5155,6 +5524,16 @@
         }
       }
     },
+    "Nothing Installed" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "尚未安装任何内容"
+          }
+        }
+      }
+    },
     "Nothing needed translating into %@." : {
       "extractionState" : "stale",
       "localizations" : {
@@ -5265,6 +5644,26 @@
         }
       }
     },
+    "Open a film first." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "请先打开影片。"
+          }
+        }
+      }
+    },
+    "Open a film to add this item" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "打开影片以添加此项目"
+          }
+        }
+      }
+    },
     "Open AI Provider settings" : {
       "localizations" : {
         "zh-Hans" : {
@@ -5291,6 +5690,16 @@
     },
     "Open in Player" : {
 
+    },
+    "Open Marketplace…" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "打开市场…"
+          }
+        }
+      }
     },
     "Open Recent" : {
 
@@ -5488,6 +5897,26 @@
         }
       }
     },
+    "Owned" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已拥有"
+          }
+        }
+      }
+    },
+    "Page %lld of %lld" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "第 %lld 页，共 %lld 页"
+          }
+        }
+      }
+    },
     "Pane" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -5609,10 +6038,24 @@
         }
       }
     },
+    "Pick something from the list to preview it." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "从列表中选择一项进行预览。"
+          }
+        }
+      }
+    },
     "Pick up where you left off." : {
 
     },
     "Pin this thread" : {
+
+    },
+    "Pin Thread" : {
 
     },
     "Pinned" : {
@@ -5758,6 +6201,9 @@
         }
       }
     },
+    "Preparing…" : {
+
+    },
     "Preview" : {
       "localizations" : {
         "zh-Hans" : {
@@ -5778,6 +6224,16 @@
         }
       }
     },
+    "Preview video" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "预览视频"
+          }
+        }
+      }
+    },
     "Preview voice" : {
       "localizations" : {
         "zh-Hans" : {
@@ -5794,6 +6250,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "预览合成"
+          }
+        }
+      }
+    },
+    "Previous" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "上一页"
           }
         }
       }
@@ -6105,6 +6571,16 @@
     "Reload Preview" : {
 
     },
+    "Reload the catalog" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "重新加载目录"
+          }
+        }
+      }
+    },
     "reluctantly" : {
       "localizations" : {
         "zh-Hans" : {
@@ -6138,6 +6614,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Remotion 项目"
+          }
+        }
+      }
+    },
+    "Remotion Prompts" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Remotion 提示词"
           }
         }
       }
@@ -6796,6 +7282,16 @@
         }
       }
     },
+    "Search the marketplace" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "搜索市场"
+          }
+        }
+      }
+    },
     "Section Time" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -6868,6 +7364,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "全选"
+          }
+        }
+      }
+    },
+    "Select an item" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "选择一个项目"
           }
         }
       }
@@ -7133,8 +7640,21 @@
     "Show effects and transitions" : {
 
     },
+    "Show full details…" : {
+
+    },
     "Show in Finder" : {
 
+    },
+    "Show in Marketplace…" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在市场中显示…"
+          }
+        }
+      }
     },
     "Show Lyrics" : {
       "localizations" : {
@@ -7182,8 +7702,28 @@
         }
       }
     },
+    "Sign In to %@" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "登录以%@"
+          }
+        }
+      }
+    },
     "Sign in to RxLab" : {
 
+    },
+    "Sign in to use the marketplace." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "登录后使用市场。"
+          }
+        }
+      }
     },
     "Sign in to your RxLab account on the Account tab." : {
       "localizations" : {
@@ -7306,6 +7846,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "灵魂乐"
+          }
+        }
+      }
+    },
+    "Sound Effects" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "音效"
           }
         }
       }
@@ -7706,6 +8256,16 @@
         }
       }
     },
+    "Tags" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "标签"
+          }
+        }
+      }
+    },
     "Tell the model what kind of video to build (style, motion, mood, structure). Used as context whenever the agent edits this composition." : {
 
     },
@@ -7831,6 +8391,36 @@
         }
       }
     },
+    "the descriptor file is not valid JSON." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "描述文件不是有效的 JSON。"
+          }
+        }
+      }
+    },
+    "The download did not complete." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "下载未完成。"
+          }
+        }
+      }
+    },
+    "The download failed (HTTP %lld)." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "下载失败（HTTP %lld）。"
+          }
+        }
+      }
+    },
     "The endpoint, key and model here are what the agent, caption review and translation all use." : {
       "localizations" : {
         "zh-Hans" : {
@@ -7859,6 +8449,16 @@
     },
     "The film stays small, but breaks if the original file moves." : {
 
+    },
+    "The font %@ could not be registered." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法注册字体 %@。"
+          }
+        }
+      }
     },
     "The generated audio file will be permanently deleted." : {
 
@@ -8005,8 +8605,28 @@
         }
       }
     },
+    "This effect cannot be loaded: %@" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法加载此效果：%@"
+          }
+        }
+      }
+    },
     "This Film · Version %lld" : {
 
+    },
+    "This item is no longer in the catalog." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此项目已不在目录中。"
+          }
+        }
+      }
     },
     "This lyric section will be permanently deleted." : {
 
@@ -8253,6 +8873,16 @@
     "Transition" : {
 
     },
+    "Transitions" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "转场"
+          }
+        }
+      }
+    },
     "Translate" : {
       "localizations" : {
         "zh-Hans" : {
@@ -8408,6 +9038,16 @@
         }
       }
     },
+    "Try Again" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "重试"
+          }
+        }
+      }
+    },
     "Turkish" : {
       "localizations" : {
         "zh-Hans" : {
@@ -8468,7 +9108,7 @@
         }
       }
     },
-    "Type @ to pick a project, / for commands." : {
+    "Type @ to pick footage, / for commands." : {
 
     },
     "Type a time…" : {
@@ -8494,6 +9134,16 @@
     "Ungrouped" : {
 
     },
+    "Uninstall" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "卸载"
+          }
+        }
+      }
+    },
     "Unload model from memory" : {
       "localizations" : {
         "zh-Hans" : {
@@ -8505,6 +9155,9 @@
       }
     },
     "Unpin this thread" : {
+
+    },
+    "Unpin Thread" : {
 
     },
     "Untitled term" : {
@@ -8957,6 +9610,9 @@
           }
         }
       }
+    },
+    "Whole film" : {
+
     },
     "Width" : {
       "localizations" : {

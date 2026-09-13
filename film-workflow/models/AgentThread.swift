@@ -55,6 +55,15 @@ final class AgentThread {
     /// remember a model for each rather than carry one across.
     var modelOverridesJSON: String?
 
+    /// Per-backend thinking-level overrides keyed by `AgentBackend.rawValue`, as
+    /// JSON. Empty or missing means "follow Settings, then the engine default".
+    ///
+    /// Keyed per backend and separate from `modelOverridesJSON` because the
+    /// levels are neither shared nor uniform: Codex publishes them per model
+    /// (`low`/`medium`/`high`/`xhigh`, sometimes `ultra`), Claude Code accepts
+    /// its own set, and a level one engine never heard of fails every turn.
+    var effortOverridesJSON: String?
+
     // MARK: - Content
 
     @Relationship(deleteRule: .cascade, inverse: \AgentMessage.thread)
@@ -82,6 +91,7 @@ final class AgentThread {
         self.backendRaw = backend?.rawValue ?? ""
         self.providerSessionIDsJSON = nil
         self.modelOverridesJSON = nil
+        self.effortOverridesJSON = nil
         self.messages = []
         self.summary = ""
     }
@@ -156,6 +166,18 @@ final class AgentThread {
         modelOverridesJSON = Self.setting(id, for: backend, in: modelOverridesJSON)
     }
 
+    // MARK: - Thinking level overrides
+
+    /// The thinking level this thread pins for `backend`, or nil to follow
+    /// Settings and then the engine's own default.
+    func effortOverride(for backend: AgentBackend) -> String? {
+        Self.decodeMap(effortOverridesJSON)[backend.rawValue]
+    }
+
+    func setEffortOverride(_ level: String?, for backend: AgentBackend) {
+        effortOverridesJSON = Self.setting(level, for: backend, in: effortOverridesJSON)
+    }
+
     // MARK: - Per-backend JSON maps
 
     private static func decodeMap(_ json: String?) -> [String: String] {
@@ -181,5 +203,23 @@ final class AgentThread {
         }
         return (try? JSONEncoder().encode(map))
             .flatMap { String(data: $0, encoding: .utf8) }
+    }
+}
+
+extension AgentThread {
+    /// A thread the user is about to start chatting in.
+    ///
+    /// Inherits the engine, model and thinking level the user last picked in any
+    /// thread's engine menu (see `AgentSettings.rememberPick`), so a new thread keeps
+    /// answering on what they were using rather than resetting to the app
+    /// default. Threads that already exist keep their own picks.
+    @MainActor
+    static func startingFromLastPick(target: AgentTarget) -> AgentThread {
+        let thread = AgentThread(target: target)
+        let settings = AgentSettings.shared
+        thread.backendRaw = settings.lastPickedBackendRaw
+        thread.modelOverridesJSON = settings.lastPickedModelOverridesJSON
+        thread.effortOverridesJSON = settings.lastPickedEffortOverridesJSON
+        return thread
     }
 }

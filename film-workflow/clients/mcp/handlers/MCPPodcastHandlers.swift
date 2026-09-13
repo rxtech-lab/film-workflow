@@ -1,18 +1,19 @@
 import Foundation
 import SwiftData
 
-/// Podcast tools. A "podcast" is backed by the existing `NarrativeProject`
-/// (multi-speaker TTS): the podcast's *content* is its ordered paragraphs, its
-/// *speakers* map to `NarrativeSpeaker`, and the *backend* is the TTS provider
-/// (Gemini | Azure). These tools give MCP clients a podcast-shaped surface over
-/// that model: create a podcast, add/update/remove content lines, discover the
-/// speakers/params a backend supports, and patch podcast settings.
+/// Podcast tools. A "podcast" is a narration item in the library (multi-speaker
+/// TTS) seen line by line: the podcast's *content* is the item's ordered
+/// paragraphs, its *speakers* map to `NarrativeSpeaker`, and the *backend* is
+/// the TTS provider (Gemini | Azure). These tools give MCP clients a
+/// conversational surface over that item: create one, add/update/remove lines,
+/// discover the voices a backend supports, and patch its settings. The audio
+/// itself comes from `narration_generate`.
 @MainActor
 enum MCPPodcastHandlers {
     static let descriptors: [MCPToolDescriptor] = [
         MCPToolDescriptor(
             name: "podcast_create",
-            description: "Create a new podcast (backed by a narrative TTS project). Returns the full podcast state including its id, default backend, and the seeded default speaker.",
+            description: "Create a podcast: a narration item in the library whose lines are spoken by several TTS speakers. Returns the item, with its id (a footage_id), default backend and seeded default speaker. Generate the audio with narration_generate.",
             inputSchema: [
                 "type": "object",
                 "properties": [
@@ -32,17 +33,17 @@ enum MCPPodcastHandlers {
         ),
         MCPToolDescriptor(
             name: "podcast_add_content",
-            description: "Append (or insert) one content line to a podcast. Each line is spoken by one speaker. `speaker_id` must reference a speaker on the podcast (see podcast get/settings); if omitted the podcast's first speaker is used. Optional `index` inserts at that 0-based position instead of appending. Returns the created line (with its id) and the updated content list.",
+            description: "Append (or insert) one content line to a podcast. Each line is spoken by one speaker. `speaker_id` must reference a speaker on the item (footage_get lists them); if omitted the first speaker is used. Optional `index` inserts at that 0-based position instead of appending. Returns the created line (with its id) and the updated content list.",
             inputSchema: [
                 "type": "object",
                 "properties": [
-                    "podcast_id": ["type": "string", "description": "Podcast id."] as [String: Any],
+                    "footage_id": ["type": "string", "description": "The narration item's id."] as [String: Any],
                     "content": ["type": "string", "description": "The text this speaker says."] as [String: Any],
                     "speaker_id": ["type": "string", "description": "Optional speaker UUID. Defaults to the first speaker."] as [String: Any],
                     "emotion": ["type": "string", "description": "Optional delivery/emotion hint (e.g. enthusiastic, sad, whispers)."] as [String: Any],
                     "index": ["type": "integer", "description": "Optional 0-based insert position. Defaults to end."] as [String: Any]
                 ],
-                "required": ["podcast_id", "content"]
+                "required": ["footage_id", "content"]
             ]
         ),
         MCPToolDescriptor(
@@ -51,13 +52,13 @@ enum MCPPodcastHandlers {
             inputSchema: [
                 "type": "object",
                 "properties": [
-                    "podcast_id": ["type": "string", "description": "Podcast id."] as [String: Any],
+                    "footage_id": ["type": "string", "description": "The narration item's id."] as [String: Any],
                     "content_id": ["type": "string", "description": "Content line UUID (a paragraph id)."] as [String: Any],
                     "content": ["type": "string", "description": "New text. Omit to leave unchanged."] as [String: Any],
                     "speaker_id": ["type": "string", "description": "New speaker UUID. Omit to leave unchanged."] as [String: Any],
                     "emotion": ["type": "string", "description": "New emotion hint. Omit to leave unchanged."] as [String: Any]
                 ],
-                "required": ["podcast_id", "content_id"]
+                "required": ["footage_id", "content_id"]
             ]
         ),
         MCPToolDescriptor(
@@ -66,10 +67,10 @@ enum MCPPodcastHandlers {
             inputSchema: [
                 "type": "object",
                 "properties": [
-                    "podcast_id": ["type": "string", "description": "Podcast id."] as [String: Any],
+                    "footage_id": ["type": "string", "description": "The narration item's id."] as [String: Any],
                     "content_id": ["type": "string", "description": "Content line UUID to remove."] as [String: Any]
                 ],
-                "required": ["podcast_id", "content_id"]
+                "required": ["footage_id", "content_id"]
             ]
         ),
         MCPToolDescriptor(
@@ -78,10 +79,10 @@ enum MCPPodcastHandlers {
             inputSchema: [
                 "type": "object",
                 "properties": [
-                    "podcast_id": ["type": "string", "description": "Podcast id."] as [String: Any],
+                    "footage_id": ["type": "string", "description": "The narration item's id."] as [String: Any],
                     "fields": ["type": "object", "additionalProperties": true, "description": "Settings to patch."] as [String: Any]
                 ],
-                "required": ["podcast_id", "fields"]
+                "required": ["footage_id", "fields"]
             ]
         )
     ]
@@ -101,7 +102,7 @@ enum MCPPodcastHandlers {
             let p = NarrativeProject(name: displayName)
             context.insert(p)
             try context.save()
-            return MCPToolRegistry.jsonResult(MCPProjectHandlers.narrativeFull(p))
+            return MCPToolRegistry.jsonResult(MCPLibraryHandlers.narrationFull(p, context: context))
 
         case "podcast_list_speakers":
             return MCPToolRegistry.jsonResult(listSpeakers(backend: arguments["backend"] as? String))
@@ -274,16 +275,16 @@ enum MCPPodcastHandlers {
         p.updatedAt = Date()
         try context.save()
 
-        return MCPToolRegistry.jsonResult(MCPProjectHandlers.narrativeFull(p))
+        return MCPToolRegistry.jsonResult(MCPLibraryHandlers.narrationFull(p, context: context))
     }
 
     // MARK: - Helpers
 
     private static func podcast(from arguments: [String: Any], context: ModelContext) throws -> NarrativeProject {
-        guard let id = arguments["podcast_id"] as? String else {
-            throw MCPToolError.invalidArguments("missing podcast_id")
+        guard let id = arguments["footage_id"] as? String else {
+            throw MCPToolError.invalidArguments("missing footage_id")
         }
-        return try MCPProjectHandlers.fetchNarrative(id: id, context: context)
+        return try MCPLibraryHandlers.fetchNarration(id: id, context: context)
     }
 
     private static func contentID(from arguments: [String: Any]) throws -> UUID {

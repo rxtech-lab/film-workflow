@@ -63,7 +63,7 @@ struct RemotionCodeBuilder {
     }
 
     /// Build a no-AI default Composition.tsx scaffold seeded from the project's
-    /// settings. Used by MCP `create_project(type="remotion")` so callers get a
+    /// settings. Used by MCP `footage_create(kind="remotion")` so callers get a
     /// ready-to-preview project without round-tripping through the LLM agent.
     static func defaultComposition(project: RemotionProject) -> String {
         let fps = max(1, project.compositionFps)

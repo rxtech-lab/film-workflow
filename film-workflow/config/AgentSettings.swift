@@ -43,6 +43,50 @@ final class AgentSettings {
         }
     }
 
+    /// The engine the user last picked in a thread's engine menu, as
+    /// `AgentBackend.rawValue`; empty means they picked "Default".
+    ///
+    /// A new thread starts from this rather than from `defaultBackend`: someone
+    /// who switched to Codex in their last three threads wants the fourth on
+    /// Codex too, without going to Settings to make it the app default.
+    /// Existing threads are untouched — each keeps the pick it was given.
+    var lastPickedBackendRaw: String {
+        didSet {
+            guard lastPickedBackendRaw != oldValue else { return }
+            UserDefaults.standard.set(lastPickedBackendRaw, forKey: Keys.lastPickedBackend)
+        }
+    }
+
+    /// The per-engine model map (`AgentThread.modelOverridesJSON`) as it stood
+    /// when the user last picked a model. The whole map rather than one model
+    /// so a new thread that later switches engines lands on the model last
+    /// used with *that* engine, not the engine's default.
+    var lastPickedModelOverridesJSON: String? {
+        didSet {
+            guard lastPickedModelOverridesJSON != oldValue else { return }
+            UserDefaults.standard.set(lastPickedModelOverridesJSON, forKey: Keys.lastPickedModelOverrides)
+        }
+    }
+
+    /// The per-engine thinking-level map (`AgentThread.effortOverridesJSON`) as
+    /// it stood when the user last picked a level. The whole map, for the same
+    /// reason the model map is kept whole: the levels are per engine, so a new
+    /// thread that switches engines lands on the level last used with *that* one.
+    var lastPickedEffortOverridesJSON: String? {
+        didSet {
+            guard lastPickedEffortOverridesJSON != oldValue else { return }
+            UserDefaults.standard.set(lastPickedEffortOverridesJSON, forKey: Keys.lastPickedEffortOverrides)
+        }
+    }
+
+    /// Records a pick made in `thread`'s engine menu so the next new thread
+    /// starts from it.
+    func rememberPick(from thread: AgentThread) {
+        lastPickedBackendRaw = thread.backendRaw
+        lastPickedModelOverridesJSON = thread.modelOverridesJSON
+        lastPickedEffortOverridesJSON = thread.effortOverridesJSON
+    }
+
     private init() {
         let defaults = UserDefaults.standard
 
@@ -57,11 +101,21 @@ final class AgentSettings {
 
         let storedIterations = defaults.integer(forKey: Keys.maxIterations)
         self.maxIterations = storedIterations == 0 ? 20 : storedIterations
+
+        let storedPick = defaults.string(forKey: Keys.lastPickedBackend) ?? ""
+        // Drop a pick for an engine this build no longer knows, so a stale
+        // value can't pin new threads to nothing.
+        self.lastPickedBackendRaw = AgentBackend(rawValue: storedPick) == nil ? "" : storedPick
+        self.lastPickedModelOverridesJSON = defaults.string(forKey: Keys.lastPickedModelOverrides)
+        self.lastPickedEffortOverridesJSON = defaults.string(forKey: Keys.lastPickedEffortOverrides)
     }
 
     private enum Keys {
         static let defaultBackend = "agent.defaultBackend"
         static let writePolicy = "agent.writePolicy"
         static let maxIterations = "agent.maxIterations"
+        static let lastPickedBackend = "agent.lastPickedBackend"
+        static let lastPickedModelOverrides = "agent.lastPickedModelOverrides"
+        static let lastPickedEffortOverrides = "agent.lastPickedEffortOverrides"
     }
 }

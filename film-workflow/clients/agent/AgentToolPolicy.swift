@@ -1,4 +1,5 @@
 import Foundation
+import RxAgentSDK
 
 /// How much the agent is allowed to change without asking.
 nonisolated enum AgentWritePolicy: String, CaseIterable, Identifiable, Sendable {
@@ -31,7 +32,7 @@ enum AgentToolPolicy {
     /// Tools withheld under `.review` because they write captions immediately.
     ///
     /// `caption_transcribe` is here for the same reason as `caption_update_segment`:
-    /// it replaces every caption in the project, which is the largest destructive
+    /// it replaces every caption on the item, which is the largest destructive
     /// edit in the app and not something to do without being asked.
     static let reviewWithheld: Set<String> = [
         "caption_update_segment",
@@ -40,11 +41,12 @@ enum AgentToolPolicy {
 
     /// Tools never offered to the agent under any policy.
     ///
-    /// Deleting a project is not something a conversational agent should be one
-    /// hallucinated argument away from; the user has a delete button.
+    /// Deleting footage or a folder is not something a conversational agent
+    /// should be one hallucinated argument away from; the user has a delete
+    /// button in the library.
     static let alwaysWithheld: Set<String> = [
-        "delete_project",
-        "delete_project_group",
+        "footage_delete",
+        "folder_delete",
     ]
 
     /// The descriptors a thread may call.
@@ -95,5 +97,31 @@ enum AgentToolPolicy {
     /// agent's built-in tools.
     static func disallowedToolNames(policy: AgentWritePolicy) -> [String] {
         Array(withheldNames(policy: policy)) + codingAgentTools
+    }
+}
+
+/// Answers a CLI agent's approval hook the way the allowlist already did.
+///
+/// Claude Code runs the `PreToolUse` hook for every `mcp__*` call *before* it
+/// consults `--allowedTools`, so a deny from the hook overrides the
+/// pre-approval and the model sees "the user declined this tool call" for a
+/// tool the user never got asked about. This resolver closes that gap: a tool
+/// the current write policy exposes is allowed without a prompt (the policy is
+/// the user's standing answer), and anything else is refused with a reason the
+/// model can act on rather than a silent no.
+///
+/// Reads the policy on every call rather than capturing it, so flipping
+/// Settings › Write policy mid-conversation applies to the next tool call.
+struct AgentPolicyPermissions: PermissionResolving {
+    func resolve(_ request: PermissionRequest) async -> PermissionDecision {
+        let bare = MCPToolName.bare(request.toolName)
+        let allowed = await MainActor.run {
+            AgentToolPolicy.allows(bare, policy: AgentSettings.shared.writePolicy)
+        }
+        if allowed { return .allow }
+        return .denyWithReason(
+            reason: "\(bare) is not available in this conversation. "
+                + "Use the tools listed in the system prompt instead."
+        )
     }
 }
