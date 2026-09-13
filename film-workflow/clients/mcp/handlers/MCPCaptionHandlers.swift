@@ -3,9 +3,11 @@ import SwiftData
 
 /// Caption tools.
 ///
-/// A caption project owns an audio source, a speaker roster, and an ordered list
-/// of timed captions. These tools let an MCP client transcribe audio, read and
-/// correct captions, and export VTT/SRT/text.
+/// A captions item in the library owns an audio source, a speaker roster, and
+/// an ordered list of timed captions, kept in transcript versions. These tools
+/// let an MCP client transcribe audio, read and correct captions, translate
+/// them and export VTT/SRT/text. On a sequence the item is one clip on the
+/// overlay track, drawn into the picture at render time.
 ///
 /// Two deliberate shape choices, both about result size: listing captions is
 /// **paginated**, and export writes a file and returns its path rather than
@@ -16,12 +18,12 @@ enum MCPCaptionHandlers {
     static let descriptors: [MCPToolDescriptor] = [
         MCPToolDescriptor(
             name: "caption_create",
-            description: "Create a caption project. Optionally attach audio immediately: pass `narrative_id` to caption an existing generated narration (timings come from the speech service, caption text stays exactly as written in the narrative), or `audio_path` for an absolute path to an audio file on disk, which is copied into app storage. Returns the caption project state.",
+            description: "Create a captions item in the library. Optionally attach audio immediately: pass `narration_id` to caption a generated narration (timings come from the speech service, caption text stays exactly as written in the narration), or `audio_path` for an absolute path to an audio file on disk, which is copied into the film. Then run caption_transcribe. Returns the item's state; its id is the `footage_id` the other caption tools take.",
             inputSchema: [
                 "type": "object",
                 "properties": [
                     "name": ["type": "string", "description": "Display name. Defaults to 'Untitled Captions'."] as [String: Any],
-                    "narrative_id": ["type": "string", "description": "Optional narrative project id whose most recent generated audio should be captioned."] as [String: Any],
+                    "narration_id": ["type": "string", "description": "Optional id of a narration item whose newest take should be captioned."] as [String: Any],
                     "audio_path": ["type": "string", "description": "Optional absolute path to an audio file to import."] as [String: Any],
                     "provider": ["type": "string", "enum": ["WhisperKit", "OpenAI", "Azure", "Gemini"], "description": "Optional transcription provider override. Omit to use the app default."] as [String: Any],
                     "language": ["type": "string", "description": "Optional BCP-47 language hint (e.g. 'en-US', 'zh-CN'). Omit to auto-detect."] as [String: Any],
@@ -31,55 +33,55 @@ enum MCPCaptionHandlers {
         ),
         MCPToolDescriptor(
             name: "caption_transcribe",
-            description: "Run transcription on a caption project's audio. This creates a NEW transcript version and makes it active; earlier versions and their captions are kept and can be restored with caption_versions. Translations carry over to the new version for captions whose text came out unchanged. For a narrative-sourced project this aligns the narrative's own text to the audio (timings only from the speech service); otherwise it transcribes the audio directly. This can take minutes for long audio. Returns a summary including how many captions were created and any warning about degraded timings or missing speaker detection.",
+            description: "Run transcription on a captions item's audio. This creates a NEW transcript version and makes it active; earlier versions and their captions are kept and can be restored with caption_versions. Translations carry over to the new version for captions whose text came out unchanged. For an item made from a narration this aligns the narration's own text to the audio (timings only from the speech service); otherwise it transcribes the audio directly. This can take minutes for long audio. Returns a summary including how many captions were created and any warning about degraded timings or missing speaker detection.",
             inputSchema: [
                 "type": "object",
                 "properties": [
-                    "caption_id": ["type": "string", "description": "Caption project id."] as [String: Any],
+                    "footage_id": ["type": "string", "description": "The captions item's id."] as [String: Any],
                     "note": ["type": "string", "description": "Optional short label for this version, shown in the app's version list."] as [String: Any]
                 ],
-                "required": ["caption_id"]
+                "required": ["footage_id"]
             ]
         ),
         MCPToolDescriptor(
             name: "caption_versions",
-            description: "List a caption project's transcript versions, each with its number, language, provider, caption count and translation status. Pass `activate` with a version number to switch which version the editor and every export use. Switching is non-destructive; pass `delete` with a version number to remove one permanently (the last remaining version cannot be deleted).",
+            description: "List a captions item's transcript versions, each with its number, language, provider, caption count and translation status. Pass `activate` with a version number to switch which version the editor and every export use. Switching is non-destructive; pass `delete` with a version number to remove one permanently (the last remaining version cannot be deleted).",
             inputSchema: [
                 "type": "object",
                 "properties": [
-                    "caption_id": ["type": "string", "description": "Caption project id."] as [String: Any],
+                    "footage_id": ["type": "string", "description": "The captions item's id."] as [String: Any],
                     "activate": ["type": "integer", "description": "Version number to make active."] as [String: Any],
                     "delete": ["type": "integer", "description": "Version number to delete permanently."] as [String: Any]
                 ],
-                "required": ["caption_id"]
+                "required": ["footage_id"]
             ]
         ),
         MCPToolDescriptor(
             name: "caption_translate",
-            description: "Translate the active transcript version into another language, using the app's configured AI backend. Existing translations in other languages are untouched. By default only captions with no translation — or whose text changed since they were translated — are processed, so re-running after a few edits is cheap; pass `scope: \"all\"` to redo everything, including translations the user edited by hand. Apple's on-device translation engine cannot be used here because it only exists inside the app's UI. Captions the model can't manage are skipped rather than failing the run and reported as `failed`; they keep no translation, so calling again with the default scope retries exactly those. Where a caption uses a project glossary term, the stored translation keeps a `{{Term}}` placeholder that resolves to the term's wording for that language, so editing the wording later updates every caption without re-translating. Returns how many captions were written and the language's completion counts.",
+            description: "Translate the active transcript version into another language, using the app's configured AI backend. Existing translations in other languages are untouched. By default only captions with no translation — or whose text changed since they were translated — are processed, so re-running after a few edits is cheap; pass `scope: \"all\"` to redo everything, including translations the user edited by hand. Apple's on-device translation engine cannot be used here because it only exists inside the app's UI. Captions the model can't manage are skipped rather than failing the run and reported as `failed`; they keep no translation, so calling again with the default scope retries exactly those. Where a caption uses a glossary term from the item, the stored translation keeps a `{{Term}}` placeholder that resolves to the term's wording for that language, so editing the wording later updates every caption without re-translating. Returns how many captions were written and the language's completion counts.",
             inputSchema: [
                 "type": "object",
                 "properties": [
-                    "caption_id": ["type": "string", "description": "Caption project id."] as [String: Any],
+                    "footage_id": ["type": "string", "description": "The captions item's id."] as [String: Any],
                     "target_language": ["type": "string", "description": "BCP-47 language to translate into, e.g. 'zh-Hans', 'es', 'ja'."] as [String: Any],
                     "scope": ["type": "string", "enum": ["missing_or_stale", "all"], "description": "Which captions to translate. Defaults to missing_or_stale."] as [String: Any]
                 ],
-                "required": ["caption_id", "target_language"]
+                "required": ["footage_id", "target_language"]
             ]
         ),
         MCPToolDescriptor(
             name: "caption_list_segments",
-            description: "List a caption project's captions, paginated. Each entry has its index, start/end milliseconds, text, speaker, and word count. Use `offset`/`limit` to page; the response reports `total` and `hasMore`. Pass `include_words: true` to get per-word timings (verbose — prefer paging with a small limit).",
+            description: "List a captions item's captions, paginated. Each entry has its index, start/end milliseconds, text, speaker, and word count. Use `offset`/`limit` to page; the response reports `total` and `hasMore`. Pass `include_words: true` to get per-word timings (verbose — prefer paging with a small limit).",
             inputSchema: [
                 "type": "object",
                 "properties": [
-                    "caption_id": ["type": "string", "description": "Caption project id."] as [String: Any],
+                    "footage_id": ["type": "string", "description": "The captions item's id."] as [String: Any],
                     "offset": ["type": "integer", "description": "0-based start index. Defaults to 0."] as [String: Any],
                     "limit": ["type": "integer", "description": "Maximum entries to return. Defaults to 50, capped at 200."] as [String: Any],
                     "include_words": ["type": "boolean", "description": "Include per-word timings. Defaults to false."] as [String: Any],
                     "include_translations": ["type": "boolean", "description": "Include each caption's translations, keyed by language code. Glossary terms are already substituted; `translationsRaw` carries the stored form with its `{{Term}}` placeholders whenever the two differ. Defaults to true."] as [String: Any]
                 ],
-                "required": ["caption_id"]
+                "required": ["footage_id"]
             ]
         ),
         MCPToolDescriptor(
@@ -88,7 +90,7 @@ enum MCPCaptionHandlers {
             inputSchema: [
                 "type": "object",
                 "properties": [
-                    "caption_id": ["type": "string", "description": "Caption project id."] as [String: Any],
+                    "footage_id": ["type": "string", "description": "The captions item's id."] as [String: Any],
                     "index": ["type": "integer", "description": "0-based caption index."] as [String: Any],
                     "text": ["type": "string", "description": "New caption text."] as [String: Any],
                     "start_ms": ["type": "integer", "description": "New start time in milliseconds."] as [String: Any],
@@ -97,7 +99,7 @@ enum MCPCaptionHandlers {
                     "translation": ["type": "string", "description": "New translated text for `translation_language`. Empty string removes the translation."] as [String: Any],
                     "translation_language": ["type": "string", "description": "BCP-47 language the `translation` is written in, e.g. 'zh-Hans'."] as [String: Any]
                 ],
-                "required": ["caption_id", "index"]
+                "required": ["footage_id", "index"]
             ]
         ),
         MCPToolDescriptor(
@@ -106,7 +108,7 @@ enum MCPCaptionHandlers {
             inputSchema: [
                 "type": "object",
                 "properties": [
-                    "caption_id": ["type": "string", "description": "Caption project id."] as [String: Any],
+                    "footage_id": ["type": "string", "description": "The captions item's id."] as [String: Any],
                     "rename": [
                         "type": "object",
                         "description": "Rename a single speaker.",
@@ -118,16 +120,16 @@ enum MCPCaptionHandlers {
                     ] as [String: Any],
                     "labels": ["type": "array", "items": ["type": "string"], "description": "Replacement roster, in order."] as [String: Any]
                 ],
-                "required": ["caption_id"]
+                "required": ["footage_id"]
             ]
         ),
         MCPToolDescriptor(
             name: "caption_export",
-            description: "Render captions to a file and return its absolute path. `format` is vtt, srt, text or json. `granularity` is sentence (one cue per caption), word (one cue per word), or word_karaoke (WebVTT only, inline word timings). To include a translation, pass `translation` with a language code and `mode` (bilingual puts the original above the translation, translation_only replaces it). To write one file per language in one call, pass `languages` — then `destination` is treated as a DIRECTORY and files are named {project}_{language_code}.{ext}. Returns paths, byte sizes and cue counts — never the file body, which can be hundreds of kilobytes.",
+            description: "Render captions to a file and return its absolute path. `format` is vtt, srt, text or json. `granularity` is sentence (one cue per caption), word (one cue per word), or word_karaoke (WebVTT only, inline word timings). To include a translation, pass `translation` with a language code and `mode` (bilingual puts the original above the translation, translation_only replaces it). To write one file per language in one call, pass `languages` — then `destination` is treated as a DIRECTORY and files are named {item name}_{language_code}.{ext}. Returns paths, byte sizes and cue counts — never the file body, which can be hundreds of kilobytes.",
             inputSchema: [
                 "type": "object",
                 "properties": [
-                    "caption_id": ["type": "string", "description": "Caption project id."] as [String: Any],
+                    "footage_id": ["type": "string", "description": "The captions item's id."] as [String: Any],
                     "format": ["type": "string", "enum": ["vtt", "srt", "text", "json"], "description": "Output format. Defaults to vtt."] as [String: Any],
                     "granularity": ["type": "string", "enum": ["sentence", "word", "word_karaoke"], "description": "Cue granularity. Defaults to sentence. Forced to sentence when a translation is included."] as [String: Any],
                     "speaker_style": ["type": "string", "enum": ["none", "prefix", "vtt_voice_tag"], "description": "How to render speaker names. Defaults to prefix."] as [String: Any],
@@ -136,7 +138,7 @@ enum MCPCaptionHandlers {
                     "languages": ["type": "array", "items": ["type": "string"], "description": "Write one file per language. Use an empty string for the original. `destination` becomes a directory."] as [String: Any],
                     "destination": ["type": "string", "description": "Optional absolute output path, or a directory when `languages` is used. Defaults to app storage."] as [String: Any]
                 ],
-                "required": ["caption_id"]
+                "required": ["footage_id"]
             ]
         ),
         MCPToolDescriptor(
@@ -145,13 +147,13 @@ enum MCPCaptionHandlers {
             inputSchema: [
                 "type": "object",
                 "properties": [
-                    "caption_id": ["type": "string", "description": "Caption project id."] as [String: Any],
+                    "footage_id": ["type": "string", "description": "The captions item's id."] as [String: Any],
                     "query": ["type": "string", "description": "Words to look for. A caption matches when it contains any of them."] as [String: Any],
                     "limit": ["type": "integer", "description": "Maximum matches to return. Defaults to 20, capped at 100."] as [String: Any],
                     "context": ["type": "integer", "description": "Also return this many captions either side of each match. Defaults to 0, capped at 3."] as [String: Any],
                     "include_translations": ["type": "boolean", "description": "Include each caption's translations, keyed by language code. Glossary terms are already substituted; `translationsRaw` carries the stored form with its `{{Term}}` placeholders whenever the two differ. Defaults to true."] as [String: Any]
                 ],
-                "required": ["caption_id", "query"]
+                "required": ["footage_id", "query"]
             ]
         ),
         MCPToolDescriptor(
@@ -160,7 +162,7 @@ enum MCPCaptionHandlers {
             inputSchema: [
                 "type": "object",
                 "properties": [
-                    "caption_id": ["type": "string", "description": "Caption project id."] as [String: Any],
+                    "footage_id": ["type": "string", "description": "The captions item's id."] as [String: Any],
                     "summary": ["type": "string", "description": "One line describing the batch, shown above the review list."] as [String: Any],
                     "edits": [
                         "type": "array",
@@ -181,7 +183,7 @@ enum MCPCaptionHandlers {
                         ] as [String: Any]
                     ] as [String: Any]
                 ],
-                "required": ["caption_id", "edits"]
+                "required": ["footage_id", "edits"]
             ]
         )
     ]
@@ -228,7 +230,7 @@ enum MCPCaptionHandlers {
         context: ModelContext
     ) async throws -> [String: Any] {
         // Validate everything that can fail *before* inserting, so a rejected
-        // call doesn't leave an orphan project behind.
+        // call doesn't leave an orphan item behind.
         var provider: CaptionProvider?
         if let raw = arguments["provider"] as? String {
             guard let parsed = CaptionProvider(rawValue: raw) else {
@@ -241,13 +243,13 @@ enum MCPCaptionHandlers {
         }
 
         var narrativeSource: (narrative: NarrativeProject, audio: GeneratedNarrative)?
-        if let narrativeID = arguments["narrative_id"] as? String {
-            let narrative = try MCPProjectHandlers.fetchNarrative(id: narrativeID, context: context)
+        if let narrativeID = arguments["narration_id"] as? String {
+            let narrative = try MCPLibraryHandlers.fetchNarration(id: narrativeID, context: context)
             guard let latest = narrative.generatedFiles
                 .sorted(by: { $0.createdAt > $1.createdAt }).first
             else {
                 throw MCPToolError.invalidArguments(
-                    "narrative '\(narrative.name)' has no generated audio yet"
+                    "narration '\(narrative.name)' has no take yet; run narration_generate first"
                 )
             }
             narrativeSource = (narrative, latest)
@@ -426,7 +428,7 @@ enum MCPCaptionHandlers {
         }
         guard project.activeSegmentCount > 0 else {
             throw MCPToolError.invalidArguments(
-                "this caption project has no captions yet — run caption_transcribe first"
+                "this captions item has no captions yet — run caption_transcribe first"
             )
         }
 
@@ -695,7 +697,7 @@ enum MCPCaptionHandlers {
         let project = try captionProject(from: arguments, context: context)
         guard project.activeSegmentCount > 0 else {
             throw MCPToolError.invalidArguments(
-                "this caption project has no captions yet — run caption_transcribe first"
+                "this captions item has no captions yet — run caption_transcribe first"
             )
         }
 
@@ -1131,13 +1133,18 @@ enum MCPCaptionHandlers {
 
     // MARK: - Helpers
 
-    /// Compact project state. Never includes the caption list — use
+    /// Compact item state. Never includes the caption list — use
     /// `caption_list_segments` for that.
     static func summary(_ project: CaptionProject) -> [String: Any] {
         var out: [String: Any] = [
             "id": project.projectUUID.uuidString,
+            "kind": FootageKind.caption.rawValue,
             "name": project.name,
-            "groupId": project.groupID.map { $0.uuidString as Any } ?? NSNull(),
+            "folderId": project.groupID.map { $0.uuidString as Any } ?? NSNull(),
+            // What sequence_add_clip takes, once there is something to show.
+            "sourceId": project.activeSegmentCount > 0
+                ? DocumentMediaResolver.sourceID(.caption, project.projectUUID) as Any
+                : NSNull(),
             "source": project.sourceKindEnum.rawValue,
             "hasAudio": project.hasAudio,
             "audioDurationMs": project.audioDurationMs,
@@ -1211,13 +1218,13 @@ enum MCPCaptionHandlers {
 
     static func fetchCaption(id: String, context: ModelContext) throws -> CaptionProject {
         guard let uuid = UUID(uuidString: id) else {
-            throw MCPToolError.invalidArguments("caption_id is not a valid id: \(id)")
+            throw MCPToolError.invalidArguments("footage_id is not a valid id: \(id)")
         }
         let descriptor = FetchDescriptor<CaptionProject>(
             predicate: #Predicate { $0.projectUUID == uuid }
         )
         guard let project = try context.fetch(descriptor).first else {
-            throw MCPToolError.projectNotFound(id)
+            throw MCPToolError.notFound(id)
         }
         return project
     }
@@ -1226,11 +1233,11 @@ enum MCPCaptionHandlers {
         from arguments: [String: Any],
         context: ModelContext
     ) throws -> CaptionProject {
-        guard let id = arguments["caption_id"] as? String else {
-            throw MCPToolError.invalidArguments("missing caption_id")
+        guard let id = arguments["footage_id"] as? String else {
+            throw MCPToolError.invalidArguments("missing footage_id")
         }
         let project = try fetchCaption(id: id, context: context)
-        // A project last written before versioning has no version record. Every
+        // An item last written before versioning has no version record. Every
         // entry point backfills lazily so an agent never sees the legacy shape.
         project.ensureVersioned()
         return project

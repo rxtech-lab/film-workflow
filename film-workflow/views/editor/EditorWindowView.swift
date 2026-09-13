@@ -235,6 +235,13 @@ struct EditorWindowView: View {
             }
             .help(agentController.runningCount > 0 ? "Open the agent (running)" : "Open the agent")
             .popoverTip(FilmWorkflowTips.AgentButtonTip(), arrowEdge: .top)
+            Button {
+                openWindow(id: MarketplaceWindowID.value)
+            } label: {
+                Label("Marketplace", systemImage: "storefront")
+            }
+            .help("Browse footage, sounds, fonts and effects to install")
+            .popoverTip(FilmWorkflowTips.MarketplaceTip(), arrowEdge: .top)
         }
     }
 
@@ -448,15 +455,32 @@ extension NSItemProvider {
 }
 
 /// Quiet content surfaces keep glass reserved for navigation and actions.
-struct StudioPanelHeader: View {
+/// A panel's title bar. Controls that switch what the panel shows, such as
+/// the inspector's tab row, go in `accessory` so they sit beside the title
+/// instead of taking a row of their own.
+struct StudioPanelHeader<Accessory: View>: View {
     let title: LocalizedStringKey
     let symbol: String
+    @ViewBuilder let accessory: Accessory
+
+    init(title: LocalizedStringKey, symbol: String) where Accessory == EmptyView {
+        self.title = title
+        self.symbol = symbol
+        self.accessory = EmptyView()
+    }
+
+    init(title: LocalizedStringKey, symbol: String, @ViewBuilder accessory: () -> Accessory) {
+        self.title = title
+        self.symbol = symbol
+        self.accessory = accessory()
+    }
 
     var body: some View {
         HStack(spacing: 7) {
             Image(systemName: symbol).foregroundStyle(.secondary)
             Text(title).fontWeight(.semibold)
             Spacer()
+            accessory.controlSize(.small)
         }
         .font(.system(size: 12))
         .padding(.horizontal, 14)

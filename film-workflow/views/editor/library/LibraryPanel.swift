@@ -19,9 +19,14 @@ struct LibraryPanel: View {
     let onDelete: (LibraryRow) -> Void
     let onExport: (LibraryRow) -> Void
     let onShowVersions: (LibraryRow, UUID?) -> Void
+    /// Backs the Marketplace tab. Nil hides the tab.
+    var marketplace: MarketplaceStore? = .shared
 
+    @Environment(\.openWindow) private var openWindow
+    @State private var tab: LibraryTab = .library
     @State private var filter: FootageKind?
     @State private var searchText = ""
+    @State private var marketplaceError: String?
     /// Set once the user toggles the pane; until then the document's saved state applies.
     @State private var footageToggled: Bool?
 
@@ -34,83 +39,144 @@ struct LibraryPanel: View {
         }
     }
 
+    private var marketplaceRows: [LibraryMarketplaceRow] {
+        guard let marketplace else { return [] }
+        return LibraryMarketplaceRow.rows(from: marketplace.libraryItems, directory: marketplace.directory(for:), search: searchText)
+    }
+
     var body: some View {
         LibraryFootageSplit(document: document, footageVisible: footageVisible) {
             VStack(spacing: 0) {
-                StudioPanelHeader(title: "Library", symbol: "sidebar.left")
+                StudioPanelHeader(title: "Library", symbol: "sidebar.left") {
+                    if marketplace != nil {
+                        Picker("Show", selection: $tab) {
+                            ForEach(LibraryTab.allCases) { tab in
+                                Text(tab.title).tag(tab)
+                            }
+                        }
+                        .pickerStyle(.segmented)
+                        .labelsHidden()
+                        .fixedSize()
+                        .accessibilityIdentifier("library.tab")
+                    }
+                }
                 HStack(spacing: 6) {
                     TextField("Filter", text: $searchText)
                         .textFieldStyle(.roundedBorder)
                         .controlSize(.small)
-                    Picker("Kind", selection: $filter) {
-                        Text("All").tag(FootageKind?.none)
-                        ForEach(FootageKind.allCases) { kind in
-                            Label(kind.displayName, systemImage: kind.systemImage).tag(FootageKind?.some(kind))
+                    // Marketplace items are sectioned by kind already.
+                    if tab == .library {
+                        Picker("Kind", selection: $filter) {
+                            Text("All").tag(FootageKind?.none)
+                            ForEach(FootageKind.allCases) { kind in
+                                Label(kind.displayName, systemImage: kind.systemImage).tag(FootageKind?.some(kind))
+                            }
                         }
+                        .labelsHidden()
+                        .controlSize(.small)
+                        .frame(width: 100)
                     }
-                    .labelsHidden()
-                    .controlSize(.small)
-                    .frame(width: 100)
                 }
                 .padding(8)
-                LibraryGrid(
-                    rows: rows,
-                    groups: groups,
-                    selection: Binding(get: { state.selection }, set: { state.select($0) }),
-                    onMove: onMove,
-                    onCreate: onCreate,
-                    onImport: onImport,
-                    onCreateGroup: onCreateGroup,
-                    onRenameGroup: onRenameGroup,
-                    onDeleteGroup: onDeleteGroup,
-                    onRename: onRename,
-                    onDelete: onDelete,
-                    onExport: onExport,
-                    onShowVersions: onShowVersions,
-                    currentVersion: { currentVersion(for: $0) },
-                    onSelectVersion: selectVersion,
-                    dragPayload: dragPayload,
-                    footage: currentFootage,
-                    player: state.footagePlayer,
-                    onSkim: { item, cell, fraction in
-                        if let fraction { state.skimFootage(item, cellID: cell.id, fraction: fraction) }
-                        else { state.endFootageSkim() }
-                    },
-                    onSeek: { item, cell, fraction in state.seekFootage(item, cellID: cell.id, fraction: fraction) }
-                )
+                switch tab {
+                case .library: libraryGrid
+                case .marketplace:
+                    LibraryMarketplaceGrid(rows: marketplaceRows, groups: groups, onAdd: addMarketplaceItem,
+                                           onReveal: { marketplace?.revealInFinder($0.id) },
+                                           onOpenMarketplace: { openWindow(id: MarketplaceWindowID.value) })
+                }
             }
             .frame(maxWidth: .infinity, minHeight: 180, maxHeight: .infinity)
         } footage: {
-            let cells = state.selection.map { index.footage(for: $0) } ?? []
-            FootageBrowserView(
-                libraryItem: state.selection,
-                title: state.selection.flatMap { index.name(of: $0) } ?? "Footage",
-                cells: cells,
-                selectedID: state.selection.flatMap { currentVersion(for: $0) } ?? cells.first?.id,
-                onSelect: { cell in
-                    if let item = state.selection { state.setCurrentVersion(cell.id, for: item) }
-                },
-                onDeselect: { state.select(nil) },
-                player: state.footagePlayer,
-                onSkim: { cell, fraction in
-                    if let fraction, let item = state.selection {
-                        state.skimFootage(item, cellID: cell.id, fraction: fraction)
-                    } else {
-                        state.endFootageSkim()
-                    }
-                },
-                onSeek: { cell, fraction in
-                    if let item = state.selection { state.seekFootage(item, cellID: cell.id, fraction: fraction) }
-                },
-                isExpanded: footageVisible,
-                onToggle: toggleFootage
-            )
+            footageBrowser
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .task(id: rows.map(\.id)) { await warmDurations() }
         .contextMenu {
             Button(action: onImport) {
                 Label("Import Media…", systemImage: "square.and.arrow.down")
+            }
+            Button { openWindow(id: MarketplaceWindowID.value) } label: {
+                Label("From Marketplace…", systemImage: "storefront")
+            }
+        }
+        .alert("Couldn’t Add to Film", isPresented: Binding(get: { marketplaceError != nil }, set: { if !$0 { marketplaceError = nil } })) {
+            Button("OK") { marketplaceError = nil }
+        } message: {
+            Text(marketplaceError ?? "")
+        }
+    }
+
+    private var libraryGrid: some View {
+        LibraryGrid(
+            rows: rows,
+            groups: groups,
+            selection: Binding(get: { state.selection }, set: { state.select($0) }),
+            onMove: onMove,
+            onCreate: onCreate,
+            onImport: onImport,
+            onCreateGroup: onCreateGroup,
+            onRenameGroup: onRenameGroup,
+            onDeleteGroup: onDeleteGroup,
+            onRename: onRename,
+            onDelete: onDelete,
+            onExport: onExport,
+            onShowVersions: onShowVersions,
+            currentVersion: { currentVersion(for: $0) },
+            onSelectVersion: selectVersion,
+            dragPayload: dragPayload,
+            footage: currentFootage,
+            player: state.footagePlayer,
+            onSkim: { item, cell, fraction in
+                if let fraction { state.skimFootage(item, cellID: cell.id, fraction: fraction) }
+                else { state.endFootageSkim() }
+            },
+            onSeek: { item, cell, fraction in state.seekFootage(item, cellID: cell.id, fraction: fraction) }
+        )
+    }
+
+    @ViewBuilder
+    private var footageBrowser: some View {
+    let cells = state.selection.map { index.footage(for: $0) } ?? []
+    FootageBrowserView(
+        libraryItem: state.selection,
+        title: state.selection.flatMap { index.name(of: $0) } ?? "Footage",
+        cells: cells,
+        selectedID: state.selection.flatMap { currentVersion(for: $0) } ?? cells.first?.id,
+        onSelect: { cell in
+            if let item = state.selection { state.setCurrentVersion(cell.id, for: item) }
+        },
+        onDeselect: { state.select(nil) },
+        player: state.footagePlayer,
+        onSkim: { cell, fraction in
+            if let fraction, let item = state.selection {
+                state.skimFootage(item, cellID: cell.id, fraction: fraction)
+            } else {
+                state.endFootageSkim()
+            }
+        },
+        onSeek: { cell, fraction in
+            if let item = state.selection { state.seekFootage(item, cellID: cell.id, fraction: fraction) }
+        },
+        isExpanded: footageVisible,
+        onToggle: toggleFootage
+    )
+    }
+
+    /// Copies an installed marketplace item into this film, switches to the
+    /// Library tab and selects the copy, so it is previewed and ready to drag.
+    private func addMarketplaceItem(_ row: LibraryMarketplaceRow, groupID: UUID?) {
+        guard let marketplace, let manifest = marketplace.manifest(for: row.id) else {
+            marketplaceError = MarketplaceError.notInstalled.errorDescription
+            return
+        }
+        Task {
+            do {
+                let added = try await MarketplaceInstaller.addToFilm(manifest, contentURL: row.mediaURL, document: document, groupID: groupID)
+                tab = .library
+                state.select(added)
+            } catch {
+                marketplaceError = error.localizedDescription
             }
         }
     }
@@ -164,6 +230,22 @@ struct LibraryPanel: View {
                 guard !Task.isCancelled, let url = cell.mediaURL else { return }
                 _ = await MediaDurationCache.duration(of: url)
             }
+        }
+    }
+}
+
+/// What the library panel lists: this film's footage, or what is installed
+/// from the marketplace and can be added to it.
+enum LibraryTab: String, CaseIterable, Identifiable {
+    case library
+    case marketplace
+
+    var id: String { rawValue }
+
+    var title: LocalizedStringKey {
+        switch self {
+        case .library: return "Library"
+        case .marketplace: return "Marketplace"
         }
     }
 }

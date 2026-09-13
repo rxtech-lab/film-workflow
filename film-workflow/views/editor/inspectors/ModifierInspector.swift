@@ -38,7 +38,7 @@ struct ModifierInspector: View {
     }
 
     @ViewBuilder private func catalog(_ item: ModifierDragItem) -> some View {
-        if let definition = ModifierCatalog.standard.definition(item) {
+        if let definition = ModifierCatalog.current.definition(item) {
             Section {
                 ModifierThumbnail(item: item).frame(maxHeight: 140)
                 Text(definition.name).font(.headline)
@@ -56,7 +56,7 @@ struct ModifierInspector: View {
         if let sequence, let clip = sequence.timeline.clip(id: clipID) {
             if clip.effects.isEmpty { Text("Drag an effect onto this clip to get started.").foregroundStyle(.secondary) }
             ForEach(Array(clip.effects.enumerated()), id: \.element.id) { index, instance in
-                let definition = ModifierCatalog.standard.effect(instance.definitionID)
+                let definition = ModifierCatalog.current.effect(instance.definitionID)
                 Section(definition?.name ?? "Unavailable Effect") {
                     if let definition {
                         ModifierThumbnail(item: .init(kind: .effect, definitionID: instance.definitionID), parameters: instance.parameters).frame(maxHeight: 140)
@@ -87,7 +87,7 @@ struct ModifierInspector: View {
 
     @ViewBuilder private func transition(_ id: UUID) -> some View {
         if let sequence, let instance = sequence.timeline.transitions.first(where: { $0.id == id }) {
-            let definition = ModifierCatalog.standard.transition(instance.definitionID)
+            let definition = ModifierCatalog.current.transition(instance.definitionID)
             Section(definition?.name ?? "Unavailable Transition") {
                 if let definition {
                     ModifierThumbnail(item: .init(kind: .transition, definitionID: instance.definitionID), parameters: instance.parameters).frame(maxHeight: 140)

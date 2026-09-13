@@ -71,7 +71,7 @@ struct MCPCaptionAITests {
         let result = try await MCPCaptionHandlers.handle(
             name: "caption_search_segments",
             arguments: [
-                "caption_id": project.projectUUID.uuidString,
+                "footage_id": project.projectUUID.uuidString,
                 "query": "rxlab",
             ],
             context: context
@@ -93,7 +93,7 @@ struct MCPCaptionAITests {
         let result = try await MCPCaptionHandlers.handle(
             name: "caption_search_segments",
             arguments: [
-                "caption_id": project.projectUUID.uuidString,
+                "footage_id": project.projectUUID.uuidString,
                 "query": "needle",
                 "context": 1,
             ],
@@ -114,7 +114,7 @@ struct MCPCaptionAITests {
         await #expect(throws: MCPToolError.self) {
             _ = try await MCPCaptionHandlers.handle(
                 name: "caption_search_segments",
-                arguments: ["caption_id": project.projectUUID.uuidString, "query": "   "],
+                arguments: ["footage_id": project.projectUUID.uuidString, "query": "   "],
                 context: context
             )
         }
@@ -130,7 +130,7 @@ struct MCPCaptionAITests {
         let result = try await MCPCaptionHandlers.handle(
             name: "caption_propose_edits",
             arguments: [
-                "caption_id": project.projectUUID.uuidString,
+                "footage_id": project.projectUUID.uuidString,
                 "summary": "one fix",
                 "edits": [
                     ["index": 0, "kind": "replace_text", "text": "Replacement text here."]
@@ -155,7 +155,7 @@ struct MCPCaptionAITests {
         let result = try await MCPCaptionHandlers.handle(
             name: "caption_propose_edits",
             arguments: [
-                "caption_id": project.projectUUID.uuidString,
+                "footage_id": project.projectUUID.uuidString,
                 "edits": [
                     ["index": 0, "kind": "delete"],
                     ["index": 99, "kind": "delete"],
@@ -178,7 +178,7 @@ struct MCPCaptionAITests {
         let result = try await MCPCaptionHandlers.handle(
             name: "caption_propose_edits",
             arguments: [
-                "caption_id": project.projectUUID.uuidString,
+                "footage_id": project.projectUUID.uuidString,
                 "edits": [["index": 1, "kind": "merge_with_next"]],
             ],
             context: context
@@ -196,7 +196,7 @@ struct MCPCaptionAITests {
         let result = try await MCPCaptionHandlers.handle(
             name: "caption_propose_edits",
             arguments: [
-                "caption_id": project.projectUUID.uuidString,
+                "footage_id": project.projectUUID.uuidString,
                 "edits": [
                     ["index": 0, "kind": "split", "pieces": ["one two three", "completely different"]]
                 ],
@@ -218,7 +218,7 @@ struct MCPCaptionAITests {
         let result = try await MCPCaptionHandlers.handle(
             name: "caption_propose_edits",
             arguments: [
-                "caption_id": project.projectUUID.uuidString,
+                "footage_id": project.projectUUID.uuidString,
                 "edits": [
                     ["index": 0, "kind": "split", "pieces": ["One two three,", "four five six."]]
                 ],
@@ -250,7 +250,7 @@ struct MCPCaptionAITests {
         ] {
             _ = try await MCPCaptionHandlers.handle(
                 name: "caption_propose_edits",
-                arguments: ["caption_id": project.projectUUID.uuidString, "edits": [edit]],
+                arguments: ["footage_id": project.projectUUID.uuidString, "edits": [edit]],
                 context: context
             )
         }
@@ -272,7 +272,7 @@ struct MCPCaptionAITests {
         _ = try await MCPCaptionHandlers.handle(
             name: "caption_propose_edits",
             arguments: [
-                "caption_id": project.projectUUID.uuidString,
+                "footage_id": project.projectUUID.uuidString,
                 // "seven" was never spoken; a chat edit could say this, a split
                 // never can.
                 "edits": [["index": 0, "kind": "split", "pieces": ["One two three,", "four five seven."]]],
@@ -292,7 +292,7 @@ struct MCPCaptionAITests {
         _ = try await MCPCaptionHandlers.handle(
             name: "caption_propose_edits",
             arguments: [
-                "caption_id": project.projectUUID.uuidString,
+                "footage_id": project.projectUUID.uuidString,
                 "edits": [["index": 0, "kind": "split", "pieces": ["One two three,", "four five six."]]],
             ],
             context: context
@@ -322,7 +322,7 @@ struct MCPCaptionAITests {
         await #expect(throws: MCPToolError.self) {
             _ = try await MCPCaptionHandlers.handle(
                 name: "caption_propose_edits",
-                arguments: ["caption_id": project.projectUUID.uuidString, "edits": [[String: Any]]()],
+                arguments: ["footage_id": project.projectUUID.uuidString, "edits": [[String: Any]]()],
                 context: context
             )
         }
@@ -337,7 +337,7 @@ struct MCPCaptionAITests {
         let result = try await MCPCaptionHandlers.handle(
             name: "caption_propose_edits",
             arguments: [
-                "caption_id": project.projectUUID.uuidString,
+                "footage_id": project.projectUUID.uuidString,
                 "edits": [[String: Any]()],
             ],
             context: context
@@ -358,7 +358,7 @@ struct MCPCaptionAITests {
         let result = try await MCPCaptionHandlers.handle(
             name: "caption_propose_edits",
             arguments: [
-                "caption_id": project.projectUUID.uuidString,
+                "footage_id": project.projectUUID.uuidString,
                 "edits": [["index": 1, "kind": "retime", "end_ms": 1_800]],
             ],
             context: context
@@ -393,7 +393,7 @@ struct MCPCaptionAITests {
         let result = try await MCPCaptionHandlers.handle(
             name: "caption_propose_edits",
             arguments: [
-                "caption_id": project.projectUUID.uuidString,
+                "footage_id": project.projectUUID.uuidString,
                 "edits": [
                     ["index": 0, "kind": "retime"],
                     ["index": 0, "kind": "retime", "start_ms": 900, "end_ms": 400],
@@ -417,7 +417,7 @@ struct MCPCaptionAITests {
         let result = try await MCPCaptionHandlers.handle(
             name: "caption_propose_edits",
             arguments: [
-                "caption_id": project.projectUUID.uuidString,
+                "footage_id": project.projectUUID.uuidString,
                 "edits": [
                     [
                         "index": 0,
@@ -460,7 +460,7 @@ struct MCPCaptionAITests {
         let result = try await MCPCaptionHandlers.handle(
             name: "caption_propose_edits",
             arguments: [
-                "caption_id": project.projectUUID.uuidString,
+                "footage_id": project.projectUUID.uuidString,
                 "edits": [["index": 0, "kind": "set_translation", "text": "一。"]],
             ],
             context: context
@@ -478,7 +478,7 @@ struct MCPCaptionAITests {
         let result = try await MCPCaptionHandlers.handle(
             name: "caption_update_segment",
             arguments: [
-                "caption_id": project.projectUUID.uuidString,
+                "footage_id": project.projectUUID.uuidString,
                 "index": 0,
                 "translation": "身份随行。",
                 "translation_language": "zh-Hans",
@@ -501,7 +501,7 @@ struct MCPCaptionAITests {
             _ = try await MCPCaptionHandlers.handle(
                 name: "caption_update_segment",
                 arguments: [
-                    "caption_id": project.projectUUID.uuidString,
+                    "footage_id": project.projectUUID.uuidString,
                     "index": 0,
                     "translation": "一。",
                 ],
@@ -531,8 +531,8 @@ struct MCPCaptionAITests {
         // as Alice" impossible.
         #expect(review.contains("caption_set_speakers"))
         // Never offered under any policy.
-        #expect(!review.contains("delete_project"))
-        #expect(!AgentToolPolicy.toolNames(policy: .direct).contains("delete_project"))
+        #expect(!review.contains("footage_delete"))
+        #expect(!AgentToolPolicy.toolNames(policy: .direct).contains("footage_delete"))
     }
 
     @Test("The direct policy lifts the caption write restriction")
@@ -580,7 +580,7 @@ struct MCPCaptionAITests {
         #expect(!request.permitsTool(named: "mcp__film_workflow__caption_update_segment"))
 
         // Withheld under every policy.
-        #expect(!request.permitsTool(named: "delete_project"))
+        #expect(!request.permitsTool(named: "footage_delete"))
 
         // And nothing outside the app's own surface is reachable at all.
         #expect(!request.permitsTool(named: "Bash"))
@@ -609,7 +609,7 @@ struct MCPCaptionAITests {
 
             #expect(prefixed.count == allowed.count)
             #expect(!prefixed.contains("mcp__film_workflow__caption_update_segment"))
-            #expect(!argument.contains("mcp__film_workflow__delete_project"))
+            #expect(!argument.contains("mcp__film_workflow__footage_delete"))
             // Claude's own filesystem tools are never pre-approved here.
             #expect(!argument.contains("Read"))
             #expect(!argument.contains("Bash"))

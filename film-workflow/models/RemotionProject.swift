@@ -23,9 +23,10 @@ final class RemotionProject: GroupableProject {
 
     var compositionSource: String
 
-    /// True when the project was created through the MCP `create_project` tool,
-    /// which seeds a default composition and boots Studio immediately. Such
-    /// projects never show the "Generate Initial Composition" button.
+    /// True when the composition was created through the MCP `footage_create`
+    /// tool, which seeds a default composition and starts the preview
+    /// immediately. Such items never show the "Generate Initial Composition"
+    /// button.
     var createdViaMCP: Bool = false
 
     /// On-disk Remotion project folder inside the film package.

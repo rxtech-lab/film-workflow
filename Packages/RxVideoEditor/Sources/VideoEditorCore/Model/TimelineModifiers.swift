@@ -83,7 +83,7 @@ public extension Timeline {
         return result
     }
     func validateModifiers(requireDefinitions: Bool = false) throws {
-        let catalog = ModifierCatalog.standard
+        let catalog = ModifierCatalog.current
         for clip in allClips where !clip.effects.isEmpty {
             guard acceptsModifiers(on: clip.id) else { throw ModifierEditError.incompatibleTarget }
             if requireDefinitions && clip.effects.contains(where: { $0.isEnabled && catalog.effect($0.definitionID) == nil }) {
@@ -116,7 +116,7 @@ public extension TimelineEditor {
     @discardableResult
     static func addEffect(_ timeline: inout Timeline, definitionID: String, clipID: UUID) throws -> UUID {
         guard timeline.acceptsModifiers(on: clipID) else { throw ModifierEditError.incompatibleTarget }
-        guard let definition = ModifierCatalog.standard.effect(definitionID) else { throw ModifierEditError.unknownDefinition }
+        guard let definition = ModifierCatalog.current.effect(definitionID) else { throw ModifierEditError.unknownDefinition }
         let effect = EffectInstance(definitionID: definitionID, parameters: definition.defaults)
         try update(&timeline, clipID: clipID) { $0.effects.append(effect) }
         return effect.id
@@ -124,7 +124,7 @@ public extension TimelineEditor {
 
     @discardableResult
     static func addTransition(_ timeline: inout Timeline, definitionID: String, attachment: TransitionAttachment, duration: Double = 1) throws -> UUID {
-        guard let definition = ModifierCatalog.standard.transition(definitionID) else { throw ModifierEditError.unknownDefinition }
+        guard let definition = ModifierCatalog.current.transition(definitionID) else { throw ModifierEditError.unknownDefinition }
         guard duration.isFinite, duration > 0 else { throw ModifierEditError.invalidDuration }
         guard !timeline.transitions.contains(where: { $0.attachment == attachment }) else { throw ModifierEditError.overlappingTransitions }
         var item = TransitionInstance(definitionID: definitionID, parameters: definition.defaults, attachment: attachment, duration: duration)

@@ -27,6 +27,48 @@ struct AgentSDKMigrationTests {
         return ModelContext(container)
     }
 
+    // MARK: - Persistence
+
+    /// The thinking level is a new attribute on a model that already has rows on
+    /// every machine that has run this app. Optional attributes migrate
+    /// lightweight, but the store is opened with `fatalError` on failure — so
+    /// this exercises the schema, saves, and reads the value back through a
+    /// context rather than trusting the model in memory.
+    @Test("A pinned thinking level survives a save and a reload")
+    func effortOverridePersists() throws {
+        let context = try makeStore()
+        let thread = film_workflow.AgentThread(title: "Pinned")
+        thread.setModelOverride("gpt-5.5", for: .codex)
+        thread.setEffortOverride("high", for: .codex)
+        thread.setEffortOverride("xhigh", for: .claudeCode)
+        context.insert(thread)
+        try context.save()
+
+        let reloaded = try #require(
+            try context.fetch(FetchDescriptor<film_workflow.AgentThread>()).first
+        )
+        #expect(reloaded.effortOverride(for: .codex) == "high")
+        #expect(reloaded.effortOverride(for: .claudeCode) == "xhigh")
+        #expect(reloaded.modelOverride(for: .codex) == "gpt-5.5")
+    }
+
+    /// A thread that predates the field — the row every existing store has —
+    /// reads as "no level pinned" rather than as an empty pick that sends "".
+    @Test("A thread with no stored level reports none")
+    func missingEffortOverrideIsNil() throws {
+        let context = try makeStore()
+        let thread = film_workflow.AgentThread(title: "Legacy")
+        thread.effortOverridesJSON = nil
+        context.insert(thread)
+        try context.save()
+
+        let reloaded = try #require(
+            try context.fetch(FetchDescriptor<film_workflow.AgentThread>()).first
+        )
+        #expect(reloaded.effortOverride(for: .codex) == nil)
+        #expect(reloaded.effortOverride(for: .claudeCode) == nil)
+    }
+
     // MARK: - Client identity
 
     @Test("Every engine maps to a distinct SDK client id, and back")
@@ -81,7 +123,7 @@ struct AgentSDKMigrationTests {
             content: "",
             kind: .tool,
             toolName: "caption_export",
-            toolArgs: #"{"caption_id":"abc"}"#,
+            toolArgs: #"{"footage_id":"abc"}"#,
             toolResult: "done",
             toolStatus: .ok,
             toolCallId: "call_1"
@@ -96,7 +138,7 @@ struct AgentSDKMigrationTests {
 
         let call = try #require(sdkThread.messages[1].toolCalls.first)
         #expect(call.name == "caption_export")
-        #expect(call.input["caption_id"]?.stringValue == "abc")
+        #expect(call.input["footage_id"]?.stringValue == "abc")
         #expect(call.result == "done")
         #expect(!call.isError)
         #expect(sdkThread.messages[2].plainText == "exported")
@@ -267,7 +309,7 @@ struct AgentSDKMigrationTests {
         for name in ["Bash", "Write", "Edit", "Read", "WebFetch", "Task"] {
             #expect(disallowed.contains(name), "\(name) should be withheld")
         }
-        #expect(disallowed.contains("delete_project"))
+        #expect(disallowed.contains("footage_delete"))
     }
 
     @Test("Withheld tools are refused in both spellings")
@@ -288,7 +330,7 @@ struct AgentSDKMigrationTests {
         #expect(request.permitsTool(named: "caption_search_segments"))
         #expect(request.permitsTool(named: "mcp__film_workflow__caption_search_segments"))
 
-        for name in ["Bash", "caption_update_segment", "delete_project"] {
+        for name in ["Bash", "caption_update_segment", "footage_delete"] {
             #expect(!request.permitsTool(named: name))
             #expect(!request.permitsTool(named: "mcp__film_workflow__\(name)"))
         }

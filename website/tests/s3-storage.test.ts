@@ -41,4 +41,13 @@ describe("S3 storage paths", () => {
     expect(ownsTranscriptionObject("user-a", "transcriptions/user-b/clip.m4a")).toBe(false);
     expect(ownsTranscriptionObject("user-a", "transcriptions/user-a/../user-b/clip.m4a")).toBe(false);
   });
+
+  it("scopes marketplace objects to their item", async () => {
+    const { isMarketplaceObject, marketplaceObjectKey } = await import("@/lib/storage/s3");
+    const key = marketplaceObjectKey("item-1", "content", "Rx Serif.ttf");
+    expect(key).toMatch(/^marketplace\/item-1\/content\/[0-9a-f-]{36}-Rx_Serif\.ttf$/);
+    expect(isMarketplaceObject("item-1", key)).toBe(true);
+    expect(isMarketplaceObject("item-2", key)).toBe(false);
+    expect(isMarketplaceObject("item-1", "marketplace/item-1/../item-2/content/x.ttf")).toBe(false);
+  });
 });

@@ -17,7 +17,7 @@ Multiple instances of one composition keep independent playback positions.
 
 `Packages/RxRemotion` owns compilation, the scoped Swift resource server and native exports. The bundled esbuild Web Worker compiles editable source without Bun, Node, Chromium, Studio or external renderer processes. Compiled resources are shared per project; each WebView has an independent playback bridge. Browser modules, CSS and assets remain in the film. Native source watching refreshes previews.
 
-MCP `create_project` for `type: "remotion"` now returns `preview: {status, url}`. The URL is a native-hosted Player page, retained until the film closes or map settings change; it is not a Studio editing interface. Existing screenshot and file-editing tool names and arguments are unchanged. Edit files with those tools and watch the preview reload. `@rxlab/remotion-maps` exports `MapKitMap` and `OpenStreetMap`; configure an export-permitted tile provider in Settings → Maps before using OpenStreetMap.
+MCP `footage_create` for `kind: "remotion"` now returns `preview: {status, url}`. The URL is a native-hosted Player page, retained until the film closes or map settings change; it is not a Studio editing interface. Existing screenshot and file-editing tool names and arguments are unchanged. Edit files with those tools and watch the preview reload. `@rxlab/remotion-maps` exports `MapKitMap` and `OpenStreetMap`; configure an export-permitted tile provider in Settings → Maps before using OpenStreetMap.
 
 When a web player cannot decode its media, or the clip exceeds its supported
 speed or volume range, the app prepares an alpha-preserving ProRes source in the

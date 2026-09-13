@@ -171,6 +171,113 @@ struct AgentModelCatalogTests {
         )
     }
 
+    // MARK: - Thinking level selection
+
+    /// The per-thread pick, layered over the Settings value. Codex publishes its
+    /// levels per model, so both have to be checked against the model the thread
+    /// will actually run on.
+    @Test("A thread's pinned level wins over Settings")
+    func overrideBeatsSettings() {
+        #expect(
+            AgentModelCatalog.effort(
+                for: "deep", backend: .codex,
+                override: "ultra", configured: "low",
+                in: Self.codexOptions
+            ) == "ultra"
+        )
+    }
+
+    @Test("With nothing pinned the Settings value still applies")
+    func settingsRemainsTheFallback() {
+        #expect(
+            AgentModelCatalog.effort(
+                for: "deep", backend: .codex,
+                override: nil, configured: "high",
+                in: Self.codexOptions
+            ) == "high"
+        )
+        // An empty pick is the same request as none — it is what the menu's
+        // default row writes.
+        #expect(
+            AgentModelCatalog.effort(
+                for: "deep", backend: .codex,
+                override: "", configured: "high",
+                in: Self.codexOptions
+            ) == "high"
+        )
+    }
+
+    /// The case the validation exists for: a level pinned while one model was
+    /// selected, then the thread re-pointed at a model that doesn't take it.
+    @Test("A pinned level the model doesn't accept is dropped, not sent")
+    func unsupportedOverrideIsDropped() {
+        #expect(
+            AgentModelCatalog.effort(
+                for: "shallow", backend: .codex,
+                override: "ultra", configured: "low",
+                in: Self.codexOptions
+            ) == nil
+        )
+    }
+
+    /// Claude Code has no Settings field for this, so its level is the thread's
+    /// own pick or the CLI's default — never a value configured for Codex.
+    @Test("Claude Code takes a pinned level but never Codex's Settings value")
+    func claudeUsesOnlyItsOwnPick() {
+        #expect(
+            AgentModelCatalog.effort(
+                for: "sonnet", backend: .claudeCode,
+                override: "xhigh", configured: "",
+                in: Self.codexOptions
+            ) == "xhigh"
+        )
+        #expect(
+            AgentModelCatalog.effort(
+                for: "sonnet", backend: .claudeCode,
+                override: nil, configured: "high",
+                in: Self.codexOptions
+            ) == nil
+        )
+        // `minimal` is Codex vocabulary; Claude Code does not accept it.
+        #expect(
+            AgentModelCatalog.effort(
+                for: "sonnet", backend: .claudeCode,
+                override: "minimal", configured: "",
+                in: Self.codexOptions
+            ) == nil
+        )
+    }
+
+    @Test("An engine with no thinking dial sends nothing, whatever is pinned")
+    func enginesWithoutLevelsSendNothing() {
+        for backend in [AgentBackend.appleIntelligence, .openAICompatible, .subscription] {
+            #expect(
+                AgentModelCatalog.effort(
+                    for: "anything", backend: backend,
+                    override: "high", configured: "high",
+                    in: Self.codexOptions
+                ) == nil,
+                "\(backend.rawValue) has no reasoning dial"
+            )
+            #expect(
+                AgentModelCatalog.efforts(for: backend, model: "anything", in: Self.codexOptions)
+                    .isEmpty
+            )
+        }
+    }
+
+    @Test("The menu offers the model's levels for Codex and a fixed set for Claude")
+    func levelsPerBackend() {
+        #expect(
+            AgentModelCatalog.efforts(for: .codex, model: "deep", in: Self.codexOptions)
+                == ["low", "high", "ultra"]
+        )
+        #expect(
+            AgentModelCatalog.efforts(for: .claudeCode, model: "sonnet", in: Self.codexOptions)
+                == AgentModelCatalog.claudeEfforts
+        )
+    }
+
     // MARK: - Backend lookup
 
     @Test("Claude Code's list is fixed and carries no effort setting")
@@ -250,6 +357,44 @@ struct AgentThreadModelOverrideTests {
         // model" row and a cleared text field both produce.
         thread.setModelOverride("", for: .codex)
         #expect(thread.modelOverride(for: .codex) == nil)
+    }
+
+    @Test("Thinking levels are pinned per backend and don't leak")
+    func effortOverridesAreScoped() {
+        let thread = AgentThread()
+        #expect(thread.effortOverride(for: .codex) == nil)
+
+        thread.setEffortOverride("high", for: .codex)
+        thread.setEffortOverride("xhigh", for: .claudeCode)
+        #expect(thread.effortOverride(for: .codex) == "high")
+        #expect(thread.effortOverride(for: .claudeCode) == "xhigh")
+
+        // Clearing one leaves the other, and an empty string clears like nil —
+        // the menu's default row writes exactly that.
+        thread.setEffortOverride(nil, for: .codex)
+        #expect(thread.effortOverride(for: .codex) == nil)
+        #expect(thread.effortOverride(for: .claudeCode) == "xhigh")
+        thread.setEffortOverride("", for: .claudeCode)
+        #expect(thread.effortOverride(for: .claudeCode) == nil)
+    }
+
+    /// Three maps on one thread, each keyed the same way. A level written for
+    /// one engine must not disturb the model pinned for another, nor any resume
+    /// id — the bug a single combined map would invite.
+    @Test("Levels, models and resume ids stay out of each other's way")
+    func effortOverridesAreSeparateFromModels() {
+        let thread = AgentThread()
+        thread.setModelOverride("gpt-5.5", for: .codex)
+        thread.setEffortOverride("high", for: .codex)
+        thread.setProviderSessionID("session-abc", for: .codex)
+
+        #expect(thread.modelOverride(for: .codex) == "gpt-5.5")
+        #expect(thread.effortOverride(for: .codex) == "high")
+        #expect(thread.providerSessionID(for: .codex) == "session-abc")
+
+        thread.setEffortOverride(nil, for: .codex)
+        #expect(thread.modelOverride(for: .codex) == "gpt-5.5")
+        #expect(thread.providerSessionID(for: .codex) == "session-abc")
     }
 
     @Test("Overrides and resume ids don't disturb each other")

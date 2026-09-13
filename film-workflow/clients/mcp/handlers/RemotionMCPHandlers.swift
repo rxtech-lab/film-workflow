@@ -3,7 +3,7 @@ import Foundation
 import SwiftData
 
 extension Notification.Name {
-    /// Posted when `remotion_generate_image` saves a new image into a project's
+    /// Posted when `remotion_generate_image` saves a new image into a composition's
     /// `public/generated/`, so the parameters view can refresh its gallery.
     ///
     /// Declared here rather than in the agent because this handler is the only
@@ -12,8 +12,10 @@ extension Notification.Name {
     static let remotionGeneratedImageWritten = Notification.Name("remotionGeneratedImageWritten")
 }
 
-/// The file/screenshot/image-gen toolset for Remotion projects.
-/// Externally-driven agents call these to iterate on a remotion project.
+/// The file/screenshot/image-gen toolset for Remotion compositions — the
+/// library items whose footage is rendered from TSX. Agents call these to
+/// iterate on a composition's source; the composition renders itself when a
+/// sequence that uses it is rendered.
 @MainActor
 enum RemotionMCPHandlers {
     /// Shared by MCP tool descriptions and every in-app agent backend.
@@ -37,38 +39,38 @@ enum RemotionMCPHandlers {
     static let descriptors: [MCPToolDescriptor] = [
         MCPToolDescriptor(
             name: "remotion_list_files",
-            description: "List source files in a remotion project (relative paths under src/, public/, plus root configs). Excludes node_modules / build output.",
+            description: "List a Remotion composition's source files (relative paths under src/, public/, plus root configs). Excludes node_modules / build output.",
             inputSchema: [
                 "type": "object",
                 "properties": [
-                    "project_id": ["type": "string"] as [String: Any]
+                    "footage_id": ["type": "string", "description": "A Remotion composition's id from footage_list."] as [String: Any]
                 ],
-                "required": ["project_id"]
+                "required": ["footage_id"]
             ]
         ),
         MCPToolDescriptor(
             name: "remotion_read_file",
-            description: "Read a file in a remotion project. Capped at 200KB; the response indicates truncation when applicable.",
+            description: "Read a file in a Remotion composition. Capped at 200KB; the response indicates truncation when applicable.",
             inputSchema: [
                 "type": "object",
                 "properties": [
-                    "project_id": ["type": "string"] as [String: Any],
-                    "path": ["type": "string", "description": "Relative path inside the project, e.g. 'src/Composition.tsx'."] as [String: Any]
+                    "footage_id": ["type": "string", "description": "A Remotion composition's id from footage_list."] as [String: Any],
+                    "path": ["type": "string", "description": "Relative path inside the composition, e.g. 'src/Composition.tsx'."] as [String: Any]
                 ],
-                "required": ["project_id", "path"]
+                "required": ["footage_id", "path"]
             ]
         ),
         MCPToolDescriptor(
             name: "remotion_write_file",
-            description: "Write (create or overwrite) a file in a remotion project. Parent directories are created. NOTE: package.json, package-lock.json, bun.lockb, tsconfig.json, remotion.config.ts and anything under node_modules/ are protected and will be rejected — you cannot add npm packages. " + authoringInstructions,
+            description: "Write (create or overwrite) a file in a Remotion composition. Writing src/Composition.tsx also updates the item's compositionSource. Parent directories are created. NOTE: package.json, package-lock.json, bun.lockb, tsconfig.json, remotion.config.ts and anything under node_modules/ are protected and will be rejected — you cannot add npm packages. " + authoringInstructions,
             inputSchema: [
                 "type": "object",
                 "properties": [
-                    "project_id": ["type": "string"] as [String: Any],
+                    "footage_id": ["type": "string", "description": "A Remotion composition's id from footage_list."] as [String: Any],
                     "path": ["type": "string"] as [String: Any],
                     "content": ["type": "string"] as [String: Any]
                 ],
-                "required": ["project_id", "path", "content"]
+                "required": ["footage_id", "path", "content"]
             ]
         ),
         MCPToolDescriptor(
@@ -77,100 +79,100 @@ enum RemotionMCPHandlers {
             inputSchema: [
                 "type": "object",
                 "properties": [
-                    "project_id": ["type": "string"] as [String: Any],
+                    "footage_id": ["type": "string", "description": "A Remotion composition's id from footage_list."] as [String: Any],
                     "path": ["type": "string"] as [String: Any],
                     "old_string": ["type": "string"] as [String: Any],
                     "new_string": ["type": "string"] as [String: Any]
                 ],
-                "required": ["project_id", "path", "old_string", "new_string"]
+                "required": ["footage_id", "path", "old_string", "new_string"]
             ]
         ),
         MCPToolDescriptor(
             name: "remotion_take_screenshot",
-            description: "Capture a deterministic PNG with native RxRemotion at the given timestamp and return it as a base64 data URL.",
+            description: "Capture a deterministic PNG of the composition at the given timestamp and return it as an image. Use it to check your work before telling the user it is done.",
             inputSchema: [
                 "type": "object",
                 "properties": [
-                    "project_id": ["type": "string"] as [String: Any],
+                    "footage_id": ["type": "string", "description": "A Remotion composition's id from footage_list."] as [String: Any],
                     "time_seconds": ["type": "number", "minimum": 0] as [String: Any]
                 ],
-                "required": ["project_id", "time_seconds"]
+                "required": ["footage_id", "time_seconds"]
             ]
         ),
         MCPToolDescriptor(
             name: "remotion_take_screenshots",
-            description: "Render N evenly-spaced PNG frames covering the timeline (count between 2 and 8).",
+            description: "Render N evenly-spaced PNG frames covering the composition's duration (count between 2 and 8).",
             inputSchema: [
                 "type": "object",
                 "properties": [
-                    "project_id": ["type": "string"] as [String: Any],
+                    "footage_id": ["type": "string", "description": "A Remotion composition's id from footage_list."] as [String: Any],
                     "count": ["type": "integer", "minimum": 2, "maximum": 8] as [String: Any]
                 ],
-                "required": ["project_id", "count"]
+                "required": ["footage_id", "count"]
             ]
         ),
         MCPToolDescriptor(
             name: "remotion_generate_image",
-            description: "Generate an image from a text prompt and save it under public/generated/ in the project. Returns the relative `staticFile()` path.",
+            description: "Generate an image from a text prompt and save it under public/generated/ in the composition. Returns the relative `staticFile()` path.",
             inputSchema: [
                 "type": "object",
                 "properties": [
-                    "project_id": ["type": "string"] as [String: Any],
+                    "footage_id": ["type": "string", "description": "A Remotion composition's id from footage_list."] as [String: Any],
                     "prompt": ["type": "string"] as [String: Any],
                     "transparent": ["type": "boolean", "description": "Best-effort transparent background (PNG only)."] as [String: Any],
                     "filename_hint": ["type": "string"] as [String: Any]
                 ],
-                "required": ["project_id", "prompt"]
+                "required": ["footage_id", "prompt"]
             ]
         ),
         MCPToolDescriptor(
             name: "remotion_add_image",
-            description: "Attach an image asset to a remotion project (max 10) by copying a file from disk. Format-agnostic — PNG / JPEG / WebP / GIF / SVG / AVIF / BMP — the file's extension is preserved; never re-encode the bytes elsewhere before calling this tool. Reads `source_path` (absolute or file:// URL on the local filesystem), copies it into the app's image library, appends the relative path to the project's imagePaths, and stages it into public/upload/ so `staticFile(\"upload/<filename>\")` resolves. Returns `path` (project-relative) and `static_path` (the staticFile arg).",
+            description: "Attach an image asset to a Remotion composition (max 10) by copying a file from disk. Format-agnostic — PNG / JPEG / WebP / GIF / SVG / AVIF / BMP — the file's extension is preserved; never re-encode the bytes elsewhere before calling this tool. Reads `source_path` (absolute or file:// URL on the local filesystem), copies it into the app's image library, appends the relative path to the item's imagePaths, and stages it into public/upload/ so `staticFile(\"upload/<filename>\")` resolves. Returns `path` (film-relative) and `static_path` (the staticFile arg).",
             inputSchema: [
                 "type": "object",
                 "properties": [
-                    "project_id": ["type": "string"] as [String: Any],
+                    "footage_id": ["type": "string", "description": "A Remotion composition's id from footage_list."] as [String: Any],
                     "source_path": ["type": "string", "description": "Absolute filesystem path or file:// URL of the image on the local machine. The file is copied (not moved); the source is left untouched."] as [String: Any]
                 ],
-                "required": ["project_id", "source_path"]
+                "required": ["footage_id", "source_path"]
             ]
         ),
         MCPToolDescriptor(
             name: "remotion_remove_image",
-            description: "Detach a user-uploaded image from a remotion project. Identify it by zero-based `index` in imagePaths or by `path` (the relative path stored in imagePaths). Deletes the underlying file and the corresponding public/upload/ copy.",
+            description: "Detach a user-uploaded image from a Remotion composition. Identify it by zero-based `index` in imagePaths or by `path` (the relative path stored in imagePaths). Deletes the underlying file and the corresponding public/upload/ copy.",
             inputSchema: [
                 "type": "object",
                 "properties": [
-                    "project_id": ["type": "string"] as [String: Any],
+                    "footage_id": ["type": "string", "description": "A Remotion composition's id from footage_list."] as [String: Any],
                     "index": ["type": "integer", "minimum": 0, "description": "Zero-based index in imagePaths. One of `index` or `path` is required."] as [String: Any],
                     "path": ["type": "string", "description": "Relative path stored in imagePaths (e.g. \"images/<uuid>.png\"). One of `index` or `path` is required."] as [String: Any]
                 ],
-                "required": ["project_id"]
+                "required": ["footage_id"]
             ]
         ),
         MCPToolDescriptor(
             name: "remotion_add_audio",
-            description: "Attach any audio file to a remotion project by copying it from disk. Covers ALL audio kinds — background music, sound effects, foley, voiceover / narration, ambience, dialogue stems, jingles, etc. Format-agnostic: mp3, wav, m4a, aac, ogg, flac, etc.; the file's extension is preserved, never re-encode. Reads `source_path` (absolute or file:// URL on the local filesystem), copies into the app's library, appends the relative path to the project's audioFilePaths, and stages into public/audio/ so `staticFile(\"audio/<filename>\")` resolves from <Audio src={…} />. Returns `path` (project-relative) and `static_path` (the staticFile arg). Multiple tracks are supported — call this tool once per file.",
+            description: "Attach any audio file to a Remotion composition by copying it from disk. Covers ALL audio kinds — background music, sound effects, foley, voiceover / narration, ambience, dialogue stems, jingles, etc. Format-agnostic: mp3, wav, m4a, aac, ogg, flac, etc.; the file's extension is preserved, never re-encode. Reads `source_path` (absolute or file:// URL on the local filesystem), copies into the app's library, appends the relative path to the item's audioFilePaths, and stages into public/audio/ so `staticFile(\"audio/<filename>\")` resolves from <Audio src={…} />. Returns `path` (film-relative) and `static_path` (the staticFile arg). Multiple tracks are supported — call this tool once per file.",
             inputSchema: [
                 "type": "object",
                 "properties": [
-                    "project_id": ["type": "string"] as [String: Any],
+                    "footage_id": ["type": "string", "description": "A Remotion composition's id from footage_list."] as [String: Any],
                     "source_path": ["type": "string", "description": "Absolute filesystem path or file:// URL of the audio file on the local machine. The file is copied (not moved); the source is left untouched."] as [String: Any]
                 ],
-                "required": ["project_id", "source_path"]
+                "required": ["footage_id", "source_path"]
             ]
         ),
         MCPToolDescriptor(
             name: "remotion_remove_audio",
-            description: "Detach an audio file (music, SFX, narration, etc.) from a remotion project. Identify it by zero-based `index` in audioFilePaths or by `path` (the relative path stored in audioFilePaths). Deletes the underlying file and the corresponding public/audio/ copy.",
+            description: "Detach an audio file (music, SFX, narration, etc.) from a Remotion composition. Identify it by zero-based `index` in audioFilePaths or by `path` (the relative path stored in audioFilePaths). Deletes the underlying file and the corresponding public/audio/ copy.",
             inputSchema: [
                 "type": "object",
                 "properties": [
-                    "project_id": ["type": "string"] as [String: Any],
+                    "footage_id": ["type": "string", "description": "A Remotion composition's id from footage_list."] as [String: Any],
                     "index": ["type": "integer", "minimum": 0, "description": "Zero-based index in audioFilePaths. One of `index` or `path` is required."] as [String: Any],
                     "path": ["type": "string", "description": "Relative path stored in audioFilePaths (e.g. \"images/<uuid>.mp3\"). One of `index` or `path` is required."] as [String: Any]
                 ],
-                "required": ["project_id"]
+                "required": ["footage_id"]
             ]
         )
     ]
@@ -232,10 +234,10 @@ enum RemotionMCPHandlers {
         arguments: [String: Any],
         context: ModelContext
     ) async throws -> [String: Any] {
-        guard let projectId = arguments["project_id"] as? String else {
-            throw MCPToolError.invalidArguments("missing project_id")
+        guard let footageID = arguments["footage_id"] as? String else {
+            throw MCPToolError.invalidArguments("missing footage_id")
         }
-        let project = try MCPProjectHandlers.fetchRemotion(id: projectId, context: context)
+        let project = try MCPLibraryHandlers.fetchRemotion(id: footageID, context: context)
         let storage = ProjectStorage.forContainer(context.container)
         let projectDir = project.projectDir
         _ = try? RemotionRuntime.shared.prepareProjectDirectory(projectDir)
@@ -352,7 +354,7 @@ enum RemotionMCPHandlers {
 
         case "remotion_add_image":
             if project.imagePaths.count >= maxUploadedImages {
-                throw MCPToolError.invalidArguments("project already has the maximum of \(maxUploadedImages) uploaded images")
+                throw MCPToolError.invalidArguments("the composition already has the maximum of \(maxUploadedImages) uploaded images")
             }
             let sourceURL = try resolveLocalSourcePath(arguments)
             let imageData = try Data(contentsOf: sourceURL)

@@ -90,12 +90,10 @@ enum AgentClientFactory {
                     id: clientID(for: backend),
                     displayName: backend.engineLabel,
                     binaryPath: AgentBackendAvailability.shared.executablePath(for: backend),
-                    // Codex expects a git repository it may edit; a film package
-                    // is neither, so it is pinned read-only and told not to look
-                    // for a repo. Its reach into the app is the MCP server.
+                    // App-server accepts non-git working directories. Keep the
+                    // film package read-only; tools reach the app through MCP.
                     approvalPolicy: .never,
-                    sandbox: .readOnly,
-                    configOverrides: ["skip_git_repo_check=true"]
+                    sandbox: .readOnly
                 )
             #else
                 return nil

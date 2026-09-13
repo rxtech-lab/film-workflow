@@ -1,5 +1,6 @@
 import Foundation
 import Observation
+import OSLog
 #if os(macOS)
 import AppKit
 #else
@@ -39,19 +40,38 @@ final class CreditBalanceStore {
     private(set) var isLoading = false
     private(set) var error: String?
 
-    private init() {}
+    private let isAuthenticated: @MainActor () -> Bool
+    private let loadAccount: @MainActor () async throws -> AccountSnapshot
+    private let logger = Logger(subsystem: "rxlab.film-workflow", category: "AccountBalance")
 
-    var isSignedIn: Bool { AuthManager.shared.isAuthenticated }
+    init(isAuthenticated: @escaping @MainActor () -> Bool = { AuthManager.shared.isAuthenticated },
+         loadAccount: @escaping @MainActor () async throws -> AccountSnapshot = {
+             try await BackendClient.shared.get("api/v1/me")
+         }) {
+        self.isAuthenticated = isAuthenticated
+        self.loadAccount = loadAccount
+    }
+
+    var isSignedIn: Bool { isAuthenticated() }
 
     func refresh() async {
-        guard AuthManager.shared.isAuthenticated else { clear(); return }
+        guard isSignedIn else { clear(); return }
         isLoading = true
         error = nil
         defer { isLoading = false }
         do {
-            let snapshot: AccountSnapshot = try await BackendClient.shared.get("api/v1/me")
+            try Task.checkCancellation()
+            logger.debug("Refreshing account balance: GET \(BackendConfig.apiBaseURL.absoluteString, privacy: .public)/api/v1/me")
+            let snapshot = try await loadAccount()
+            try Task.checkCancellation()
             apply(snapshot.billing)
+        } catch is CancellationError {
+            logger.debug("Account balance refresh cancelled")
+        } catch let error as URLError where error.code == .cancelled {
+            logger.debug("Account balance request cancelled (NSURLErrorDomain -999)")
         } catch {
+            let failure = error as NSError
+            logger.error("Account balance refresh failed: \(failure.domain, privacy: .public) \(failure.code)")
             self.error = error.localizedDescription
         }
     }

@@ -136,7 +136,7 @@ private struct TransitionRegion: View {
     @State private var resizeError: String?
     private var duration: Double { draft ?? item.duration }
     private var width: Double { max(22, duration * pixelsPerSecond) }
-    private var name: String { ModifierCatalog.standard.transition(item.definitionID)?.name ?? "Unavailable transition" }
+    private var name: String { ModifierCatalog.current.transition(item.definitionID)?.name ?? "Unavailable transition" }
     private var leadingOffset: Double {
         var preview = item
         preview.duration = duration

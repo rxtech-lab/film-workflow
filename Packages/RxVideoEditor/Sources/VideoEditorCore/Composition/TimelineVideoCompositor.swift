@@ -80,7 +80,7 @@ public final class TimelineVideoCompositor: NSObject, AVVideoCompositing, @unche
 
     private func image(for layer: LayerSpec, at time: Double, frame: CGRect, request: AVAsynchronousVideoCompositionRequest,
                        effects: [EffectInstance] = []) -> CIImage? {
-        let catalog = ModifierCatalog.standard
+        let catalog = ModifierCatalog.current
         switch layer {
         case .sourceTrack(let trackID, let transform, let opacity, let preferredTransform, _):
             guard let pixelBuffer = request.sourceFrame(byTrackID: trackID) else { return nil }

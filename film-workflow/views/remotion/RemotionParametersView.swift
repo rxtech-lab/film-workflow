@@ -463,7 +463,7 @@ struct RemotionParametersView: View {
 
     /// Seeds a starting composition and boots Studio, with no model involved.
     ///
-    /// This is the same path `MCPProjectHandlers` already uses for projects
+    /// This is the same path `MCPLibraryHandlers` already uses for compositions
     /// created over MCP, so it is proven and needs no credentials — you get a
     /// running preview immediately and refine it in the agent window. The old
     /// button called the in-app agent and could not do anything at all until an

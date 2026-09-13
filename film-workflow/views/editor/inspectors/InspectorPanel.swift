@@ -28,22 +28,20 @@ struct InspectorPanel: View {
         let current = InspectorTabResolver.effectiveTabID(remembered: state.modifierSelection?.tabID ?? state.inspectorTabID, tabs: tabs)
         let tab = tabs.first { $0.id == current }
         VStack(spacing: 0) {
-            StudioPanelHeader(title: "Inspector", symbol: "slider.horizontal.3")
-            if !tabs.isEmpty {
-                Picker("Inspector", selection: Binding(get: { current ?? "" }, set: { id in
-                    if id == "effects", let clipID = state.selectedClipID { state.inspectEffects(clipID) }
-                    else if id != "transition" { state.modifierSelection = nil; state.inspectorTabID = id }
-                })) {
-                    ForEach(tabs) { tab in
-                        Text(tab.title).tag(tab.id)
+            StudioPanelHeader(title: "Inspector", symbol: "slider.horizontal.3") {
+                if !tabs.isEmpty {
+                    Picker("Inspector", selection: Binding(get: { current ?? "" }, set: { id in
+                        if id == "effects", let clipID = state.selectedClipID { state.inspectEffects(clipID) }
+                        else if id != "transition" { state.modifierSelection = nil; state.inspectorTabID = id }
+                    })) {
+                        ForEach(tabs) { tab in
+                            Text(tab.title).tag(tab.id)
+                        }
                     }
+                    .pickerStyle(.segmented)
+                    .labelsHidden()
+                    .fixedSize()
                 }
-                .pickerStyle(.segmented)
-                .labelsHidden()
-                .padding(6)
-                .glassEffect(.regular, in: .rect(cornerRadius: 12))
-                .padding(10)
-                Divider()
             }
             Group {
                 if let tab {

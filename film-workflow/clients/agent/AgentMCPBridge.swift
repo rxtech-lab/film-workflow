@@ -66,7 +66,7 @@ enum AgentMCPBridge {
             throw CaptionAIError.backendUnavailable(
                 .claudeCode,
                 server.lastError ?? "The app's MCP server couldn't start, so the "
-                    + "agent has no way to reach your projects."
+                    + "agent has no way to reach your film."
             )
         }
 

@@ -1,75 +1,76 @@
 import Foundation
 import SwiftData
 
-/// Per-domain "generate" tools — these run a full generation flow and persist
-/// the result via the same services the SwiftUI tabs use.
+/// One "generate" tool per generator kind. Each runs the same flow the
+/// inspector's Generate button runs and keeps the result as a new take on the
+/// item, so the library, the viewer and the timeline see it immediately.
 @MainActor
 enum MCPGenerateHandlers {
     static let descriptors: [MCPToolDescriptor] = [
         MCPToolDescriptor(
-            name: "narrative_generate",
-            description: "Run TTS for a narrative project and save the resulting audio + transcript. Uses the keys configured in Settings → AI Provider.",
+            name: "narration_generate",
+            description: "Speak a narration item's paragraphs with its speakers' voices (Gemini or Azure TTS, per the item's provider) and keep the audio and transcript as a new take. Set paragraphs and speakers first with footage_update or the podcast_* tools.",
             inputSchema: [
                 "type": "object",
                 "properties": [
-                    "project_id": ["type": "string", "description": "NarrativeProject id."] as [String: Any]
+                    "footage_id": ["type": "string", "description": "A narration item's id."] as [String: Any]
                 ],
-                "required": ["project_id"]
+                "required": ["footage_id"]
             ]
         ),
         MCPToolDescriptor(
             name: "music_generate",
-            description: "Run music generation for a music project (Lyria via the Google AI key). Saves the audio + lyrics to disk.",
+            description: "Generate a music item's track (Lyria) from its prompt, genre, structure and lyrics settings, and keep it as a new take.",
             inputSchema: [
                 "type": "object",
                 "properties": [
-                    "project_id": ["type": "string", "description": "MusicProject id."] as [String: Any]
+                    "footage_id": ["type": "string", "description": "A music item's id."] as [String: Any]
                 ],
-                "required": ["project_id"]
+                "required": ["footage_id"]
             ]
         ),
         MCPToolDescriptor(
             name: "image_generate",
-            description: "Run image generation for an image project, using the project's configured provider/model/parameters.",
+            description: "Generate an image item's picture with its configured provider, model and prompt, and keep it as a new take.",
             inputSchema: [
                 "type": "object",
                 "properties": [
-                    "project_id": ["type": "string", "description": "ImageGenProject id."] as [String: Any]
+                    "footage_id": ["type": "string", "description": "An image item's id."] as [String: Any]
                 ],
-                "required": ["project_id"]
+                "required": ["footage_id"]
             ]
         ),
         MCPToolDescriptor(
             name: "video_generate",
-            description: "Run video generation for a video project, using the project's configured model and parameters. Blocks for several minutes — if the call times out, the job keeps running: read `pendingJobId` with project_get, or call video_job_status, and use video_resume to collect the result.",
+            description: "Generate a video item's clip (Veo) with its configured model and prompt, and keep it as a new take. Blocks for several minutes. If the call times out the job keeps running: check with video_job_status and collect it with video_resume rather than generating again.",
             inputSchema: [
                 "type": "object",
                 "properties": [
-                    "project_id": ["type": "string", "description": "VideoGenProject id."] as [String: Any]
+                    "footage_id": ["type": "string", "description": "A video item's id."] as [String: Any]
                 ],
-                "required": ["project_id"]
+                "required": ["footage_id"]
             ]
         ),
         MCPToolDescriptor(
             name: "video_job_status",
-            description: "Report whether a video project has a generation still running with the provider, without waiting for it.",
+            description: "Whether a video item still has a generation running with the provider, without waiting for it.",
             inputSchema: [
                 "type": "object",
                 "properties": [
-                    "project_id": ["type": "string", "description": "VideoGenProject id."] as [String: Any]
+                    "footage_id": ["type": "string", "description": "A video item's id."] as [String: Any]
                 ],
-                "required": ["project_id"]
+                "required": ["footage_id"]
             ]
         ),
         MCPToolDescriptor(
             name: "video_resume",
-            description: "Wait for a video project's already-submitted generation and save the result. Use after video_generate timed out. Does not start a new generation, so it never bills twice.",
+            description: "Wait for a video item's already-submitted generation and keep the result as a new take. Use after video_generate timed out. Never starts a new generation, so it cannot bill twice.",
             inputSchema: [
                 "type": "object",
                 "properties": [
-                    "project_id": ["type": "string", "description": "VideoGenProject id."] as [String: Any]
+                    "footage_id": ["type": "string", "description": "A video item's id."] as [String: Any]
                 ],
-                "required": ["project_id"]
+                "required": ["footage_id"]
             ]
         )
     ]
@@ -83,8 +84,8 @@ enum MCPGenerateHandlers {
         arguments: [String: Any],
         context: ModelContext
     ) async throws -> [String: Any] {
-        guard let projectId = arguments["project_id"] as? String else {
-            throw MCPToolError.invalidArguments("missing project_id")
+        guard let footageID = arguments["footage_id"] as? String else {
+            throw MCPToolError.invalidArguments("missing footage_id")
         }
         let config: AppConfig
         do {
@@ -94,66 +95,71 @@ enum MCPGenerateHandlers {
         }
 
         switch name {
-        case "narrative_generate":
-            let project = try MCPProjectHandlers.fetchNarrative(id: projectId, context: context)
+        case "narration_generate":
+            let project = try MCPLibraryHandlers.fetchNarration(id: footageID, context: context)
             let generated = try await NarrativeGenerationService.generate(
                 project: project, context: context, config: config
             )
             try context.save()
             return MCPToolRegistry.jsonResult([
                 "ok": true,
-                "audio_path": generated.audioFilePath,
+                "sourceId": DocumentMediaResolver.sourceID(.narration, generated.id),
+                "audioPath": generated.audioFilePath,
                 "transcript": generated.transcriptText,
-                "provider": generated.providerName
+                "provider": generated.providerName,
+                "durationSeconds": generated.durationSeconds
             ] as [String: Any])
         case "music_generate":
-            let project = try MCPProjectHandlers.fetchMusic(id: projectId, context: context)
+            let project = try MCPLibraryHandlers.fetchMusic(id: footageID, context: context)
             let generated = try await MusicGenerationService.generate(
                 project: project, context: context, config: config
             )
             try context.save()
             return MCPToolRegistry.jsonResult([
                 "ok": true,
-                "audio_path": generated.audioFilePath,
-                "lyrics": generated.lyricsText as Any
+                "sourceId": DocumentMediaResolver.sourceID(.music, generated.id),
+                "audioPath": generated.audioFilePath,
+                "lyrics": generated.lyricsText as Any,
+                "durationSeconds": generated.durationSeconds
             ] as [String: Any])
         case "image_generate":
-            let project = try MCPProjectHandlers.fetchImage(id: projectId, context: context)
+            let project = try MCPLibraryHandlers.fetchImage(id: footageID, context: context)
             let generated = try await ImageGenerationService.generate(
                 project: project, context: context, config: config
             )
             try context.save()
             return MCPToolRegistry.jsonResult([
                 "ok": true,
-                "image_path": generated.imageFilePath,
+                "sourceId": DocumentMediaResolver.sourceID(.image, generated.id),
+                "imagePath": generated.imageFilePath,
                 "prompt": generated.prompt
             ] as [String: Any])
         case "video_generate":
-            let project = try MCPProjectHandlers.fetchVideo(id: projectId, context: context)
+            let project = try MCPLibraryHandlers.fetchVideo(id: footageID, context: context)
             let generated = try await VideoGenerationService.generate(
                 project: project, context: context, config: config
             )
             try context.save()
             return MCPToolRegistry.jsonResult(videoResult(generated))
         case "video_job_status":
-            let project = try MCPProjectHandlers.fetchVideo(id: projectId, context: context)
+            let project = try MCPLibraryHandlers.fetchVideo(id: footageID, context: context)
             return MCPToolRegistry.jsonResult([
                 "ok": true,
                 "pending": project.hasPendingJob,
                 "stale": project.pendingJobIsStale,
-                "pending_job_id": project.pendingJobID as Any,
-                "started_at": project.pendingJobStartedAt.map {
+                "pendingJobId": project.pendingJobID as Any,
+                "startedAt": project.pendingJobStartedAt.map {
                     ISO8601DateFormatter().string(from: $0)
                 } as Any
             ] as [String: Any])
         case "video_resume":
-            let project = try MCPProjectHandlers.fetchVideo(id: projectId, context: context)
+            let project = try MCPLibraryHandlers.fetchVideo(id: footageID, context: context)
             guard let generated = try await VideoGenerationService.resume(
                 project: project, context: context, config: config
             ) else {
                 return MCPToolRegistry.jsonResult([
                     "ok": false,
-                    "error": "No generation is pending for this project."
+                    "error": "No generation is pending for this item."
                 ] as [String: Any])
             }
             try context.save()
@@ -166,11 +172,12 @@ enum MCPGenerateHandlers {
     private static func videoResult(_ generated: GeneratedVideo) -> [String: Any] {
         [
             "ok": true,
-            "video_path": generated.videoFilePath,
-            "thumbnail_path": generated.thumbnailFilePath as Any,
+            "sourceId": DocumentMediaResolver.sourceID(.video, generated.id),
+            "videoPath": generated.videoFilePath,
+            "thumbnailPath": generated.thumbnailFilePath as Any,
             "prompt": generated.prompt,
             "model": generated.modelID,
-            "duration_seconds": generated.durationSeconds,
+            "durationSeconds": generated.durationSeconds,
             "width": generated.width,
             "height": generated.height
         ] as [String: Any]

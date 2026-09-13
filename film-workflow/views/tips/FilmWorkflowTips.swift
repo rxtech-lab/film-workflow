@@ -33,6 +33,15 @@ enum FilmWorkflowTips {
         var options: [any TipOption] { Tips.MaxDisplayCount(1) }
     }
 
+    struct MarketplaceTip: Tip {
+        var title: Text { Text("Browse the marketplace") }
+        var message: Text? {
+            Text("Footage, music, sound effects, fonts, transitions and Remotion prompts you can install and add to any film. ⌘⌥M opens it any time.")
+        }
+        var image: Image? { Image(systemName: "storefront") }
+        var options: [any TipOption] { Tips.MaxDisplayCount(1) }
+    }
+
     struct AgentComposerTip: Tip {
         var title: Text { Text("Every thread targets one project") }
         var message: Text? {

@@ -15,7 +15,9 @@ nonisolated struct AgentModelOption: Codable, Identifiable, Hashable, Sendable {
     /// One line for the picker's help text. May be empty.
     let detail: String
     /// Reasoning levels this model accepts, in the order the CLI reported them.
-    /// Always empty for Claude Code, which takes no effort setting here.
+    ///
+    /// Always empty for Claude Code, whose levels don't vary by model — they come
+    /// from `AgentModelCatalog.claudeEfforts` instead.
     let efforts: [String]
     let defaultEffort: String?
 
@@ -92,6 +94,21 @@ final class AgentModelCatalog {
     /// custom id the user typed in. Every model the CLI has shipped so far
     /// accepts at least these four.
     nonisolated static let genericCodexEfforts = ["low", "medium", "high", "xhigh"]
+
+    // MARK: - Thinking levels
+
+    /// `claude --effort` levels, lowest first.
+    ///
+    /// Hardcoded for the same reason the Claude model list is: the CLI publishes
+    /// no list command. Unlike Codex these don't vary by model, so they hang off
+    /// the backend rather than off each `AgentModelOption`.
+    nonisolated static let claudeEfforts = ["low", "medium", "high", "xhigh", "max"]
+
+    /// Thinking levels to offer for `backend` running `model`, empty for an
+    /// engine that has no such dial.
+    func efforts(for backend: AgentBackend, model: String) -> [String] {
+        Self.efforts(for: backend, model: model, in: codexModels)
+    }
 
     private(set) var codexModels: [AgentModelOption]
     private(set) var isLoadingCodexModels = false
@@ -191,6 +208,23 @@ final class AgentModelCatalog {
         Self.effort(for: modelID, configured: configured, in: codexModels)
     }
 
+    /// The level to actually send for one turn: the thread's own pick when the
+    /// model accepts it, else the Settings value under the same rule, else none.
+    func effort(
+        for modelID: String,
+        backend: AgentBackend,
+        override: String?,
+        configured: String
+    ) -> String? {
+        Self.effort(
+            for: modelID,
+            backend: backend,
+            override: override,
+            configured: configured,
+            in: codexModels
+        )
+    }
+
     // MARK: - Pure forms
     //
     // Split out from the two methods above so the rules can be exercised against
@@ -205,6 +239,44 @@ final class AgentModelCatalog {
               !option.efforts.isEmpty
         else { return genericCodexEfforts }
         return option.efforts
+    }
+
+    nonisolated static func efforts(
+        for backend: AgentBackend,
+        model: String,
+        in options: [AgentModelOption]
+    ) -> [String] {
+        switch backend {
+        case .codex: return efforts(forCodexModel: model, in: options)
+        case .claudeCode: return claudeEfforts
+        case .appleIntelligence, .openAICompatible, .subscription: return []
+        }
+    }
+
+    /// The thread's pick is validated, not trusted: a thread can pin `ultra` on
+    /// GPT-5.6-Sol and then be re-pointed at a model that doesn't take it, and
+    /// the turn that follows must not carry a level the CLI will reject.
+    ///
+    /// With nothing pinned this falls through to the Settings value — which only
+    /// Codex has a field for, so a Claude Code thread's level is its own pick or
+    /// the CLI's default.
+    nonisolated static func effort(
+        for modelID: String,
+        backend: AgentBackend,
+        override: String?,
+        configured: String,
+        in options: [AgentModelOption]
+    ) -> String? {
+        let accepted = efforts(for: backend, model: modelID, in: options)
+        guard !accepted.isEmpty else { return nil }
+
+        let pinned = (override ?? "").trimmingCharacters(in: .whitespaces)
+        if !pinned.isEmpty {
+            return accepted.contains(pinned) ? pinned : nil
+        }
+
+        guard backend == .codex else { return nil }
+        return effort(for: modelID, configured: configured, in: options)
     }
 
     /// An id we don't know is passed through unchanged: the user typed it, so

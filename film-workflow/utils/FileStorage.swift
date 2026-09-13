@@ -29,11 +29,23 @@ nonisolated struct FileStorage {
         appSupportURL.appendingPathComponent("Agent.store")
     }
 
+    /// Installed marketplace items: `Marketplace/<kind>/<itemId>/manifest.json`
+    /// plus the content file and a cached preview still. Shared by every film;
+    /// "Add to film" copies from here into a package.
+    static var marketplaceDir: URL {
+        appSupportURL.appendingPathComponent("Marketplace", isDirectory: true)
+    }
+
+    static func marketplaceItemDir(kind: String, itemID: String, root: URL = marketplaceDir) -> URL {
+        root.appendingPathComponent(kind, isDirectory: true).appendingPathComponent(itemID, isDirectory: true)
+    }
+
     static func ensureDirectories() {
         let fm = FileManager.default
         try? fm.createDirectory(at: appSupportURL, withIntermediateDirectories: true)
         try? fm.createDirectory(at: whisperModelsDir, withIntermediateDirectories: true)
         try? fm.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        try? fm.createDirectory(at: marketplaceDir, withIntermediateDirectories: true)
     }
 
     /// Removes everything in `tempDir` and recreates it. Called at launch:

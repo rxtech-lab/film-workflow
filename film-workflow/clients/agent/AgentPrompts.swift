@@ -10,9 +10,14 @@ import SwiftData
 /// Claude, a prompt prefix for Codex and ACP, and a `system` message for the
 /// in-process clients.
 ///
-/// Nothing here replays the conversation any more: `Agent` carries the
-/// transcript in `AgentSendRequest.history` and its own rolling summary, so the
-/// `turn(instruction:summary:recentTurns:)` builder this replaces is gone.
+/// The base prompt says what a film is and how the app is laid out; the
+/// domain know-how (cutting a sequence, generating footage, authoring a
+/// Remotion composition, working on captions) is a `Skill` each, in
+/// `AgentSkills.swift`, so it can be added only when the tools it talks about
+/// are on offer.
+///
+/// Nothing here replays the conversation: `Agent` carries the transcript in
+/// `AgentSendRequest.history` and its own rolling summary.
 @MainActor
 enum AgentPrompts {
 
@@ -25,69 +30,89 @@ enum AgentPrompts {
         context modelContext: ModelContext,
         toolNamePrefix: String = ""
     ) -> AgentContext {
-        AgentContext {
+        let tool = { (name: String) in toolNamePrefix + name }
+        let offered = Set(toolNames)
+        let has = { (name: String) in offered.contains(name) }
+
+        return AgentContext {
             """
             You are the assistant inside Film Studio, a macOS app for making \
-            short films: music, narration, captions, generated images and \
-            Remotion video compositions.
-
-            You are not editing a code repository. Do not read, write or search \
-            files on disk and do not run shell commands — the only exception is \
-            the Remotion tools below, which edit one project's composition \
-            source through the app. Everything you need is in the tools.
+            short films from generated footage. The window is laid out like a \
+            video editor: the library of footage on the left, a viewer in the \
+            centre, an inspector on the right with the selected item's \
+            parameters, its Generate button and its versions, and the sequence \
+            timeline along the bottom.
             """
 
-            AgentTargetResolver.promptBlock(for: target, context: modelContext)
+            """
+            How a film is organised:
+            - A film is one document, and everything below lives inside it. \
+            There is no separate notion of a project: the film is the project.
+            - The library holds footage items — music, narration, captions, \
+            images, video, Remotion compositions and imported files — optionally \
+            filed in folders. Each item carries the parameters the inspector \
+            shows.
+            - Generating an item never overwrites it. Every run is kept as a new \
+            take (version); the newest take is what the library drags to the \
+            timeline, and older takes stay available.
+            - A sequence is a timeline of tracks (V1 video, A1/A2 audio, T1 \
+            overlay) holding clips cut from those takes. Rendering a sequence \
+            exports it as a movie, kept as a version of the sequence or written \
+            to a folder the user chooses.
+            """
+
+            """
+            You are not editing a code repository. Do not read, write or search \
+            files on disk and do not run shell commands — the only exception is \
+            the Remotion tools, which edit one composition's source through the \
+            app. Everything you need is in the tools.
+            """
+
+            AgentTargetResolver.promptBlock(
+                for: target,
+                context: modelContext,
+                toolNamePrefix: toolNamePrefix
+            )
 
             if let doc = ProjectDocumentController.shared.document(
                 forContainer: modelContext.container
             ) {
                 """
-                The open film is "\(doc.displayName)" (document id \(doc.id.uuidString)); \
-                tools act on it unless you pass `document` to address another open film.
+                The open film is "\(doc.displayName)" (film id \(doc.id.uuidString)); \
+                tools act on it unless you pass `film` to address another open film.
                 """
             }
 
             if !toolNames.isEmpty {
                 """
                 Tools available to you:
-                \(toolNames.map { "- \(toolNamePrefix)\($0)" }.joined(separator: "\n"))
+                \(toolNames.map { "- \(tool($0))" }.joined(separator: "\n"))
                 """
             }
 
             """
             Work in the app, not in prose. If the user asks for a change, make \
-            it with a tool rather than describing what they could do. Prefer \
-            searching over listing everything — caption_search_segments before \
-            caption_list_segments, get_project before list_projects when you \
-            already know the id.
+            it with a tool rather than describing what they could do. Ids: a \
+            library item takes `footage_id`, a sequence takes `sequence_id`, a \
+            folder takes `folder_id`, and a take goes on the timeline by its \
+            `sourceId`. Prefer the narrow call over the broad one — \
+            \(tool("footage_get")) when you already know the id, \
+            \(tool("caption_search_segments")) before \(tool("caption_list_segments")).
             """
 
+            if has("sequence_add_clip") {
+                Skill.sequenceAssembly(tool: tool)
+            }
+            if has("footage_update") {
+                Skill.footageGeneration(tool: tool, offered: offered)
+            }
             #if os(macOS)
-                if toolNames.contains(where: { $0.hasPrefix("remotion_") }) {
-                    RemotionMCPHandlers.authoringInstructions
+                if has("remotion_write_file") {
+                    Skill.remotionAuthoring(tool: tool)
                 }
             #endif
-
-            switch policy {
-            case .review:
-                """
-                Captions are under review control: \(toolNamePrefix)caption_propose_edits \
-                is the only way to change one, and it queues your changes for \
-                the user to approve. It covers wording, splits and merges, \
-                timing (retime) and a single line's translation \
-                (set_translation) — so a one-line translation fix goes here, \
-                not through \(toolNamePrefix)caption_translate, which redoes a \
-                whole language. Never claim you have changed a caption — say \
-                what you have proposed. Everything else you do takes effect \
-                immediately.
-                """
-            case .direct:
-                """
-                Your changes take effect immediately, including caption edits. \
-                Be careful with anything that replaces existing work, and say \
-                what you changed.
-                """
+            if has("caption_propose_edits") || has("caption_update_segment") {
+                Skill.captions(tool: tool, policy: policy, offered: offered)
             }
 
             """

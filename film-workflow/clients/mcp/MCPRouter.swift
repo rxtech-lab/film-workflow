@@ -142,16 +142,18 @@ enum MCPRouter {
 
 enum MCPToolError: LocalizedError {
     case invalidArguments(String)
-    case unknownProjectType(String)
-    case projectNotFound(String)
+    case unknownKind(String)
+    case notFound(String)
     case macOSOnly
     case underlying(Error)
 
     var errorDescription: String? {
         switch self {
         case .invalidArguments(let m): return "invalid arguments: \(m)"
-        case .unknownProjectType(let t): return "unknown project type: \(t) (must be one of: narrative, music, image, video, remotion, caption; sequences use the sequence_* tools)"
-        case .projectNotFound(let id): return "project not found: \(id)"
+        case .unknownKind(let k):
+            return "unknown footage kind: \(k) (must be one of: "
+                + FootageKind.allCases.map(\.rawValue).joined(separator: ", ") + ")"
+        case .notFound(let id): return "nothing in the film has the id \(id); call footage_list"
         case .macOSOnly: return "this tool is only available on macOS"
         case .underlying(let e): return e.localizedDescription
         }

@@ -27,12 +27,15 @@ struct AgentMessageRow: View {
         case .message(let message):
             messageRow(message)
         case .transientGroup(let calls):
-            // One container for the run of cards, so their glass title bars
-            // blend into each other instead of each sampling on its own.
-            GlassEffectContainer(spacing: 6) {
-                VStack(alignment: .leading, spacing: 5) {
-                    ForEach(calls) { call in
-                        toolRow(call)
+            // The SDK folded these blind to what they are; a proposal inside
+            // the run still has to surface as its review card.
+            VStack(alignment: .leading, spacing: 6) {
+                ForEach(segments(of: calls.map { .toolCall($0) })) { segment in
+                    switch segment {
+                    case .block(let block):
+                        if case .toolCall(let call) = block { toolRow(call) }
+                    case .toolRun(let run):
+                        toolGroup(run)
                     }
                 }
             }
@@ -46,14 +49,19 @@ struct AgentMessageRow: View {
     @ViewBuilder
     private func messageRow(_ message: RxAgentSDK.AgentMessage) -> some View {
         VStack(alignment: .leading, spacing: 6) {
-            ForEach(message.blocks) { block in
-                switch block {
-                case .text(_, let text):
-                    textBlock(text, role: message.role)
-                case .thinking(_, let text):
-                    thinkingBlock(text)
-                case .toolCall(let call):
-                    toolRow(call)
+            ForEach(segments(of: message.blocks)) { segment in
+                switch segment {
+                case .block(let block):
+                    switch block {
+                    case .text(_, let text):
+                        textBlock(text, role: message.role)
+                    case .thinking(_, let text):
+                        thinkingBlock(text)
+                    case .toolCall(let call):
+                        toolRow(call)
+                    }
+                case .toolRun(let calls):
+                    toolGroup(calls)
                 }
             }
             if let error = message.error {
@@ -116,6 +124,63 @@ struct AgentMessageRow: View {
         }
     }
 
+    // MARK: - Segments
+
+    /// A message's blocks with consecutive tool calls folded into one run, so
+    /// a burst of lookups collapses into a single chip instead of a column of
+    /// them. A proposal breaks the run: it is something waiting on the user,
+    /// and must not hide inside a collapsed group.
+    private enum Segment: Identifiable {
+        case block(AgentBlock)
+        case toolRun([AgentToolCall])
+
+        var id: String {
+            switch self {
+            case .block(let block): block.id
+            case .toolRun(let calls): "run-\(calls.first?.id ?? "")"
+            }
+        }
+    }
+
+    private func segments(of blocks: [AgentBlock]) -> [Segment] {
+        var segments: [Segment] = []
+        var run: [AgentToolCall] = []
+        func flush() {
+            guard !run.isEmpty else { return }
+            segments.append(.toolRun(run))
+            run = []
+        }
+        for block in blocks {
+            if case .toolCall(let call) = block, proposalRow(for: call) == nil {
+                run.append(call)
+            } else {
+                flush()
+                segments.append(.block(block))
+            }
+        }
+        flush()
+        return segments
+    }
+
+    /// One call stands on its own; two or more fold into a group chip that
+    /// opens onto the individual chips.
+    @ViewBuilder
+    private func toolGroup(_ calls: [AgentToolCall]) -> some View {
+        if calls.count == 1, let call = calls.first {
+            toolRow(call)
+        } else {
+            HStack(spacing: 0) {
+                // One container for the run of chips, so their glass blends
+                // into each other instead of each sampling on its own.
+                GlassEffectContainer(spacing: 6) {
+                    AgentToolGroupCard(calls: calls)
+                }
+                .frame(maxWidth: 460, alignment: .leading)
+                Spacer(minLength: 0)
+            }
+        }
+    }
+
     // MARK: - Tool
 
     @ViewBuilder
@@ -133,7 +198,7 @@ struct AgentMessageRow: View {
 
     /// The persisted proposal row this call produced, if it produced one.
     ///
-    /// Matched by project rather than by call id: a proposal arriving from a CLI
+    /// Matched by item rather than by call id: a proposal arriving from a CLI
     /// engine reaches the app over HTTP, where the only identity both sides know
     /// is the project's.
     private func proposalRow(for call: AgentToolCall) -> AgentMessage? {
@@ -192,110 +257,66 @@ struct AgentMessageRow: View {
     }
 }
 
-// MARK: - Tool card
+// MARK: - Tool status
 
-private struct AgentToolCard: View {
-    let call: AgentToolCall
-    @State private var showDetails = false
-    @State private var isHovered = false
+/// How a call (or a run of them) went, and the colour that says so.
+private enum ToolStatus {
+    case pending, ok, failed
 
-    private static let maxDisplayChars = 200
-
-    private enum Status { case pending, ok, failed }
-
-    private var status: Status {
-        guard call.isComplete else { return .pending }
-        return call.isError ? .failed : .ok
+    init(_ call: AgentToolCall) {
+        guard call.isComplete else { self = .pending; return }
+        self = call.isError ? .failed : .ok
     }
+
+    /// Pending if anything is still running, failed if anything failed,
+    /// otherwise ok — the group is only as done as its slowest member.
+    init(_ calls: [AgentToolCall]) {
+        if calls.contains(where: { !$0.isComplete }) { self = .pending }
+        else if calls.contains(where: \.isError) { self = .failed }
+        else { self = .ok }
+    }
+
+    var accent: Color {
+        switch self {
+        case .pending: .secondary
+        case .ok: .green
+        case .failed: .red
+        }
+    }
+}
+
+/// A glyph for the family of work the tool does, so a run of chips reads as
+/// a sequence of steps rather than a wall of identical rows.
+private func toolGlyph(for toolName: String) -> String {
+    let name = MCPToolName.bare(toolName)
+    if name.hasPrefix("caption_") { return "captions.bubble" }
+    if name.hasPrefix("remotion_") { return "film.stack" }
+    if name.hasPrefix("sequence_") { return "rectangle.stack" }
+    if name.hasPrefix("podcast_") { return "mic" }
+    if name.hasPrefix("music_") { return "music.note" }
+    if name.hasPrefix("image_") { return "photo" }
+    if name.hasPrefix("video_") { return "video" }
+    if name.hasPrefix("narration_") { return "text.book.closed" }
+    if name.hasPrefix("folder_") { return "folder" }
+    if name.hasPrefix("film_") { return "film" }
+    if name.hasPrefix("footage_import") { return "tray.and.arrow.down" }
+    if name.hasPrefix("footage_") { return "square.grid.2x2" }
+    if name.contains("search") || name.contains("list") { return "magnifyingglass" }
+    if name.contains("read") || name.contains("document") { return "doc.text" }
+    if name.contains("write") || name.contains("edit") { return "square.and.pencil" }
+    return "wrench.and.screwdriver"
+}
+
+/// What the work is, with how it went badged onto the corner: the glyph says
+/// "caption edit" at a glance, the badge says whether it landed.
+private struct ToolStatusIcon: View {
+    let glyph: String
+    let status: ToolStatus
 
     var body: some View {
-        Button {
-            showDetails = true
-        } label: {
-            VStack(alignment: .leading, spacing: 0) {
-                titleRow
-                detailRow
-            }
-            .background {
-                // Only drawn when a second row exists — with the title alone the
-                // glass edge is the card's edge, and a second outline doubles it.
-                if detailText != nil {
-                    RoundedRectangle(cornerRadius: Self.radius, style: .continuous)
-                        .fill(Color.secondary.opacity(0.07))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: Self.radius, style: .continuous)
-                                .strokeBorder(accentColor.opacity(0.16), lineWidth: 0.5)
-                        )
-                }
-            }
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .onHover { isHovered = $0 }
-        .animation(.easeInOut(duration: 0.15), value: isHovered)
-        .animation(.easeInOut(duration: 0.2), value: call.isComplete)
-        .sheet(isPresented: $showDetails) {
-            AgentToolDetailSheet(call: call)
-        }
-    }
-
-    private static let radius: CGFloat = 12
-
-    // MARK: - Title
-
-    /// The tool name and its arguments, on liquid glass tinted by the call's
-    /// outcome. The glass carries the card's edge, so the shape closes off its
-    /// bottom corners only when a result line sits underneath it.
-    private var titleRow: some View {
-        HStack(spacing: 8) {
-            iconView
-
-            Text(MCPToolName.bare(call.name))
-                .font(.caption.weight(.semibold))
-                .monospaced()
-                .foregroundStyle(.primary)
-                .lineLimit(1)
-                .layoutPriority(1)
-
-            if let args = compactArgs, !args.isEmpty {
-                Text(truncate(args))
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-            }
-
-            Spacer(minLength: 4)
-
-            Image(systemName: "chevron.right")
-                .font(.caption2.weight(.semibold))
-                .foregroundStyle(.tertiary)
-        }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 7)
-        .glassEffect(
-            .regular.tint(accentColor.opacity(isHovered ? 0.24 : 0.11)).interactive(),
-            in: titleShape
-        )
-    }
-
-    private var titleShape: UnevenRoundedRectangle {
-        let bottom: CGFloat = detailText == nil ? Self.radius : 0
-        return UnevenRoundedRectangle(
-            topLeadingRadius: Self.radius,
-            bottomLeadingRadius: bottom,
-            bottomTrailingRadius: bottom,
-            topTrailingRadius: Self.radius,
-            style: .continuous
-        )
-    }
-
-    /// What the tool is, with how it went badged onto the corner: the glyph
-    /// says "caption edit" at a glance, the badge says whether it landed.
-    private var iconView: some View {
         ZStack(alignment: .bottomTrailing) {
             RoundedRectangle(cornerRadius: 7, style: .continuous)
-                .fill(accentColor.opacity(0.16))
+                .fill(status.accent.opacity(0.16))
                 .frame(width: 24, height: 24)
                 .overlay {
                     if status == .pending {
@@ -303,9 +324,9 @@ private struct AgentToolCard: View {
                             .controlSize(.small)
                             .scaleEffect(0.65)
                     } else {
-                        Image(systemName: toolIcon)
+                        Image(systemName: glyph)
                             .font(.system(size: 12, weight: .semibold))
-                            .foregroundStyle(accentColor)
+                            .foregroundStyle(status.accent)
                     }
                 }
 
@@ -313,89 +334,320 @@ private struct AgentToolCard: View {
                 Image(systemName: status == .ok ? "checkmark.circle.fill" : "xmark.circle.fill")
                     .symbolRenderingMode(.palette)
                     .font(.system(size: 10, weight: .bold))
-                    .foregroundStyle(.white, accentColor)
+                    .foregroundStyle(.white, status.accent)
                     .offset(x: 3, y: 3)
             }
         }
     }
+}
 
-    // MARK: - Detail
+/// The chip's glass shape: fully rounded on its own, open along the bottom
+/// when a body hangs beneath it.
+private func chipShape(open: Bool, radius: CGFloat) -> UnevenRoundedRectangle {
+    let bottom: CGFloat = open ? 0 : radius
+    return UnevenRoundedRectangle(
+        topLeadingRadius: radius,
+        bottomLeadingRadius: bottom,
+        bottomTrailingRadius: bottom,
+        topTrailingRadius: radius,
+        style: .continuous
+    )
+}
 
-    @ViewBuilder
-    private var detailRow: some View {
-        if let text = detailText {
-            Text(text)
-                .font(.caption)
-                .foregroundStyle(status == .failed ? Color.red : .secondary)
-                .lineLimit(2)
-                .truncationMode(.tail)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, 12)
+// MARK: - Tool group card
+
+/// A run of consecutive tool calls folded into one chip. Collapsed, it says
+/// how many steps there were and how they are going; expanded, it lists each
+/// call as its own chip, which opens further on its own.
+private struct AgentToolGroupCard: View {
+    let calls: [AgentToolCall]
+    @State private var isExpanded = false
+    @State private var isHovered = false
+
+    private static let radius: CGFloat = 12
+
+    private var status: ToolStatus { ToolStatus(calls) }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            header
+            if isExpanded {
+                VStack(alignment: .leading, spacing: 5) {
+                    ForEach(calls) { call in
+                        AgentToolCard(call: call)
+                    }
+                }
+                .padding(.horizontal, 8)
                 .padding(.top, 6)
                 .padding(.bottom, 8)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .transition(.opacity)
+            }
         }
+        .background {
+            if isExpanded {
+                RoundedRectangle(cornerRadius: Self.radius, style: .continuous)
+                    .fill(Color.secondary.opacity(0.07))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: Self.radius, style: .continuous)
+                            .strokeBorder(status.accent.opacity(0.16), lineWidth: 0.5)
+                    )
+            }
+        }
+        .animation(.snappy(duration: 0.18), value: isExpanded)
+        .animation(.easeInOut(duration: 0.15), value: isHovered)
+        .animation(.easeInOut(duration: 0.2), value: status)
     }
 
-    /// The one line of outcome the card shows: the result if there is one,
-    /// otherwise what the call is still doing.
-    private var detailText: String? {
-        if let result = call.result, !result.isEmpty {
-            return truncate(collapse(result))
+    private var header: some View {
+        Button {
+            isExpanded.toggle()
+        } label: {
+            HStack(spacing: 8) {
+                ToolStatusIcon(glyph: "square.stack.3d.up", status: status)
+
+                Text("\(calls.count) tool calls")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
+                    .layoutPriority(1)
+
+                if let hint {
+                    Text(hint)
+                        .font(.caption2)
+                        .monospaced()
+                        .foregroundStyle(status == .failed ? Color.red : .secondary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                }
+
+                if isExpanded {
+                    Spacer(minLength: 4)
+                }
+
+                Image(systemName: "chevron.right")
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(.tertiary)
+                    .rotationEffect(.degrees(isExpanded ? 90 : 0))
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 7)
+            .contentShape(Rectangle())
         }
-        if status == .pending {
-            return call.hasCompleteInput ? "Running…" : "Preparing…"
-        }
-        return nil
+        .buttonStyle(.plain)
+        .onHover { isHovered = $0 }
+        .glassEffect(
+            .regular.tint(status.accent.opacity(isHovered ? 0.24 : 0.11)).interactive(),
+            in: chipShape(open: isExpanded, radius: Self.radius)
+        )
     }
 
-    private var accentColor: Color {
+    /// While running, the step in flight; once done, either what failed or
+    /// the distinct tools that ran, so the collapsed chip still says what the
+    /// agent did without opening it.
+    private var hint: String? {
         switch status {
-        case .pending: .secondary
-        case .ok: .green
-        case .failed: .red
+        case .pending:
+            guard let active = calls.first(where: { !$0.isComplete }) else { return nil }
+            return "Running \(MCPToolName.bare(active.name))…"
+        case .failed:
+            let failed = calls.filter(\.isError).count
+            return "\(failed) failed"
+        case .ok:
+            var seen = Set<String>()
+            let names = calls.map { MCPToolName.bare($0.name) }.filter { seen.insert($0).inserted }
+            return names.joined(separator: ", ")
+        }
+    }
+}
+
+// MARK: - Tool card
+
+/// A tool call as a chip: the glyph, the name, and how it went. Nothing else
+/// until the user asks — expanding the chip reveals the parameters and a
+/// preview of the result inline, and from there the full detail sheet.
+private struct AgentToolCard: View {
+    let call: AgentToolCall
+    @State private var isExpanded = false
+    @State private var showDetails = false
+    @State private var isHovered = false
+
+    private static let radius: CGFloat = 12
+    private static let maxPreviewChars = 600
+    private static let maxValueChars = 160
+
+    private var status: ToolStatus { ToolStatus(call) }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            chip
+            if isExpanded {
+                expandedBody
+                    .transition(.opacity)
+            }
+        }
+        .background {
+            // Only drawn once the body is open — collapsed, the glass edge is
+            // the chip's edge, and a second outline would double it.
+            if isExpanded {
+                RoundedRectangle(cornerRadius: Self.radius, style: .continuous)
+                    .fill(Color.secondary.opacity(0.07))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: Self.radius, style: .continuous)
+                            .strokeBorder(status.accent.opacity(0.16), lineWidth: 0.5)
+                    )
+            }
+        }
+        .animation(.snappy(duration: 0.18), value: isExpanded)
+        .animation(.easeInOut(duration: 0.15), value: isHovered)
+        .animation(.easeInOut(duration: 0.2), value: status)
+        .sheet(isPresented: $showDetails) {
+            AgentToolDetailSheet(call: call)
         }
     }
 
-    /// A glyph for the family of work the tool does, so a run of cards reads as
-    /// a sequence of steps rather than a wall of identical rows.
-    private var toolIcon: String {
-        let name = MCPToolName.bare(call.name)
-        if name.hasPrefix("caption_") { return "captions.bubble" }
-        if name.hasPrefix("remotion_") { return "film.stack" }
-        if name.hasPrefix("sequence_") { return "rectangle.stack" }
-        if name.hasPrefix("podcast_") { return "mic" }
-        if name.hasPrefix("music_") { return "music.note" }
-        if name.hasPrefix("image_") { return "photo" }
-        if name.hasPrefix("video_") { return "video" }
-        if name.hasPrefix("narrative_") { return "text.book.closed" }
-        if name.contains("project") || name.contains("group") { return "folder" }
-        if name.contains("import") || name.contains("footage") { return "tray.and.arrow.down" }
-        if name.contains("search") || name.contains("list") { return "magnifyingglass" }
-        if name.contains("read") || name.contains("document") { return "doc.text" }
-        if name.contains("write") || name.contains("edit") { return "square.and.pencil" }
-        return "wrench.and.screwdriver"
+    // MARK: - Chip
+
+    /// The tool name on liquid glass tinted by the call's outcome. Collapsed
+    /// it hugs its content like a chip; expanded it stretches into the header
+    /// of the card, and its bottom corners open onto the body underneath.
+    private var chip: some View {
+        Button {
+            isExpanded.toggle()
+        } label: {
+            HStack(spacing: 8) {
+                ToolStatusIcon(glyph: toolGlyph(for: call.name), status: status)
+
+                Text(MCPToolName.bare(call.name))
+                    .font(.caption.weight(.semibold))
+                    .monospaced()
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
+
+                if let hint = statusHint {
+                    Text(hint)
+                        .font(.caption2)
+                        .foregroundStyle(status == .failed ? Color.red : .secondary)
+                        .lineLimit(1)
+                }
+
+                if isExpanded {
+                    Spacer(minLength: 4)
+                }
+
+                Image(systemName: "chevron.right")
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(.tertiary)
+                    .rotationEffect(.degrees(isExpanded ? 90 : 0))
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 7)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .onHover { isHovered = $0 }
+        .glassEffect(
+            .regular.tint(status.accent.opacity(isHovered ? 0.24 : 0.11)).interactive(),
+            in: chipShape(open: isExpanded, radius: Self.radius)
+        )
     }
 
-    private func truncate(_ s: String) -> String {
-        guard s.count > Self.maxDisplayChars else { return s }
-        return String(s.prefix(Self.maxDisplayChars)) + "…"
+    /// One word on how the call is going, shown only while there is something
+    /// to say: a finished call already carries its outcome in the icon badge.
+    private var statusHint: String? {
+        switch status {
+        case .pending: call.hasCompleteInput ? "Running…" : "Preparing…"
+        case .failed: "Failed"
+        case .ok: nil
+        }
+    }
+
+    // MARK: - Expanded body
+
+    private var expandedBody: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            section("Parameters") {
+                if sortedInput.isEmpty {
+                    Text(call.hasCompleteInput ? "None" : "Preparing…")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                } else {
+                    parameterList
+                }
+            }
+
+            if let result = call.result, !result.isEmpty {
+                section("Result", isError: call.isError) {
+                    Text(truncate(result.trimmingCharacters(in: .whitespacesAndNewlines), to: Self.maxPreviewChars))
+                        .font(.system(.caption, design: .monospaced))
+                        .foregroundStyle(status == .failed ? Color.red : .primary)
+                        .lineLimit(8)
+                        .textSelection(.enabled)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            }
+
+            Button("Show full details…") {
+                showDetails = true
+            }
+            .buttonStyle(.link)
+            .font(.caption)
+        }
+        .padding(.horizontal, 12)
+        .padding(.top, 8)
+        .padding(.bottom, 10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func section<Content: View>(
+        _ title: String,
+        isError: Bool = false,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title)
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(isError ? Color.red : .secondary)
+            content()
+        }
+    }
+
+    private var sortedInput: [(key: String, value: JSONValue)] {
+        call.input.sorted { $0.key < $1.key }
+    }
+
+    /// `{"footage_id":"…","limit":50}` → two rows, `footage_id` / `…` and
+    /// `limit` / `50`, so the parameters read as a table rather than JSON.
+    private var parameterList: some View {
+        Grid(alignment: .topLeading, horizontalSpacing: 10, verticalSpacing: 3) {
+            ForEach(sortedInput, id: \.key) { entry in
+                GridRow {
+                    Text(entry.key)
+                        .font(.caption2.weight(.medium))
+                        .monospaced()
+                        .foregroundStyle(.secondary)
+                    Text(truncate(collapse(Self.plain(entry.value)), to: Self.maxValueChars))
+                        .font(.caption2)
+                        .monospaced()
+                        .foregroundStyle(.primary)
+                        .lineLimit(3)
+                        .textSelection(.enabled)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            }
+        }
+    }
+
+    // MARK: - Helpers
+
+    private func truncate(_ s: String, to limit: Int) -> String {
+        guard s.count > limit else { return s }
+        return String(s.prefix(limit)) + "…"
     }
 
     private func collapse(_ s: String) -> String {
         s.replacingOccurrences(of: "\n", with: " ")
             .trimmingCharacters(in: .whitespacesAndNewlines)
-    }
-
-    /// `{"caption_id":"…","limit":50}` → `caption_id=… limit=50`, so the card
-    /// shows what the call actually did without the JSON noise.
-    private var compactArgs: String? {
-        guard !call.input.isEmpty else { return nil }
-        let joined = call.input.keys.sorted().compactMap { key -> String? in
-            guard let value = call.input[key] else { return nil }
-            return "\(key)=\(Self.plain(value))"
-        }
-        .joined(separator: " ")
-        return joined.isEmpty ? nil : joined
     }
 
     /// Scalars render bare; anything structured renders as JSON.

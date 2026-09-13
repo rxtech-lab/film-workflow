@@ -2,16 +2,17 @@ import Foundation
 import Observation
 import RxAgentSDK
 import SwiftData
+import os
 
-/// Posted after a tool call that changed a project, so a tab showing that
-/// project can refresh.
+/// Posted after a tool call that changed the library, so a view showing the
+/// item can refresh.
 extension Notification.Name {
     static let agentDidMutateProject = Notification.Name("agentDidMutateProject")
 }
 
 /// Owns every in-flight agent turn.
 ///
-/// Keyed by **thread**, not by project, which is the whole reason threads exist:
+/// Keyed by **thread**, not by library item, which is the whole reason threads exist:
 /// a Remotion turn and a caption turn can be streaming at the same time, and
 /// closing the agent window must not cancel either.
 ///
@@ -25,6 +26,8 @@ extension Notification.Name {
 @Observable
 final class AgentController {
     static let shared = AgentController()
+
+    @ObservationIgnored private let logger = Logger(subsystem: "rxlab.film-workflow", category: "Agent")
 
     struct Run {
         var input: String = ""
@@ -47,12 +50,20 @@ final class AgentController {
     /// down. The server is refcounted, so overlapping threads share one.
     @ObservationIgnored private var mcpHolds: Set<UUID> = []
 
-    /// Caption proposals waiting for review, keyed by the project they apply to.
+    /// Caption proposals waiting for review, keyed by the captions item they
+    /// apply to.
     ///
-    /// Keyed by project rather than thread because a proposal can arrive from a
+    /// Keyed by item rather than thread because a proposal can arrive from a
     /// CLI engine, whose tool call comes in over HTTP with no idea which thread
-    /// it belongs to. The project id is the only thing both paths know.
+    /// it belongs to. The item id is the only thing both paths know.
     private var proposalsByProject: [UUID: CaptionEditProposal] = [:]
+
+    /// The last config `agent(for:context:container:)` loaded.
+    ///
+    /// The keychain read is not free and the engine menu needs the same answer
+    /// in `body`, so the value is kept rather than re-read. Observed, so a menu
+    /// that drew before the first load refreshes once it lands.
+    private(set) var lastConfig: AppConfig?
 
     private init() {}
 
@@ -99,11 +110,14 @@ final class AgentController {
         agents[thread.id]
     }
 
-    /// Builds and configures the thread's agent if it doesn't have one yet.
+    /// Builds the thread's agent if it doesn't have one yet, and applies the
+    /// thread's current engine, model and policy to it either way.
     ///
     /// Called from `.task` when a thread appears, so the transcript, the MCP
     /// server and the engine are ready before the user types rather than after
-    /// they hit send.
+    /// they hit send — and again whenever the thread's engine or model pick
+    /// changes, because the SDK composer sends without coming back through
+    /// this controller.
     func prepare(thread: AgentThread, context: ModelContext) async {
         let container = ProjectDocumentController.shared.document(for: thread)?.container
             ?? ProjectDocumentController.shared.activeDocument?.container
@@ -134,6 +148,38 @@ final class AgentController {
 
     func backend(for thread: AgentThread) -> AgentBackend {
         thread.backendOverride ?? AgentSettings.shared.defaultBackend
+    }
+
+    /// The model a thread's next turn will run on for `backend`: its own pin,
+    /// else the one Settings names for that engine.
+    ///
+    /// Reads `lastConfig` rather than the keychain because the engine menu asks
+    /// in `body` — `prepare(thread:context:)` refreshes it whenever a thread
+    /// appears or its pick changes, which is exactly when the answer can move.
+    func effectiveModel(for thread: AgentThread, backend: AgentBackend) -> String {
+        let pinned = thread.modelOverride(for: backend)?.trimmingCharacters(in: .whitespaces)
+        if let pinned, !pinned.isEmpty { return pinned }
+        return backend.model(config: lastConfig)
+    }
+
+    /// Thinking levels the engine menu should offer for a thread, given the
+    /// model it will actually use. Empty for an engine with no such dial.
+    func thinkingLevels(for thread: AgentThread, backend: AgentBackend) -> [String] {
+        AgentModelCatalog.shared.efforts(
+            for: backend,
+            model: effectiveModel(for: thread, backend: backend)
+        )
+    }
+
+    /// The level the *next turn* would send with nothing pinned on the thread —
+    /// what the menu's "Engine default" row actually means right now.
+    func settingsThinkingLevel(for thread: AgentThread, backend: AgentBackend) -> String? {
+        AgentModelCatalog.shared.effort(
+            for: effectiveModel(for: thread, backend: backend),
+            backend: backend,
+            override: nil,
+            configured: backend.reasoningEffort(config: lastConfig)
+        )
     }
 
     // MARK: - Proposals
@@ -256,6 +302,7 @@ final class AgentController {
         container: ModelContainer?
     ) async throws -> Agent {
         let config = try? AppConfig.loadFromKeychain()
+        lastConfig = config
         let preferred = backend(for: thread)
         let resolved = try AgentBackendAvailability.shared.resolved(
             preferred: preferred,
@@ -310,15 +357,18 @@ final class AgentController {
             mcpServers: mcpServers,
             workingDirectory: workingDirectory(for: thread),
             // There is no approval UI here, and deliberately so: the agent's
-            // whole surface is this app's own MCP tools, which `allowedTools`
-            // pre-approves. Anything *else* it tries has by definition escaped
-            // that surface, and the only honest answer to a question we cannot
-            // ask the user is no.
+            // whole surface is this app's own MCP tools, and the write policy
+            // is the user's standing answer about which of them may run. The
+            // resolver says yes to exactly that set and no to everything else.
+            //
+            // Not `DenyAllPermissions`: Claude Code's approval hook fires for
+            // every MCP call ahead of `--allowedTools`, so a blanket deny
+            // refused the pre-approved tools too.
             //
             // `.default` rather than `.bypassPermissions` is load-bearing:
             // bypass turns off the very pipeline that carries `--allowedTools`,
             // which would hand a coding agent an unscoped shell.
-            permissions: DenyAllPermissions(),
+            permissions: AgentPolicyPermissions(),
             permissionMode: .default
         )
 
@@ -355,14 +405,29 @@ final class AgentController {
         let model = (pinned?.isEmpty == false ? pinned! : backend.model(config: config))
         agent.model = model.isEmpty ? nil : model
 
-        // Dropped when the thread's model doesn't accept it: effort is
-        // configured once in Settings but the model can be overridden per
-        // thread, and the levels differ between Codex models.
+        // The thread's own pick wins over Settings here too, and both are
+        // dropped when the thread's model doesn't accept the level: the levels
+        // differ between Codex models, and a thread can be re-pointed at a model
+        // after a level was chosen.
         let effort = AgentModelCatalog.shared.effort(
             for: model,
+            backend: backend,
+            override: thread.effortOverride(for: backend),
             configured: backend.reasoningEffort(config: config)
         ) ?? ""
         agent.effort = effort.isEmpty ? nil : effort
+
+        // Which engine the next turn actually runs on. `backend` here is the
+        // *resolved* one, so this is also where a silent fallback from the
+        // thread's pick becomes visible.
+        let preferred = self.backend(for: thread)
+        var summary = "Thread \(thread.id.uuidString) chats with \(backend.engineLabel)"
+            + " (model: \(model.isEmpty ? "engine default" : model),"
+            + " effort: \(effort.isEmpty ? "engine default" : effort))"
+        if preferred != backend {
+            summary += " — thread asked for \(preferred.engineLabel), which is unavailable"
+        }
+        logger.info("\(summary, privacy: .public)")
 
         let policy = AgentSettings.shared.writePolicy
         agent.allowedTools = AgentToolPolicy.toolNames(policy: policy)
@@ -457,6 +522,12 @@ final class AgentController {
         let threadID = thread.id
 
         switch event {
+        case .turnStarted:
+            mutate(threadID) {
+                $0.errorMessage = nil
+                $0.hasUnseenCompletion = false
+            }
+
         case .toolCallStarted(let id, let name):
             guard toolRow(callID: id, in: thread) == nil else { return }
             let row = AgentMessage(
@@ -493,6 +564,9 @@ final class AgentController {
 
         case .failed(let error):
             setError(error.description, for: threadID)
+            // A failed CLI turn may never emit turnEnded. Keep its user input
+            // and any session id so retrying or switching agents retains context.
+            persistTurnEnd(thread: thread, context: context)
 
         case .turnEnded:
             persistTurnEnd(thread: thread, context: context)
