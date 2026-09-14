@@ -5,59 +5,52 @@ import SwiftUI
 ///
 /// The player, clip strip, and agent activity are injected by the app, which
 /// owns the film document and its live agent.
-public struct PreviewPageView<Player: View, Strip: View, AgentActivity: View>: View {
+public struct PreviewPageView<Player: View, Strip: View>: View {
     let title: String
     let status: String?
     let isBusy: Bool
     let summary: String?
-    let hasAgentActivity: Bool
     let onRefine: (String) -> Void
     let onOpenEditor: () -> Void
     let onCancel: () -> Void
     @ViewBuilder let player: () -> Player
     @ViewBuilder let clipStrip: () -> Strip
-    @ViewBuilder let agentActivity: () -> AgentActivity
 
     @State private var refinement = ""
     @State private var showingNotes = false
-    @State private var showingAgentActivity = false
 
     public init(
         title: String,
         status: String?,
         isBusy: Bool,
         summary: String?,
-        hasAgentActivity: Bool = false,
         onRefine: @escaping (String) -> Void,
         onOpenEditor: @escaping () -> Void,
         onCancel: @escaping () -> Void,
         @ViewBuilder player: @escaping () -> Player,
-        @ViewBuilder clipStrip: @escaping () -> Strip = { EmptyView() },
-        @ViewBuilder agentActivity: @escaping () -> AgentActivity = { EmptyView() }
+        @ViewBuilder clipStrip: @escaping () -> Strip = { EmptyView() }
     ) {
         self.title = title
         self.status = status
         self.isBusy = isBusy
         self.summary = summary
-        self.hasAgentActivity = hasAgentActivity
         self.onRefine = onRefine
         self.onOpenEditor = onOpenEditor
         self.onCancel = onCancel
         self.player = player
         self.clipStrip = clipStrip
-        self.agentActivity = agentActivity
     }
 
     public var body: some View {
         WizardShell(
-            title: title,
+            title: LocalizedStringKey(title),
             subtitle: isBusy ? "Watch your story come together." : "Your first cut. Ready when you are.",
             current: isBusy ? .build : .preview,
             onCancel: onCancel
         ) {
             VStack(spacing: 14) {
                 HStack {
-                    Label(isBusy ? "Building your film" : "Film preview", systemImage: "play.rectangle")
+                    Label(isBusy ? LocalizedStringKey("Building your film") : LocalizedStringKey("Film preview"), systemImage: "play.rectangle")
                         .font(.system(size: 12, weight: .medium))
                         .foregroundStyle(.secondary)
                     Spacer()
@@ -105,32 +98,16 @@ public struct PreviewPageView<Player: View, Strip: View, AgentActivity: View>: V
     }
 
     @ViewBuilder private var statusRow: some View {
-        if isBusy || (status?.isEmpty == false) || hasAgentActivity {
+        if isBusy || (status?.isEmpty == false) {
             HStack(spacing: 8) {
                 if isBusy {
                     ProgressView().controlSize(.small)
                 }
-                Text(status ?? (isBusy ? "Working…" : "Ready"))
+                Text(status ?? (isBusy ? String(localized: "Working…") : String(localized: "Ready")))
                     .font(.system(size: 11))
                     .foregroundStyle(.secondary)
                     .lineLimit(2)
                     .accessibilityIdentifier("wizard.preview.status")
-                if hasAgentActivity {
-                    Button { showingAgentActivity.toggle() } label: {
-                        Image(systemName: "info.circle")
-                            .font(.system(size: 13))
-                            .foregroundStyle(.secondary)
-                    }
-                    .buttonStyle(.plain)
-                    .fixedSize()
-                    .help("Show agent activity")
-                    .accessibilityLabel("Show agent activity")
-                    .accessibilityIdentifier("wizard.preview.activity")
-                    .popover(isPresented: $showingAgentActivity, arrowEdge: .bottom) {
-                        agentActivity()
-                            .frame(width: 520, height: 480)
-                    }
-                }
                 Spacer(minLength: 0)
             }
             .padding(.horizontal, 4)

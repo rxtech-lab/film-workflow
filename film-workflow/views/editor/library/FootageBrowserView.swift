@@ -24,11 +24,15 @@ struct FootageBrowserView: View {
     /// the pane's height so expanding returns it to where it was.
     var isExpanded = true
     var onToggle: () -> Void = {}
+    /// Whether this item came from the marketplace, which is where its takes
+    /// stop being something to publish.
+    var isFromMarketplace = false
 
     /// Authoring is admin-only. `LibraryPanel` refreshes the flag; observing
     /// it here rebuilds the menus once it lands.
     @State private var authoring = MarketplaceAuthoringService.shared
-    @State private var authoringSeed: MarketplaceAuthoringSeed?
+    @State private var seedRequest: MarketplaceSeedRequest?
+    @State private var lyricsRequest: MusicLyricsRequest?
 
     /// The header's fixed height, which is all that remains of a collapsed pane.
     static let headerHeight: CGFloat = 28
@@ -46,7 +50,8 @@ struct FootageBrowserView: View {
                             FootageCellView(cell: cell, libraryItem: libraryItem, isSelected: cell.id == selectedID,
                                             onSelect: { onSelect(cell) }, onSkim: { onSkim(cell, $0) },
                                             player: player, onSeek: { onSeek(cell, $0) },
-                                            onCreateMarketplaceItem: seed(for: cell).map { seed in { authoringSeed = seed } })
+                                            onCreateMarketplaceItem: request(for: cell).map { request in { seedRequest = request } },
+                                            onLyricsRequest: { player?.pause(); lyricsRequest = $0 })
                         }
                     }
                     .padding(4)
@@ -57,13 +62,20 @@ struct FootageBrowserView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .sheet(item: $authoringSeed) { MarketplaceAuthoringEditor(seed: $0) }
+        .marketplaceSeedHost($seedRequest)
+        .musicLyricsHost($lyricsRequest)
     }
 
     /// The item's own name titles the draft; a take's own title is only "v3".
-    private func seed(for cell: FootageCell) -> MarketplaceAuthoringSeed? {
-        guard authoring.canAuthor else { return nil }
-        return MarketplaceAuthoringSeed(title: title, sourceKind: cell.kind, file: cell.mediaURL)
+    ///
+    /// A Remotion take publishes the composition behind it, with this render as
+    /// the listing's preview, rather than the rendered file as the content.
+    private func request(for cell: FootageCell) -> MarketplaceSeedRequest? {
+        guard authoring.canAuthor, !isFromMarketplace, MarketplaceKind.canBeFootage(cell.kind), cell.mediaURL != nil else { return nil }
+        if cell.kind == .remotion, let libraryItem, libraryItem.kind == .remotion {
+            return .remotion(title: title, projectID: libraryItem.id, renderID: cell.id)
+        }
+        return .file(title: title, sourceKind: cell.kind, file: cell.mediaURL)
     }
 
     private var header: some View {
@@ -73,7 +85,7 @@ struct FootageBrowserView: View {
                     .font(.caption2.weight(.semibold))
                     .foregroundStyle(.secondary)
                     .rotationEffect(.degrees(isExpanded ? 90 : 0))
-                Text(title).font(.caption.weight(.semibold)).foregroundStyle(.secondary).lineLimit(1)
+                Text(LocalizedStringKey(title)).font(.caption.weight(.semibold)).foregroundStyle(.secondary).lineLimit(1)
                 Spacer()
                 Text("\(cells.count)").font(.caption).foregroundStyle(.tertiary)
                     .accessibilityIdentifier("footage.version-count")
@@ -103,6 +115,7 @@ struct FootageCellView: View {
     var onSeek: (Double) -> Void = { _ in }
     /// Nil hides the marketplace action, which is all that gates it.
     var onCreateMarketplaceItem: (() -> Void)?
+    var onLyricsRequest: (MusicLyricsRequest) -> Void = { _ in }
 
     @State private var loadedDuration: TimeInterval?
     private var duration: TimeInterval? { cell.duration ?? loadedDuration }
@@ -130,6 +143,7 @@ struct FootageCellView: View {
             .accessibilityElement(children: .contain)
             .accessibilityIdentifier("footage.cell.\(cell.id.uuidString)")
             .contextMenu {
+                MusicLyricsContextMenu(sourceID: cell.drag.source.id, onRequest: onLyricsRequest)
                 if let onCreateMarketplaceItem {
                     Button(action: onCreateMarketplaceItem) {
                         Label("Create Marketplace Item…", systemImage: "storefront")

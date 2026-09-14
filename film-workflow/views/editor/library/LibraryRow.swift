@@ -1,3 +1,4 @@
+import CryptoKit
 import Foundation
 import SwiftData
 import VideoEditorCore
@@ -13,6 +14,9 @@ struct LibraryRow: Identifiable, Hashable {
     let dragItem: FootageDragItem?
     /// Every generated output, render or transcript of this item, newest first.
     let versions: [LibraryVersion]
+    /// Added to this film from the marketplace, and so never offered back to
+    /// it: republishing someone else's item is not a thing to invite.
+    var isFromMarketplace = false
 }
 
 /// One version of a library item as the library shows it: a label and a line
@@ -69,11 +73,11 @@ struct LibraryIndex {
         }
         rows += remotions.map { p in
             LibraryRow(id: LibraryItemID(kind: .remotion, id: p.id), name: p.name, subtitle: "\(Int(p.durationSeconds))s · \(p.compositionWidth)×\(p.compositionHeight)", updatedAt: p.updatedAt, groupID: p.groupID,
-                       dragItem: p.dragItem, versions: remotionVersions(p))
+                       dragItem: p.dragItem, versions: remotionVersions(p), isFromMarketplace: p.marketplaceItemId != nil)
         }
         rows += imported.map { a in
             LibraryRow(id: LibraryItemID(kind: .imported, id: a.id), name: a.name, subtitle: a.dimensionsLabel, updatedAt: a.updatedAt, groupID: a.groupID,
-                       dragItem: a.dragItem, versions: [])
+                       dragItem: a.dragItem, versions: [], isFromMarketplace: a.marketplaceItemId != nil)
         }
         return rows.sorted { $0.updatedAt > $1.updatedAt }
     }
@@ -89,6 +93,16 @@ struct LibraryIndex {
 
     func name(of item: LibraryItemID) -> String? {
         rows().first { $0.id == item }?.name
+    }
+
+    /// Whether this item was added from the marketplace. Only the kinds
+    /// `MarketplaceInstaller` creates can be: everything else is the film's own.
+    func isFromMarketplace(_ item: LibraryItemID) -> Bool {
+        switch item.kind {
+        case .imported: return imported(item.id)?.marketplaceItemId != nil
+        case .remotion: return remotion(item.id)?.marketplaceItemId != nil
+        case .sequence, .music, .narration, .caption, .image, .video: return false
+        }
     }
 
     /// The model behind a library item, as the footage protocols see it.
@@ -274,5 +288,39 @@ struct FootageCell: Identifiable, Hashable {
         self.captionAudioURL = (footage as? CaptionProject).flatMap { $0.hasAudio ? $0.audioURL : nil }
         self.previewFPS = (footage as? RemotionProject)?.compositionFps ?? 30
         self.previewDirectory = (footage as? RemotionProject)?.projectDir.standardizedFileURL
+    }
+
+    /// Content installed from the marketplace, which no film owns and no model
+    /// stands behind: the file on disk is everything the strip and the viewer
+    /// need. It drags nothing — adding the item to the film is what makes a
+    /// copy the timeline can take.
+    init(marketplaceItemID: String, title: String, subtitle: String, kind: SourceKind, mediaURL: URL,
+         thumbnailURL: URL?, duration: TimeInterval?, width: Int? = nil, height: Int? = nil) {
+        let source = ClipSource(id: "marketplace:\(marketplaceItemID)", kind: kind, displayName: title)
+        self.id = Self.installedID(marketplaceItemID)
+        self.title = title
+        self.subtitle = subtitle
+        self.kind = kind
+        self.thumbnailURL = thumbnailURL
+        self.mediaURL = mediaURL
+        self.duration = duration
+        self.drag = FootageDragItem(source: source, duration: duration, naturalWidth: width, naturalHeight: height)
+        self.previewSource = .file(id: source.id, kind: kind, mediaURL: mediaURL, thumbnailURL: thumbnailURL, duration: duration)
+        self.captionStyle = nil
+        self.captionAudioURL = nil
+        self.previewFPS = 30
+        self.previewDirectory = nil
+    }
+
+    /// A marketplace item is named by a server-issued string, and a cell by a
+    /// UUID. Hashing the one into the other keeps a card's identity — and so
+    /// the player's idea of what is loaded — stable across installs and
+    /// launches, whatever shape the server's ids take.
+    private static func installedID(_ itemID: String) -> UUID {
+        if let parsed = UUID(uuidString: itemID) { return parsed }
+        let hex = SHA256.hash(data: Data(itemID.utf8)).prefix(16).map { String(format: "%02x", $0) }.joined()
+        let groups = [hex.prefix(8), hex.dropFirst(8).prefix(4), hex.dropFirst(12).prefix(4),
+                      hex.dropFirst(16).prefix(4), hex.dropFirst(20).prefix(12)]
+        return UUID(uuidString: groups.joined(separator: "-")) ?? UUID()
     }
 }

@@ -105,12 +105,23 @@ import VideoEffectsCore
                         duration: min(modifier.durationSeconds ?? 0.5, min(visualClips[index].duration, visualClips[index + 1].duration) / 2)))
                 }
             }
-        case .footage, .remotionPrompt:
+        // A still has no duration and no video track to probe; it becomes a
+        // held frame, the way the audio branch below holds its cover art.
+        case .footage where item.item.footageMediaType == .image:
+            let local = try await loadContent(item)
+            guard let image = NSImage(contentsOf: local), image.size.width > 0, image.size.height > 0 else {
+                throw MarketplaceAuthoringError.invalid("This image could not be read.")
+            }
+            timeline.width = Int(image.size.width); timeline.height = Int(image.size.height)
+            visualClips = [Clip(source: source(local, kind: .image, name: item.item.title), start: 0, duration: min(limit, 5))]
+        case .footage, .remotion:
             let local: URL
-            if item.item.kind == .remotionPrompt {
-                guard let demoPath else { throw MarketplaceAuthoringError.invalid("Render this prompt in its authoring workspace using mock assets, then supply the rendered demo as demo_path.") }
+            if item.item.kind == .remotion {
+                // The content file is an archive of the project's source, so the
+                // demonstration has to be a render supplied alongside it.
+                guard let demoPath else { throw MarketplaceAuthoringError.invalid("Supply this composition's rendered movie as demo_path.") }
                 local = URL(fileURLWithPath: demoPath).standardizedFileURL
-                guard local.path.hasPrefix(directory.standardizedFileURL.path + "/") else { throw MarketplaceAuthoringError.invalid("Use a mock demo rendered inside this item's authoring workspace.") }
+                guard local.path.hasPrefix(directory.standardizedFileURL.path + "/") else { throw MarketplaceAuthoringError.invalid("Use a render staged inside this item's authoring workspace.") }
             } else { local = try await loadContent(item) }
             let asset = AVURLAsset(url: local)
             let seconds = try await asset.load(.duration).seconds
@@ -161,7 +172,10 @@ import VideoEffectsCore
         var options = TimelineExporter.Options(); options.resolution = .p720; options.video = .h264; options.container = .mp4
         try await TimelineExporter.export(timeline, resolver: resolver, to: staging, options: options) { fraction in Task { @MainActor in progress(0.4 + fraction * 0.6) } }
         let generator = AVAssetImageGenerator(asset: AVURLAsset(url: staging)); generator.appliesPreferredTrackTransform = true
-        let image = try await generator.image(at: CMTime(seconds: min(timeline.duration / 2, 2), preferredTimescale: 600)).image
+        // A composition's card shows where it starts; everything else reads
+        // better from a frame a little way in, past any fade from black.
+        let coverSeconds = item.item.kind == .remotion ? 0 : min(timeline.duration / 2, 2)
+        let image = try await generator.image(at: CMTime(seconds: coverSeconds, preferredTimescale: 600)).image
         let bitmap = NSBitmapImageRep(cgImage: image)
         guard let png = bitmap.representation(using: .png, properties: [:]) else { throw MarketplaceAuthoringError.invalid("Could not create the preview cover.") }
         try png.write(to: cover, options: .atomic)
@@ -182,11 +196,42 @@ import VideoEffectsCore
             return path
         }
         let config = try AppConfig.loadFromKeychain()
-        if config.subscriptionImageModel.isEmpty { project.subscriptionModel = try await BackendModelCatalog.shared.models(capability: .image).first?.id ?? "" }
-        let result = try await ImageGenerationService.generate(project: project, context: context, config: config)
+        project.subscriptionModel = await imageModel(config.subscriptionImageModel)
+        guard !project.subscriptionModel.isEmpty else { throw MarketplaceAuthoringError.invalid("No image model is available. Pick one in Settings \u{25B8} AI.") }
+        let result: GeneratedImage
+        do {
+            result = try await ImageGenerationService.generate(project: project, context: context, config: config)
+        } catch let error as BackendError {
+            // The backend rejects a model it no longer offers rather than
+            // substituting one, and the cached catalog can still be listing it.
+            // A forced refresh is the only way to tell a retired model from a
+            // request this account genuinely cannot make.
+            switch error {
+            case .badRequest, .priceUnavailable: break
+            default: throw error
+            }
+            let refreshed = await imageModel(config.subscriptionImageModel, forceRefresh: true)
+            guard !refreshed.isEmpty, refreshed != project.subscriptionModel else { throw error }
+            project.subscriptionModel = refreshed
+            result = try await ImageGenerationService.generate(project: project, context: context, config: config)
+        }
         try context.save()
         try savePNG(from: document.storage.absoluteURL(for: result.imageFilePath), to: path)
         return path
+    }
+
+    /// The image model cover art is billed against.
+    ///
+    /// Settings keeps whatever was chosen in the Keychain forever, but the
+    /// catalog is curated server-side: a model retired since that choice comes
+    /// back as a 400, not as a silent substitution. So the saved id is only
+    /// used while the catalog still offers it, and the catalog's own first
+    /// entry stands in when it does not.
+    private static func imageModel(_ configured: String, forceRefresh: Bool = false) async -> String {
+        let saved = configured.trimmingCharacters(in: .whitespacesAndNewlines)
+        let catalog = (try? await BackendModelCatalog.shared.models(capability: .image, forceRefresh: forceRefresh)) ?? []
+        if catalog.isEmpty { return saved }
+        return catalog.contains { $0.id == saved } ? saved : catalog.first?.id ?? saved
     }
     private static func savePNG(from source: URL, to destination: URL) throws {
         guard let image = NSImage(contentsOf: source), let tiff = image.tiffRepresentation,

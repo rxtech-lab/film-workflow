@@ -30,6 +30,7 @@ struct SimpleModeHostView: View {
         }
         .frame(minWidth: 720, minHeight: 560)
         .clipped()
+        .wizardAgentActivity(agentActivity)
         .animation(
             reduceMotion ? .easeInOut(duration: 0.15) : .smooth(duration: 0.32),
             value: pageIdentity
@@ -46,6 +47,7 @@ struct SimpleModeHostView: View {
         case .creating: "creating"
         case .researching: "research"
         case .chooseTemplate: "templates"
+        case .templatesUnavailable: "templates-fallback"
         case .planning: "planning"
         case .chooseOptions: "options"
         case .optionsUnavailable: "options-fallback"
@@ -106,6 +108,13 @@ struct SimpleModeHostView: View {
                 onCancel: cancel
             )
 
+        case .templatesUnavailable(let reason):
+            TemplatesUnavailableView(
+                reason: reason,
+                onContinue: { coordinator.continueWithoutTemplate(for: session) },
+                onCancel: cancel
+            )
+
         case .planning:
             waiting(
                 step: .chooseOptions,
@@ -135,7 +144,7 @@ struct SimpleModeHostView: View {
 
         case .failed(let message):
             WizardShell(
-                title: session.template.title,
+                title: LocalizedStringKey(session.template.title),
                 subtitle: nil,
                 current: session.step.wizardStep,
                 onCancel: cancel
@@ -147,6 +156,14 @@ struct SimpleModeHostView: View {
                 )
             }
         }
+    }
+
+    /// The agent's transcript, offered from the header of every page once a
+    /// thread exists: a waiting page is where the user most wants to know what
+    /// the agent is doing.
+    private var agentActivity: (() -> SimpleModeAgentActivityView)? {
+        guard let thread = session.thread else { return nil }
+        return { SimpleModeAgentActivityView(thread: thread) }
     }
 
     /// While the build runs, show the timeline filling up rather than a
@@ -180,10 +197,10 @@ struct SimpleModeHostView: View {
     ///
     /// A failed turn would otherwise leave the user on a spinner with no way
     /// forward: the agent has stopped, and nothing else moves the wizard on.
-    private func waiting(step: WizardStep, title: String, detail: String) -> some View {
+    private func waiting(step: WizardStep, title: LocalizedStringKey, detail: LocalizedStringKey) -> some View {
         WizardShell(
-            title: session.template.title,
-            subtitle: session.template.summary,
+            title: LocalizedStringKey(session.template.title),
+            subtitle: LocalizedStringKey(session.template.summary),
             current: step,
             onCancel: cancel
         ) {

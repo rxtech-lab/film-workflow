@@ -1,5 +1,6 @@
 import AVFoundation
 import CryptoKit
+import ImageIO
 import Foundation
 import Observation
 import SwiftData
@@ -13,8 +14,18 @@ nonisolated struct MarketplaceCategory: Codable, Identifiable, Hashable, Sendabl
     /// SF Symbol for the sidebar row; nil from a server that predates it.
     var icon: String?
 }
+/// Text an admin has entered in the languages the item is not written in,
+/// keyed by locale then field: `["zh-Hans": ["title": "极简片头"]]`.
+///
+/// Only the authoring side ever sees this. A reader is sent the text already
+/// resolved for its `Accept-Language`, so nothing outside the editor has to
+/// know a translation exists.
+typealias MarketplaceTranslations = [String: [String: String]]
+
 nonisolated struct MarketplaceAuthoringItem: Codable, Identifiable, Sendable {
     var item: MarketplaceItem
+    /// Absent from a server that predates translations.
+    var translations: MarketplaceTranslations? = nil
     var categoryId: String
     var status: String
     var updatedAt: String
@@ -35,10 +46,15 @@ nonisolated struct MarketplaceItemInput: Codable, Sendable {
     var description: String = ""
     var pricePoints: Int = 0
     var metadata: MarketplaceItemMetadata = .init()
+    /// The title and description in the app's other languages. The form's
+    /// boxes for these come from the server's schema, so a language added
+    /// there needs no release here.
+    var translations: MarketplaceTranslations = [:]
     init() {}
     init(_ value: MarketplaceAuthoringItem) {
         kind = value.item.kind; categoryId = value.categoryId; title = value.item.title
         description = value.item.description; pricePoints = value.item.pricePoints; metadata = value.item.metadata
+        translations = value.translations ?? [:]
     }
 }
 nonisolated struct MarketplaceAuthoringPage: Codable, Sendable {
@@ -62,6 +78,7 @@ nonisolated struct MarketplaceAuthoringJob: Codable, Identifiable, Sendable {
     var generationKind: String?
     var prompt: String?
     var previewStart: Double?
+    var uploadMetadata: MarketplaceItemMetadata?
     var previewDuration: Double?
     var demoPath: String?
     var updatedAt: Date = Date()
@@ -144,6 +161,15 @@ final class MarketplaceAuthoringService {
         let result: Result = try await request("categories", method: "POST", body: Input(kind: kind, name: name, icon: trimmed.isEmpty ? nil : trimmed))
         return result.category
     }
+    /// Renames a category or gives it a different sidebar symbol. The slug is
+    /// what published items filter on, so it stays put and is not patchable.
+    func updateCategory(id: String, name: String, icon: String = "") async throws -> MarketplaceCategory {
+        struct Input: Encodable { var name: String; var icon: String? }
+        struct Result: Decodable { var category: MarketplaceCategory }
+        let trimmed = icon.trimmingCharacters(in: .whitespacesAndNewlines)
+        let result: Result = try await request("categories/\(id)", method: "PATCH", body: Input(name: name, icon: trimmed.isEmpty ? nil : trimmed))
+        return result.category
+    }
     func list(page: Int = 1, mine: Bool = false, status: String? = nil, query: String = "") async throws -> MarketplaceAuthoringPage {
         var parameters = [URLQueryItem(name: "page", value: String(page))]
         if mine { parameters.append(.init(name: "scope", value: "mine")) }
@@ -184,7 +210,10 @@ final class MarketplaceAuthoringService {
     }
 
     /// Persist the file first. Retrying a network failure never asks a generator to run again.
-    func upload(itemId: String, role: String, file: URL, mock: Bool = false, jobId: String? = nil) async throws -> MarketplaceAuthoringItem {
+    /// `metadata` carries facts the file itself cannot be asked for — a
+    /// Remotion archive's composition size, duration and prompt. It is merged
+    /// over whatever probing finds.
+    func upload(itemId: String, role: String, file: URL, mock: Bool = false, jobId: String? = nil, metadata: MarketplaceItemMetadata? = nil) async throws -> MarketplaceAuthoringItem {
         let account = try await requireAdmin()
         guard ["content", "preview-image", "preview-video"].contains(role), file.isFileURL else { throw MarketplaceAuthoringError.invalid("Choose a valid asset slot and local file.") }
         let directory = try directory(for: itemId)
@@ -199,6 +228,7 @@ final class MarketplaceAuthoringService {
             file = output
         }
         var job = MarketplaceAuthoringJob(itemId: itemId, userId: account, operation: "upload", role: role, mock: mock)
+        job.uploadMetadata = metadata
         if let jobId { job.id = jobId }
         let staged = file.deletingLastPathComponent().standardizedFileURL == directory.standardizedFileURL && file.lastPathComponent.hasPrefix(job.id + "-") ? file : directory.appendingPathComponent("\(job.id)-\(file.lastPathComponent)")
         if staged.standardizedFileURL != file.standardizedFileURL && !FileManager.default.fileExists(atPath: staged.path) {
@@ -207,7 +237,7 @@ final class MarketplaceAuthoringService {
         job.outputPath = staged.path; job.state = "running"; job.message = "Uploading \(role.replacingOccurrences(of: "-", with: " "))"
         try persist(job)
         do {
-            try await transfer(itemId: itemId, role: role, file: staged, mock: mock)
+            try await transfer(itemId: itemId, role: role, file: staged, mock: mock, supplied: metadata)
             job.state = "succeeded"; job.progress = 1; job.message = "Uploaded"; try persist(job)
             return try await get(itemId)
         } catch {
@@ -217,9 +247,9 @@ final class MarketplaceAuthoringService {
     func retryUpload(job: MarketplaceAuthoringJob) async throws -> MarketplaceAuthoringItem {
         guard job.operation == "upload", let path = job.outputPath, let role = job.role else { throw MarketplaceAuthoringError.invalid("This operation is not an upload.") }
         guard try await requireAdmin() == job.userId else { throw MarketplaceAuthoringError.adminRequired }
-        return try await upload(itemId: job.itemId, role: role, file: URL(fileURLWithPath: path), mock: job.mock, jobId: job.id)
+        return try await upload(itemId: job.itemId, role: role, file: URL(fileURLWithPath: path), mock: job.mock, jobId: job.id, metadata: job.uploadMetadata)
     }
-    private func transfer(itemId: String, role: String, file: URL, mock: Bool) async throws {
+    private func transfer(itemId: String, role: String, file: URL, mock: Bool, supplied: MarketplaceItemMetadata? = nil) async throws {
         struct Upload: Encodable {
             var itemId: String; var role: String; var filename: String; var contentType: String; var sizeBytes: Int
             var objectKey: String?; var metadata: MarketplaceItemMetadata?
@@ -248,8 +278,23 @@ final class MarketplaceAuthoringService {
                 metadata.width = Int(abs(oriented.width)); metadata.height = Int(abs(oriented.height))
             }
         }
+        // A still carries dimensions but no duration; nothing above reads them.
+        if ["png", "jpg", "jpeg", "webp"].contains(file.pathExtension.lowercased()),
+           let source = CGImageSourceCreateWithURL(file as CFURL, nil),
+           let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any] {
+            metadata.width = properties[kCGImagePropertyPixelWidth] as? Int
+            metadata.height = properties[kCGImagePropertyPixelHeight] as? Int
+        }
         if role == "preview-video" { metadata.preview = .init(mock: mock) }
         if role == "content", ["ttf", "otf"].contains(file.pathExtension.lowercased()) { metadata.fontFamily = MarketplaceFonts.familyName(of: file) }
+        // What the caller knows wins: an archive tells the probe nothing.
+        if let supplied {
+            metadata.width = supplied.width ?? metadata.width
+            metadata.height = supplied.height ?? metadata.height
+            metadata.durationSeconds = supplied.durationSeconds ?? metadata.durationSeconds
+            metadata.promptExcerpt = supplied.promptExcerpt ?? metadata.promptExcerpt
+            if role == "preview-video" { metadata.preview?.startSeconds = supplied.preview?.startSeconds }
+        }
         upload.metadata = metadata
         let _: Result = try await request("uploads/finalize", method: "POST", body: upload)
     }
@@ -298,7 +343,9 @@ final class MarketplaceAuthoringService {
                 }
                 current.outputPath = output.video.path; current.coverPath = output.cover.path; current.message = "Uploading preview"; try persist(current)
                 _ = try await upload(itemId: itemId, role: "preview-image", file: output.cover)
-                _ = try await upload(itemId: itemId, role: "preview-video", file: output.video, mock: current.mock)
+                var previewMetadata = MarketplaceItemMetadata()
+                previewMetadata.preview = .init(startSeconds: max(0, start))
+                _ = try await upload(itemId: itemId, role: "preview-video", file: output.video, mock: current.mock, metadata: previewMetadata)
                 current.state = "succeeded"; current.progress = 1; current.message = "Preview ready"; try persist(current)
             } catch { current.state = "failed"; current.message = error.localizedDescription; try? persist(current) }
             tasks[job.id] = nil
@@ -353,7 +400,9 @@ final class MarketplaceAuthoringService {
         if job.operation == "generate", let kind = job.generationKind, let prompt = job.prompt { return try await startGeneration(itemId: job.itemId, kind: kind, prompt: prompt, existingJob: job) }
         if let video = job.outputPath, let cover = job.coverPath {
             _ = try await upload(itemId: job.itemId, role: "preview-image", file: URL(fileURLWithPath: cover))
-            _ = try await upload(itemId: job.itemId, role: "preview-video", file: URL(fileURLWithPath: video), mock: job.mock)
+            var previewMetadata = MarketplaceItemMetadata()
+            previewMetadata.preview = .init(startSeconds: max(0, job.previewStart ?? 0))
+            _ = try await upload(itemId: job.itemId, role: "preview-video", file: URL(fileURLWithPath: video), mock: job.mock, metadata: previewMetadata)
             var finished = job; finished.state = "succeeded"; finished.progress = 1; finished.message = "Preview uploaded"; try persist(finished); return finished
         }
         return try await startPreview(itemId: job.itemId, start: job.previewStart ?? 0, duration: job.previewDuration ?? 15, demoPath: job.demoPath, existingJob: job)

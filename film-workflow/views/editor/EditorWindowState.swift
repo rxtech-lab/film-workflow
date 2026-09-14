@@ -66,6 +66,18 @@ struct FootageSkim: Equatable {
     var fraction: Double
 }
 
+/// An installed marketplace item as the viewer previews it. Marketplace
+/// content is shared by every film and owned by none, so it has no library
+/// item to hang a preview off and travels as the cell itself.
+struct MarketplacePreview: Equatable {
+    let rowID: String
+    let name: String
+    let cell: FootageCell
+    /// Where the pointer is over the card, as a share of the length. Nil once
+    /// the item is the one the viewer is holding rather than skimming.
+    var skimFraction: Double?
+}
+
 /// Per-window editor state: what is selected in the library, which sequence
 /// the timeline shows, and the preview player.
 @MainActor
@@ -176,6 +188,45 @@ final class EditorWindowState {
     func endFootageSkim() {
         footageSkim = nil
     }
+
+    /// The marketplace card the viewer is holding, set by a click on the
+    /// Marketplace tab and dropped as soon as anything in this film is picked.
+    private(set) var marketplaceSelection: MarketplacePreview?
+    /// The marketplace card under the pointer, which outranks the held one
+    /// the way a browser skim outranks the library selection.
+    private(set) var marketplaceSkim: MarketplacePreview?
+
+    /// What the Marketplace tab puts on screen, if anything.
+    var marketplacePreview: MarketplacePreview? { marketplaceSkim ?? marketplaceSelection }
+
+    /// Holds an installed item in the viewer at `fraction` of its length, the
+    /// way clicking a filmstrip holds one of this film's takes.
+    func selectMarketplace(_ preview: MarketplacePreview, fraction: Double) {
+        marketplaceSkim = nil
+        marketplaceSelection = preview
+        player.pause()
+        footagePlayer.commitPosition(fraction: fraction, cellID: preview.cell.id)
+    }
+
+    /// Previews the card under the pointer without changing what is held.
+    func skimMarketplace(_ preview: MarketplacePreview, fraction: Double) {
+        guard !player.isPlaying, !footagePlayer.isPlaying, fraction.isFinite else { return }
+        var preview = preview
+        preview.skimFraction = min(max(0, fraction), 1)
+        marketplaceSkim = preview
+    }
+
+    /// Returns the viewer to the held card once the pointer leaves this one.
+    func endMarketplaceSkim() {
+        marketplaceSkim = nil
+    }
+
+    /// Gives the viewer back to this film: the Marketplace tab went away, or
+    /// the click landed between its cards.
+    func clearMarketplacePreview() {
+        marketplaceSkim = nil
+        marketplaceSelection = nil
+    }
     /// Where the playhead was when skimming started, so it can come back
     /// once the pointer leaves the timeline.
     private var restingPlayhead: TimeInterval?
@@ -216,6 +267,10 @@ final class EditorWindowState {
         // the app, or while the window was not key — would otherwise keep that
         // take in the viewer however often the user picked something else.
         endFootageSkim()
+        // Picking something of this film's own takes the viewer back from
+        // whatever the Marketplace tab was showing.
+        marketplaceSelection = nil
+        marketplaceSkim = nil
         selection = item
         if updateViewer { viewerSelection = item }
         if let item, item.kind == .sequence {

@@ -4,17 +4,20 @@ import SwiftUI
 /// The frame every wizard page sits in: a progress header, the page, and a
 /// footer the page fills with its own buttons.
 public struct WizardShell<Content: View, Footer: View>: View {
-    let title: String
-    let subtitle: String?
+    let title: LocalizedStringKey
+    let subtitle: LocalizedStringKey?
     let steps: [WizardStep]
     let current: WizardStep
     let onCancel: (() -> Void)?
     @ViewBuilder let content: () -> Content
     @ViewBuilder let footer: () -> Footer
 
+    @Environment(\.wizardAgentActivity) private var agentActivity
+    @State private var showingAgentActivity = false
+
     public init(
-        title: String,
-        subtitle: String? = nil,
+        title: LocalizedStringKey,
+        subtitle: LocalizedStringKey? = nil,
         steps: [WizardStep] = WizardStep.allCases,
         current: WizardStep,
         onCancel: (() -> Void)? = nil,
@@ -68,7 +71,7 @@ public struct WizardShell<Content: View, Footer: View>: View {
                     Text(title)
                         .font(.system(size: 26, weight: .semibold))
                         .lineLimit(1)
-                    if let subtitle, !subtitle.isEmpty {
+                    if let subtitle {
                         Text(subtitle)
                             .font(.system(size: 13))
                             .foregroundStyle(.secondary)
@@ -76,17 +79,42 @@ public struct WizardShell<Content: View, Footer: View>: View {
                     }
                 }
                 Spacer(minLength: 0)
-                Text("STEP \(currentIndex + 1) OF \(steps.count)")
-                    .font(.system(size: 10, weight: .semibold))
-                    .tracking(1.4)
-                    .foregroundStyle(.tertiary)
-                    .padding(.top, 8)
+                HStack(spacing: 12) {
+                    if let agentActivity {
+                        activityButton(agentActivity)
+                    }
+                    Text("STEP \(currentIndex + 1) OF \(steps.count)")
+                        .font(.system(size: 10, weight: .semibold))
+                        .tracking(1.4)
+                        .foregroundStyle(.tertiary)
+                }
+                .padding(.top, 4)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 28)
         .padding(.top, 20)
         .padding(.bottom, 20)
+    }
+
+    /// What the agent has been saying, on every page rather than only the
+    /// preview: a wizard that sits on a spinner should still be able to show
+    /// its work.
+    private func activityButton(_ activity: @escaping () -> AnyView) -> some View {
+        Button { showingAgentActivity.toggle() } label: {
+            Label("Agent Activity", systemImage: "bubble.left.and.bubble.right")
+                .labelStyle(.iconOnly)
+                .font(.system(size: 13))
+        }
+        .buttonStyle(.glass)
+        .controlSize(.small)
+        .help("Agent Activity")
+        .accessibilityLabel("Agent Activity")
+        .accessibilityIdentifier("wizard.activity")
+        .popover(isPresented: $showingAgentActivity, arrowEdge: .bottom) {
+            activity()
+                .frame(width: 520, height: 480)
+        }
     }
 
     private var currentIndex: Int { steps.firstIndex(of: current) ?? 0 }
@@ -111,7 +139,7 @@ struct WizardProgressBar: View {
                     .frame(width: 20, height: 20)
                     .foregroundStyle(index <= currentIndex ? Color.accentColor : Color.secondary)
                     .background(index <= currentIndex ? Color.accentColor.opacity(0.12) : Color.primary.opacity(0.04), in: Circle())
-                    Text(step.shortTitle)
+                    Text(LocalizedStringKey(step.shortTitle))
                         .font(.system(size: 11, weight: index == currentIndex ? .semibold : .regular))
                         .foregroundStyle(index == currentIndex ? .primary : .secondary)
                         .lineLimit(1)
@@ -137,11 +165,11 @@ struct WizardProgressBar: View {
 
 /// Shown while the agent works between pages.
 public struct WizardWaitingView: View {
-    let title: String
-    let detail: String
+    let title: LocalizedStringKey
+    let detail: LocalizedStringKey
     let status: String?
 
-    public init(title: String, detail: String, status: String?) {
+    public init(title: LocalizedStringKey, detail: LocalizedStringKey, status: String?) {
         self.title = title
         self.detail = detail
         self.status = status

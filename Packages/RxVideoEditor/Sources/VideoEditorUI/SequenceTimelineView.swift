@@ -338,18 +338,18 @@ public struct SequenceTimelineView: View {
     private var addTrackMenu: some View {
         Menu {
             Button { TimelineEditor.addTrack(&timeline, kind: .video) } label: {
-                Label("Video Track", systemImage: "film")
+                Label(LocalizedStringKey("Video Track"), systemImage: "film")
             }
             Button { TimelineEditor.addTrack(&timeline, kind: .audio) } label: {
-                Label("Audio Track", systemImage: "waveform")
+                Label(LocalizedStringKey("Audio Track"), systemImage: "waveform")
             }
             Button { TimelineEditor.addTrack(&timeline, kind: .caption) } label: {
-                Label("Caption Track", systemImage: "captions.bubble")
+                Label(LocalizedStringKey("Caption Track"), systemImage: "captions.bubble")
             }
             Button { TimelineEditor.addTrack(&timeline, kind: .overlay) } label: {
-                Label("Overlay Track", systemImage: "square.3.layers.3d")
+                Label(LocalizedStringKey("Overlay Track"), systemImage: "square.3.layers.3d")
             }
-        } label: { Label("Add Track", systemImage: "plus") }
+        } label: { Label(LocalizedStringKey("Add Track"), systemImage: "plus") }
         .fixedSize()
         .help("Add a video, audio, caption or overlay track")
         .accessibilityIdentifier("timeline.add-track")
@@ -384,20 +384,20 @@ public struct SequenceTimelineView: View {
     private var editingToolbar: some View {
         HStack(spacing: 8) {
             Button { tool = .select; timelineFocused = true } label: {
-                Label("Select", systemImage: "cursorarrow")
+                Label(LocalizedStringKey("Select"), systemImage: "cursorarrow")
             }
             .tint(tool == .select ? .accentColor : .secondary)
             .help("Selection tool (A)")
             .accessibilityIdentifier("timeline.tool.select")
             Button { tool = .blade; timelineFocused = true } label: {
-                Label("Cut", systemImage: "scissors")
+                Label(LocalizedStringKey("Cut"), systemImage: "scissors")
             }
             .tint(tool == .blade ? .accentColor : .secondary)
             .help("Blade tool (B): click footage to split it")
             .accessibilityIdentifier("timeline.tool.cut")
             if onSkim != nil {
                 Button { skimming.toggle(); timelineFocused = true } label: {
-                    Label("Skim", systemImage: "cursorarrow.motionlines")
+                    Label(LocalizedStringKey("Skim"), systemImage: "cursorarrow.motionlines")
                 }
                 .tint(skimming ? .accentColor : .secondary)
                 .help(skimming ? "Skim (S): moving the pointer over the timeline previews that frame. Click to turn off."
@@ -407,7 +407,7 @@ public struct SequenceTimelineView: View {
             }
             Divider().frame(height: 16)
             Button { speedClipID = selectedClip?.id } label: {
-                Label("Speed", systemImage: "speedometer")
+                Label(LocalizedStringKey("Speed"), systemImage: "speedometer")
             }
             .disabled(selectedClip?.source.capabilities.contains(.speed) != true)
             .accessibilityIdentifier("timeline.speed")
@@ -415,7 +415,7 @@ public struct SequenceTimelineView: View {
             Button {
                 if let selectedClip { performEdit { try TimelineEditor.reverse(&timeline, clipID: selectedClip.id) } }
             } label: {
-                Label("Reverse", systemImage: "backward.end")
+                Label(LocalizedStringKey("Reverse"), systemImage: "backward.end")
             }
             .tint(selectedClip?.isReversed == true ? .accentColor : .secondary)
             .disabled(selectedClip?.source.capabilities.contains(.reverse) != true)

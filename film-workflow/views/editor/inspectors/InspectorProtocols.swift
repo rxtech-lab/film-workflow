@@ -59,6 +59,13 @@ protocol CaptionStyleProviding: FootageProtocol {
     func makeStyleTab(_ context: InspectorContext) -> AnyView
 }
 
+/// A Translation tab: every language the footage has been translated into,
+/// and the runs that fill them in.
+@MainActor
+protocol TranslationTabProviding: FootageProtocol {
+    func makeTranslationTab(_ context: InspectorContext) -> AnyView
+}
+
 /// One segment of the inspector's tab row and what it shows.
 struct InspectorTabDescriptor: Identifiable {
     let id: String
@@ -77,8 +84,10 @@ enum InspectorTabResolver {
     static let settingsTabID = "settings"
     static let sequenceTabID = "sequence"
     static let clipTabID = "clip"
+    static let translationTabID = "translation"
 
-    /// Footage tabs in protocol order (settings, editor, style), then Clip
+    /// Footage tabs in protocol order (settings, editor, style, translation),
+    /// then Clip
     /// when clips are selected, then Sequence when the sequence is the
     /// library selection but a clip's source is what the footage tabs show.
     static func tabs(footage: (any FootageProtocol)?, hasClip: Bool, sequenceSelected: Bool, context: InspectorContext) -> [InspectorTabDescriptor] {
@@ -99,6 +108,11 @@ enum InspectorTabResolver {
             if let styled = footage as? any CaptionStyleProviding {
                 tabs.append(InspectorTabDescriptor(id: "style", title: "Style", systemImage: "textformat", showsFooter: true) {
                     styled.makeStyleTab(context)
+                })
+            }
+            if let translatable = footage as? any TranslationTabProviding {
+                tabs.append(InspectorTabDescriptor(id: translationTabID, title: "Translation", systemImage: "globe", showsFooter: true) {
+                    translatable.makeTranslationTab(context)
                 })
             }
         }

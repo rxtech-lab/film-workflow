@@ -28,7 +28,7 @@ public struct TemplateChoiceView: View {
     public var body: some View {
         WizardShell(
             title: "Pick a template",
-            subtitle: summary ?? "These fit what we found on your site and the footage you gave us.",
+            subtitle: summary.map { LocalizedStringKey($0) } ?? "These fit what we found on your site and the footage you gave us.",
             current: .chooseTemplate,
             onCancel: onCancel
         ) {

@@ -11,10 +11,15 @@ import Foundation
 nonisolated struct MarketplaceTaxonomy: Codable, Hashable, Sendable {
     var kinds: [MarketplaceKindPresentation]
     var categories: [MarketplaceCategoryCount]
+    /// The level between a kind and its categories, where a kind has one.
+    /// Only footage does today, and only the backend decides that.
+    var mediaTypes: [MarketplaceMediaTypePresentation]
 
-    init(kinds: [MarketplaceKindPresentation], categories: [MarketplaceCategoryCount] = []) {
+    init(kinds: [MarketplaceKindPresentation], categories: [MarketplaceCategoryCount] = [],
+         mediaTypes: [MarketplaceMediaTypePresentation] = []) {
         self.kinds = kinds
         self.categories = categories
+        self.mediaTypes = mediaTypes
     }
 
     /// A kind or a category this build does not know about is dropped rather
@@ -24,6 +29,7 @@ nonisolated struct MarketplaceTaxonomy: Codable, Hashable, Sendable {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         kinds = try container.decodeIfPresent([Lenient<MarketplaceKindPresentation>].self, forKey: .kinds)?.compactMap { $0.value } ?? []
         categories = try container.decodeIfPresent([Lenient<MarketplaceCategoryCount>].self, forKey: .categories)?.compactMap { $0.value } ?? []
+        mediaTypes = try container.decodeIfPresent([Lenient<MarketplaceMediaTypePresentation>].self, forKey: .mediaTypes)?.compactMap { $0.value } ?? []
     }
 
     /// What the app used to hardcode, in the order the enum declares.
@@ -35,6 +41,13 @@ nonisolated struct MarketplaceTaxonomy: Codable, Hashable, Sendable {
 
     func categories(for kind: MarketplaceKind) -> [MarketplaceCategoryCount] {
         categories.filter { $0.kind == kind }
+    }
+
+    /// The sub-level under a kind, in the order the backend sorted it. Empty
+    /// for every kind the backend reports none for, which keeps the sidebar
+    /// flat until it says otherwise.
+    func mediaTypes(for kind: MarketplaceKind) -> [MarketplaceMediaTypePresentation] {
+        mediaTypes.filter { $0.kind == kind }.sorted { $0.sortOrder < $1.sortOrder }
     }
 
     /// The backend's presentation for a kind, or the built-in one when the
@@ -56,6 +69,19 @@ nonisolated struct MarketplaceKindPresentation: Codable, Hashable, Identifiable,
     let count: Int
 
     var id: MarketplaceKind { kind }
+}
+
+/// One row in the level between a kind and its categories.
+nonisolated struct MarketplaceMediaTypePresentation: Codable, Hashable, Identifiable, Sendable {
+    let kind: MarketplaceKind
+    let mediaType: MarketplaceMediaType
+    let label: String
+    /// An SF Symbol name; resolve it through `MarketplaceSymbol` before drawing.
+    let icon: String
+    let sortOrder: Int
+    let count: Int
+
+    var id: String { "\(kind.rawValue)/\(mediaType.rawValue)" }
 }
 
 /// Decodes to `nil` instead of throwing, for elements the app may not understand.

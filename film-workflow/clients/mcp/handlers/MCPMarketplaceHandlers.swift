@@ -17,9 +17,9 @@ import VideoEditorCore
             descriptor("show_marketplace_item", "The only tool that displays a marketplace item or project template as an interactive native chat card, with cover, preview, instructions and marketplace dependencies. Call once per item after completing the requested authoring/revision work or when the user asks to see it; do not repeat it for intermediate saves or reads. Other marketplace tools return data without displaying cards. Set show_publish_button:false to hide Edit and Publish/Unpublish on this card; defaults to true. Purchase, install and template-use actions remain available.", ["item_id": text, "show_publish_button": ["type": "boolean", "default": true]], required: ["item_id"]),
             descriptor("marketplace_create", "Admin: save a new draft, never publish. item is {kind,title,description,pricePoints,categoryId?,draftId?}; content is a prompt string or definition JSON. Template definition version 1: prompt,videoStyle,editingGuidance,width,height,fps,shots:[{id,title,instructions,durationSeconds,footageRequirementId?,marketplaceItemId?,transition?:{modifierId,parameters,durationSeconds},effects:[]}],footageRequirements:[{id,title,mediaType:video|image|audio,required,instructions}],marketplaceItems:[{itemId,purpose,required}]. Reuse draftId (UUID) on retries. Omit categoryId to use/create General for this kind.", ["item": ["type": "object"], "content": [:]], required: ["item"]),
             descriptor("marketplace_update", "Admin: edit draft listing fields and/or structured content. item fields use the same camelCase names as marketplace_create. Preserve template requirements and references when updating.", ["item_id": text, "item": ["type": "object"], "content": [:]], required: ["item_id"]),
-            descriptor("marketplace_upload", "Admin: upload content, preview-image, or preview-video from a source_id in a film or a local file selected/provided by the user. Template previews MUST use mock images: set mock:true. Upload only the explicitly selected item, never a project package.", ["item_id": text, "role": ["type": "string", "enum": ["content", "preview-image", "preview-video"]], "path": text, "source_id": text, "mock": ["type": "boolean"]], required: ["item_id", "role"]),
+            descriptor("marketplace_upload", "Admin: upload content, preview-image, or preview-video from a source_id in a film or a local file selected/provided by the user. Template previews MUST use mock images: set mock:true. A Remotion item's content is its composition source: pass the composition's source_id with role:content and the app packages the archive itself — never upload a render or a zip you assembled. Upload only the explicitly selected item, never a project package.", ["item_id": text, "role": ["type": "string", "enum": ["content", "preview-image", "preview-video"]], "path": text, "source_id": text, "mock": ["type": "boolean"]], required: ["item_id", "role"]),
             descriptor("marketplace_generate", "Admin: generate content for footage/music or a cover image using existing app generators, inside this item's separate authoring workspace. Returns a job; check marketplace_job_status. Font and sound-effect content need supplied files. kind=image makes a cover; video/music make content. Supply a descriptive prompt.", ["item_id": text, "kind": ["type": "string", "enum": ["image", "video", "music"]], "prompt": text], required: ["item_id", "kind", "prompt"]),
-            descriptor("marketplace_render_preview", "Admin: render and upload a <=15s preview plus cover. Templates use generated mock images only; footage/music/sound use actual content; fonts use specimens; effects/transitions use mock demos. For a Remotion prompt, first author and render its mock demonstration in marketplace_workspace, then provide demo_path. Returns a resumable job.", ["item_id": text, "start": ["type": "number"], "duration": ["type": "number"], "demo_path": text], required: ["item_id"]),
+            descriptor("marketplace_render_preview", "Admin: render and upload a <=15s preview plus cover. Templates use generated mock images only; footage/music/sound use actual content; fonts use specimens; effects/transitions use mock demos. For a Remotion composition, supply its rendered movie as demo_path, staged inside the item's authoring workspace. Returns a resumable job.", ["item_id": text, "start": ["type": "number"], "duration": ["type": "number"], "demo_path": text], required: ["item_id"]),
             descriptor("marketplace_job_status", "Admin: read persisted generation/render/upload progress. Completed files remain available for retry after a failure.", ["item_id": text, "job_id": text], required: ["item_id"]),
             descriptor("marketplace_retry", "Admin: retry upload of completed assets, or resume an interrupted generation. Never generate again when a completed file exists.", ["item_id": text, "job_id": text], required: ["item_id", "job_id"]),
             descriptor("marketplace_publish", "Admin: publish/unpublish only when explicitly requested. Create and show the draft first; creating an item does not authorize publishing. Templates require a cover, mock preview and valid published dependencies.", ["item_id": text, "published": ["type": "boolean"]], required: ["item_id", "published"]),
@@ -66,12 +66,18 @@ import VideoEditorCore
         case "marketplace_upload":
             let itemId = try required("item_id"), role = try required("role")
             let file: URL
+            var metadata: MarketplaceItemMetadata?
             if let sourceId = arguments["source_id"] as? String {
-                let doc = try document(), source = try ProjectTemplateService.source(sourceId, document: doc)
-                let resolver = DocumentMediaResolver(document: doc, width: 1920, height: 1080, fps: 30)
-                guard let url = try await resolver.resolve(source).fileURL else { throw MarketplaceAuthoringError.invalid("Select media with a file.") }; file = url
+                let doc = try document()
+                if role == "content", DocumentMediaResolver.parse(sourceId)?.0 == .remotion {
+                    (file, metadata) = try compositionArchive(sourceId, itemId: itemId, document: doc, service: service)
+                } else {
+                    let source = try ProjectTemplateService.source(sourceId, document: doc)
+                    let resolver = DocumentMediaResolver(document: doc, width: 1920, height: 1080, fps: 30)
+                    guard let url = try await resolver.resolve(source).fileURL else { throw MarketplaceAuthoringError.invalid("Select media with a file.") }; file = url
+                }
             } else { file = URL(fileURLWithPath: try required("path")) }
-            return try card(await service.upload(itemId: itemId, role: role, file: file, mock: arguments["mock"] as? Bool ?? false))
+            return try card(await service.upload(itemId: itemId, role: role, file: file, mock: arguments["mock"] as? Bool ?? false, metadata: metadata))
         case "marketplace_generate": return try result(await service.startGeneration(itemId: required("item_id"), kind: required("kind"), prompt: required("prompt")))
         case "marketplace_render_preview": return try result(await service.startPreview(itemId: required("item_id"), start: arguments["start"] as? Double ?? 0, duration: arguments["duration"] as? Double ?? 15, demoPath: arguments["demo_path"] as? String))
         case "marketplace_job_status":
@@ -104,6 +110,36 @@ import VideoEditorCore
         default: throw MCPToolError.invalidArguments("Unknown marketplace tool.")
         }
     }
+    /// Packages a composition into the zip the marketplace stores as content.
+    ///
+    /// A Remotion item publishes its *source*, not a render: the buyer installs
+    /// TypeScript they go on to edit. Resolving the source id the ordinary way
+    /// would hand back whatever the renderer last produced, so this takes the
+    /// project folder instead and carries the composition's size, duration and
+    /// prompt across in metadata — facts a zip cannot be probed for.
+    ///
+    /// The archive is written into the item's authoring directory so a failed
+    /// upload can be retried from the saved job without rebuilding it.
+    private static func compositionArchive(
+        _ sourceId: String, itemId: String, document: ProjectDocument, service: MarketplaceAuthoringService
+    ) throws -> (URL, MarketplaceItemMetadata) {
+        guard let (_, id) = DocumentMediaResolver.parse(sourceId) else {
+            throw MarketplaceAuthoringError.invalid("Use a sourceId from footage_list.")
+        }
+        let project = try MCPLibraryHandlers.fetchRemotion(id: id.uuidString, context: document.container.mainContext)
+        let descriptor = RemotionProjectArchive.Descriptor(project: project)
+        let destination = try service.directory(for: itemId)
+            .appendingPathComponent("composition-\(project.id.uuidString).zip")
+        try RemotionProjectArchive.write(project: project.projectDir, descriptor: descriptor, to: destination)
+        let prompt = descriptor.prompt.trimmingCharacters(in: .whitespacesAndNewlines)
+        return (destination, MarketplaceItemMetadata(
+            durationSeconds: descriptor.durationSeconds,
+            width: descriptor.compositionWidth,
+            height: descriptor.compositionHeight,
+            promptExcerpt: prompt.isEmpty ? nil : String(prompt.prefix(280))
+        ))
+    }
+
     static func content(_ value: Any?) throws -> String? {
         guard let value else { return nil }
         if let string = value as? String { return string }

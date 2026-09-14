@@ -50,6 +50,20 @@
       "when": 1789352462549,
       "tag": "0006_catalog_models",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1789366611358,
+      "tag": "0007_marketplace_remotion",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1789378379026,
+      "tag": "0008_marketplace_translations",
+      "breakpoints": true
     }
   ]
 }

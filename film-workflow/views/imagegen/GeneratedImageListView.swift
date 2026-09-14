@@ -1,4 +1,5 @@
 import SwiftUI
+import VideoEditorCore
 
 struct GeneratedImageListView: View {
     let files: [GeneratedImage]
@@ -8,8 +9,20 @@ struct GeneratedImageListView: View {
 
     @State private var previewedFile: GeneratedImage?
     @State private var pendingDeletion: GeneratedImage?
+    /// Authoring is admin-only; observing the service rebuilds the menus when
+    /// the flag lands.
+    @State private var authoring = MarketplaceAuthoringService.shared
+    @State private var seedRequest: MarketplaceSeedRequest?
 
     private let columns = [GridItem(.adaptive(minimum: 160), spacing: 12)]
+
+    /// What titles a draft made from a take: the item's own name, or enough of
+    /// the prompt to recognise it by.
+    private func title(for file: GeneratedImage) -> String {
+        if let name = file.project?.name, !name.isEmpty { return name }
+        let prompt = file.prompt.trimmingCharacters(in: .whitespacesAndNewlines)
+        return prompt.isEmpty ? String(localized: "Generated image") : String(prompt.prefix(60))
+    }
 
     /// Waits for the hosting sheet to finish presenting before stacking the preview on it.
     private func openInitial() async {
@@ -34,7 +47,10 @@ struct GeneratedImageListView: View {
                             GeneratedImageCard(
                                 file: file,
                                 onTap: { previewedFile = file },
-                                onDelete: { pendingDeletion = $0 }
+                                onDelete: { pendingDeletion = $0 },
+                                onCreateMarketplaceItem: authoring.canAuthor
+                                    ? { seedRequest = .file(title: title(for: file), sourceKind: .image, file: file.imageURL) }
+                                    : nil
                             )
                         }
                     }
@@ -42,6 +58,7 @@ struct GeneratedImageListView: View {
                 }
             }
         }
+        .marketplaceSeedHost($seedRequest)
         .task { await openInitial() }
         .sheet(item: $previewedFile) { file in
             GeneratedImagePreviewSheet(file: file) {
@@ -72,6 +89,8 @@ private struct GeneratedImageCard: View {
     let file: GeneratedImage
     var onTap: () -> Void
     var onDelete: (GeneratedImage) -> Void
+    /// Nil hides the marketplace action, which is all that gates it.
+    var onCreateMarketplaceItem: (() -> Void)?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -105,17 +124,7 @@ private struct GeneratedImageCard: View {
                     .foregroundStyle(.tertiary)
                 Spacer()
                 Menu {
-                    Button("Copy Path") {
-                        Pasteboard.copy(file.imageURL.path)
-                    }
-                    Button("Reveal in Finder") {
-                        #if os(macOS)
-                        NSWorkspace.shared.activateFileViewerSelecting([file.imageURL])
-                        #endif
-                    }
-                    Button("Delete", role: .destructive) {
-                        onDelete(file)
-                    }
+                    actions
                 } label: {
                     Image(systemName: "ellipsis.circle")
                 }
@@ -129,6 +138,32 @@ private struct GeneratedImageCard: View {
             RoundedRectangle(cornerRadius: 10)
                 .stroke(Color.platformSeparator, lineWidth: 0.5)
         )
+        // The same actions on right-click, so this card behaves like every
+        // other version list rather than hiding them behind the button.
+        .contextMenu { actions }
+    }
+
+    /// One list, drawn by both the button and the context menu.
+    @ViewBuilder
+    private var actions: some View {
+        Button("Copy Path") {
+            Pasteboard.copy(file.imageURL.path)
+        }
+        Button("Reveal in Finder") {
+            #if os(macOS)
+            NSWorkspace.shared.activateFileViewerSelecting([file.imageURL])
+            #endif
+        }
+        if let onCreateMarketplaceItem {
+            Divider()
+            Button(action: onCreateMarketplaceItem) {
+                Label("Create Marketplace Item…", systemImage: "storefront")
+            }
+            Divider()
+        }
+        Button("Delete", role: .destructive) {
+            onDelete(file)
+        }
     }
 }
 

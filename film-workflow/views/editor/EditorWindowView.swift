@@ -239,11 +239,20 @@ struct EditorWindowView: View {
                 if state.renderProgress != nil {
                     ProgressView().controlSize(.small)
                 } else {
-                    Label("Render", systemImage: "film.stack")
+                    Label("Render", systemImage: "square.and.arrow.up")
                 }
             }
             .disabled(currentSequence == nil || currentSequence?.timeline.isEmpty == true || state.renderProgress != nil)
             .help("Render the current sequence as a new version")
+            Button {
+                openWindow(id: MarketplaceWindowID.value)
+            } label: {
+                Label("Marketplace", systemImage: "storefront")
+            }
+            .help("Browse footage, sounds, fonts and effects to install")
+            .popoverTip(FilmWorkflowTips.MarketplaceTip(), arrowEdge: .top)
+        }
+        ToolbarItem(placement: .primaryAction) {
             Button {
                 openWindow(id: AgentWindowID.value)
             } label: {
@@ -256,13 +265,6 @@ struct EditorWindowView: View {
             }
             .help(agentController.runningCount > 0 ? "Open the agent (running)" : "Open the agent")
             .popoverTip(FilmWorkflowTips.AgentButtonTip(), arrowEdge: .top)
-            Button {
-                openWindow(id: MarketplaceWindowID.value)
-            } label: {
-                Label("Marketplace", systemImage: "storefront")
-            }
-            .help("Browse footage, sounds, fonts and effects to install")
-            .popoverTip(FilmWorkflowTips.MarketplaceTip(), arrowEdge: .top)
         }
     }
 

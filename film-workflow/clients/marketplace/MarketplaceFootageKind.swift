@@ -4,17 +4,22 @@ import VideoEditorCore
 extension MarketplaceKind {
     /// The kind a piece of the film could be published as, or nil when it
     /// could not be one: the marketplace has no shelf for it, or the kind's
-    /// content slot refuses the file. Stills and captions have no kind at all.
+    /// content slot refuses the file. Captions have no kind at all.
     ///
     /// Audio accepts movies too, because `MarketplaceAuthoringService.upload`
-    /// extracts the track for an audio or sound-effect item.
-    static func forFootage(_ kind: SourceKind, file: URL) -> MarketplaceKind? {
-        guard canBeFootage(kind) else { return nil }
-        let ext = file.pathExtension.lowercased()
+    /// extracts the track for an audio or sound-effect item. Footage accepts
+    /// stills as well as clips; which shelf it lands on is the server's to
+    /// decide from the file, not this call's.
+    static func forFootage(_ kind: SourceKind, file: URL?) -> MarketplaceKind? {
+        let ext = file?.pathExtension.lowercased() ?? ""
         switch kind {
-        case .video, .remotion: return ["mp4", "mov"].contains(ext) ? .footage : nil
+        // A composition publishes its whole project, not the file in front of
+        // it; the render only proves there is something to show for it.
+        case .remotion: return file != nil ? .remotion : nil
+        case .video: return ["mp4", "mov"].contains(ext) ? .footage : nil
+        case .image: return ["png", "jpg", "jpeg", "webp"].contains(ext) ? .footage : nil
         case .audio: return ["mp3", "wav", "m4a", "aac", "mp4", "mov"].contains(ext) ? .audio : nil
-        case .image, .captions: return nil
+        case .captions: return nil
         }
     }
 
@@ -23,29 +28,34 @@ extension MarketplaceKind {
     /// a file is asynchronous, and too much work to do while drawing a menu.
     static func canBeFootage(_ kind: SourceKind) -> Bool {
         switch kind {
-        case .video, .audio, .remotion: return true
-        case .image, .captions: return false
+        case .video, .audio, .image, .remotion: return true
+        case .captions: return false
         }
     }
+
+    /// Whether a draft of this kind can be seeded from its file alone. A
+    /// Remotion composition cannot: its content is an archive of the whole
+    /// project, which only `MarketplaceSeedRequest.remotion` can build.
+    var seedsFromFileAlone: Bool { self != .remotion }
 }
 
 extension FootageCell {
     /// What this take would become in the marketplace, if anything. Nil once
-    /// there is nothing on disk to upload — captions, and Remotion before its
+    /// there is nothing on disk to publish — captions, and Remotion before its
     /// first render.
     var marketplaceKind: MarketplaceKind? {
-        guard let mediaURL else { return nil }
-        return .forFootage(kind, file: mediaURL)
+        MarketplaceKind.forFootage(kind, file: mediaURL)
     }
 }
 
 extension MarketplaceAuthoringSeed {
     /// A draft seeded from a piece of the film, or nil when that piece cannot
-    /// be one: there is no file, or nothing about it fits a kind. Whether the
-    /// user may author at all is the caller's to check — every call site
-    /// already observes `canAuthor` so its menu is rebuilt when it lands.
+    /// be one: there is no file, nothing about it fits a kind, or the kind
+    /// needs more than a file. Whether the user may author at all is the
+    /// caller's to check — every call site already observes `canAuthor` so its
+    /// menu is rebuilt when it lands.
     init?(title: String, sourceKind: SourceKind, file: URL?) {
-        guard let file, let kind = MarketplaceKind.forFootage(sourceKind, file: file) else { return nil }
+        guard let file, let kind = MarketplaceKind.forFootage(sourceKind, file: file), kind.seedsFromFileAlone else { return nil }
         self.init(title: title, kind: kind, contentFile: file)
     }
 }

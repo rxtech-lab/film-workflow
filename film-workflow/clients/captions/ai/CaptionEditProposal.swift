@@ -59,15 +59,15 @@ nonisolated enum CaptionEditVerdict: Codable, Sendable, Hashable {
         case .ok:
             return ""
         case .wordsChanged:
-            return "The suggested text changes the spoken words, not just the line breaks."
+            return String(localized: "The suggested text changes the spoken words, not just the line breaks.")
         case .stubPiece:
-            return "This would leave a very short second line."
+            return String(localized: "This would leave a very short second line.")
         case .overSplit:
-            return "This breaks the caption into more lines than its length calls for."
+            return String(localized: "This breaks the caption into more lines than its length calls for.")
         case .editedNonTerm(let word):
-            return "This changes \"\(word)\", which isn't in the glossary."
+            return String(localized: "This changes \"\(word)\", which isn't in the glossary.")
         case .timingOverlap:
-            return "This span overlaps the caption next to it."
+            return String(localized: "This span overlaps the caption next to it.")
         case .notApplicable(let reason):
             return reason
         }

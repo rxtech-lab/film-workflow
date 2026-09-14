@@ -147,7 +147,7 @@ private struct TransitionRegion: View {
         HStack(spacing: 0) {
             if item.attachment.isPair || isEnd { handle(leading: true) }
             Button(action: onSelect) {
-                Text(name).font(.caption2.weight(.semibold)).lineLimit(1)
+                Text(LocalizedStringKey(name)).font(.caption2.weight(.semibold)).lineLimit(1)
                     .frame(maxWidth: .infinity, maxHeight: .infinity).contentShape(Rectangle())
             }.buttonStyle(.plain).accessibilityLabel(name)
             if item.attachment.isPair || !isEnd { handle(leading: false) }
