@@ -142,7 +142,9 @@ struct ClipInspectorTab: View {
                                                    context: context.document.container.mainContext, preserveAlpha: true) == nil
                     ? "Live preview available · renders when exporting" : nil
             }
-            ClipInspectorView(timeline: timeline, clipID: clipID, renderStatus: status, onRender: remotion == nil ? nil : context.onRender)
+            ClipInspectorView(timeline: timeline, clipID: clipID, renderStatus: status,
+                              captionLanguages: captionLanguages(for: clipID),
+                              onRender: remotion == nil ? nil : context.onRender)
         } else if state.selectedClipIDs.count > 1 {
             StudioEmptyState(title: "\(state.selectedClipIDs.count) Clips Selected", symbol: "rectangle.stack",
                              message: "Drag them to move together, or press Delete to remove them all.")
@@ -150,6 +152,22 @@ struct ClipInspectorTab: View {
             StudioEmptyState(title: "No Clip Selected", symbol: "rectangle.dashed",
                              message: "Select a clip on the timeline.")
         }
+    }
+
+    /// What a caption clip can be drawn in: the transcript, then every
+    /// language its project has been translated into. Empty for anything else,
+    /// which leaves the inspector's language rows out.
+    private func captionLanguages(for clipID: UUID) -> [CaptionLanguageChoice] {
+        guard let clip = sequence.timeline.clip(id: clipID), clip.source.kind == .captions,
+              let (prefix, id) = DocumentMediaResolver.parse(clip.source.id), prefix == .caption,
+              let project = try? context.document.container.mainContext
+                  .fetch(FetchDescriptor<CaptionProject>(predicate: #Predicate { $0.projectUUID == id })).first else {
+            return []
+        }
+        return [CaptionLanguageChoice(code: "", name: String(localized: "Original"))]
+            + project.translatedLanguages.sorted().map {
+                CaptionLanguageChoice(code: $0, name: CaptionTranslationAvailability.displayName($0))
+            }
     }
 
     private func remotionProject(for clipID: UUID) -> RemotionProject? {

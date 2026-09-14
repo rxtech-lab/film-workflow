@@ -28,7 +28,9 @@ import {
 
 export type UsageFundingScope = "user" | "platform";
 
-export const USAGE_EVENT_PAGE_SIZE = 10;
+export const USAGE_EVENT_PAGE_SIZE = 25;
+/** What the /usage overview shows before handing off to the detail page. */
+export const USAGE_EVENT_SUMMARY_SIZE = 10;
 
 export function nanoUsdFromUsd(usd: number) {
   if (!Number.isFinite(usd) || usd < 0) throw new Error("INVALID_PROVIDER_COST");
@@ -41,18 +43,18 @@ export function pointsFromCost(costNanoUsd: number) {
   return Math.max(Math.ceil(costNanoUsd / NANO_USD_PER_POINT), billingConfig.minChargePoints);
 }
 
-export async function getUsageEventHistory(userId: string, requestedPage: number) {
+export async function getUsageEventHistory(userId: string, requestedPage: number, pageSize: number = USAGE_EVENT_PAGE_SIZE) {
   // Everything except pending placeholders: an operation awaiting reconciliation
   // still consumed provider capacity, so hiding it reads as "nothing happened".
   const visibleForUser = and(eq(usageEvents.userId, userId), ne(usageEvents.status, "pending"));
   const [{ total }] = await db.select({ total: count() }).from(usageEvents).where(visibleForUser);
-  const pageCount = Math.max(1, Math.ceil(total / USAGE_EVENT_PAGE_SIZE));
+  const pageCount = Math.max(1, Math.ceil(total / pageSize));
   const currentPage = Math.min(Math.max(1, requestedPage), pageCount);
   const events = await db.select().from(usageEvents)
     .where(visibleForUser)
     .orderBy(desc(usageEvents.createdAt), desc(usageEvents.id))
-    .limit(USAGE_EVENT_PAGE_SIZE)
-    .offset((currentPage - 1) * USAGE_EVENT_PAGE_SIZE);
+    .limit(pageSize)
+    .offset((currentPage - 1) * pageSize);
   return { events, total, currentPage, pageCount };
 }
 

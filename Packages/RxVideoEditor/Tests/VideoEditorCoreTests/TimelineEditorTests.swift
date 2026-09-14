@@ -38,7 +38,7 @@ struct TimelineEditorTests {
     func alignWithOrigin() throws {
         var t = timeline
         let a = audioTrack(t)
-        let overlay = t.tracks.first { $0.kind == .overlay }!.id
+        let overlay = t.tracks.first { $0.kind == .caption }!.id
         var narration = Clip(source: ClipSource(id: "narration:n", kind: .audio, displayName: "n"), start: 6, duration: 5)
         narration.inPoint = 1.5
         try TimelineEditor.insert(&t, clip: narration, on: a)
@@ -96,8 +96,8 @@ struct TimelineEditorTests {
         let v2 = TimelineEditor.addTrack(&t, kind: .video)
         try TimelineEditor.move(&t, clipID: a.id, to: 5, onTrack: v2)
         #expect(t.track(containing: a.id)?.id == v2)
-        #expect(throws: TimelineEditError.kindNotAllowed(.video, on: .overlay)) {
-            try TimelineEditor.move(&t, clipID: a.id, to: 0, onTrack: t.tracks.first { $0.kind == .overlay }!.id)
+        #expect(throws: TimelineEditError.kindNotAllowed(.video, on: .caption)) {
+            try TimelineEditor.move(&t, clipID: a.id, to: 0, onTrack: t.tracks.first { $0.kind == .caption }!.id)
         }
     }
 
@@ -226,7 +226,7 @@ struct TimelineEditorTests {
         #expect(t.clip(id: b.id)?.start == 4)
         #expect(t[trackID: v]!.clips.isEmpty)
 
-        #expect(throws: TimelineEditError.kindNotAllowed(.video, on: .overlay)) {
+        #expect(throws: TimelineEditError.kindNotAllowed(.video, on: .caption)) {
             try TimelineEditor.move(&t, clipIDs: [a.id, b.id], by: 0, laneOffset: -2)
         }
     }
@@ -293,5 +293,67 @@ struct TimelineEditorTests {
         #expect(TrackKind.audio.accepts(.audio) && TrackKind.audio.accepts(.video) && !TrackKind.audio.accepts(.image))
         #expect(TrackKind.overlay.accepts(.captions) && TrackKind.overlay.accepts(.image) && !TrackKind.overlay.accepts(.video))
         #expect(TrackKind.video.accepts(.remotion) && !TrackKind.video.accepts(.audio))
+        // A caption lane is for cues alone, and is drawn over the picture
+        // without being part of the mix.
+        #expect(TrackKind.caption.accepts(.captions))
+        #expect(!TrackKind.caption.accepts(.image) && !TrackKind.caption.accepts(.video))
+        #expect(TrackKind.caption.drawsOverPicture && TrackKind.overlay.drawsOverPicture)
+        #expect(!TrackKind.caption.carriesAudio && TrackKind.video.carriesAudio && TrackKind.audio.carriesAudio)
+    }
+
+    @Test("A sequence takes as many caption tracks as it needs, above the picture")
+    func captionTracksStack() throws {
+        var t = Timeline()
+        // One caption lane comes with every new sequence; these are extra.
+        let first = TimelineEditor.addTrack(&t, kind: .caption)
+        let second = TimelineEditor.addTrack(&t, kind: .caption)
+        #expect(t.tracks.map(\.name) == ["C3", "C2", "C1", "V1", "A1", "A2"])
+        #expect(t[trackID: first]?.kind == .caption && t[trackID: second]?.kind == .caption)
+        // Both draw, and they draw over every video track.
+        let painted = t.pictureTracksBackToFront.map(\.name)
+        #expect(painted == ["V1", "C1", "C2", "C3"])
+
+        // Cues go on either lane; pictures and sound go on neither.
+        let cues = ClipSource(id: "cues", kind: .captions, displayName: "Captions")
+        try TimelineEditor.insert(&t, clip: Clip(source: cues, start: 0, duration: 2), on: first)
+        try TimelineEditor.insert(&t, clip: Clip(source: cues, start: 0, duration: 2), on: second)
+        #expect(t.tracks.filter { !$0.clips.isEmpty }.count == 2)
+        #expect(throws: TimelineEditError.kindNotAllowed(.image, on: .caption)) {
+            try TimelineEditor.insert(&t, clip: Clip(source: ClipSource(id: "still", kind: .image, displayName: "Still"),
+                                                     start: 4, duration: 2), on: first)
+        }
+
+        // A video track still lands under them, not between them.
+        TimelineEditor.addTrack(&t, kind: .video)
+        #expect(t.tracks.map(\.name) == ["C3", "C2", "C1", "V1", "V2", "A1", "A2"])
+    }
+
+    @Test("Films made before caption lanes open with their cues on one")
+    func overlayLanesCarryingOnlyCuesBecomeCaptionLanes() throws {
+        let cues = ClipSource(id: "caption:c", kind: .captions, displayName: "Cues")
+        let still = ClipSource(id: "image:i", kind: .image, displayName: "Still")
+        let old = Timeline(width: 320, height: 180, fps: 30, tracks: [
+            Track(kind: .overlay, name: "T3", clips: [Clip(source: still, start: 0, duration: 1)]),
+            Track(kind: .overlay, name: "T2"),
+            Track(kind: .overlay, name: "T1", clips: [Clip(source: cues, start: 0, duration: 2)]),
+            Track(kind: .video, name: "V1"),
+        ])
+        let opened = try TimelineCodec.decode(try stored(old, formatVersion: 1))
+        #expect(opened.tracks.map(\.kind) == [.overlay, .caption, .caption, .video])
+        #expect(opened.tracks.map(\.name) == ["T3", "C1", "C2", "V1"])
+        // The clips themselves are untouched, and reopening changes nothing.
+        #expect(opened.allClips == old.allClips)
+        #expect(try TimelineCodec.decode(try TimelineCodec.encode(opened)) == opened)
+
+        // An overlay lane added since is the lane that was asked for, empty or
+        // not, so nothing about it changes when the film is reopened.
+        #expect(try TimelineCodec.decode(try TimelineCodec.encode(old)) == old)
+    }
+
+    /// `timeline` as an older version of the app would have written it.
+    private func stored(_ timeline: Timeline, formatVersion: Int) throws -> Data {
+        var envelope = try #require(try JSONSerialization.jsonObject(with: TimelineCodec.encode(timeline)) as? [String: Any])
+        envelope["formatVersion"] = formatVersion
+        return try JSONSerialization.data(withJSONObject: envelope)
     }
 }

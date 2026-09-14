@@ -25,6 +25,7 @@
       }
     },
     "—" : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -33,6 +34,9 @@
           }
         }
       }
+    },
+    "·" : {
+
     },
     "\"%@\" and its known spelling variants will be permanently deleted." : {
 
@@ -222,6 +226,9 @@
     "%@ credits" : {
 
     },
+    "%@ credits available." : {
+
+    },
     "%@ doesn't detect speakers. You can select captions in the editor and assign speakers in bulk." : {
       "localizations" : {
         "zh-Hans" : {
@@ -313,6 +320,9 @@
           }
         }
       }
+    },
+    "%@s" : {
+
     },
     "%lld" : {
       "localizations" : {
@@ -489,6 +499,9 @@
         }
       }
     },
+    "+%lld" : {
+
+    },
     "+10" : {
       "localizations" : {
         "zh-Hans" : {
@@ -660,6 +673,9 @@
         }
       }
     },
+    "Add an endpoint, API key, and model to use this engine." : {
+
+    },
     "Add an endpoint, key and model in Settings › AI Provider." : {
       "localizations" : {
         "zh-Hans" : {
@@ -679,6 +695,15 @@
           }
         }
       }
+    },
+    "Add Captions" : {
+
+    },
+    "Add captions for this narration to the timeline, ready to transcribe" : {
+
+    },
+    "Add Captions to Timeline" : {
+
     },
     "Add Clip" : {
 
@@ -817,6 +842,9 @@
 
     },
     "Agent" : {
+
+    },
+    "Agent Activity" : {
 
     },
     "Aggressive" : {
@@ -1005,6 +1033,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "动画"
+          }
+        }
+      }
+    },
+    "Answer a few questions. Get a first cut." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "回答几个问题，获得初剪。"
           }
         }
       }
@@ -1224,6 +1262,9 @@
         }
       }
     },
+    "Authoring" : {
+
+    },
     "Automatic" : {
 
     },
@@ -1249,6 +1290,9 @@
           }
         }
       }
+    },
+    "Available models" : {
+
     },
     "Azure Speech" : {
       "extractionState" : "stale",
@@ -1300,6 +1344,9 @@
           }
         }
       }
+    },
+    "Back to template selection" : {
+
     },
     "Background" : {
       "localizations" : {
@@ -1580,6 +1627,16 @@
     "Builds a starting Composition.tsx from these inputs and launches Studio. Use the agent window to refine it." : {
 
     },
+    "Built from your website and your footage" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "根据你的网站和素材生成"
+          }
+        }
+      }
+    },
     "Buy" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -1607,6 +1664,9 @@
           }
         }
       }
+    },
+    "Buy once, use in your films" : {
+
     },
     "Buy this item before installing it." : {
       "localizations" : {
@@ -1863,7 +1923,13 @@
         }
       }
     },
+    "Change Caption Language" : {
+
+    },
     "Change Caption Style" : {
+
+    },
+    "Change Location…" : {
 
     },
     "Change Sequence Settings" : {
@@ -1930,6 +1996,9 @@
           }
         }
       }
+    },
+    "Choose a location" : {
+
     },
     "Choose a Marketplace Item" : {
 
@@ -2026,7 +2095,13 @@
     "Choose footage version" : {
 
     },
+    "Choose Location…" : {
+
+    },
     "Choose Preview Video…" : {
+
+    },
+    "Choose the engine that builds your film." : {
 
     },
     "Choose where AI work runs" : {
@@ -2203,6 +2278,9 @@
     "Close" : {
 
     },
+    "Close agent activity" : {
+
+    },
     "Close gaps shorter than 300 ms on save" : {
       "localizations" : {
         "zh-Hans" : {
@@ -2222,6 +2300,9 @@
           }
         }
       }
+    },
+    "Close item details" : {
+
     },
     "Codex" : {
       "localizations" : {
@@ -2331,6 +2412,9 @@
         }
       }
     },
+    "Connect an OpenAI-compatible provider." : {
+
+    },
     "Connect from Claude Code" : {
       "localizations" : {
         "zh-Hans" : {
@@ -2340,6 +2424,9 @@
           }
         }
       }
+    },
+    "Connection" : {
+
     },
     "Context" : {
       "localizations" : {
@@ -2351,7 +2438,7 @@
         }
       }
     },
-    "Continue with Agent" : {
+    "Continue" : {
 
     },
     "Copied" : {
@@ -2423,6 +2510,12 @@
         }
       }
     },
+    "Couldn’t Create a Marketplace Item" : {
+
+    },
+    "Couldn’t create captions" : {
+
+    },
     "Couldn’t edit" : {
 
     },
@@ -2464,6 +2557,12 @@
         }
       }
     },
+    "Cover" : {
+
+    },
+    "Cover art is required before an item can be published." : {
+
+    },
     "Create" : {
 
     },
@@ -2473,16 +2572,22 @@
     "Create an item, prepare its content and previews, then publish it to the marketplace." : {
 
     },
+    "Create Captions" : {
+
+    },
     "Create Composition & Start Studio" : {
 
     },
-    "Create from Current Film with Agent" : {
+    "Create Film" : {
 
     },
     "Create Item" : {
 
     },
-    "Create Marketplace Item" : {
+    "Create Marketplace Item…" : {
+
+    },
+    "Create Marketplace Template…" : {
 
     },
     "Credential header (optional)" : {
@@ -2837,6 +2942,9 @@
         }
       }
     },
+    "Description" : {
+
+    },
     "Detect speakers" : {
       "localizations" : {
         "zh-Hans" : {
@@ -2853,6 +2961,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "放弃"
+          }
+        }
+      }
+    },
+    "Discard this film?" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "要放弃这部影片吗？"
           }
         }
       }
@@ -3115,7 +3233,7 @@
     "Edit Clip" : {
 
     },
-    "Edit Marketplace Item" : {
+    "Edit Endpoint…" : {
 
     },
     "Edit shortcode parameters" : {
@@ -3280,6 +3398,9 @@
         }
       }
     },
+    "Endpoint URL" : {
+
+    },
     "Ends after the audio ends." : {
       "localizations" : {
         "zh-Hans" : {
@@ -3329,6 +3450,9 @@
           }
         }
       }
+    },
+    "Enter a valid URL starting with https:// or http://." : {
+
     },
     "Enter your API key" : {
       "extractionState" : "stale",
@@ -3420,6 +3544,9 @@
           }
         }
       }
+    },
+    "Every marketplace item you can manage." : {
+
     },
     "Every message and the saved summary in this thread will be permanently deleted. The film is not affected." : {
 
@@ -3979,6 +4106,9 @@
     "Generate Preview" : {
 
     },
+    "Generate this narration’s audio first." : {
+
+    },
     "Generate with AI…" : {
 
     },
@@ -4160,6 +4290,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "女孩"
+          }
+        }
+      }
+    },
+    "Give us your site, a sentence about the film and any clips you have. We find a matching template and ask how it should look." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "提供你的网站、一句影片说明和现有片段。我们会找到匹配的模板，并询问它应该呈现什么样子。"
           }
         }
       }
@@ -4347,7 +4487,13 @@
         }
       }
     },
+    "How this item appears in the catalog." : {
+
+    },
     "How this item is used" : {
+
+    },
+    "https://api.openai.com/v1" : {
 
     },
     "https://provider.example/{z}/{x}/{y}.png" : {
@@ -4477,7 +4623,10 @@
     "Importing…" : {
 
     },
-    "In progress" : {
+    "In Progress" : {
+
+    },
+    "In your library" : {
 
     },
     "Include timestamps" : {
@@ -4562,6 +4711,9 @@
           }
         }
       }
+    },
+    "Install to your library" : {
+
     },
     "Installed" : {
       "localizations" : {
@@ -4707,6 +4859,16 @@
     "Keep Waiting" : {
 
     },
+    "Keep Working" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "继续制作"
+          }
+        }
+      }
+    },
     "Keeps characters or objects consistent across shots. Describe the scene in the prompt — Veo has no token syntax for referring to them." : {
 
     },
@@ -4850,6 +5012,9 @@
         }
       }
     },
+    "Latest messages" : {
+
+    },
     "Latin" : {
       "localizations" : {
         "zh-Hans" : {
@@ -4904,6 +5069,9 @@
         }
       }
     },
+    "Length" : {
+
+    },
     "Length seconds" : {
 
     },
@@ -4933,6 +5101,9 @@
         }
       }
     },
+    "Live" : {
+
+    },
     "Lively" : {
       "localizations" : {
         "zh-Hans" : {
@@ -4953,7 +5124,16 @@
         }
       }
     },
+    "Load Models" : {
+
+    },
+    "Load models from your provider or enter a model ID." : {
+
+    },
     "Loading Captions…" : {
+
+    },
+    "Loading items…" : {
 
     },
     "Loading model list…" : {
@@ -5013,9 +5193,6 @@
           }
         }
       }
-    },
-    "Loading your items…" : {
-
     },
     "Loading…" : {
       "localizations" : {
@@ -5092,12 +5269,6 @@
 
     },
     "Manage Items" : {
-
-    },
-    "Manage Marketplace Items" : {
-
-    },
-    "Manage your drafts and published items." : {
 
     },
     "MapKit maps are ready to use in Remotion compositions." : {
@@ -5225,6 +5396,9 @@
         }
       }
     },
+    "Messages will appear here as your film is built." : {
+
+    },
     "Metal" : {
       "localizations" : {
         "zh-Hans" : {
@@ -5252,6 +5426,9 @@
 
     },
     "Model id" : {
+
+    },
+    "Model ID" : {
 
     },
     "Models download from Hugging Face and run entirely on this device. Larger models are more accurate and slower. On-device Whisper doesn't detect speakers, so you assign them in the editor." : {
@@ -5519,6 +5696,16 @@
     "New" : {
 
     },
+    "New Blank Film…" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "新建空白影片…"
+          }
+        }
+      }
+    },
     "New Caption Project" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -5536,6 +5723,16 @@
     "New Category…" : {
 
     },
+    "New Film opens a gallery of guided starting points. Company intro video is first; more are coming." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "“新建影片”会打开引导式起点图库。首个模板是公司介绍视频，更多模板即将推出。"
+          }
+        }
+      }
+    },
     "New Film…" : {
 
     },
@@ -5551,6 +5748,9 @@
           }
         }
       }
+    },
+    "New Marketplace Item" : {
+
     },
     "New Narrative" : {
       "extractionState" : "stale",
@@ -5647,6 +5847,9 @@
     "No Clip Selected" : {
 
     },
+    "No cover art yet. Buyers see the placeholder above until one is uploaded." : {
+
+    },
     "No drafts" : {
 
     },
@@ -5718,6 +5921,9 @@
           }
         }
       }
+    },
+    "No models were returned. You can enter a model ID above." : {
+
     },
     "No music attached" : {
       "extractionState" : "stale",
@@ -5902,6 +6108,9 @@
         }
       }
     },
+    "Not set" : {
+
+    },
     "Not translated" : {
       "localizations" : {
         "zh-Hans" : {
@@ -5953,6 +6162,9 @@
         }
       }
     },
+    "Nothing on the timeline yet." : {
+
+    },
     "Nothing selected" : {
 
     },
@@ -5967,6 +6179,9 @@
       }
     },
     "Nothing to preview yet" : {
+
+    },
+    "Nothing uploaded yet" : {
 
     },
     "Offline" : {
@@ -6071,6 +6286,9 @@
           }
         }
       }
+    },
+    "Open a film to use this item" : {
+
     },
     "Open AI Provider settings" : {
       "localizations" : {
@@ -6212,6 +6430,9 @@
     "OpenStreetMap" : {
 
     },
+    "Optional" : {
+
+    },
     "Optional. A first frame animates that image; adding a last frame makes the model interpolate between the two." : {
 
     },
@@ -6324,9 +6545,6 @@
           }
         }
       }
-    },
-    "Page %lld" : {
-
     },
     "Page %lld of %lld" : {
       "localizations" : {
@@ -6749,6 +6967,9 @@
         }
       }
     },
+    "Prompt preview" : {
+
+    },
     "Prompt Preview" : {
       "localizations" : {
         "zh-Hans" : {
@@ -6800,6 +7021,9 @@
 
     },
     "Published" : {
+
+    },
+    "Purchased" : {
 
     },
     "px" : {
@@ -6892,6 +7116,9 @@
           }
         }
       }
+    },
+    "Read full prompt" : {
+
     },
     "Ready for your story" : {
 
@@ -7344,6 +7571,9 @@
         }
       }
     },
+    "Restoring your account…" : {
+
+    },
     "Resume" : {
 
     },
@@ -7550,6 +7780,9 @@
     "Runs on the RxFilm server and is billed to your credits. Gemini detects speakers but returns no word timings, and its timestamps sometimes need the timing fallback." : {
 
     },
+    "Runs on the RxFilm servers, billed to your credits." : {
+
+    },
     "Russian" : {
       "localizations" : {
         "zh-Hans" : {
@@ -7647,6 +7880,12 @@
       }
     },
     "Save Draft" : {
+
+    },
+    "Save Endpoint" : {
+
+    },
+    "Save to" : {
 
     },
     "Save To" : {
@@ -8033,6 +8272,9 @@
         }
       }
     },
+    "Set Up Endpoint…" : {
+
+    },
     "Set your AI provider once" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -8101,6 +8343,9 @@
     "Shot direction and framing" : {
 
     },
+    "Shot plan" : {
+
+    },
     "Shot title" : {
 
     },
@@ -8146,6 +8391,9 @@
         }
       }
     },
+    "Show less" : {
+
+    },
     "Show Lyrics" : {
       "localizations" : {
         "zh-Hans" : {
@@ -8155,6 +8403,9 @@
           }
         }
       }
+    },
+    "Show parameters and result" : {
+
     },
     "Show Transcript" : {
       "localizations" : {
@@ -8177,6 +8428,9 @@
       }
     },
     "Sign in" : {
+
+    },
+    "Sign In" : {
 
     },
     "Sign in on the Account tab and add credits when needed. Images, speech, music, transcription and video all run on the RxFilm server, and each generation deducts its actual usage." : {
@@ -8235,6 +8489,9 @@
     "Sign in to your RxLab account to manage credits and subscription usage." : {
 
     },
+    "Sign in to your RxLab account to use it." : {
+
+    },
     "Sign in with RxLab and choose RxFilm credits in AI Provider settings. Use credits for supported AI models and paid marketplace assets." : {
       "localizations" : {
         "zh-Hans" : {
@@ -8256,6 +8513,16 @@
     },
     "Sign-in Unavailable" : {
 
+    },
+    "Simple mode" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "简易模式"
+          }
+        }
+      }
     },
     "Size" : {
       "localizations" : {
@@ -8510,11 +8777,34 @@
         }
       }
     },
+    "Start a Film" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "开始制作影片"
+          }
+        }
+      }
+    },
+    "Start a marketplace draft from this take, with its file attached" : {
+
+    },
     "Start a New One" : {
 
     },
     "Start a thread to work with the agent." : {
 
+    },
+    "Start from a template" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "从模板开始"
+          }
+        }
+      }
     },
     "Start Generation" : {
       "localizations" : {
@@ -8640,6 +8930,9 @@
           }
         }
       }
+    },
+    "Stop building this film?" : {
+
     },
     "Stop generating" : {
       "extractionState" : "stale",
@@ -8778,6 +9071,7 @@
       }
     },
     "Tags" : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -8903,6 +9197,9 @@
         }
       }
     },
+    "The claude command on this Mac, billed to your Claude subscription." : {
+
+    },
     "The codex command isn't installed." : {
       "localizations" : {
         "zh-Hans" : {
@@ -8912,6 +9209,9 @@
           }
         }
       }
+    },
+    "The codex command on this Mac, billed to your OpenAI account." : {
+
     },
     "the descriptor file is not valid JSON." : {
       "localizations" : {
@@ -8967,10 +9267,27 @@
     "The file could not be found." : {
 
     },
+    "The film and everything built so far will be moved to the Trash." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "影片及目前已完成的内容都会被移到废纸篓。"
+          }
+        }
+      }
+    },
+    "The film stays in your chosen location. You can open it from Recent Films." : {
+
+    },
     "The film stays self-contained and portable. Large footage takes space twice." : {
 
     },
     "The film stays small, but breaks if the original file moves." : {
+
+    },
+    "The film will be moved to the Trash." : {
 
     },
     "The font %@ could not be registered." : {
@@ -8995,6 +9312,9 @@
     "The item, its content file and its previews cannot be recovered." : {
 
     },
+    "The marketplace has no slot for this clip’s file." : {
+
+    },
     "The model decides where a long caption should break — at a clause boundary, never mid-phrase, and never leaving a stub second line. It leaves a caption alone when no split improves it. The length above is the threshold it works to." : {
       "localizations" : {
         "zh-Hans" : {
@@ -9015,6 +9335,9 @@
         }
       }
     },
+    "The narration audio file is missing: %@" : {
+
+    },
     "The note tells the model what this is — \"company name\", \"drug name\"." : {
       "localizations" : {
         "zh-Hans" : {
@@ -9034,6 +9357,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "将删除已生成的部分视频文件。"
+          }
+        }
+      }
+    },
+    "The preview follows along as each shot lands. Ask for changes in plain words, then open it in the full editor." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "每个镜头落位时，预览都会同步跟随。用日常语言提出修改，然后在完整编辑器中打开。"
           }
         }
       }
@@ -9120,6 +9453,9 @@
     "This caption and its translations will be permanently deleted from the current version." : {
 
     },
+    "This clip has no file to upload yet. Render it first." : {
+
+    },
     "This creates version %lld. The current version and its translations are kept, and translations carry over for captions that come out unchanged." : {
 
     },
@@ -9144,6 +9480,9 @@
         }
       }
     },
+    "This engine isn't set up." : {
+
+    },
     "This Film · Version %lld" : {
 
     },
@@ -9156,6 +9495,9 @@
           }
         }
       }
+    },
+    "This kind has no categories yet. Add one to continue." : {
+
     },
     "This lyric section will be permanently deleted." : {
 
@@ -9701,6 +10043,9 @@
     "Unpublish" : {
 
     },
+    "Untitled Item" : {
+
+    },
     "Untitled term" : {
       "localizations" : {
         "zh-Hans" : {
@@ -9752,6 +10097,9 @@
         }
       }
     },
+    "Uploaded" : {
+
+    },
     "Uploaded preview uses mock images, without original project footage" : {
 
     },
@@ -9764,6 +10112,9 @@
           }
         }
       }
+    },
+    "Uploads when you save the draft." : {
+
     },
     "Usage by capability" : {
 
@@ -9860,6 +10211,9 @@
       }
     },
     "Use This Version" : {
+
+    },
+    "Use your own endpoint, API key, and chat model." : {
 
     },
     "Used" : {
@@ -10074,12 +10428,25 @@
         }
       }
     },
+    "Waiting for the agent" : {
+
+    },
     "Warm" : {
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "温暖"
+          }
+        }
+      }
+    },
+    "Watch it come together" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "看着它逐步成形"
           }
         }
       }
@@ -10364,6 +10731,12 @@
     "Write %@ in a translated caption and it becomes the wording set here. Change the wording and every caption using the placeholder updates — no re-translation. A language left blank falls back to the spelling above." : {
 
     },
+    "You can switch engines later from the Agent window. Claude Code and Codex run the command-line tools installed on this Mac." : {
+
+    },
+    "You have no credits left. Add some and this page updates on its own." : {
+
+    },
     "You need %@ credits; %@ are available." : {
       "localizations" : {
         "en" : {
@@ -10397,6 +10770,9 @@
         }
       }
     },
+    "Your API key is stored securely in the Keychain when you save." : {
+
+    },
     "Your API key is stored securely in the Keychain." : {
       "extractionState" : "stale",
       "localizations" : {
@@ -10419,6 +10795,15 @@
         }
       }
     },
+    "Your drafts and published items." : {
+
+    },
+    "Your Endpoint" : {
+
+    },
+    "Your footage, edits, and generated media stay together in one film project." : {
+
+    },
     "Your key is stored securely in the Keychain." : {
 
     },
@@ -10434,6 +10819,9 @@
       }
     },
     "Your next story starts here." : {
+
+    },
+    "Your own endpoint, running %@." : {
 
     },
     "Your projects are not affected." : {

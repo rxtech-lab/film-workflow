@@ -15,11 +15,11 @@ final class MarketplaceAuthoringUITests: XCTestCase {
         XCTAssertTrue(prompt.exists); prompt.click(); prompt.typeText("Make a travel story from a wide shot and a detail shot.")
         app.buttons["Save Draft"].click()
         XCTAssertTrue(app.staticTexts["Draft saved"].waitForExistence(timeout: 5))
-        app.buttons["Publish"].click()
-        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "mock images")).firstMatch.waitForExistence(timeout: 5))
-        let screenshot = XCTAttachment(screenshot: app.screenshot()); screenshot.name = "Template editor publication validation"; screenshot.lifetime = .keepAlways; add(screenshot)
+        let screenshot = XCTAttachment(screenshot: app.screenshot()); screenshot.name = "Template editor draft saved"; screenshot.lifetime = .keepAlways; add(screenshot)
         app.buttons["Done"].firstMatch.click()
-        app.buttons["marketplace-manage-button"].click()
+        // Publishing and deleting moved to the row's context menu, so the
+        // editor is reopened from the sidebar's authoring list.
+        sidebarItem(app, "marketplace-manage-button").click()
         let row = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Cinematic Travel Template")).firstMatch
         XCTAssertTrue(row.waitForExistence(timeout: 5)); row.click()
         XCTAssertTrue(prompt.waitForExistence(timeout: 5))
@@ -33,7 +33,14 @@ final class MarketplaceAuthoringUITests: XCTestCase {
         app.launch(); app.typeKey("m", modifierFlags: [.command, .option])
         XCTAssertTrue(app.windows["Marketplace"].waitForExistence(timeout: 10))
         XCTAssertFalse(app.buttons["marketplace-create-item"].exists)
-        XCTAssertFalse(app.buttons["marketplace-manage-button"].exists)
+        XCTAssertFalse(sidebarItem(app, "marketplace-manage-button").exists)
+        XCTAssertFalse(sidebarItem(app, "marketplace-my-items").exists)
         app.terminate()
+    }
+
+    /// A sidebar row is not a button, and its element type differs between
+    /// macOS releases, so it is matched by identifier alone.
+    @MainActor private func sidebarItem(_ app: XCUIApplication, _ identifier: String) -> XCUIElement {
+        app.descendants(matching: .any).matching(identifier: identifier).firstMatch
     }
 }

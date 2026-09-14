@@ -1,3 +1,4 @@
+import FilmTemplateKit
 import Foundation
 import RxAgentSDK
 import SwiftData
@@ -27,12 +28,16 @@ enum AgentPrompts {
         target: AgentTarget,
         toolNames: [String],
         policy: AgentWritePolicy,
+        mode: AgentThreadMode = .conversation,
         context modelContext: ModelContext?,
         toolNamePrefix: String = ""
     ) -> AgentContext {
-        let tool = { (name: String) in toolNamePrefix + name }
+        let tool = { @Sendable (name: String) in toolNamePrefix + name }
         let offered = Set(toolNames)
         let has = { (name: String) in offered.contains(name) }
+        // A wizard run answers to its template's script, not to the general
+        // marketplace and assembly advice a conversation gets.
+        let wizardTemplate = mode.templateID.flatMap(FilmTemplateCatalog.template(id:))
 
         return AgentContext {
             """
@@ -101,7 +106,11 @@ enum AgentPrompts {
                 """
             }
 
-            if has("show_marketplace_item") {
+            if let wizardTemplate {
+                wizardTemplate.prompts.systemBlock(tool)
+            }
+
+            if wizardTemplate == nil, has("show_marketplace_item") {
                 """
                 Marketplace workflow: Only \(tool("show_marketplace_item")) displays an interactive marketplace card. All other marketplace tools, including reads, creates, updates, uploads, installs, publishing and template application, return data without displaying this UI.
                 Finish the requested creation or revision work, including any requested preview jobs, then call \(tool("show_marketplace_item")) once per item to present the finished result. Do not show duplicate cards after intermediate saves, reads or job polling. Show an existing item when the user asks to see it or needs its purchase/use controls; show it again only for a meaningful completed revision or a new user request.
@@ -129,10 +138,12 @@ enum AgentPrompts {
                 Skill.captions(tool: tool, policy: policy, offered: offered)
             }
 
-            """
-            Keep your final reply short — a couple of sentences saying what you \
-            did. The user can see the tool calls, so don't narrate them.
-            """
+            if wizardTemplate == nil {
+                """
+                Keep your final reply short — a couple of sentences saying what \
+                you did. The user can see the tool calls, so don't narrate them.
+                """
+            }
         }
     }
 

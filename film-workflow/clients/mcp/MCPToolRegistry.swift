@@ -25,6 +25,8 @@ enum MCPToolRegistry {
         tools.append(contentsOf: RemotionMCPHandlers.descriptors)
         #endif
         tools.append(contentsOf: MCPPodcastHandlers.descriptors)
+        tools.append(contentsOf: MCPWebHandlers.descriptors)
+        tools.append(contentsOf: MCPWizardHandlers.descriptors)
         // Film tools can be pointed at a film other than the active one. Added
         // here rather than in fifty descriptors so the schema cannot drift.
         return tools.map(withFilmArgument)
@@ -107,6 +109,13 @@ enum MCPToolRegistry {
         if MCPMarketplaceHandlers.isMarketplaceTool(name) {
             return try await MCPMarketplaceHandlers.handle(name: name, arguments: rawArguments, container: defaultContainer)
         }
+        if MCPWebHandlers.canHandle(name) {
+            // Reading a web page has nothing to do with a film, and the wizard
+            // may call it before one is the active document.
+            var arguments = rawArguments
+            arguments.removeValue(forKey: filmArgument)
+            return try await MCPWebHandlers.handle(name: name, arguments: arguments)
+        }
         if name == filmListDescriptor.name {
             return jsonResult(ProjectDocumentController.shared.openDocuments.map(filmSummary))
         }
@@ -153,6 +162,9 @@ enum MCPToolRegistry {
         }
         if MCPPodcastHandlers.canHandle(name) {
             return try await MCPPodcastHandlers.handle(name: name, arguments: arguments, context: context)
+        }
+        if MCPWizardHandlers.canHandle(name) {
+            return try await MCPWizardHandlers.handle(name: name, arguments: arguments, context: context)
         }
         #if os(macOS)
         if RemotionMCPHandlers.canHandle(name) {

@@ -182,9 +182,8 @@ public final class TimelinePreviewController {
                 }
                 guard generation == revision else { return }
                 let old = Dictionary(uniqueKeysWithValues: layers.map { ($0.id, $0) })
-                // Match the export compositor: last video track is bottommost, overlays last.
-                let ordered = timeline.tracks.filter { $0.kind == .video }.reversed()
-                    + timeline.tracks.filter { $0.kind == .overlay }.reversed()
+                // Match the export compositor and the editor's visible track order.
+                let ordered = timeline.pictureTracksBackToFront
                     + timeline.tracks.filter { $0.kind == .audio }
                 var next: [TimelinePreviewLayer] = []
                 for track in ordered {

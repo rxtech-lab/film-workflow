@@ -34,9 +34,15 @@ nonisolated struct MarketplaceCardPayload: Codable, Sendable {
 
 @MainActor enum MarketplaceAgentLauncher {
     static func start(item: MarketplaceItem, instruction: String, document: ProjectDocument? = nil) {
+        start(title: item.title, instruction: instruction, document: document)
+    }
+
+    /// Opens a thread for marketplace work that has no item yet, such as
+    /// turning a sequence into a template draft.
+    static func start(title: String, instruction: String, document: ProjectDocument? = nil) {
         let document = document ?? ProjectDocumentController.shared.activeDocument
         let context = AppModelContainer.shared.mainContext
-        let thread = AgentThread(title: item.title)
+        let thread = AgentThread(title: title)
         thread.documentID = document?.id; thread.documentPath = document?.packageURL.path
         context.insert(thread); try? context.save()
         AppNavigation.shared.pendingAgentThreadID = thread.id
@@ -77,7 +83,7 @@ struct MarketplaceTemplateDetails: View {
         }
     }
 }
-private struct MarketplaceDependencyRow: View {
+struct MarketplaceDependencyRow: View {
     let reference: ProjectTemplateDefinition.Dependency
     @State private var item: MarketplaceItem?
     @State private var error: String?

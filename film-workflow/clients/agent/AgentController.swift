@@ -136,6 +136,10 @@ final class AgentController {
 
     /// Tears a thread's agent down, releasing its MCP hold and any child process.
     func clear(threadID: UUID) {
+        // The mode goes with the agent: it gates which tools the CLI approval
+        // hook allows, and a torn-down wizard thread must not keep answering
+        // for a Simple mode allowlist.
+        threadModes[threadID] = nil
         guard let agent = agents.removeValue(forKey: threadID) else {
             runs[threadID] = nil
             return
@@ -149,6 +153,50 @@ final class AgentController {
 
     func backend(for thread: AgentThread) -> AgentBackend {
         thread.backendOverride ?? AgentSettings.shared.defaultBackend
+    }
+
+    static let wizardToolIterations = 40
+
+    /// Each live thread's mode, so the CLI approval hook can answer for the
+    /// right allowlist. Keyed by id because the hook only knows the thread it
+    /// was built for, not the SwiftData row.
+    private var threadModes: [UUID: AgentThreadMode] = [:]
+
+    func mode(forThreadID id: UUID?) -> AgentThreadMode {
+        guard let id else { return .conversation }
+        return threadModes[id] ?? .conversation
+    }
+
+    /// How this thread's engine spells an MCP tool name.
+    ///
+    /// A CLI engine discovers the app's tools through an MCP server and
+    /// namespaces every one of them; an in-process client speaks MCP itself and
+    /// sees the bare name. A prompt that names the wrong one describes a tool
+    /// the model cannot find.
+    func toolNamePrefix(for thread: AgentThread) -> String {
+        backend(for: thread).isCommandLine ? "mcp__\(AgentMCPBridge.serverKey)__" : ""
+    }
+
+    /// The tool a thread is running right now, phrased for a status line, or
+    /// nil when nothing is in flight.
+    func activeToolLabel(for thread: AgentThread) -> String? {
+        guard let agent = agents[thread.id] else { return nil }
+        let active = agent.thread.messages
+            .flatMap(\.toolCalls)
+            .last { !$0.isComplete }
+        guard let active else { return nil }
+        return AgentToolLabels.progressLabel(for: MCPToolName.bare(active.name))
+    }
+
+    /// The assistant's last piece of prose, for a summary line outside the
+    /// transcript.
+    func lastAssistantText(for thread: AgentThread) -> String? {
+        guard let agent = agents[thread.id] else { return nil }
+        let text = agent.thread.messages
+            .last { $0.role == .assistant && !$0.plainText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }?
+            .plainText
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return (text?.isEmpty == false) ? text : nil
     }
 
     /// The model a thread's next turn will run on for `backend`: its own pin,
@@ -223,16 +271,23 @@ final class AgentController {
             ? "The user reviewed your proposed changes and applied none of them."
             : "The user applied \(applied) of \(total) proposed change\(total == 1 ? "" : "s")."
 
-        let row = AgentTranscriptStore.append(
+        recordDecision(note, thread: thread, context: context)
+    }
+
+    /// Tells the model what the user decided somewhere outside the transcript.
+    ///
+    /// Simple mode asks its questions as wizard pages, so without this the
+    /// agent's next turn would begin with no idea which template or which
+    /// options came back. The note goes to both transcripts: the persisted one
+    /// the UI shows, and the SDK's, which is what the model actually replays.
+    func recordDecision(_ note: String, thread: AgentThread, context: ModelContext) {
+        _ = AgentTranscriptStore.append(
             role: .system,
             content: note,
             to: thread,
             context: context
         )
-        // The SDK thread carries what the model replays, so the note has to
-        // reach it too — not just the persisted transcript.
         agents[thread.id]?.thread.appendUserMessage(note)
-        _ = row
     }
 
     // MARK: - Sending
@@ -360,7 +415,7 @@ final class AgentController {
             // `.default` rather than `.bypassPermissions` is load-bearing:
             // bypass turns off the very pipeline that carries `--allowedTools`,
             // which would hand a coding agent an unscoped shell.
-            permissions: AgentPolicyPermissions(),
+            permissions: AgentPolicyPermissions(threadID: thread.id),
             permissionMode: .default
         )
 
@@ -422,15 +477,24 @@ final class AgentController {
         logger.info("\(summary, privacy: .public)")
 
         let policy = AgentSettings.shared.writePolicy
-        agent.allowedTools = AgentToolPolicy.toolNames(policy: policy)
-        agent.disallowedTools = AgentToolPolicy.disallowedToolNames(policy: policy)
-        agent.maxToolIterations = AgentSettings.shared.maxIterations
+        let mode = thread.mode
+        let allowed = AgentToolPolicy.toolNames(policy: policy, mode: mode)
+        agent.allowedTools = allowed
+        agent.disallowedTools = AgentToolPolicy.disallowedToolNames(policy: policy, mode: mode)
+        // A wizard run spends a whole turn researching or building and is
+        // tool-heavy by design; the conversational default would cut it off
+        // partway through a cut.
+        agent.maxToolIterations = mode.isSimpleMode
+            ? max(AgentSettings.shared.maxIterations, Self.wizardToolIterations)
+            : AgentSettings.shared.maxIterations
         agent.workingDirectory = workingDirectory(for: thread)
+        threadModes[thread.id] = mode
 
         agent.context = AgentPrompts.context(
             target: thread.target,
-            toolNames: AgentToolPolicy.toolNames(policy: policy),
+            toolNames: allowed,
             policy: policy,
+            mode: mode,
             context: container.map { ModelContext($0) },
             // A CLI agent namespaces every MCP tool it discovers; an in-process
             // client speaks MCP itself and sees the bare name. The prompt has to

@@ -8,11 +8,29 @@ public struct TextCue: Codable, Sendable, Hashable {
     public var start: TimeInterval
     public var end: TimeInterval
     public var text: String
+    /// The same cue in other languages, keyed by BCP-47. A clip whose
+    /// `CaptionOptions` name one of these draws it instead of, or above,
+    /// `text`; resolvers that have no translations leave this empty.
+    public var translations: [String: String]
 
-    public init(start: TimeInterval, end: TimeInterval, text: String) {
+    public init(start: TimeInterval, end: TimeInterval, text: String, translations: [String: String] = [:]) {
         self.start = start
         self.end = end
         self.text = text
+        self.translations = translations
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case start, end, text, translations
+    }
+
+    /// Tolerant of cues encoded before translations rode along.
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        start = try c.decode(TimeInterval.self, forKey: .start)
+        end = try c.decode(TimeInterval.self, forKey: .end)
+        text = try c.decode(String.self, forKey: .text)
+        translations = try c.decodeIfPresent([String: String].self, forKey: .translations) ?? [:]
     }
 }
 

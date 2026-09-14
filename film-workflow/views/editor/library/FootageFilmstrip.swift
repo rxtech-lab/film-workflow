@@ -16,8 +16,13 @@ struct FilmstripLayout {
 
     init(duration: TimeInterval?, availableWidth: CGFloat, isTemporal: Bool) {
         width = max(1, availableWidth)
+        let preferred = Self.preferredWidth(duration: duration, isTemporal: isTemporal)
+        length = isTemporal ? preferred : min(width, preferred)
+    }
+
+    static func preferredWidth(duration: TimeInterval?, isTemporal: Bool) -> CGFloat {
         let seconds = duration.flatMap { $0.isFinite && $0 > 0 ? $0 : nil } ?? 0
-        length = isTemporal ? max(Self.posterWidth, seconds * Self.pointsPerSecond) : min(width, Self.posterWidth)
+        return isTemporal ? max(posterWidth, seconds * pointsPerSecond) : posterWidth
     }
 
     func rowWidth(_ row: Int) -> CGFloat { min(width, max(0, length - CGFloat(row) * width)) }
@@ -108,11 +113,13 @@ struct FootageFilmstrip: View {
                 case .ended: endSkim()
                 }
             }
-            .onTapGesture { point in
-                guard skimmable else { return }
+            // Only footage with frames to land on takes the click. A still has
+            // nothing to seek to, and a gesture here would swallow the tap that
+            // selects its card without putting anything in the viewer.
+            .gesture(SpatialTapGesture().onEnded { tap in
                 skimFraction = nil
-                onSeek(layout.fraction(row: row, x: point.x))
-            }
+                onSeek(layout.fraction(row: row, x: tap.location.x))
+            }, isEnabled: skimmable)
             .background {
                 if skimmable {
                     FilmstripSwipeSurface { delta in

@@ -23,7 +23,7 @@ struct CaptionAudioAlignmentTests {
     @Test("Offered for captions with audio, enabled only when a clip playing that audio is on the timeline")
     func offerRules() throws {
         var timeline = Timeline(width: 1920, height: 1080, fps: 30)
-        let overlay = try #require(timeline.tracks.first { $0.kind == .overlay }?.id)
+        let overlay = try #require(timeline.tracks.first { $0.kind == .caption }?.id)
         let audio = try #require(timeline.tracks.first { $0.kind == .audio }?.id)
         let captions = captionClip(projectUUID)
         try TimelineEditor.insert(&timeline, clip: captions, on: overlay)

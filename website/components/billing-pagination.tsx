@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { ArrowLeft, ArrowRight } from "lucide-react";
-import { billingHistoryHref, type BillingHistorySearchParams } from "@/lib/billing/history";
+import { billingHistoryHref, type BillingHistoryPath, type BillingHistorySearchParams } from "@/lib/billing/history";
 
 export function BillingPagination({
   pathname,
@@ -10,7 +10,7 @@ export function BillingPagination({
   searchParams,
   label = "History pages",
 }: {
-  pathname: "/usage";
+  pathname: BillingHistoryPath;
   currentPage: number;
   pageCount: number;
   param?: string;

@@ -22,6 +22,8 @@ struct LibraryGrid: View {
     let onExport: (LibraryRow) -> Void
     /// Opens the versions sheet for a row, on one version or the whole list.
     let onShowVersions: (LibraryRow, UUID?) -> Void
+    /// Creates the captions for a narration row and puts them on the timeline.
+    var onCreateCaptions: (LibraryRow) -> Void = { _ in }
     /// The version a row currently previews and drags, if it has one.
     let currentVersion: (LibraryItemID) -> UUID?
     /// Makes a version the current one.
@@ -35,6 +37,10 @@ struct LibraryGrid: View {
 
     @State private var collapsed: Set<UUID> = []
     @State private var ungroupedCollapsed = false
+    /// Gates the marketplace actions: only an author can create drafts.
+    /// `LibraryPanel` refreshes the flag.
+    @State private var authoring = MarketplaceAuthoringService.shared
+    @State private var authoringSeed: MarketplaceAuthoringSeed?
 
     var body: some View {
         ScrollView {
@@ -54,6 +60,7 @@ struct LibraryGrid: View {
         .contextMenu {
             creationMenu(groupID: nil)
         }
+        .sheet(item: $authoringSeed) { MarketplaceAuthoringEditor(seed: $0) }
     }
 
     @ViewBuilder
@@ -68,10 +75,10 @@ struct LibraryGrid: View {
                         .background(.quaternary.opacity(0.35), in: RoundedRectangle(cornerRadius: 8))
                         .modifier(LibraryGroupDropTarget(groupID: group?.id, onMove: move))
                 } else {
-                    // Let the outer lazy stack track each row as filtering
-                    // switches between empty and populated sections.
-                    ForEach(rows) { row in
-                        rowView(row)
+                    FootageFlowLayout {
+                        ForEach(rows) { row in
+                            rowView(row)
+                        }
                     }
                 }
             }
@@ -97,15 +104,51 @@ struct LibraryGrid: View {
         .accessibilityAction { selection = row.id }
         .contextMenu {
             versionsMenu(row)
+            if row.id.kind == .narration {
+                Button { onCreateCaptions(row) } label: {
+                    Label("Create Captions", systemImage: "captions.bubble")
+                }
+                .help("Add captions for this narration to the timeline, ready to transcribe")
+                Divider()
+            }
             Button("Rename…") { onRename(row) }
             MoveToProjectGroupMenu(groups: groups, currentGroupID: row.groupID) { onMove(row.id, $0) }
             if row.id.kind == .remotion {
                 Divider()
                 Button { onExport(row) } label: { Label("Export…", systemImage: "square.and.arrow.down") }
             }
+            if row.id.kind == .sequence, authoring.canAuthor {
+                Divider()
+                Button { createMarketplaceTemplate(from: row) } label: {
+                    Label("Create Marketplace Template…", systemImage: "storefront")
+                }
+            }
+            // Seeded from the version in force, which is the one the card shows.
+            if authoring.canAuthor, let cell = footage(row.id),
+               let seed = MarketplaceAuthoringSeed(title: row.name, sourceKind: cell.kind, file: cell.mediaURL) {
+                Divider()
+                Button { authoringSeed = seed } label: {
+                    Label("Create Marketplace Item…", systemImage: "storefront")
+                }
+            }
             Divider()
             Button("Delete…", role: .destructive) { onDelete(row) }
         }
+    }
+
+    /// Hands the sequence to the agent, which extracts it into a draft project
+    /// template and generalizes it. The draft is never published from here.
+    private func createMarketplaceTemplate(from row: LibraryRow) {
+        MarketplaceAgentLauncher.start(
+            title: row.name,
+            instruction: """
+                Create a marketplace project template from sequence \(row.id.id.uuidString) (“\(row.name)”) in my current film. \
+                Extract it with project_template_from_film, then generalize the project prompt, video style, per-shot instructions \
+                and footage requirements so it adapts to other footage. Update the draft, prepare a mock-image preview, and show it \
+                to me. Keep it a draft until I ask for it to be published.
+                """
+        )
+        openWindow(id: AgentWindowID.value)
     }
 
     /// Each version is a checkable item; the checked one is current.

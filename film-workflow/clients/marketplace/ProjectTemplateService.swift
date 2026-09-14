@@ -51,7 +51,7 @@ nonisolated struct ProjectTemplateApplication: Codable, Identifiable, Sendable {
             }
             if !found { throw MarketplaceAuthoringError.invalid("Map modifier \(modifierId) to a marketplace item using marketplace_bindings, or choose a built-in replacement before extracting.") }
         }
-        let clips = timeline.tracks.filter { $0.kind != .overlay }.flatMap(\.clips).sorted { $0.start < $1.start }
+        let clips = timeline.tracks.filter { !$0.kind.drawsOverPicture }.flatMap(\.clips).sorted { $0.start < $1.start }
         for (index, clip) in clips.enumerated() {
             let id = "shot-\(index + 1)"
             let details = sourceDetails(clip.source.id, context: context)
@@ -268,6 +268,12 @@ nonisolated struct ProjectTemplateApplication: Codable, Identifiable, Sendable {
         if !timeline.tracks.contains(where: { $0.kind == .video && !$0.clips.isEmpty }) { application.blockers.append("Provide at least one visual shot to build this video.") }
         application.state = application.blockers.isEmpty ? "ready" : "collecting"; try persist(application, document: document)
         NotificationCenter.default.post(name: .agentDidMutateProject, object: nil)
+        // Open on the first shot, so a preview that was empty a moment ago
+        // shows the cut rather than black.
+        let opening = timeline.tracks
+            .first { $0.kind == .video && !$0.clips.isEmpty }?
+            .sortedClips.first
+        document.focusTimeline(sequenceID: sequence.id, clipID: opening?.id, time: opening?.start ?? 0)
         return application
     }
 }

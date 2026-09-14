@@ -73,6 +73,13 @@ struct film_workflowApp: App {
         .commands {
             CommandGroup(replacing: .newItem) {
                 Button("New Film…") {
+                    // Same destination as the Welcome window's button: the
+                    // template gallery, with the blank film one card away.
+                    AppNavigation.shared.requestWelcomeRoute(.gallery)
+                    openWindow(id: WelcomeWindowID.value)
+                }
+                .keyboardShortcut("n", modifiers: .command)
+                Button("New Blank Film…") {
                     Task {
                         guard let url = await controller.presentNewPanel() else { return }
                         do {
@@ -83,7 +90,7 @@ struct film_workflowApp: App {
                         }
                     }
                 }
-                .keyboardShortcut("n", modifiers: .command)
+                .keyboardShortcut("n", modifiers: [.command, .shift])
                 Button("Open…") {
                     Task {
                         guard let url = await controller.presentOpenPanel() else { return }

@@ -250,7 +250,9 @@ struct FootageCell: Identifiable, Hashable {
         self.mediaURL = render.videoURL
         self.duration = render.durationSeconds > 0 ? render.durationSeconds : nil
         self.drag = project.dragItem
-        self.previewSource = nil
+        self.previewSource = .file(id: "remotion-render:\(render.id.uuidString)", kind: .video,
+                                   mediaURL: render.videoURL, thumbnailURL: render.thumbnailURL,
+                                   duration: render.durationSeconds > 0 ? render.durationSeconds : nil)
         self.captionStyle = nil
         self.captionAudioURL = nil
         self.previewFPS = render.fps

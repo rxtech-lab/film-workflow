@@ -179,7 +179,7 @@ struct CompositionBuilderTests {
 
         var t = Timeline(width: 320, height: 180, fps: 30)
         let v = t.tracks.first { $0.kind == .video }!.id
-        let o = t.tracks.first { $0.kind == .overlay }!.id
+        let o = t.tracks.first { $0.kind == .caption }!.id
         try TimelineEditor.insert(&t, clip: Clip(source: ClipSource(id: "image:g", kind: .image, displayName: "G"), start: 0, duration: 1), on: v)
         try TimelineEditor.insert(&t, clip: Clip(source: ClipSource(id: "video:b", kind: .video, displayName: "B"), start: 1, duration: 2), on: v)
         try TimelineEditor.insert(&t, clip: Clip(source: ClipSource(id: "caption:c", kind: .captions, displayName: "C"), start: 0, duration: 3,
@@ -212,7 +212,7 @@ struct CompositionBuilderTests {
     @Test("Leaving captions out of the picture drops their layers and edges")
     func excludesCaptions() async throws {
         var t = Timeline(width: 320, height: 180, fps: 30)
-        let o = t.tracks.first { $0.kind == .overlay }!.id
+        let o = t.tracks.first { $0.kind == .caption }!.id
         try TimelineEditor.insert(&t, clip: Clip(source: ClipSource(id: "caption:c", kind: .captions, displayName: "C"), start: 1, duration: 2, inPoint: 0.5), on: o)
         let resolver = FixtureResolver(files: ["caption:c": .captions([TextCue(start: 0, end: 1, text: "HELLO"), TextCue(start: 1, end: 3, text: "WORLD")])])
 

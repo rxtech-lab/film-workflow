@@ -20,6 +20,8 @@ struct LibraryPanel: View {
     let onDelete: (LibraryRow) -> Void
     let onExport: (LibraryRow) -> Void
     let onShowVersions: (LibraryRow, UUID?) -> Void
+    /// Creates the captions for a narration row and puts them on the timeline.
+    var onCreateCaptions: (LibraryRow) -> Void = { _ in }
     /// Backs the Marketplace tab. Nil hides the tab.
     var marketplace: MarketplaceStore? = .shared
 
@@ -31,6 +33,10 @@ struct LibraryPanel: View {
     @FocusState private var filterFocused: Bool
     /// Set once the user toggles the pane; until then the document's saved state applies.
     @State private var footageToggled: Bool?
+    /// Gates the authoring actions in both panes: the grid's template action
+    /// and the footage browser's. The editor window never opens the
+    /// marketplace on its own, so without this they stay hidden from authors.
+    @State private var authoring = MarketplaceAuthoringService.shared
 
     private var footageVisible: Bool { footageToggled ?? document.panelLayout.footageBrowserVisible ?? true }
 
@@ -105,6 +111,7 @@ struct LibraryPanel: View {
                 .simultaneousGesture(TapGesture().onEnded { dismissTextFieldFocus() })
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .task { _ = await authoring.refreshAccess() }
         .task(id: rows.map(\.id)) { await warmDurations() }
         // A new window's initial focus goes to its first text field, which puts
         // the caret in this filter before anyone asked for it. Handing it back
@@ -171,6 +178,7 @@ struct LibraryPanel: View {
             onDelete: onDelete,
             onExport: onExport,
             onShowVersions: onShowVersions,
+            onCreateCaptions: onCreateCaptions,
             currentVersion: { currentVersion(for: $0) },
             onSelectVersion: selectVersion,
             dragPayload: dragPayload,

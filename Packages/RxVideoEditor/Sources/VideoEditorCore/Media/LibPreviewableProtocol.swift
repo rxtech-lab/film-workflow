@@ -64,12 +64,19 @@ public extension LibPreviewableProtocol {
     /// File-based footage gets a default provider. Captions and live compositions
     /// supply their own provider while using exactly the same frame-strip views.
     func makeLibPreviewSource() -> LibPreviewSource {
-        let url = mediaURL
-        let poster = thumbnailURL
-        let kind = timelineKind
+        .file(id: clipSource.id, kind: timelineKind, mediaURL: mediaURL,
+              thumbnailURL: thumbnailURL, duration: knownDuration)
+    }
+}
+
+public extension LibPreviewSource {
+    /// A saved output can preview its own file without changing the source
+    /// that its library item drags onto the timeline.
+    static func file(id: String, kind: SourceKind, mediaURL url: URL?, thumbnailURL poster: URL?,
+                     duration: TimeInterval?) -> LibPreviewSource {
         let modified = (url ?? poster).flatMap { try? $0.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate }
         let revision = "\(url?.path ?? "")|\(poster?.path ?? "")|\(modified?.timeIntervalSinceReferenceDate ?? 0)"
-        return LibPreviewSource(id: clipSource.id, revision: revision, duration: knownDuration,
+        return LibPreviewSource(id: id, revision: revision, duration: duration,
                                 isTemporal: kind != .image, canScrub: kind != .image && url != nil) { time, size in
             if kind == .audio, let url, let waveform = await AudioWaveformCache.shared.waveform(for: url) {
                 let context = CGContext(data: nil, width: max(1, Int(size.width)), height: max(1, Int(size.height)),

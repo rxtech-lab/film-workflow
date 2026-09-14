@@ -16,7 +16,12 @@ struct TimelinePanel: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.undoManager) private var undoManager
     @State private var dropError: String?
+    @State private var captionError: String?
+    @State private var marketplaceError: String?
     @State private var browserVisible: Bool
+    /// Gates the marketplace action on a clip; refreshed by `LibraryPanel`.
+    @State private var authoring = MarketplaceAuthoringService.shared
+    @State private var authoringSeed: MarketplaceAuthoringSeed?
 
     init(state: EditorWindowState, document: ProjectDocument, sequence: SequenceProject?, previewRevision: String = "", onCreateSequence: @escaping () -> Void) {
         self.state = state
@@ -86,6 +91,9 @@ struct TimelinePanel: View {
                 alignment: { clip, timeline in
                     CaptionAudioAlignment.alignment(for: clip, in: timeline, context: modelContext)
                 },
+                clipMenuItems: { clip, _ in
+                    narrativeCaptionItems(for: clip, in: sequence) + marketplaceItems(for: clip, in: sequence)
+                },
                 selectedTransitionID: state.selectedTransitionID,
                 onInspectEffects: { state.inspectEffects($0) },
                 onInspectTransition: { state.inspectTransition($0) }
@@ -95,6 +103,17 @@ struct TimelinePanel: View {
             } message: {
                 Text(dropError ?? "")
             }
+            .alert("Couldn’t create captions", isPresented: Binding(get: { captionError != nil }, set: { if !$0 { captionError = nil } })) {
+                Button("OK") { captionError = nil }
+            } message: {
+                Text(captionError ?? "")
+            }
+            .alert("Couldn’t Create a Marketplace Item", isPresented: Binding(get: { marketplaceError != nil }, set: { if !$0 { marketplaceError = nil } })) {
+                Button("OK") { marketplaceError = nil }
+            } message: {
+                Text(marketplaceError ?? "")
+            }
+            .sheet(item: $authoringSeed) { MarketplaceAuthoringEditor(seed: $0) }
         } else {
             VStack(spacing: 0) {
                 StudioEmptyState(title: "Build your first sequence", symbol: "film.stack",
@@ -109,6 +128,76 @@ struct TimelinePanel: View {
             .contentShape(Rectangle())
             .onTapGesture { state.select(nil) }
 
+        }
+    }
+
+    /// "Create Marketplace Item…" on a clip, which starts a draft from the
+    /// file behind it.
+    ///
+    /// The clip's kind is all that is checked here: resolving it to a file is
+    /// asynchronous, and a menu cannot wait. The file is resolved when the item
+    /// is chosen, and a source the marketplace turns out to have no slot for
+    /// says so in an alert rather than going missing from the menu.
+    private func marketplaceItems(for clip: Clip, in sequence: SequenceProject) -> [ClipMenuItem] {
+        guard authoring.canAuthor, MarketplaceKind.canBeFootage(clip.source.kind) else { return [] }
+        return [
+            ClipMenuItem(id: "marketplace-item", title: String(localized: "Create Marketplace Item…"), systemImage: "storefront") {
+                seedMarketplaceItem(from: clip, in: sequence)
+            }
+        ]
+    }
+
+    private func seedMarketplaceItem(from clip: Clip, in sequence: SequenceProject) {
+        Task {
+            let resolver = DocumentMediaResolver(document: document, width: sequence.width, height: sequence.height, fps: sequence.fps)
+            let file = try? await resolver.resolve(clip.source).fileURL
+            guard let seed = MarketplaceAuthoringSeed(title: clip.source.displayName, sourceKind: clip.source.kind, file: file) else {
+                marketplaceError = file == nil
+                    ? String(localized: "This clip has no file to upload yet. Render it first.")
+                    : String(localized: "The marketplace has no slot for this clip’s file.")
+                return
+            }
+            authoringSeed = seed
+        }
+    }
+
+    /// "Create Captions" on a narration clip: builds the narration's caption
+    /// project and lays it over this clip, ready to transcribe.
+    private func narrativeCaptionItems(for clip: Clip, in sequence: SequenceProject) -> [ClipMenuItem] {
+        guard let (prefix, id) = DocumentMediaResolver.parse(clip.source.id), prefix == .narration,
+              let generated = try? modelContext.fetch(FetchDescriptor<GeneratedNarrative>(predicate: #Predicate { $0.id == id })).first,
+              let narrative = generated.project
+        else { return [] }
+        let exists = generated.captionProjectID.flatMap { captionID in
+            try? modelContext.fetch(FetchDescriptor<CaptionProject>(predicate: #Predicate { $0.projectUUID == captionID })).first
+        } != nil
+        return [
+            ClipMenuItem(id: "narrative-captions",
+                         title: exists ? String(localized: "Add Captions to Timeline")
+                                       : String(localized: "Create Captions"),
+                         systemImage: "captions.bubble") {
+                createCaptions(for: generated, narrative: narrative, sequence: sequence)
+            }
+        ]
+    }
+
+    private func createCaptions(for generated: GeneratedNarrative, narrative: NarrativeProject, sequence: SequenceProject) {
+        Task {
+            do {
+                let result = try await NarrativeCaptionClip.create(
+                    for: generated, narrative: narrative, sequence: sequence,
+                    playhead: state.playhead, context: modelContext, undoManager: undoManager
+                )
+                // Selecting the clip puts the caption project in the inspector,
+                // where Transcribe is one click away.
+                if let clipID = result.clipID {
+                    state.selectedClipID = clipID
+                } else {
+                    state.select(LibraryItemID(kind: .caption, id: result.project.projectUUID))
+                }
+            } catch {
+                captionError = error.localizedDescription
+            }
         }
     }
 

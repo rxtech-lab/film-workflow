@@ -59,6 +59,25 @@ struct LivePreviewTests {
         #expect(transport.currentTime == 15)
     }
 
+    @Test("Live preview follows the reordered video and overlay tracks")
+    func reorderedLayers() async throws {
+        let source = ClipSource(id: "still", kind: .image, displayName: "Still")
+        let overlay = Track(kind: .overlay, name: "T1", clips: [Clip(source: source, start: 0, duration: 3)])
+        let video = Track(kind: .video, name: "V1", clips: [Clip(source: source, start: 0, duration: 3)])
+        var timeline = Timeline(tracks: [overlay, video])
+        let transport = TimelinePlayerController()
+        let preview = TimelinePreviewController(transport: transport)
+        let resolver = LiveFixtureResolver()
+        defer { preview.unload(); transport.unload() }
+        preview.load(timeline, resolver: resolver)
+        try await wait { !preview.isLoading }
+        #expect(preview.layers.map(\.id) == [video.clips[0].id, overlay.clips[0].id])
+        try TimelineEditor.reorderTracks(&timeline, trackIDs: [video.id, overlay.id])
+        preview.load(timeline, resolver: resolver)
+        try await wait { !preview.isLoading }
+        #expect(preview.layers.map(\.id) == [overlay.clips[0].id, video.clips[0].id])
+    }
+
     @Test("One buffering layer stops every surface without losing play intent")
     func buffering() async throws {
         let source = ClipSource(id: "live", kind: .remotion, displayName: "Live")

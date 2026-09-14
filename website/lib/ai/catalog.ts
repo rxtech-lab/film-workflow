@@ -4,6 +4,7 @@ import { gatewayModels, imageNanoUsdPerUnit, isChatModel, isImageModel, tokenPri
 import { googleImageMode, googleModels, googleVideoMode, type GoogleModel } from "@/lib/ai/google-models";
 import { veoPriceId, type VideoResolution } from "@/lib/ai/veo";
 import { NANO_USD_PER_POINT } from "@/lib/billing/config";
+import { enabledCatalogModels } from "@/lib/models/repository";
 import { exactUnitPrice, unitPrice } from "@/lib/billing/unit-pricing";
 import type { Capability, UnitKind } from "@/lib/db/schema";
 
@@ -13,6 +14,8 @@ export type CatalogModel = {
   displayName: string;
   capability: Capability;
   estimate?: { unit: UnitKind; pointsPerUnit: number };
+  /** The model a picker should preselect for this capability. Set from the admin's curation, never from the provider. */
+  isDefault?: boolean;
 };
 
 function unitModel(input: Omit<CatalogModel, "estimate">, unit: Exclude<UnitKind, "tokens">): CatalogModel {
@@ -202,8 +205,16 @@ function preferredId(a: string, b: string) {
   return a.length <= b.length ? a : b;
 }
 
-/** The full catalog: live gateway models, live Google image and video models, and the direct hand-priced models, deduped and sorted the way the desktop pickers sort. */
-export async function modelCatalog(): Promise<CatalogModel[]> {
+/**
+ * Everything the providers offer us: live gateway models, live Google image and
+ * video models, and the direct hand-priced models, deduped and sorted the way the
+ * desktop pickers sort.
+ *
+ * This is what *could* be offered. What we actually offer is `modelCatalog()`,
+ * which narrows this to the models an admin has curated. Only the admin page and
+ * the seed script read the wide list.
+ */
+export async function discoveredCatalog(): Promise<CatalogModel[]> {
   const [gatewayList, google] = await Promise.all([gatewayCatalog(), googleCatalog()]);
   const direct = [...google, ...DIRECT_MODEL_CATALOG];
   const claimed = new Set(direct.map((model) => `${model.capability}:${model.id}`));
@@ -214,6 +225,38 @@ export async function modelCatalog(): Promise<CatalogModel[]> {
   return [...gateway, ...direct].sort((a, b) =>
     CAPABILITY_ORDER.indexOf(a.capability) - CAPABILITY_ORDER.indexOf(b.capability)
     || a.id.localeCompare(b.id, undefined, { sensitivity: "base" }));
+}
+
+/**
+ * What we offer: the discovered catalog narrowed to the models an admin has added
+ * and left enabled, in the order they chose.
+ *
+ * Curation selects and relabels; it never describes a model. The provider, the
+ * capability and above all the credit `estimate` still come from the live
+ * discovery path, so a price move needs no edit to the admin's table. The flip
+ * side is that a curated row whose model discovery no longer returns — a retired
+ * id, a model that lost its published price — is dropped rather than served
+ * without an estimate we could bill against. The admin page shows those rows as
+ * unavailable so they can be cleaned up.
+ *
+ * This is a strict allowlist: a capability with no curated rows offers nothing,
+ * and `requireCatalogModel` rejects every model that is not here.
+ */
+export async function modelCatalog(): Promise<CatalogModel[]> {
+  const [discovered, curated] = await Promise.all([discoveredCatalog(), enabledCatalogModels()]);
+  const byKey = new Map(discovered.map((model) => [`${model.capability}:${model.id}`, model]));
+  return curated
+    .flatMap((row) => {
+      const model = byKey.get(`${row.capability}:${row.modelId}`);
+      if (!model) return [];
+      const displayName = row.displayNameOverride?.trim() || model.displayName;
+      return [{ sortOrder: row.sortOrder, model: { ...model, displayName, ...(row.isDefault ? { isDefault: true } : {}) } }];
+    })
+    .sort((a, b) =>
+      CAPABILITY_ORDER.indexOf(a.model.capability) - CAPABILITY_ORDER.indexOf(b.model.capability)
+      || a.sortOrder - b.sortOrder
+      || a.model.displayName.localeCompare(b.model.displayName, undefined, { sensitivity: "base" }))
+    .map((entry) => entry.model);
 }
 
 export async function catalogForCapability(capability?: string | null) {

@@ -1,3 +1,4 @@
+import AppKit
 import SwiftData
 import SwiftUI
 import TipKit
@@ -26,6 +27,9 @@ struct EditorWindowView: View {
     @Query(sort: \RemotionRender.versionNumber, order: .reverse) private var remotionRenders: [RemotionRender]
 
     @State private var state = EditorWindowState()
+    /// The last focus this window moved to; see ``TimelineFocus``.
+    @State private var appliedFocus: UUID?
+    @State private var isFirstFocus = true
     @State private var groupEditor: ProjectGroupEditorTarget?
     @State private var groupName = ""
     @State private var pendingGroupDeletion: ProjectGroup?
@@ -35,6 +39,7 @@ struct EditorWindowView: View {
     @State private var pendingDeletion: LibraryRow?
     @State private var versionsTarget: LibraryVersionsTarget?
     @State private var exportingRemotion: RemotionProject?
+    @State private var captionError: String?
 
     private var index: LibraryIndex {
         LibraryIndex(music: music, narrations: narrations, captions: captions, images: images, videos: videos,
@@ -80,7 +85,8 @@ struct EditorWindowView: View {
                                  onRenameGroup: beginRenamingGroup, onDeleteGroup: { pendingGroupDeletion = $0 },
                                  onRename: beginRenaming, onDelete: { pendingDeletion = $0 },
                                  onExport: { exportingRemotion = index.remotion($0.id.id) },
-                                 onShowVersions: { versionsTarget = LibraryVersionsTarget(item: $0.id, versionID: $1) })
+                                 onShowVersions: { versionsTarget = LibraryVersionsTarget(item: $0.id, versionID: $1) },
+                                 onCreateCaptions: createCaptions)
                         .frame(minWidth: 240, idealWidth: geometry.size.width / 3, maxWidth: .infinity, maxHeight: .infinity)
                         .background(.regularMaterial)
                     ViewerPanel(index: index, state: state, document: document, sequence: currentSequence, onRetryModifierPreview: reloadPlayer)
@@ -119,8 +125,18 @@ struct EditorWindowView: View {
         .onChange(of: remotions.map { "\($0.id):\($0.durationSeconds):\($0.compositionFps):\($0.compositionWidth):\($0.compositionHeight):\($0.compositionSource.isEmpty)" }) { _, _ in
             if currentSequence?.timeline.allClips.contains(where: { $0.source.kind == .remotion }) == true { reloadPlayer() }
         }
+        .task(id: document.pendingTimelineFocus) {
+            defer { isFirstFocus = false }
+            await followTimelineFocus()
+        }
         .onDisappear { state.modifierPreviewGeneration = UUID(); state.modifierPreviewTask?.cancel(); state.preview.unload(); state.player.unload() }
         .task(id: unmeasuredAudioIDs) { await backfillAudioDurations() }
+        // A pointer that leaves with the app never reports the hover ending, so
+        // the skim it started would outlive the visit and pin the viewer to
+        // that take once the user comes back.
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didResignActiveNotification)) { _ in
+            state.endFootageSkim()
+        }
         .onReceive(NotificationCenter.default.publisher(for: .remotionPreviewChanged)) { notification in
             guard let directory = notification.userInfo?["directory"] as? URL,
                   directory.path.hasPrefix(document.packageURL.path + "/"),
@@ -158,6 +174,11 @@ struct EditorWindowView: View {
         }
         .sheet(item: $versionsTarget) { target in
             LibraryVersionsSheet(index: index, target: target) { versionsTarget = nil }
+        }
+        .alert("Couldn’t create captions", isPresented: Binding(get: { captionError != nil }, set: { if !$0 { captionError = nil } })) {
+            Button("OK") { captionError = nil }
+        } message: {
+            Text(captionError ?? "")
         }
         .remotionExportToDisk(project: $exportingRemotion)
         .sheet(item: $renamingRow) { row in
@@ -307,6 +328,36 @@ struct EditorWindowView: View {
         }
     }
 
+    /// Captions for the narration take the library is showing: the caption
+    /// project is created and laid over the narration on the timeline, but
+    /// nothing is transcribed — the user starts that from the inspector, which
+    /// the new clip's selection opens onto.
+    private func createCaptions(_ row: LibraryRow) {
+        guard let narrative = index.narration(row.id.id) else { return }
+        let current = state.currentVersion(for: row.id)
+        let file = current.flatMap { id in narrative.generatedFiles.first { $0.id == id } }
+            ?? narrative.generatedFiles.max { $0.createdAt < $1.createdAt }
+        guard let file else {
+            captionError = NarrativeCaptionClip.Failure.noAudio.errorDescription
+            return
+        }
+        Task {
+            do {
+                let result = try await NarrativeCaptionClip.create(
+                    for: file, narrative: narrative, sequence: currentSequence,
+                    playhead: state.playhead, context: modelContext, undoManager: undoManager
+                )
+                if let clipID = result.clipID {
+                    state.selectedClipID = clipID
+                } else {
+                    state.select(LibraryItemID(kind: .caption, id: result.project.projectUUID))
+                }
+            } catch {
+                captionError = error.localizedDescription
+            }
+        }
+    }
+
     private func delete(_ row: LibraryRow) {
         if row.id.kind == .sequence, let sequence = index.sequence(row.id.id) {
             undoManager?.removeAllActions(withTarget: sequence)
@@ -349,6 +400,39 @@ struct EditorWindowView: View {
     }
 
     // MARK: - Player and render
+
+    /// Follows the agent: when a tool changes a clip, show that clip.
+    ///
+    /// Without this the timeline rearranges itself while the playhead sits
+    /// wherever the user left it, and a long build looks like nothing is
+    /// happening. Playback the user started is left alone.
+    private func followTimelineFocus() async {
+        guard let focus = document.pendingTimelineFocus else { return }
+        // Whatever was pending when this window opened belongs to work that
+        // finished elsewhere; following it would yank the playhead the moment
+        // the editor appears.
+        guard appliedFocus != nil || !isFirstFocus else {
+            appliedFocus = focus.token
+            return
+        }
+        guard appliedFocus != focus.token else { return }
+        // Watching takes precedence over following: seeking pauses the player
+        // and moves the viewer, so a user who pressed play would have the film
+        // stop under them every time the agent touched a clip.
+        guard !state.player.isPlaying else {
+            appliedFocus = focus.token
+            return
+        }
+        if state.currentSequenceID != focus.sequenceID {
+            guard index.sequence(focus.sequenceID) != nil else { return }
+            state.currentSequenceID = focus.sequenceID
+        }
+        guard await TimelineFocusFollower.waitUntilLoaded(state.player) else { return }
+        guard document.pendingTimelineFocus == focus else { return }
+        appliedFocus = focus.token
+        state.selectedClipIDs = focus.clipID.map { [$0] } ?? []
+        state.playhead = focus.time
+    }
 
     private func reloadPlayer() {
         state.modifierPreviewTask?.cancel()

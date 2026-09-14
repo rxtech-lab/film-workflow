@@ -5,7 +5,7 @@ import SwiftData
 import UniformTypeIdentifiers
 import VideoEditorCore
 
-/// Sequences — the film's timelines — and the clips on them, for agents.
+/// Sequences — the film's timelines — and their tracks and clips, for agents.
 /// Footage itself is listed by `MCPLibraryHandlers.footage_list`; the
 /// `sourceId` it returns is what goes on a track here.
 @MainActor
@@ -51,6 +51,33 @@ enum MCPSequenceHandlers {
             ]
         ),
         MCPToolDescriptor(
+            name: "sequence_add_track",
+            description: "Add an empty video, audio, caption or overlay track to a sequence without changing existing tracks or clips. Inspect sequence_get first and reuse a suitable track when possible; add a track when footage needs a separate layer or overlapping audio. Uses the editor's default naming and track order (V2, A3, C1, T2, etc.). Returns track_id, track (name) and kind; pass track_id as sequence_add_clip's `track` argument.",
+            inputSchema: [
+                "type": "object",
+                "properties": [
+                    "sequence_id": ["type": "string"] as [String: Any],
+                    "kind": ["type": "string", "enum": TrackKind.allCases.map(\.rawValue), "description": "video for pictures, audio for sound, caption for captions, overlay for captions or images."] as [String: Any],
+                ],
+                "required": ["sequence_id", "kind"],
+                "additionalProperties": false,
+            ]
+        ),
+        MCPToolDescriptor(
+            name: "sequence_reorder_tracks",
+            description: "Reorder a sequence's whole tracks from top to bottom. Read sequence_get first, then supply every track id exactly once in the desired order. Preserves track names, clips, timing, mute settings and transitions. Higher video/overlay tracks appear above lower picture tracks in preview and export; moving audio tracks changes their layout without changing the mix.",
+            inputSchema: [
+                "type": "object",
+                "properties": [
+                    "sequence_id": ["type": "string"] as [String: Any],
+                    "track_ids": ["type": "array", "items": ["type": "string"], "uniqueItems": true,
+                                  "description": "Every track UUID from sequence_get, in the desired top-to-bottom order."] as [String: Any],
+                ],
+                "required": ["sequence_id", "track_ids"],
+                "additionalProperties": false,
+            ]
+        ),
+        MCPToolDescriptor(
             name: "sequence_add_clip",
             description: "Put one take on a track as a clip. `source_id` is a `sourceId` from footage_list or footage_get — the newest take of an item, or a specific one with include_versions. Video, images and Remotion compositions go on a `video` track, music and narration on an `audio` track, captions on the `overlay` track. Omit `start` to append after the track's last clip; omit `duration` to use the take's natural length (stills default to 5 s).",
             inputSchema: [
@@ -58,7 +85,7 @@ enum MCPSequenceHandlers {
                 "properties": [
                     "sequence_id": ["type": "string"] as [String: Any],
                     "source_id": ["type": "string", "description": "A `sourceId` from footage_list or footage_get, e.g. `video:<uuid>`, `music:<uuid>`, `remotion:<uuid>`, `caption:<uuid>`, `imported:<uuid>`."] as [String: Any],
-                    "track": ["type": "string", "description": "Track name such as V1, A1, T1, or a track id. Defaults to the first track that accepts the footage."] as [String: Any],
+                    "track": ["type": "string", "description": "Track name such as V1, A1, T1, or a track id from sequence_get or sequence_add_track. Defaults to the first track that accepts the footage. Use sequence_add_track first when a separate track is needed."] as [String: Any],
                     "start": ["type": "number", "description": "Seconds on the timeline."] as [String: Any],
                     "duration": ["type": "number", "description": "Seconds."] as [String: Any],
                     "in_point": ["type": "number", "description": "Seconds into the source to start from."] as [String: Any],
@@ -121,6 +148,8 @@ enum MCPSequenceHandlers {
         case "sequence_create": return try sequenceCreate(arguments, context: context)
         case "sequence_get": return try sequenceGet(arguments, context: context)
         case "sequence_set_timeline": return try sequenceSetTimeline(arguments, context: context)
+        case "sequence_add_track": return try sequenceAddTrack(arguments, context: context)
+        case "sequence_reorder_tracks": return try sequenceReorderTracks(arguments, context: context)
         case "sequence_add_clip": return try await sequenceAddClip(arguments, context: context)
         case "sequence_remove_clip": return try sequenceRemoveClip(arguments, context: context)
         case "sequence_render": return try await sequenceRender(arguments, context: context)
@@ -210,7 +239,43 @@ enum MCPSequenceHandlers {
         }
         rebuilt.transitions = timeline.transitions
         try rebuilt.validateModifiers(requireDefinitions: true)
+        let previous = sequence.timeline
         sequence.timeline = rebuilt
+        try context.save()
+        focus(sequence: sequence, previous: previous, context: context)
+        return MCPToolRegistry.jsonResult(timelineJSON(sequence, context: context))
+    }
+
+    private static func sequenceAddTrack(_ arguments: [String: Any], context: ModelContext) throws -> [String: Any] {
+        let sequence = try fetchSequence(arguments, context: context)
+        guard let raw = arguments["kind"] as? String, let kind = TrackKind(rawValue: raw) else {
+            throw MCPToolError.invalidArguments("kind must be video, audio, caption or overlay")
+        }
+        var timeline = sequence.timeline
+        let trackID = TimelineEditor.addTrack(&timeline, kind: kind)
+        let track = timeline.tracks.first { $0.id == trackID }!
+        sequence.timeline = timeline
+        try context.save()
+        return MCPToolRegistry.jsonResult([
+            "sequence_id": sequence.id.uuidString,
+            "track_id": trackID.uuidString,
+            "track": track.name,
+            "kind": track.kind.rawValue,
+        ])
+    }
+
+    private static func sequenceReorderTracks(_ arguments: [String: Any], context: ModelContext) throws -> [String: Any] {
+        let sequence = try fetchSequence(arguments, context: context)
+        guard let raw = arguments["track_ids"] as? [String] else {
+            throw MCPToolError.invalidArguments("track_ids must list every track UUID from sequence_get in top-to-bottom order")
+        }
+        let ids = raw.compactMap(UUID.init(uuidString:))
+        guard ids.count == raw.count else { throw MCPToolError.invalidArguments("track_ids contains a malformed UUID") }
+        var timeline = sequence.timeline
+        do { try TimelineEditor.reorderTracks(&timeline, trackIDs: ids) } catch {
+            throw MCPToolError.invalidArguments(error.localizedDescription)
+        }
+        sequence.timeline = timeline
         try context.save()
         return MCPToolRegistry.jsonResult(timelineJSON(sequence, context: context))
     }
@@ -275,6 +340,7 @@ enum MCPSequenceHandlers {
         }
         sequence.timeline = timeline
         try context.save()
+        document.focusTimeline(sequenceID: sequence.id, clipID: clip.id, time: clip.start)
         return MCPToolRegistry.jsonResult([
             "clip_id": clip.id.uuidString,
             "track": track.name,
@@ -284,12 +350,26 @@ enum MCPSequenceHandlers {
         ] as [String: Any])
     }
 
-    /// Pictures go on a video lane, sound on an audio lane, captions on the overlay.
+    /// Moves the playhead of any window showing this film to whatever the edit
+    /// just changed, so the user can watch the agent work rather than seeing a
+    /// timeline rearrange itself under a stationary playhead.
+    private static func focus(sequence: SequenceProject, previous: Timeline?, context: ModelContext) {
+        guard let document = ProjectDocumentController.shared.document(forContainer: context.container) else { return }
+        guard let target = SequenceProject.focusTarget(before: previous, after: sequence.timeline) else {
+            document.focusTimeline(sequenceID: sequence.id, time: 0)
+            return
+        }
+        document.focusTimeline(sequenceID: sequence.id, clipID: target.clipID, time: target.start)
+    }
+
+    /// Pictures go on a video lane, sound on an audio lane, captions on a
+    /// caption lane — falling back to an overlay lane when the sequence has
+    /// none, since those take captions too.
     private static func preferredTrackKind(for kind: SourceKind) -> TrackKind {
         switch kind {
         case .video, .image, .remotion: return .video
         case .audio: return .audio
-        case .captions: return .overlay
+        case .captions: return .caption
         }
     }
 
@@ -311,6 +391,7 @@ enum MCPSequenceHandlers {
             throw MCPToolError.invalidArguments("missing clip_id")
         }
         var timeline = sequence.timeline
+        let removedStart = timeline.clip(id: clipID)?.start
         if (arguments["ripple"] as? Bool) == true {
             try TimelineEditor.rippleDelete(&timeline, clipID: clipID)
         } else {
@@ -318,6 +399,9 @@ enum MCPSequenceHandlers {
         }
         sequence.timeline = timeline
         try context.save()
+        if let removedStart, let document = ProjectDocumentController.shared.document(forContainer: context.container) {
+            document.focusTimeline(sequenceID: sequence.id, clipID: nil, time: removedStart)
+        }
         return MCPToolRegistry.jsonResult(["ok": true, "sequence_duration": timeline.duration] as [String: Any])
     }
 

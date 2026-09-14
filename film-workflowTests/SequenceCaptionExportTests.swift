@@ -46,7 +46,7 @@ struct SequenceCaptionExportTests {
 
         let sequence = SequenceProject(name: "Cut")
         var timeline = Timeline(width: 320, height: 180, fps: 30)
-        let overlay = try #require(timeline.tracks.first { $0.kind == .overlay })
+        let overlay = try #require(timeline.tracks.first { $0.kind == .caption })
         try TimelineEditor.insert(&timeline, clip: Clip(source: caption.clipSource, start: 1, duration: 3, inPoint: 0.5, sourceDuration: 4,
                                                         text: TextStyle(fontSize: 0.1, alignment: .leading)), on: overlay.id)
         sequence.timeline = timeline

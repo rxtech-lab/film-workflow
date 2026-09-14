@@ -64,8 +64,10 @@ struct LibraryItemCard: View {
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
         }
+        .frame(minWidth: 0,
+               idealWidth: ceil(FilmstripLayout.preferredWidth(duration: duration, isTemporal: footage?.previewSource?.isTemporal == true)),
+               maxWidth: .infinity, alignment: .leading)
         .padding(5)
-        .frame(maxWidth: .infinity, alignment: .leading)
         .contentShape(Rectangle())
         .accessibilityElement(children: .ignore)
         .accessibilityLabel([row.name, duration.map(DurationLabel.short)].compactMap { $0 }.joined(separator: ", "))

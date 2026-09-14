@@ -161,7 +161,10 @@ struct AgentMessageRow: View {
             run = []
         }
         for block in blocks {
-            if case .toolCall(let call) = block, proposalRow(for: call) == nil, marketplaceCard(for: call) == nil {
+            if case .toolCall(let call) = block,
+               proposalRow(for: call) == nil,
+               marketplaceCard(for: call) == nil,
+               WizardStepCard.summary(for: call) == nil {
                 run.append(call)
             } else {
                 flush()
@@ -197,6 +200,8 @@ struct AgentMessageRow: View {
     private func toolRow(_ call: AgentToolCall) -> some View {
         if let payload = marketplaceCard(for: call) {
             MarketplaceChatCard(payload: payload, showPublishButton: payload.showPublishButton ?? true)
+        } else if let summary = WizardStepCard.summary(for: call) {
+            WizardStepCard(summary: summary)
         } else if let row = proposalRow(for: call) {
             proposalCard(row)
         } else {
@@ -681,101 +686,5 @@ private struct AgentToolCard: View {
         case .null: "null"
         case .object, .array: value.jsonString
         }
-    }
-}
-
-// MARK: - Tool detail
-
-private struct AgentToolDetailSheet: View {
-    let call: AgentToolCall
-    @Environment(\.dismiss) private var dismiss
-
-    private var statusLabel: String {
-        guard call.isComplete else { return "Running" }
-        return call.isError ? "Failed" : "Success"
-    }
-
-    private var statusColor: Color {
-        guard call.isComplete else { return .secondary }
-        return call.isError ? .red : .green
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            HStack(alignment: .center, spacing: 10) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(MCPToolName.bare(call.name))
-                        .font(.headline)
-                        .monospaced()
-                    Text(statusLabel)
-                        .font(.caption.weight(.medium))
-                        .foregroundStyle(statusColor)
-                        .padding(.horizontal, 9)
-                        .padding(.vertical, 3)
-                        .glassEffect(.regular.tint(statusColor.opacity(0.18)), in: .capsule)
-                }
-                Spacer()
-                Button("Done") { dismiss() }
-                    .keyboardShortcut(.defaultAction)
-            }
-
-            Divider()
-
-            section(title: "Parameters", content: prettified(JSONValue.object(call.input)))
-            section(
-                title: "Result",
-                content: call.result.flatMap { prettify($0) } ?? call.result,
-                isError: call.isError
-            )
-        }
-        .padding(16)
-        .frame(minWidth: 520, minHeight: 360)
-    }
-
-    @ViewBuilder
-    private func section(title: String, content: String?, isError: Bool = false) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(title)
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(isError ? .red : .secondary)
-            ScrollView {
-                Group {
-                    if let content, !content.isEmpty {
-                        StructuredText(markdown: "```json\n\(content)\n```")
-                            .textual.structuredTextStyle(.gitHub)
-                            .textual.textSelection(.enabled)
-                    } else {
-                        Text("—")
-                            .font(.system(.caption, design: .monospaced))
-                            .foregroundStyle(.secondary)
-                    }
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(8)
-            }
-            .frame(maxHeight: 260)
-            .background(
-                RoundedRectangle(cornerRadius: 6)
-                    .fill(Color.secondary.opacity(0.08))
-            )
-        }
-    }
-
-    private func prettified(_ value: JSONValue) -> String? {
-        prettify(value.jsonString)
-    }
-
-    /// Returns nil when the content isn't JSON, so the caller can fall back to
-    /// showing it raw rather than an empty box.
-    private func prettify(_ raw: String) -> String? {
-        guard !raw.isEmpty,
-              let data = raw.data(using: .utf8),
-              let object = try? JSONSerialization.jsonObject(with: data),
-              let pretty = try? JSONSerialization.data(
-                  withJSONObject: object,
-                  options: [.prettyPrinted, .sortedKeys]
-              )
-        else { return nil }
-        return String(data: pretty, encoding: .utf8)
     }
 }

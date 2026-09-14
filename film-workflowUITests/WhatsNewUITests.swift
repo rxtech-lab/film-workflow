@@ -28,15 +28,27 @@ final class WhatsNewUITests: XCTestCase {
         app.buttons["whats-new.next"].click()
         waitForCard("Project templates are here", in: app)
         XCTAssertTrue(app.staticTexts["Make it yours with the agent"].exists)
-        XCTAssertTrue(app.buttons["whats-new.explore"].exists)
+        // The call to action belongs to the last card only.
+        XCTAssertFalse(dismiss.exists)
         let templatesLight = XCTAttachment(screenshot: app.screenshot())
         templatesLight.name = "Project templates announcement — light"
         templatesLight.lifetime = .keepAlways
         add(templatesLight)
 
+        app.buttons["whats-new.next"].click()
+        waitForCard("Simple mode", in: app)
+        XCTAssertTrue(app.staticTexts["Start from a template"].exists)
+        XCTAssertTrue(app.buttons["whats-new.explore"].exists)
+        let simpleLight = XCTAttachment(screenshot: app.screenshot())
+        simpleLight.name = "Simple mode announcement — light"
+        simpleLight.lifetime = .keepAlways
+        add(simpleLight)
+
         // Going back returns to the previous card, and the back control disappears on the first one.
         let back = app.buttons["whats-new.back"]
         XCTAssertTrue(back.exists)
+        back.click()
+        waitForCard("Project templates are here", in: app)
         back.click()
         waitForCard("Marketplace is here", in: app)
         XCTAssertTrue(back.waitForNonExistence(timeout: 5))
@@ -44,6 +56,8 @@ final class WhatsNewUITests: XCTestCase {
         XCTAssertTrue(app.buttons["whats-new.next"].exists)
         app.buttons["whats-new.next"].click()
         waitForCard("Project templates are here", in: app)
+        app.buttons["whats-new.next"].click()
+        waitForCard("Simple mode", in: app)
         XCTAssertTrue(dismiss.waitForExistence(timeout: 5))
 
         dismiss.click()
@@ -60,8 +74,10 @@ final class WhatsNewUITests: XCTestCase {
         XCTAssertEqual(app.sheets.count, 1)
         app.buttons["whats-new.next"].click()
         waitForCard("Project templates are here", in: app)
+        app.buttons["whats-new.next"].click()
+        waitForCard("Simple mode", in: app)
         let dark = XCTAttachment(screenshot: app.screenshot())
-        dark.name = "Project templates announcement — dark"
+        dark.name = "Simple mode announcement — dark"
         dark.lifetime = .keepAlways
         add(dark)
         close.click()
@@ -70,13 +86,19 @@ final class WhatsNewUITests: XCTestCase {
         showWhatsNew(in: app)
         XCTAssertTrue(app.buttons["whats-new.next"].waitForExistence(timeout: 5))
         app.buttons["whats-new.next"].click()
-        let explore = app.buttons["whats-new.explore"]
-        XCTAssertTrue(explore.waitForExistence(timeout: 5))
-        explore.click()
-        XCTAssertTrue(app.windows["Marketplace"].waitForExistence(timeout: 10))
+        waitForCard("Project templates are here", in: app)
+        app.buttons["whats-new.next"].click()
+        waitForCard("Simple mode", in: app)
+        // The Simple mode card's button starts a film rather than opening the
+        // Marketplace: each card sends the user to what it is about.
+        let startFilm = app.buttons["whats-new.explore"]
+        XCTAssertTrue(startFilm.waitForExistence(timeout: 5))
+        startFilm.click()
         XCTAssertTrue(app.sheets.firstMatch.waitForNonExistence(timeout: 5))
+        XCTAssertTrue(app.otherElements["new-film.gallery"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.buttons["new-film.template.company-intro-video"].exists)
 
-        // The app menu also works when Marketplace, rather than a film, is key.
+        // The app menu also works when the Welcome window, rather than a film, is key.
         showWhatsNew(in: app)
         XCTAssertTrue(close.waitForExistence(timeout: 5))
         XCTAssertEqual(app.sheets.count, 1)
@@ -84,8 +106,7 @@ final class WhatsNewUITests: XCTestCase {
         XCTAssertTrue(app.sheets.firstMatch.waitForNonExistence(timeout: 5))
 
         app.typeKey("w", modifierFlags: .command)
-        app.typeKey("w", modifierFlags: .command)
-        XCTAssertEqual(app.windows.count, 0)
+        XCTAssertTrue(app.windows.firstMatch.waitForNonExistence(timeout: 5))
         showWhatsNew(in: app)
         XCTAssertTrue(close.waitForExistence(timeout: 5))
         XCTAssertTrue(app.windows["Welcome to RxFilmStudio"].exists)

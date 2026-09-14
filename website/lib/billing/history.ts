@@ -1,8 +1,13 @@
 export type BillingHistorySearchParams = Record<string, string | string[] | undefined>;
 
-/** A page can host several paginated sections, so each one owns a query param and pages independently. */
+/**
+ * The routes that page. The /usage overview shows only the most recent rows and
+ * links here, so each of these hosts exactly one paginated list and they can all
+ * share the plain `page` param.
+ */
+export type BillingHistoryPath = "/usage/operations" | "/usage/ledger";
+
 export const LEDGER_PAGE_PARAM = "page";
-export const OPERATIONS_PAGE_PARAM = "ops";
 
 function firstSearchParam(value: string | string[] | undefined) {
   return Array.isArray(value) ? value[0] : value;
@@ -30,7 +35,7 @@ export function invoiceCursorHref(cursor: { after?: string; before?: string }) {
 }
 
 export function billingHistoryHref(
-  pathname: "/usage",
+  pathname: BillingHistoryPath,
   page: number,
   options?: { param?: string; searchParams?: BillingHistorySearchParams },
 ) {

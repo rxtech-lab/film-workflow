@@ -67,9 +67,9 @@ public struct TimelineCompositionBuilder {
         var clipLayers: [UUID: LayerSpec] = [:]
         var videoTrackIDs: [UUID: CMPersistentTrackID] = [:]   // timeline track → composition track
 
-        // Picture order: video tracks bottom-up (last in the array is lowest), then overlays.
-        let videoTracks = Array(timeline.tracks.filter { $0.kind == .video }.reversed())
-        let overlayTracks = Array(timeline.tracks.filter { $0.kind == .overlay }.reversed())
+        let pictureTracks = timeline.pictureTracksBackToFront
+        let videoTracks = pictureTracks.filter { $0.kind == .video }
+        let overlayTracks = pictureTracks.filter { $0.kind.drawsOverPicture }
         let audioTracks = timeline.tracks.filter { $0.kind == .audio }
 
         for track in videoTracks {
@@ -133,7 +133,7 @@ public struct TimelineCompositionBuilder {
                 switch resolved[clip.source.id] {
                 case .success(.captions(let cues))?:
                     guard includeCaptions else { continue }
-                    clipLayers[clip.id] = .text(clip.timelineCues(cues), style: clip.text ?? .caption)
+                    clipLayers[clip.id] = .text(clip.captionCues(cues), style: clip.text ?? .caption)
                 case .success(.file(let url, _, _))?:
                     clipLayers[clip.id] = .still(url, transform: clip.transform, opacity: clip.opacity)
                 case .failure(let error)?:
@@ -166,7 +166,7 @@ public struct TimelineCompositionBuilder {
 
         // Segment at clip and transition edges, including held-frame boundaries.
 
-        let pictureClips = (videoTracks + overlayTracks).flatMap(\.clips).filter { includeCaptions || $0.source.kind != .captions }
+        let pictureClips = pictureTracks.flatMap(\.clips).filter { includeCaptions || $0.source.kind != .captions }
         var edges: Set<TimeInterval> = [0, duration]
         for clip in pictureClips {
             edges.insert(min(max(0, clip.start), duration))
@@ -183,7 +183,7 @@ public struct TimelineCompositionBuilder {
             let mid = (a + b) / 2
             var layers: [LayerSpec] = []
             var trackIDs: [CMPersistentTrackID] = [baseTrackID]
-            for track in videoTracks + overlayTracks {
+            for track in pictureTracks {
                 let active = timeline.transitions.first { transition in
                     transition.isEnabled && transition.attachment.clipIDs.contains(where: { id in track.clips.contains { $0.id == id } })
                         && transition.range(in: timeline)?.contains(mid) == true

@@ -211,6 +211,11 @@ final class EditorWindowState {
 
     /// Changes the selection without touching the inspector tab.
     func select(_ item: LibraryItemID?, updateViewer: Bool = true) {
+        // A click is a decision, so it outranks whatever the pointer is
+        // skimming. A skim that never reported its end — the pointer left with
+        // the app, or while the window was not key — would otherwise keep that
+        // take in the viewer however often the user picked something else.
+        endFootageSkim()
         selection = item
         if updateViewer { viewerSelection = item }
         if let item, item.kind == .sequence {
@@ -225,6 +230,9 @@ final class EditorWindowState {
 
     func setCurrentVersion(_ versionID: UUID, for item: LibraryItemID) {
         guard currentVersions[item] != versionID else { return }
+        // Picking a version is the same kind of decision as picking an item:
+        // the viewer follows it rather than a take left over from a skim.
+        endFootageSkim()
         currentVersions[item] = versionID
     }
 }

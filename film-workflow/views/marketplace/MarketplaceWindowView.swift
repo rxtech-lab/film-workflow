@@ -15,11 +15,21 @@ enum MarketplaceSidebarSelection: Hashable {
     case all
     case kind(MarketplaceKind)
     case mine
+    case manage
 
     var kind: MarketplaceKind? {
         switch self {
-        case .all, .mine: return nil
+        case .all, .mine, .manage: return nil
         case .kind(let kind): return kind
+        }
+    }
+
+    /// The authoring destinations, which read the author API rather than the
+    /// public catalog, so the catalog reload skips them.
+    var isAuthoring: Bool {
+        switch self {
+        case .mine, .manage: return true
+        case .all, .kind: return false
         }
     }
 }
@@ -47,7 +57,6 @@ struct MarketplaceWindowView: View {
     @State private var presented: MarketplacePresentedItem?
     @State private var addedMessage: String?
     @State private var creatingItem = false
-    @State private var managingItems = false
     @State private var authoring = MarketplaceAuthoringService.shared
     @State private var authoringRevision = 0
 
@@ -60,10 +69,11 @@ struct MarketplaceWindowView: View {
             sidebar
                 .navigationSplitViewColumnWidth(min: 200, ideal: 230, max: 300)
         } detail: {
-            if selection == .mine, authoring.canAuthor {
-                MarketplaceMyItemsView(query: search, refreshID: authoringRevision,
-                                       onCreate: { creatingItem = true }, onItemsChanged: authoringDidChange)
-                    .id(authoring.userId)
+            if selection.isAuthoring, authoring.canAuthor {
+                MarketplaceAuthoringListView(scope: selection == .mine ? .mine : .all, query: search,
+                                             refreshID: authoringRevision,
+                                             onCreate: { creatingItem = true }, onItemsChanged: authoringDidChange)
+                    .id("\(authoring.userId ?? "")-\(selection == .mine)")
             } else {
                 grid
             }
@@ -78,7 +88,6 @@ struct MarketplaceWindowView: View {
                     .disabled(store.isLoading)
                 if authoring.canAuthor {
                     Button("Create Item", systemImage: "plus") { creatingItem = true }.accessibilityIdentifier("marketplace-create-item")
-                    Button("Manage Items", systemImage: "square.and.pencil") { managingItems = true }.accessibilityIdentifier("marketplace-manage-button")
                 }
                 AccountControl(placement: .toolbar)
             }
@@ -88,7 +97,6 @@ struct MarketplaceWindowView: View {
                                  hasActiveFilm: documents.activeDocument != nil, onAddToFilm: addToFilm)
         }
         .sheet(isPresented: $creatingItem, onDismiss: authoringDidChange) { MarketplaceAuthoringEditor() }
-        .sheet(isPresented: $managingItems, onDismiss: authoringDidChange) { MarketplaceManageItems() }
         .task { await reload() }
         .task { await store.loadTaxonomy() }
         .task { _ = await authoring.refreshAccess() }
@@ -98,9 +106,8 @@ struct MarketplaceWindowView: View {
         .onChange(of: auth.isAuthenticated) { Task { _ = await authoring.refreshAccess(); await reload() } }
         .onChange(of: authoring.canAuthor) {
             if !authoring.canAuthor {
-                if selection == .mine { selection = .all }
+                if selection.isAuthoring { selection = .all }
                 creatingItem = false
-                managingItems = false
             }
         }
         .insufficientCreditsAlert(Binding(get: { store.insufficientCredits }, set: { store.insufficientCredits = $0 }))
@@ -130,11 +137,13 @@ struct MarketplaceWindowView: View {
             }
             .accessibilityIdentifier("marketplace-kinds")
             if authoring.canAuthor {
-                Section {
-                    Divider().padding(.vertical, 2)
+                Section("Authoring") {
                     Label("My Marketplace", systemImage: "person.crop.square")
                         .tag(MarketplaceSidebarSelection.mine)
                         .accessibilityIdentifier("marketplace-my-items")
+                    Label("Manage Items", systemImage: "square.and.pencil")
+                        .tag(MarketplaceSidebarSelection.manage)
+                        .accessibilityIdentifier("marketplace-manage-button")
                 }
             }
         }
@@ -227,7 +236,7 @@ struct MarketplaceWindowView: View {
 
     private func reload(page: Int = 1, debounced: Bool = false) async {
         reloadTask?.cancel()
-        guard selection != .mine else { return }
+        guard !selection.isAuthoring else { return }
         let selection = selection, category = category, search = search
         let task = Task { @MainActor in
             if debounced { try? await Task.sleep(for: .milliseconds(300)); if Task.isCancelled { return } }
@@ -503,14 +512,16 @@ struct MarketplacePreviewPlayer: View {
     private var playButton: some View {
         Button(action: start) {
             ZStack {
-                Circle().fill(.black.opacity(0.5)).frame(width: 56, height: 56)
                 if isPreparing {
                     ProgressView().controlSize(.small).tint(.white)
                 } else {
                     Image(systemName: playbackError == nil ? "play.fill" : "arrow.clockwise").font(.title2).foregroundStyle(.white)
                 }
             }
+            .frame(width: 64, height: 64)
             .contentShape(Circle())
+            .glassEffect(.regular.tint(.black.opacity(0.22)).interactive(), in: .circle)
+            .environment(\.colorScheme, .dark)
         }
         .buttonStyle(.plain)
         .disabled(isPreparing)
@@ -566,172 +577,6 @@ struct MarketplacePreviewPlayer: View {
         }
     }
 
-}
-
-/// The detail sheet: reads the live item from the store so the action row
-/// tracks purchase and install state while it is open.
-struct MarketplaceItemSheet: View {
-    let itemID: String
-    let store: MarketplaceStore
-    let isSignedIn: Bool
-    let hasActiveFilm: Bool
-    let onAddToFilm: (MarketplaceItem) -> Void
-    @Environment(\.dismiss) private var dismiss
-
-    var body: some View {
-        VStack(spacing: 0) {
-            if let item = store.item(itemID) {
-                MarketplaceItemDetail(item: item, store: store, isSignedIn: isSignedIn, hasActiveFilm: hasActiveFilm, onAddToFilm: { onAddToFilm(item) })
-            } else {
-                ContentUnavailableView("Item unavailable", systemImage: "storefront", description: Text("This item is no longer in the catalog."))
-            }
-            Divider()
-            HStack {
-                Spacer()
-                Button("Done") { dismiss() }
-                    .keyboardShortcut(.cancelAction)
-                    .accessibilityIdentifier("marketplace-detail-done")
-            }
-            .padding(12)
-        }
-        .frame(minWidth: 560, idealWidth: 620, minHeight: 560, idealHeight: 640)
-        .accessibilityIdentifier("marketplace-detail")
-    }
-}
-
-/// Preview, description and the action row for one item.
-struct MarketplaceItemDetail: View {
-    let item: MarketplaceItem
-    let store: MarketplaceStore
-    let isSignedIn: Bool
-    let hasActiveFilm: Bool
-    let onAddToFilm: () -> Void
-    @State private var navigation = AppNavigation.shared
-    @State private var templateDefinition: ProjectTemplateDefinition?
-    @Environment(\.openWindow) private var openWindow
-
-    private var isInstalled: Bool { store.isInstalled(item.id) }
-    private var isBusy: Bool { store.busyItemIDs.contains(item.id) }
-    private var progress: Double? { store.downloadProgress[item.id] }
-
-    var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
-                MarketplacePreviewPlayer(item: item)
-                    .aspectRatio(16 / 9, contentMode: .fit)
-                    .clipShape(RoundedRectangle(cornerRadius: 10))
-                VStack(alignment: .leading, spacing: 6) {
-                    HStack(alignment: .firstTextBaseline) {
-                        Text(item.title).font(.title2.weight(.semibold))
-                        Spacer()
-                        MarketplacePriceBadge(item: item)
-                    }
-                    Label(store.label(for: item.kind), systemImage: store.symbol(for: item.kind)).font(.callout).foregroundStyle(.secondary)
-                    Text(item.categoryLabel).font(.callout).foregroundStyle(.secondary)
-                }
-                actionRow
-                if !item.description.isEmpty {
-                    Text(item.description).font(.body).textSelection(.enabled)
-                }
-                facts
-                if item.kind == .projectTemplate { MarketplaceTemplateDetails(item: item, definition: templateDefinition) }
-                if item.kind == .remotionPrompt, let excerpt = item.metadata.promptExcerpt, !excerpt.isEmpty {
-                    GroupBox("Prompt") { Text(excerpt).font(.callout).textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading) }
-                }
-                if isInstalled, !item.kind.installedHint.isEmpty {
-                    Text(item.kind.installedHint).font(.callout).foregroundStyle(.secondary)
-                }
-            }
-            .padding(20)
-        }
-        .task(id: isInstalled) {
-            if item.kind == .projectTemplate, let manifest = store.manifest(for: item.id) {
-                templateDefinition = try? ProjectTemplateDefinition.decode(Data(contentsOf: manifest.contentURL(in: store.directory(for: manifest))))
-            }
-        }
-    }
-
-    @ViewBuilder
-    private var actionRow: some View {
-        HStack(spacing: 10) {
-            if !isSignedIn && (!item.isFree || !isInstalled) {
-                Button("Sign In to \(item.isFree ? "Install" : "Buy")") { navigation.requestSignIn() }
-                    .buttonStyle(.borderedProminent)
-                    .accessibilityIdentifier("marketplace-sign-in")
-            } else if !item.isEntitled {
-                Button { Task { await store.purchase(item) } } label: {
-                    if isBusy { ProgressView().controlSize(.small) } else { Text("Buy for \(item.pricePoints.formatted()) credits") }
-                }
-                .buttonStyle(.borderedProminent)
-                .disabled(isBusy)
-                .accessibilityIdentifier("marketplace-buy")
-            } else if let progress {
-                ProgressView(value: progress) { Text("Downloading — \(Int(progress * 100))%") }
-                    .frame(maxWidth: 260)
-            } else if !isInstalled {
-                Button("Install") { Task { await store.install(item) } }
-                    .buttonStyle(.borderedProminent)
-                    .disabled(isBusy)
-                    .accessibilityIdentifier("marketplace-install")
-            } else {
-                Menu {
-                    Button("Reveal in Finder") { store.revealInFinder(item.id) }
-                    Button("Uninstall", role: .destructive) { store.uninstall(item.id) }
-                } label: {
-                    Label("Installed", systemImage: "checkmark.circle.fill")
-                }
-                .fixedSize()
-                .accessibilityIdentifier("marketplace-installed")
-                if item.kind == .projectTemplate {
-                    Button("Use in Current Film") {
-                        MarketplaceAgentLauncher.start(item: item, instruction: "Use project template \(item.id) in my current film. Inspect my footage, show the template, collect missing footage, and create a new sequence.")
-                        openWindow(id: AgentWindowID.value)
-                    }.buttonStyle(.borderedProminent).disabled(!hasActiveFilm).accessibilityIdentifier("marketplace-use-template")
-                }
-                if item.kind.addsToFilm {
-                    Button("Add to Film", action: onAddToFilm)
-                        .buttonStyle(.borderedProminent)
-                        .disabled(!hasActiveFilm)
-                        .help(hasActiveFilm ? "Add this item to the film in front" : "Open a film to add this item")
-                        .accessibilityIdentifier("marketplace-add-to-film")
-                }
-            }
-            Spacer()
-        }
-    }
-
-    @ViewBuilder
-    private var facts: some View {
-        let rows = factRows
-        if !rows.isEmpty {
-            Grid(alignment: .leading, horizontalSpacing: 12, verticalSpacing: 4) {
-                ForEach(rows, id: \.0) { row in
-                    GridRow {
-                        Text(row.0).foregroundStyle(.secondary)
-                        Text(row.1)
-                    }
-                }
-            }
-            .font(.callout)
-        }
-    }
-
-    private var factRows: [(String, String)] {
-        var rows: [(String, String)] = []
-        if let seconds = item.metadata.durationSeconds, seconds > 0 {
-            rows.append((String(localized: "Duration"), Duration.seconds(seconds).formatted(.time(pattern: .minuteSecond))))
-        }
-        if let width = item.metadata.width, let height = item.metadata.height, width > 0, height > 0 {
-            rows.append((String(localized: "Size"), "\(width)×\(height)"))
-        }
-        if let family = item.metadata.fontFamily, !family.isEmpty { rows.append((String(localized: "Family"), family)) }
-        if let descriptor = item.metadata.descriptor { rows.append((String(localized: "Filter"), descriptor.filterName)) }
-        if let bytes = item.contentSizeBytes, bytes > 0 {
-            rows.append((String(localized: "Download"), ByteCountFormatter.string(fromByteCount: bytes, countStyle: .file)))
-        }
-        if let tags = item.metadata.tags, !tags.isEmpty { rows.append((String(localized: "Tags"), tags.joined(separator: ", "))) }
-        return rows
-    }
 }
 
 // MARK: - Previews

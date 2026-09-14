@@ -18,9 +18,34 @@ public extension Clip {
     func timelineCues(_ cues: [TextCue]) -> [TextCue] {
         cues.compactMap { cue in
             timelineInterval(sourceStart: cue.start, sourceEnd: cue.end).map {
-                TextCue(start: $0.start, end: $0.end, text: cue.text)
+                TextCue(start: $0.start, end: $0.end, text: cue.text, translations: cue.translations)
             }
         }
+    }
+
+    /// `timelineCues` with the clip's language and punctuation choices
+    /// applied: what the compositor burns in and the viewer draws. Subtitle
+    /// tracks and sidecar files deliberately stay on `timelineCues`, since
+    /// they carry each language separately and format their own text.
+    func captionCues(_ cues: [TextCue]) -> [TextCue] {
+        timelineCues(cues).compactMap { cue in
+            let text = captions.text(for: cue)
+            guard !text.isEmpty else { return nil }
+            return TextCue(start: cue.start, end: cue.end, text: text)
+        }
+    }
+
+    /// What this clip draws at `time` on the timeline clock, cues that overlap
+    /// stacked. The viewer asks for this on every frame, so it filters before
+    /// composing text rather than mapping the whole transcript each time.
+    func captionText(at time: TimeInterval, in cues: [TextCue]) -> String {
+        cues.compactMap { cue -> String? in
+            guard let interval = timelineInterval(sourceStart: cue.start, sourceEnd: cue.end),
+                  interval.start <= time, time < interval.end else { return nil }
+            let text = captions.text(for: cue)
+            return text.isEmpty ? nil : text
+        }
+        .joined(separator: "\n")
     }
 }
 

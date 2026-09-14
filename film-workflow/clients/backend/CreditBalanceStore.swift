@@ -46,6 +46,10 @@ final class CreditBalanceStore {
     private(set) var user: SubscriptionUser?
     var isAdmin: Bool { isSignedIn && user?.roles.contains("admin") == true }
     private(set) var availablePoints = 0
+    /// Whether the server actually bills this account. An account with billing
+    /// off reports zero points and spends nothing, so "no credits" is only a
+    /// blocker when this is on.
+    private(set) var billingEnabled = true
     private(set) var reservedPoints = 0
     private(set) var balancePoints = 0
     private(set) var lastUpdated: Date?
@@ -90,6 +94,7 @@ final class CreditBalanceStore {
     }
 
     func apply(_ snapshot: BillingSnapshot) {
+        billingEnabled = snapshot.enabled
         balancePoints = snapshot.balancePoints
         reservedPoints = snapshot.reservedPoints
         availablePoints = snapshot.availablePoints
@@ -103,6 +108,7 @@ final class CreditBalanceStore {
 
     func clear() {
         user = nil
+        billingEnabled = true
         balancePoints = 0
         reservedPoints = 0
         availablePoints = 0

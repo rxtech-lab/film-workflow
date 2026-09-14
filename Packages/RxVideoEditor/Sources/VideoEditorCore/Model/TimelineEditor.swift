@@ -9,6 +9,7 @@ public enum TimelineEditError: Error, Equatable, Sendable {
     case invalidDuration
     case invalidSpeed
     case unsupportedOperation
+    case invalidTrackOrder
 }
 
 /// Pure editing operations on a `Timeline`. Every operation validates the
@@ -462,6 +463,18 @@ public enum TimelineEditor {
         return nearest
     }
 
+    /// Reorders whole tracks from top to bottom, retaining their identities,
+    /// clips, settings and transitions. The order must include every track once.
+    public static func reorderTracks(_ timeline: inout Timeline, trackIDs: [UUID]) throws {
+        let existing = timeline.tracks.map(\.id)
+        guard trackIDs.count == existing.count,
+              Set(trackIDs).count == trackIDs.count,
+              Set(trackIDs) == Set(existing) else { throw TimelineEditError.invalidTrackOrder }
+        guard trackIDs != existing else { return }
+        let tracks = Dictionary(uniqueKeysWithValues: timeline.tracks.map { ($0.id, $0) })
+        timeline.tracks = trackIDs.compactMap { tracks[$0] }
+    }
+
     /// Adds a track of a kind at the end of the layout.
     @discardableResult
     public static func addTrack(_ timeline: inout Timeline, kind: TrackKind) -> UUID {
@@ -471,13 +484,14 @@ public enum TimelineEditor {
         case .video: prefix = "V"
         case .audio: prefix = "A"
         case .overlay: prefix = "T"
+        case .caption: prefix = "C"
         }
         let track = Track(kind: kind, name: "\(prefix)\(count)")
         switch kind {
-        case .overlay:
+        case .overlay, .caption:
             timeline.tracks.insert(track, at: 0)
         case .video:
-            let index = timeline.tracks.lastIndex { $0.kind == .video || $0.kind == .overlay }.map { $0 + 1 } ?? 0
+            let index = timeline.tracks.lastIndex { $0.kind == .video || $0.kind.drawsOverPicture }.map { $0 + 1 } ?? 0
             timeline.tracks.insert(track, at: index)
         case .audio:
             timeline.tracks.append(track)
@@ -493,6 +507,7 @@ extension TimelineEditError: LocalizedError {
         case .invalidDuration: return "Enter a duration of at least one frame within the available source media."
         case .invalidSpeed: return "Enter a finite speed greater than 0%."
         case .unsupportedOperation: return "This footage does not support that edit."
+        case .invalidTrackOrder: return "Include every track exactly once in the new order."
         case .unknownTrack: return "The track is no longer available."
         case .unknownClip: return "The clip is no longer available."
         case .kindNotAllowed: return "This footage cannot be placed on that track."

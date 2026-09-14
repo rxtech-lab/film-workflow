@@ -8,11 +8,12 @@ import VideoEditorCore
 /// Timing goes through `Clip.timelineInterval`, the same shift burn-in uses.
 @MainActor
 enum SequenceCaptionSources {
-    /// Overlay clips whose source is a caption project, in timeline order.
+    /// Clips on a caption or overlay lane whose source is a caption project,
+    /// in timeline order.
     static func captionClips(in sequence: SequenceProject, context: ModelContext) -> [(clip: Clip, project: CaptionProject)] {
         var projects: [UUID: CaptionProject] = [:]
         var result: [(clip: Clip, project: CaptionProject)] = []
-        for track in sequence.timeline.tracks where track.kind == .overlay {
+        for track in sequence.timeline.tracks where track.kind.drawsOverPicture {
             for clip in track.sortedClips where clip.source.kind == .captions {
                 guard let (prefix, id) = DocumentMediaResolver.parse(clip.source.id), prefix == .caption else { continue }
                 if projects[id] == nil {
@@ -46,10 +47,31 @@ enum SequenceCaptionSources {
     /// The style the render sheet edits and the subtitle track copies: the
     /// first caption clip's, since every caption clip usually shares one.
     static func effectiveStyle(in sequence: SequenceProject) -> TextStyle {
-        for track in sequence.timeline.tracks where track.kind == .overlay {
+        for track in sequence.timeline.tracks where track.kind.drawsOverPicture {
             if let clip = track.sortedClips.first(where: { $0.source.kind == .captions }) { return clip.text ?? .caption }
         }
         return .caption
+    }
+
+    /// The languages the caption clips are set to draw, when they agree; nil
+    /// when they differ, which the render sheet's single picker cannot show.
+    static func effectiveBurnInLanguages(in sequence: SequenceProject) -> [String]? {
+        let clips = sequence.timeline.allClips.filter { $0.source.kind == .captions }
+        guard let first = clips.first else { return nil }
+        return clips.allSatisfy { $0.captions.languages == first.captions.languages } ? first.captions.languages : nil
+    }
+
+    /// `timeline` with every caption clip drawing `languages`, for a render
+    /// that names its own burn-in language instead of using each clip's.
+    /// Punctuation stays as each clip set it.
+    static func timeline(_ timeline: Timeline, burningIn languages: [String]) -> Timeline {
+        var copy = timeline
+        for clip in copy.allClips where clip.source.kind == .captions {
+            try? TimelineEditor.update(&copy, clipID: clip.id) {
+                $0.captions = CaptionOptions(languages: languages, stripsPunctuation: $0.captions.stripsPunctuation)
+            }
+        }
+        return copy
     }
 
     /// Cues per language on the timeline clock, across every caption clip.

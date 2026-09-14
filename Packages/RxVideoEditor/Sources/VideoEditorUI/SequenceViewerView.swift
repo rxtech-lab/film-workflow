@@ -8,12 +8,14 @@ public struct SequenceViewerView: View {
     @Bindable var controller: TimelinePlayerController
     let fps: Int
     let stage: AnyView?
+    let showsScrubber: Bool
     @State private var presentedError: String?
 
-    public init(controller: TimelinePlayerController, fps: Int, stage: AnyView? = nil) {
+    public init(controller: TimelinePlayerController, fps: Int, stage: AnyView? = nil, showsScrubber: Bool = false) {
         self.controller = controller
         self.fps = fps
         self.stage = stage
+        self.showsScrubber = showsScrubber
     }
 
     public var body: some View {
@@ -25,6 +27,27 @@ public struct SequenceViewerView: View {
                     PlayerLayerView(player: controller.player)
                         .opacity(controller.currentTime < controller.duration ? 1 : 0)
                 }
+            }
+            .accessibilityElement(children: .contain)
+            .accessibilityLabel("Sequence preview")
+            .accessibilityIdentifier("sequence.viewer.stage")
+            if showsScrubber {
+                HStack(spacing: 12) {
+                    Slider(value: Binding(
+                        get: { min(controller.currentTime, controller.duration) },
+                        set: { controller.pause(); controller.seek(to: $0) }
+                    ), in: 0...max(controller.duration, 0.001))
+                    .controlSize(.small)
+                    .accessibilityLabel("Playback position")
+                    .accessibilityIdentifier("sequence.viewer.scrubber")
+                    Text(Timecode.string(seconds: controller.duration, fps: fps))
+                        .font(.system(size: 10, design: .monospaced))
+                        .foregroundStyle(.secondary)
+                }
+                .padding(.horizontal, 16)
+                .padding(.top, 8)
+                .background(.bar)
+                .disabled(controller.duration <= 0)
             }
             transport
         }
@@ -52,21 +75,28 @@ public struct SequenceViewerView: View {
             .menuStyle(.borderlessButton)
             .fixedSize()
             .help("Viewer tools")
+            .accessibilityIdentifier("sequence.viewer.tools")
             Spacer(minLength: 0)
             Button { controller.step(frames: -1) } label: { Image(systemName: "backward.frame.fill") }
                 .help("Previous frame")
+                .accessibilityIdentifier("sequence.viewer.previous-frame")
             Button { controller.togglePlay() } label: {
                 Image(systemName: controller.isPlaying ? "pause.fill" : "play.fill")
                     .frame(width: 16)
             }
             .keyboardShortcut(.space, modifiers: [])
             .help(controller.isPlaying ? "Pause" : "Play")
+            .accessibilityLabel(controller.isPlaying ? "Pause" : "Play")
+            .accessibilityIdentifier("sequence.viewer.play")
+            .disabled(controller.isLoading || controller.duration <= 0)
             Text(Timecode.string(seconds: controller.currentTime, fps: fps))
                 .font(.system(size: 17, weight: .light, design: .monospaced))
                 .fixedSize()
+                .accessibilityIdentifier("sequence.viewer.timecode")
 
             Button { controller.step(frames: 1) } label: { Image(systemName: "forward.frame.fill") }
                 .help("Next frame")
+                .accessibilityIdentifier("sequence.viewer.next-frame")
             Spacer(minLength: 0)
             AudioLevelMeterView(player: controller.player)
             Button { NSApp.keyWindow?.toggleFullScreen(nil) } label: {

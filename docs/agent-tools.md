@@ -17,6 +17,7 @@ separate "project" concept — the film is the project.
 | `folder_id` | A library folder. `null` means "no folder". | `folder_list` |
 | `source_id` | One take, as `sequence_add_clip` places it: `music:<uuid>`, `narration:<uuid>`, `image:<uuid>`, `video:<uuid>`, `remotion:<uuid>`, `caption:<uuid>`, `imported:<uuid>`. | `sourceId` on `footage_list` rows and takes, and on generator results |
 | `clip_id` | A clip on a sequence's timeline. | `sequence_get`, `sequence_add_clip` |
+| `track` | A track name or UUID, used by `sequence_add_clip`. | Track `id` on `sequence_get`, or `track_id` on `sequence_add_track` |
 
 Kinds are the library's own names: `music`, `narration`, `caption`, `image`,
 `video`, `remotion`, `sequence`, `imported`.
@@ -32,11 +33,13 @@ Kinds are the library's own names: `music`, `narration`, `caption`, `image`,
 | Templates | `project_template_from_film` (admin), `project_template_apply` |
 | Library | `footage_list`, `footage_get`, `footage_create`, `footage_update`, `footage_duplicate`, `footage_move`, `footage_import`, `footage_delete` |
 | Folders | `folder_list`, `folder_create`, `folder_rename`, `folder_delete` |
-| Sequences | `sequence_list`, `sequence_create`, `sequence_get`, `sequence_set_timeline`, `sequence_add_clip`, `sequence_remove_clip`, `sequence_render`, `sequence_renders` |
+| Sequences | `sequence_list`, `sequence_create`, `sequence_get`, `sequence_set_timeline`, `sequence_add_track`, `sequence_reorder_tracks`, `sequence_add_clip`, `sequence_remove_clip`, `sequence_render`, `sequence_renders` |
 | Generators | `music_generate`, `narration_generate`, `image_generate`, `video_generate`, `video_job_status`, `video_resume` |
 | Captions | `caption_create`, `caption_transcribe`, `caption_versions`, `caption_translate`, `caption_list_segments`, `caption_search_segments`, `caption_update_segment`, `caption_propose_edits`, `caption_set_speakers`, `caption_export` |
 | Remotion | `remotion_list_files`, `remotion_read_file`, `remotion_write_file`, `remotion_edit_file`, `remotion_take_screenshot`, `remotion_take_screenshots`, `remotion_generate_image`, `remotion_add_image`, `remotion_remove_image`, `remotion_add_audio`, `remotion_remove_audio` |
 | Podcast | `podcast_create`, `podcast_list_speakers`, `podcast_add_content`, `podcast_update_content`, `podcast_remove_content`, `podcast_update_settings` (a line-by-line view of a narration item) |
+| Web | `web_read` |
+| Simple mode | `wizard_present_templates`, `wizard_present_options`, `wizard_report_progress` |
 
 `show_sign_in_dialog` takes no arguments and works without an open film. It
 requests the native RxLab sign-in sheet when the user is signed out, returning
@@ -55,6 +58,43 @@ the kind's generator adds a new one.
 A typical build: `footage_list` → `footage_create`/`footage_update` →
 `<kind>_generate` → `sequence_create` → `sequence_add_clip` (one call per
 take) → `sequence_render`.
+
+`sequence_add_track` takes `sequence_id` and `kind` (`video`, `audio`,
+`caption` or `overlay`), and returns `sequence_id`, `track_id`, `track` (name)
+and `kind`. A sequence may hold as many caption lanes (`C1`, `C2`, …) as the
+film needs; `overlay` lanes take captions too, and stills as well.
+It adds an empty track using the editor's naming and ordering, preserving the
+existing timeline. Reuse a suitable track when possible; add one when another
+picture layer or simultaneous audio needs its own track. Pass the returned
+`track_id` as `sequence_add_clip.track` and set `start` to align clips across
+tracks. The tool is available in conversations and Simple mode.
+
+`sequence_reorder_tracks` takes `sequence_id` and `track_ids`: every track UUID
+from `sequence_get`, exactly once, in the desired top-to-bottom order. It
+returns the updated sequence and timeline. Clips, track names, mute settings
+and transitions stay with their tracks. Higher video, caption and overlay
+tracks draw over lower picture tracks in preview and export; audio track order affects
+layout only. The tool is available in conversations and Simple mode.
+
+In the timeline UI, drag a track's grip or name in the left header column.
+The row follows the pointer with a raised shadow, neighboring rows slide aside,
+and an insertion line marks its destination. Motion respects Reduce Motion.
+Releasing applies one undoable edit;
+releasing outside the header column cancels the move. The mute button remains
+independent of dragging.
+
+`web_read` fetches a public page and returns its title, meta description,
+visible text and advertised images. It works without an open film. http and
+https only; loopback, private and link-local addresses are refused on every hop
+including redirects, the body is capped, and `max_chars` bounds the text. It exists because the CLI engines' own
+`WebFetch` is withheld from every thread and does not exist on the in-process
+engines at all.
+
+The `wizard_*` tools belong to a Simple mode run and are withheld from ordinary
+conversations; a Simple mode thread in turn sees a narrower allowlist than a
+conversation. Each ends a phase: call one, then stop, because the user's answer
+comes back as the next turn. See `docs/simple-mode.md` for the protocol and the
+json-render page format.
 
 ## The agent window
 
@@ -80,6 +120,8 @@ engine's own filesystem and shell tools are always disallowed.
 | `MCPSequenceHandlers` | `sequence_*` |
 | `MCPGenerateHandlers` | The four generators and the video job tools |
 | `MCPCaptionHandlers`, `RemotionMCPHandlers`, `MCPPodcastHandlers` | Their families |
+| `MCPWebHandlers` | `web_read` |
+| `MCPWizardHandlers` | `wizard_*`, parked on the run's `SimpleModeSession` |
 | `AgentPrompts`, `AgentSkills` (`clients/agent/`) | The system prompt and its skills |
 | `AgentTarget`, `AgentTargetResolver` (`models/`) | What a thread is pointed at, and how the prompt describes it |
 

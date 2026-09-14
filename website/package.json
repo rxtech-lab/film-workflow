@@ -12,7 +12,8 @@
     "test:watch": "vitest",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
-    "db:push": "drizzle-kit push"
+    "db:push": "drizzle-kit push",
+    "db:seed-models": "bun --conditions react-server scripts/seed-catalog-models.ts"
   },
   "dependencies": {
     "@ai-sdk/gateway": "3.0.153",

@@ -25,6 +25,11 @@ struct FootageBrowserView: View {
     var isExpanded = true
     var onToggle: () -> Void = {}
 
+    /// Authoring is admin-only. `LibraryPanel` refreshes the flag; observing
+    /// it here rebuilds the menus once it lands.
+    @State private var authoring = MarketplaceAuthoringService.shared
+    @State private var authoringSeed: MarketplaceAuthoringSeed?
+
     /// The header's fixed height, which is all that remains of a collapsed pane.
     static let headerHeight: CGFloat = 28
 
@@ -36,20 +41,29 @@ struct FootageBrowserView: View {
                                  message: "Import media or generate footage, then drag it to the timeline.")
             } else {
                 ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 12) {
+                    FootageFlowLayout {
                         ForEach(cells) { cell in
                             FootageCellView(cell: cell, libraryItem: libraryItem, isSelected: cell.id == selectedID,
                                             onSelect: { onSelect(cell) }, onSkim: { onSkim(cell, $0) },
-                                            player: player, onSeek: { onSeek(cell, $0) })
+                                            player: player, onSeek: { onSeek(cell, $0) },
+                                            onCreateMarketplaceItem: seed(for: cell).map { seed in { authoringSeed = seed } })
                         }
                     }
                     .padding(4)
                 }
                 .contentShape(Rectangle())
                 .onTapGesture(perform: onDeselect)
+                .accessibilityIdentifier("footage.versions")
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .sheet(item: $authoringSeed) { MarketplaceAuthoringEditor(seed: $0) }
+    }
+
+    /// The item's own name titles the draft; a take's own title is only "v3".
+    private func seed(for cell: FootageCell) -> MarketplaceAuthoringSeed? {
+        guard authoring.canAuthor else { return nil }
+        return MarketplaceAuthoringSeed(title: title, sourceKind: cell.kind, file: cell.mediaURL)
     }
 
     private var header: some View {
@@ -62,6 +76,7 @@ struct FootageBrowserView: View {
                 Text(title).font(.caption.weight(.semibold)).foregroundStyle(.secondary).lineLimit(1)
                 Spacer()
                 Text("\(cells.count)").font(.caption).foregroundStyle(.tertiary)
+                    .accessibilityIdentifier("footage.version-count")
             }
             .padding(.horizontal, 10)
             .frame(height: Self.headerHeight)
@@ -86,6 +101,8 @@ struct FootageCellView: View {
 
     var player: FootagePlayer?
     var onSeek: (Double) -> Void = { _ in }
+    /// Nil hides the marketplace action, which is all that gates it.
+    var onCreateMarketplaceItem: (() -> Void)?
 
     @State private var loadedDuration: TimeInterval?
     private var duration: TimeInterval? { cell.duration ?? loadedDuration }
@@ -110,6 +127,16 @@ struct FootageCellView: View {
             .timelineDraggable(dragItem, thumbnailURL: cell.thumbnailURL) { provider in
                 if let libraryItem { provider.register(LibraryDragToken(item: libraryItem)) }
             }
+            .accessibilityElement(children: .contain)
+            .accessibilityIdentifier("footage.cell.\(cell.id.uuidString)")
+            .contextMenu {
+                if let onCreateMarketplaceItem {
+                    Button(action: onCreateMarketplaceItem) {
+                        Label("Create Marketplace Item…", systemImage: "storefront")
+                    }
+                    .help("Start a marketplace draft from this take, with its file attached")
+                }
+            }
     }
 
     private var content: some View {
@@ -119,6 +146,9 @@ struct FootageCellView: View {
             Text(cell.title).font(.caption).lineLimit(1)
             Text(cell.subtitle).font(.caption2).foregroundStyle(.secondary).lineLimit(1)
         }
+        .frame(minWidth: 0,
+               idealWidth: ceil(FilmstripLayout.preferredWidth(duration: duration, isTemporal: cell.previewSource?.isTemporal == true)),
+               maxWidth: .infinity, alignment: .leading)
         .help("Click to preview, drag onto the timeline or into a library group")
         .task(id: cell) {
             loadedDuration = nil

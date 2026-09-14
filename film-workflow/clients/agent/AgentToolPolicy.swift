@@ -1,3 +1,4 @@
+import FilmTemplateKit
 import Foundation
 import RxAgentSDK
 
@@ -49,25 +50,73 @@ enum AgentToolPolicy {
         "folder_delete",
     ]
 
+    /// Tools that only mean something inside a Simple mode run.
+    ///
+    /// A normal conversation has a transcript to ask questions in, so a wizard
+    /// page there would have nowhere to appear; offering these to every thread
+    /// would invite the agent to call one and get an error back.
+    static let wizardOnly: Set<String> = Set(WizardTool.all)
+
+    /// What a Simple mode thread is allowed to do.
+    ///
+    /// Narrower than a conversation on purpose. The wizard drives a fixed
+    /// sequence of phases, and a tool outside that arc — rendering, podcasts,
+    /// editing a Remotion composition by hand — is a way for a run to wander
+    /// off instead of producing the first cut the user asked for.
+    static let simpleModeTools: Set<String> = ([
+        WebTool.read,
+        "film_list",
+        "marketplace_list", "marketplace_get", "marketplace_show", "marketplace_install",
+        "project_template_apply",
+        "footage_list", "footage_get", "footage_create", "footage_update", "footage_import",
+        "folder_list", "folder_create",
+        "image_generate", "music_generate", "narration_generate",
+        "sequence_list", "sequence_get", "sequence_create",
+        "sequence_add_track", "sequence_reorder_tracks", "sequence_add_clip", "sequence_remove_clip", "sequence_set_timeline",
+        "caption_create",
+    ] as Set<String>).union(wizardOnly)
+
     /// The descriptors a thread may call.
-    static func descriptors(policy: AgentWritePolicy) -> [MCPToolDescriptor] {
-        let withheld = withheldNames(policy: policy)
-        return MCPToolRegistry.allDescriptors().filter { !withheld.contains($0.name) }
-    }
-
-    static func toolNames(policy: AgentWritePolicy) -> [String] {
-        descriptors(policy: policy).map(\.name)
-    }
-
-    static func withheldNames(policy: AgentWritePolicy) -> Set<String> {
-        switch policy {
-        case .review: return alwaysWithheld.union(reviewWithheld)
-        case .direct: return alwaysWithheld
+    static func descriptors(
+        policy: AgentWritePolicy,
+        mode: AgentThreadMode = .conversation
+    ) -> [MCPToolDescriptor] {
+        let withheld = withheldNames(policy: policy, mode: mode)
+        return MCPToolRegistry.allDescriptors().filter { descriptor in
+            guard !withheld.contains(descriptor.name) else { return false }
+            guard case .simpleMode = mode else { return true }
+            return simpleModeTools.contains(descriptor.name)
         }
     }
 
-    static func allows(_ name: String, policy: AgentWritePolicy) -> Bool {
-        !withheldNames(policy: policy).contains(name) && (!MCPMarketplaceHandlers.adminNames.contains(name) || MarketplaceAuthoringService.shared.canAuthor)
+    static func toolNames(
+        policy: AgentWritePolicy,
+        mode: AgentThreadMode = .conversation
+    ) -> [String] {
+        descriptors(policy: policy, mode: mode).map(\.name)
+    }
+
+    static func withheldNames(
+        policy: AgentWritePolicy,
+        mode: AgentThreadMode = .conversation
+    ) -> Set<String> {
+        var withheld = switch policy {
+        case .review: alwaysWithheld.union(reviewWithheld)
+        case .direct: alwaysWithheld
+        }
+        if case .conversation = mode { withheld.formUnion(wizardOnly) }
+        return withheld
+    }
+
+    static func allows(
+        _ name: String,
+        policy: AgentWritePolicy,
+        mode: AgentThreadMode = .conversation
+    ) -> Bool {
+        guard !withheldNames(policy: policy, mode: mode).contains(name) else { return false }
+        if case .simpleMode = mode, !simpleModeTools.contains(name) { return false }
+        return !MCPMarketplaceHandlers.adminNames.contains(name)
+            || MarketplaceAuthoringService.shared.canAuthor
     }
 
     // MARK: - Coding-agent tools
@@ -95,8 +144,11 @@ enum AgentToolPolicy {
 
     /// Everything withheld from a turn: the policy's own withholdings plus the
     /// agent's built-in tools.
-    static func disallowedToolNames(policy: AgentWritePolicy) -> [String] {
-        Array(withheldNames(policy: policy)) + codingAgentTools
+    static func disallowedToolNames(
+        policy: AgentWritePolicy,
+        mode: AgentThreadMode = .conversation
+    ) -> [String] {
+        Array(withheldNames(policy: policy, mode: mode)) + codingAgentTools
     }
 }
 
@@ -113,10 +165,25 @@ enum AgentToolPolicy {
 /// Reads the policy on every call rather than capturing it, so flipping
 /// Settings › Write policy mid-conversation applies to the next tool call.
 struct AgentPolicyPermissions: PermissionResolving {
+    /// Which thread is asking. The allowlist is per thread now that Simple mode
+    /// threads see a narrower surface, and this hook runs before
+    /// `--allowedTools`, so without the thread it would allow a tool the turn
+    /// was never offered.
+    let threadID: UUID?
+
+    init(threadID: UUID? = nil) {
+        self.threadID = threadID
+    }
+
     func resolve(_ request: PermissionRequest) async -> PermissionDecision {
         let bare = MCPToolName.bare(request.toolName)
+        let threadID = threadID
         let allowed = await MainActor.run {
-            AgentToolPolicy.allows(bare, policy: AgentSettings.shared.writePolicy)
+            AgentToolPolicy.allows(
+                bare,
+                policy: AgentSettings.shared.writePolicy,
+                mode: AgentController.shared.mode(forThreadID: threadID)
+            )
         }
         if allowed { return .allow }
         return .denyWithReason(

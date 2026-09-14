@@ -30,6 +30,8 @@ struct FootageViewer: View {
                 stage
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .accessibilityElement(children: .contain)
+            .accessibilityIdentifier("viewer.stage")
             transport
         }
         .task(id: LoadRequest(cell: cell, revision: previewRevision)) { await player.load(cell, document: document) }
@@ -106,6 +108,7 @@ struct FootageViewer: View {
             .disabled(versions.count < 2)
             .help("Choose footage version")
             .accessibilityLabel("Footage version")
+            .accessibilityIdentifier("viewer.version")
         }
         .padding(.horizontal, 12)
         .frame(height: 34)
@@ -132,10 +135,12 @@ struct FootageViewer: View {
             .fixedSize()
             .help("Viewer tools")
             .accessibilityLabel("Viewer tools")
+            .accessibilityIdentifier("viewer.tools")
             Spacer(minLength: 0)
             if isPlayable {
                 Button { player.pause(); player.step(frames: -1) } label: { Image(systemName: "backward.frame.fill") }
                     .help("Previous frame")
+                    .accessibilityIdentifier("viewer.previous-frame")
                 Button { player.togglePlay() } label: {
                     Image(systemName: player.isPlaying ? "pause.fill" : "play.fill").frame(width: 16)
                 }
@@ -275,7 +280,7 @@ final class FootagePlayer {
             let height = cell.drag.naturalHeight ?? 1080
             let clip = Clip(id: cell.id, source: cell.drag.source, start: 0, duration: max(0.1, duration),
                             sourceDuration: duration, text: cell.captionStyle)
-            var tracks = [Track(kind: cell.kind == .captions ? .overlay : .video, name: cell.title, clips: [clip])]
+            var tracks = [Track(kind: cell.kind == .captions ? .caption : .video, name: cell.title, clips: [clip])]
             if cell.captionAudioURL != nil {
                 let source = ClipSource(id: "library-caption-audio", kind: .audio, displayName: cell.title)
                 tracks.append(Track(kind: .audio, name: "Source audio", clips: [Clip(source: source, start: 0, duration: max(0.1, duration))]))
