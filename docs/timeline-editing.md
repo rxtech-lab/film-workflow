@@ -45,6 +45,29 @@ the context menu remove the whole selection as one undo step; Ripple Delete
 closes each gap. Speed, Reverse, and the inspector need exactly one selected
 clip; the toolbar shows the count otherwise.
 
+## Disabling clips and tracks
+
+A clip can be turned off without being removed. The clip keeps its place,
+trims, speed, volume and effects, and the timeline keeps its length; it is
+simply left out of the preview and the render, so what was under it shows
+through and a gap is all that remains where nothing else covers it. Nothing
+on the timeline moves, so turning a clip back on restores the cut exactly.
+
+Toggle it from the clip's context menu (Enable/Disable, which acts on the
+whole selection), the timeline toolbar's eye button, the Clip inspector's
+Enabled switch, or by pressing V with clips selected. A disabled clip draws
+greyed out with a dashed border and an eye-with-a-slash badge.
+
+Each track header carries the same eye button, which turns the whole lane off
+the way disabling each of its clips would. It is separate from the audio
+lane's mute button: mute silences a lane that still renders its picture,
+while disabling removes the lane from the render entirely.
+
+Everything downstream follows the switch: burned-in captions, embedded
+subtitle tracks and sidecar transcripts all skip disabled caption clips and
+lanes, and a Remotion clip that is off is neither rendered before an export
+nor able to hold one up while its media is missing.
+
 A caption clip starts with its project's default style
 (`CaptionProject.captionStyle`, edited in the project's Style tab); the Clip
 tab changes one clip, and the render sheet's Caption Style changes every

@@ -45,6 +45,12 @@ public struct ClipInspectorView: View {
                 Section {
                     LabeledContent("Source", value: clip.source.displayName)
                     LabeledContent("Kind", value: clip.source.kind.rawValue.capitalized)
+                    Toggle("Enabled", isOn: Binding(
+                        get: { clip.isEnabled },
+                        set: { on in performEdit { try TimelineEditor.setEnabled(&timeline, clipIDs: [clipID], isEnabled: on) } }
+                    ))
+                    .help("A disabled clip keeps its place on the timeline but is left out of the preview and the render")
+                    .accessibilityIdentifier("inspector.clip.enabled")
                     if let renderStatus {
                         HStack {
                             Label(renderStatus, systemImage: "exclamationmark.triangle")

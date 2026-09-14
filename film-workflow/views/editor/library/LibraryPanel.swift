@@ -22,6 +22,8 @@ struct LibraryPanel: View {
     let onShowVersions: (LibraryRow, UUID?) -> Void
     /// Creates the captions for a narration row and puts them on the timeline.
     var onCreateCaptions: (LibraryRow) -> Void = { _ in }
+    /// Same, for one of the film's recordings, named by its source id.
+    var onGenerateCaptions: (String) -> Void = { _ in }
     /// Backs the Marketplace tab. Nil hides the tab.
     var marketplace: MarketplaceStore? = .shared
 
@@ -66,6 +68,8 @@ struct LibraryPanel: View {
                         .labelsHidden()
                         .fixedSize()
                         .accessibilityIdentifier("library.tab")
+                        .filmTip(.libraryMarketplace, when: tab == .library)
+                        .onChange(of: tab) { FilmFeatureTip.libraryMarketplace.didPerform() }
                     }
                 }
                 .simultaneousGesture(TapGesture().onEnded { dismissTextFieldFocus() })
@@ -75,6 +79,8 @@ struct LibraryPanel: View {
                         .controlSize(.small)
                         .focused($filterFocused)
                         .onExitCommand { filterFocused = false }
+                        .filmTip(.libraryFilter, when: tab == .library && !filterFocused && searchText.isEmpty)
+                        .onChange(of: searchText) { FilmFeatureTip.libraryFilter.didPerform() }
                     // Marketplace items are sectioned by kind already.
                     if tab == .library {
                         Picker("Kind", selection: $filter) {
@@ -195,6 +201,8 @@ struct LibraryPanel: View {
             onExport: onExport,
             onShowVersions: onShowVersions,
             onCreateCaptions: onCreateCaptions,
+            onGenerateCaptions: onGenerateCaptions,
+            hasCaptions: hasCaptions,
             currentVersion: { currentVersion(for: $0) },
             onSelectVersion: selectVersion,
             dragPayload: dragPayload,
@@ -233,8 +241,16 @@ struct LibraryPanel: View {
         },
         isExpanded: footageVisible,
         onToggle: toggleFootage,
-        isFromMarketplace: state.selection.map(index.isFromMarketplace) ?? false
+        isFromMarketplace: state.selection.map(index.isFromMarketplace) ?? false,
+        onGenerateCaptions: onGenerateCaptions,
+        hasCaptions: hasCaptions
     )
+    }
+
+    /// Whether one of the film's recordings already has a caption project, so
+    /// the menus can offer to open it rather than make a second one.
+    private func hasCaptions(_ sourceID: String) -> Bool {
+        index.captions.contains { $0.lyricsSourceID == sourceID }
     }
 
     /// Copies an installed marketplace item into this film, switches to the

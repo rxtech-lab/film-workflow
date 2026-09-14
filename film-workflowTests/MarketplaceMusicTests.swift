@@ -9,6 +9,51 @@ import Testing
 struct MarketplaceMusicTests {
     private let srt = "1\n00:00:00,000 --> 00:00:01,000\nFirst line\n\n2\n00:00:01,500 --> 00:00:03,000\nSecond line"
 
+    @Observable final class LyricsDraft {
+        var tracks: [MarketplaceLyricTrack] = []
+    }
+
+    private struct LyricsEditorHarness: View {
+        @Bindable var draft: LyricsDraft
+        var body: some View { MarketplaceLyricsEditor(tracks: $draft.tracks).padding() }
+    }
+
+    @Test("Existing marketplace tracks can be relabeled without replacing captions or colliding with translations")
+    func editTrackLanguage() async throws {
+        NSApp.accessibilitySetValue(true, forAttribute: .init(rawValue: "AXEnhancedUserInterface"))
+        let draft = LyricsDraft()
+        draft.tracks = [try MarketplaceLyricTrack.parse(srt, language: "und"),
+                        try MarketplaceLyricTrack.parse(srt, language: "zh-Hans")]
+        let originalCues = draft.tracks[0].cues
+        #expect(draft.tracks[0].displayName == String(localized: "Original"))
+        let host = NSHostingView(rootView: LyricsEditorHarness(draft: draft))
+        let window = NSWindow(contentRect: .init(x: 0, y: 0, width: 600, height: 300), styleMask: [.titled], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        window.contentView = host
+        window.orderBack(nil)
+        defer { window.close() }
+        try await Task.sleep(for: .milliseconds(200))
+        func popups(_ view: NSView) -> [NSPopUpButton] {
+            view.subviews.flatMap { ($0 as? NSPopUpButton).map { [$0] } ?? popups($0) }
+        }
+        let menu = try #require(popups(host).first?.menu)
+        let english = try #require(menu.items.firstIndex { $0.title == CaptionTranslationAvailability.displayName("en") })
+        menu.performActionForItem(at: english)
+        for _ in 0..<40 where draft.tracks[0].language != "en" { try await Task.sleep(for: .milliseconds(50)) }
+        #expect(draft.tracks.map(\.language) == ["en", "zh-Hans"])
+        #expect(draft.tracks[0].cues == originalCues)
+        var metadata = MarketplaceItemMetadata()
+        metadata.lyricTracks = draft.tracks
+        let decoded = try JSONDecoder().decode(MarketplaceItemMetadata.self, from: JSONEncoder().encode(metadata))
+        #expect(decoded.lyricTracks?.first?.language == "en")
+        #expect(decoded.lyricTracks?.first?.cues == originalCues)
+        let before = draft.tracks
+        #expect(throws: (any Error).self) {
+            try MarketplaceLyricTrack.setLanguage("zh-Hans", for: "en", in: &draft.tracks)
+        }
+        #expect(draft.tracks == before)
+    }
+
     @Test("Caption import preserves timing, translations, gaps, and old metadata")
     func captions() throws {
         let original = try MarketplaceLyricTrack.parse(srt, language: "en")

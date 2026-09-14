@@ -51,6 +51,9 @@ struct CaptionSegmentListView: View {
     }
 
     var body: some View {
+        // Share one ordering across the list, row actions and toolbar. SwiftUI
+        // can ask for every row's menu while constructing a macOS List.
+        let segments = segments
         VStack(spacing: 0) {
             if segments.isEmpty {
                 ContentUnavailableView(
@@ -59,13 +62,19 @@ struct CaptionSegmentListView: View {
                     description: Text("Run transcription to create captions from your audio.")
                 )
             } else {
+                HStack {
+                    CaptionSourceLanguagePicker(project: project)
+                    Spacer(minLength: 0)
+                }
+                .padding(.horizontal, 10)
+                .padding(.top, 6)
                 actionBar
                 Divider()
-                list
+                list(segments: segments)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .toolbar { toolbarContent }
+        .toolbar { toolbarContent(segmentCount: segments.count) }
         .sheet(item: $editingSegment) { segment in
             CaptionSegmentEditorSheet(project: project, segment: segment)
         }
@@ -179,6 +188,7 @@ struct CaptionSegmentListView: View {
             .buttonStyle(.bordered)
             .controlSize(.small)
             .help("Edit caption start and end times")
+            .accessibilityIdentifier("caption-editor-retime")
 
             if project.lyricsSourceID != nil {
                 Button("Translate…") { showTranslateSheet = true }
@@ -193,7 +203,7 @@ struct CaptionSegmentListView: View {
         .padding(.vertical, 6)
     }
 
-    private var list: some View {
+    private func list(segments: [CaptionSegment]) -> some View {
         // Built once per list pass and handed down, not recomputed inside the
         // `ForEach`: the glossary is the same for every row.
         let resolver = CaptionTermResolver(terms: project.usableTerms)
@@ -205,12 +215,28 @@ struct CaptionSegmentListView: View {
 
             Section {
                 ForEach(Array(segments.enumerated()), id: \.element.uuid) { index, segment in
-                    row(index: index, segment: segment, resolver: resolver)
-                        .tag(segment.uuid)
+                    CaptionSegmentRow(
+                        project: project, segment: segment, index: index,
+                        canMergeWithNext: index + 1 < segments.count,
+                        resolver: resolver, rowIssues: validationIssuesBySegment[segment.uuid] ?? [],
+                        clipPlayer: clipPlayer, isTranslating: translator.isRunning
+                    ) { action in
+                        switch action {
+                        case .edit: editingSegment = segment
+                        case .words: inspectingSegment = segment
+                        case .retime: showRetimeSheet = true
+                        case .translate: showTranslateSheet = true
+                        case .split: split(segment)
+                        case .merge: mergeWithNext(segment)
+                        case .delete: deletingSegment = segment
+                        }
+                    }
+                    .tag(segment.uuid)
                 }
             } header: {
                 HStack {
                     Text("\(segments.count) captions")
+                        .accessibilityIdentifier("caption-editor-count")
                     Spacer()
                     if !selection.isEmpty {
                         Text("\(selection.count) selected")
@@ -253,106 +279,6 @@ struct CaptionSegmentListView: View {
         .fixedSize()
     }
 
-    @ViewBuilder
-    private func row(
-        index: Int,
-        segment: CaptionSegment,
-        resolver: CaptionTermResolver
-    ) -> some View {
-        let rowIssues = validationIssuesBySegment[segment.uuid] ?? []
-
-        HStack(alignment: .top, spacing: 10) {
-            Text("\(index + 1)")
-                .font(.caption.monospacedDigit())
-                .foregroundStyle(.secondary)
-                .frame(minWidth: 26, alignment: .trailing)
-
-            CaptionClipPlayButton(
-                url: project.audioURL,
-                startMs: segment.startMs,
-                endMs: segment.endMs,
-                clipID: segment.uuid.uuidString,
-                clipPlayer: clipPlayer
-            )
-
-            VStack(alignment: .leading, spacing: 3) {
-                HStack(spacing: 6) {
-                    Text(
-                        "\(timestamp(segment.startMs))–\(timestamp(segment.endMs))"
-                    )
-                    .font(.caption.monospacedDigit())
-                    .foregroundStyle(.secondary)
-
-                    if let label = project.speaker(segment.speakerId)?.label, !label.isEmpty {
-                        Text(label)
-                            .font(.caption)
-                            .padding(.horizontal, 5)
-                            .padding(.vertical, 1)
-                            .background(speakerTint(segment.speakerId).opacity(0.18), in: Capsule())
-                    }
-
-                    if segment.isEstimatedTiming {
-                        Image(systemName: "clock.badge.questionmark")
-                            .font(.caption)
-                            .foregroundStyle(.orange)
-                            .help("Timing is estimated")
-                    }
-                    if segment.hasWordTimings {
-                        Image(systemName: "waveform")
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                            .help("\(segment.words.count) word timings")
-                    }
-                }
-
-                Text(segment.text)
-                    .font(.body)
-                    .textSelection(.enabled)
-
-                translationLine(for: segment, resolver: resolver)
-
-                ForEach(rowIssues) { issue in
-                    Label(issue.message, systemImage: "exclamationmark.triangle.fill")
-                        .font(.caption)
-                        .foregroundStyle(issue.isBlocking ? .red : .orange)
-                }
-            }
-
-            Spacer(minLength: 0)
-        }
-        .padding(.vertical, 2)
-        .contentShape(Rectangle())
-        .onTapGesture(count: 2) { editingSegment = segment }
-        .contextMenu {
-            Button("Edit Text & Timing…") { editingSegment = segment }
-            if project.lyricsSourceID != nil {
-                Button("Retime Lyrics…") { showRetimeSheet = true }
-                Button("Translate Lyrics…") { showTranslateSheet = true }
-                    .disabled(translator.isRunning)
-            }
-            Button("Word Timings…") { inspectingSegment = segment }
-                .disabled(segment.words.isEmpty && segment.text.isEmpty)
-            Divider()
-            Button("Split at Midpoint") { split(segment) }
-                .disabled(segment.words.count < 2)
-            Button("Merge with Next") { mergeWithNext(segment) }
-                .disabled(nextSegment(after: segment) == nil)
-            Divider()
-            Button("Delete…", role: .destructive) { deletingSegment = segment }
-        }
-        #if os(iOS)
-        .swipeActions(edge: .trailing) {
-            Button("Delete…", role: .destructive) { deletingSegment = segment }
-            Button("Edit") { editingSegment = segment }
-                .tint(.blue)
-        }
-        .swipeActions(edge: .leading) {
-            Button("Words") { inspectingSegment = segment }
-                .tint(.purple)
-        }
-        #endif
-    }
-
     /// Snapshotting stays on the model's actor; the pure validation pass can
     /// run away from it. `updatedAt` changes after every editor mutation.
     private func refreshValidationIssuesIfNeeded() async {
@@ -370,42 +296,6 @@ struct CaptionSegmentListView: View {
         guard !Task.isCancelled, project.updatedAt == expectedUpdate else { return }
         validationIssuesBySegment = issues
         validatedProjectUpdate = expectedUpdate
-    }
-
-    /// The selected translation, under the original.
-    ///
-    /// Secondary colour at `.callout` is what makes the original read as the
-    /// primary text — a divider or an indent would fight the row metrics the
-    /// timestamps and speaker chip already establish.
-    @ViewBuilder
-    private func translationLine(
-        for segment: CaptionSegment,
-        resolver: CaptionTermResolver
-    ) -> some View {
-        let code = project.displayedTranslationLanguage
-        if !code.isEmpty {
-            if let translation = segment.translation(code), !translation.isEmpty {
-                HStack(alignment: .top, spacing: 4) {
-                    // Rendered, not raw: `{{RxLab}}` is storage, and it resolves
-                    // against the glossary every time the row is drawn — which
-                    // is why editing a term's wording updates the list at once.
-                    Text(resolver.render(translation.text, language: code))
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
-                        .textSelection(.enabled)
-                    if segment.isTranslationStale(code) {
-                        Image(systemName: "exclamationmark.arrow.triangle.2.circlepath")
-                            .font(.caption2)
-                            .foregroundStyle(.orange)
-                            .help("The caption changed after this was translated")
-                    }
-                }
-            } else {
-                Text("Not translated")
-                    .font(.callout)
-                    .foregroundStyle(.tertiary)
-            }
-        }
     }
 
     /// Describes the take on screen, not the last run: everything here reads the
@@ -439,7 +329,7 @@ struct CaptionSegmentListView: View {
     // MARK: - Toolbar
 
     @ToolbarContentBuilder
-    private var toolbarContent: some ToolbarContent {
+    private func toolbarContent(segmentCount: Int) -> some ToolbarContent {
         if !project.versions.isEmpty {
             ToolbarItem(placement: .primaryAction) {
                 versionMenu
@@ -491,13 +381,13 @@ struct CaptionSegmentListView: View {
                 } label: {
                     Label("Review Splits…", systemImage: "rectangle.split.3x1")
                 }
-                    .disabled(segments.isEmpty || isRunningAI)
+                    .disabled(segmentCount == 0 || isRunningAI)
                 Button {
                     checkTerms()
                 } label: {
                     Label("Check Terms…", systemImage: "text.magnifyingglass")
                 }
-                    .disabled(segments.isEmpty || project.usableTerms.isEmpty || isRunningAI)
+                    .disabled(segmentCount == 0 || project.usableTerms.isEmpty || isRunningAI)
 
                 Divider()
 
@@ -506,7 +396,7 @@ struct CaptionSegmentListView: View {
                 } label: {
                     Label("Retimer…", systemImage: "timeline.selection")
                 }
-                    .disabled(segments.isEmpty)
+                    .disabled(segmentCount == 0)
 
                 Button {
                     let changed = project.removeGaps(shorterThan: 300)
@@ -516,7 +406,7 @@ struct CaptionSegmentListView: View {
                 } label: {
                     Label("Close Gaps Under 300 ms", systemImage: "arrow.left.and.right")
                 }
-                .disabled(segments.count < 2)
+                .disabled(segmentCount < 2)
 
                 if !selection.isEmpty, !project.speakers.isEmpty {
                     Divider()
@@ -529,7 +419,7 @@ struct CaptionSegmentListView: View {
             } label: {
                 Label("More", systemImage: "ellipsis.circle")
             }
-            .disabled(segments.isEmpty)
+            .disabled(segmentCount == 0)
         }
     }
 
@@ -698,10 +588,6 @@ struct CaptionSegmentListView: View {
 
     // MARK: - Actions
 
-    private func timestamp(_ ms: Int) -> String {
-        project.lyricsSourceID == nil ? CaptionExporter.shortTimestamp(ms) : CaptionExporter.vttTimestamp(ms)
-    }
-
     private func nextSegment(after segment: CaptionSegment) -> CaptionSegment? {
         let ordered = segments
         guard let index = ordered.firstIndex(where: { $0.uuid == segment.uuid }),
@@ -746,10 +632,7 @@ struct CaptionSegmentListView: View {
         selection.removeAll()
     }
 
-    private func speakerTint(_ id: UUID?) -> Color {
-        guard let speaker = project.speaker(id) else { return .secondary }
-        return CaptionSpeakerPalette.color(at: speaker.colorIndex)
-    }
+
 }
 
 /// Deleting a version is irreversible and takes its captions with it, so it

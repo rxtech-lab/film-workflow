@@ -24,6 +24,12 @@ struct LibraryGrid: View {
     let onShowVersions: (LibraryRow, UUID?) -> Void
     /// Creates the captions for a narration row and puts them on the timeline.
     var onCreateCaptions: (LibraryRow) -> Void = { _ in }
+    /// Same, for a row that is plain audio — a music take or an imported file —
+    /// named by the source id of the version the card is showing.
+    var onGenerateCaptions: (String) -> Void = { _ in }
+    /// Whether that audio already has captions, which decides whether the item
+    /// offers to make them or to open the ones that exist.
+    var hasCaptions: (String) -> Bool = { _ in false }
     /// The version a row currently previews and drags, if it has one.
     let currentVersion: (LibraryItemID) -> UUID?
     /// Makes a version the current one.
@@ -44,22 +50,31 @@ struct LibraryGrid: View {
     @State private var lyricsRequest: MusicLyricsRequest?
 
     var body: some View {
-        ScrollView {
-            LazyVStack(spacing: 12, pinnedViews: [.sectionHeaders]) {
-                section(group: nil, rows: rows.filter { $0.groupID == nil })
-                ForEach(groups) { group in
-                    section(group: group, rows: rows.filter { $0.groupID == group.id })
+        // The gap past the last card is the library's own background: clicking
+        // it drops the selection, and right-clicking it offers the creation
+        // menu the folders offer. Neither can hang off the scroll view — a
+        // click that lands where a ScrollView has no content never reaches a
+        // gesture attached to the scroll view itself — so the content is
+        // stretched to the viewport and carries both.
+        GeometryReader { proxy in
+            ScrollView {
+                LazyVStack(spacing: 12, pinnedViews: [.sectionHeaders]) {
+                    section(group: nil, rows: rows.filter { $0.groupID == nil })
+                    ForEach(groups) { group in
+                        section(group: group, rows: rows.filter { $0.groupID == group.id })
+                    }
+                }
+                .accessibilityElement(children: .contain)
+                .padding(8)
+                .frame(maxWidth: .infinity, minHeight: proxy.size.height, alignment: .top)
+                .contentShape(Rectangle())
+                .onTapGesture { selection = nil }
+                .contextMenu {
+                    creationMenu(groupID: nil)
                 }
             }
             .accessibilityElement(children: .contain)
-            .padding(8)
-        }
-        .contentShape(Rectangle())
-        .onTapGesture { selection = nil }
-        .accessibilityElement(children: .contain)
-        .accessibilityIdentifier("library.grid")
-        .contextMenu {
-            creationMenu(groupID: nil)
+            .accessibilityIdentifier("library.grid")
         }
         .marketplaceSeedHost($seedRequest)
         .musicLyricsHost($lyricsRequest)
@@ -116,6 +131,13 @@ struct LibraryGrid: View {
                 .help("Add captions for this narration to the timeline, ready to transcribe")
                 Divider()
             }
+            if let audio = captionableAudio(row) {
+                Button { onGenerateCaptions(audio) } label: {
+                    Label(hasCaptions(audio) ? "Open Captions" : "Generate Captions…", systemImage: "captions.bubble")
+                }
+                .help("Add captions for this audio to the timeline, ready to transcribe")
+                Divider()
+            }
             Button("Rename…") { onRename(row) }
             MoveToProjectGroupMenu(groups: groups, currentGroupID: row.groupID) { onMove(row.id, $0) }
             if row.id.kind == .remotion {
@@ -145,6 +167,16 @@ struct LibraryGrid: View {
             Divider()
             Button("Delete…", role: .destructive) { onDelete(row) }
         }
+    }
+
+    /// The source id of an audio row's current take, or nil for a row that has
+    /// no audio to caption. Narrations are excluded deliberately: they have
+    /// their own item, which brings the script across as well.
+    private func captionableAudio(_ row: LibraryRow) -> String? {
+        guard row.id.kind == .music || row.id.kind == .imported,
+              let cell = footage(row.id), cell.kind == .audio
+        else { return nil }
+        return cell.drag.source.id
     }
 
     /// Hands the sequence to the agent, which extracts it into a draft project

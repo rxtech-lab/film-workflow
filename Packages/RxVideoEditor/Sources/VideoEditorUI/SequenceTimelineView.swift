@@ -113,7 +113,7 @@ public struct SequenceTimelineView: View {
     }
 
     private static let zoomRange: ClosedRange<Double> = 0.5...400
-    private let headerWidth: CGFloat = 64
+    private let headerWidth: CGFloat = 78
     private let rulerHeight: CGFloat = 20
     private let laneHeight: CGFloat = 52
     private let clipTitleHeight: CGFloat = 14
@@ -262,6 +262,11 @@ public struct SequenceTimelineView: View {
             skimming.toggle()
             return .handled
         }
+        .onKeyPress(characters: CharacterSet(charactersIn: "vV")) { press in
+            guard !selectedClipIDs.isEmpty, press.modifiers.isDisjoint(with: [.command, .control, .option]) else { return .ignored }
+            toggleSelectionEnabled()
+            return .handled
+        }
         .onKeyPress(.escape) { tool = .select; return .handled }
         .popover(isPresented: Binding(get: { speedClipID != nil }, set: { if !$0 { speedClipID = nil } })) {
             if let speedClipID { ClipSpeedEditor(timeline: $timeline, clipID: speedClipID) }
@@ -375,6 +380,18 @@ public struct SequenceTimelineView: View {
         }
     }
 
+    /// Whether the command would turn these clips on: one clip that is off
+    /// is enough, so a mixed selection lands on everything rendering.
+    private func enables(_ clipIDs: Set<UUID>) -> Bool {
+        clipIDs.contains { timeline.clip(id: $0)?.isEnabled == false }
+    }
+
+    private func toggleSelectionEnabled() {
+        guard !selectedClipIDs.isEmpty else { return }
+        timelineFocused = true
+        performEdit { try TimelineEditor.setEnabled(&timeline, clipIDs: selectedClipIDs, isEnabled: enables(selectedClipIDs)) }
+    }
+
     /// The one selected clip, for edits that only make sense on a single clip.
     private var selectedClip: Clip? {
         guard selectedClipIDs.count == 1, let id = selectedClipIDs.first else { return nil }
@@ -421,6 +438,14 @@ public struct SequenceTimelineView: View {
             .disabled(selectedClip?.source.capabilities.contains(.reverse) != true)
             .accessibilityIdentifier("timeline.reverse")
             .help("Reverse selected footage")
+            Button { toggleSelectionEnabled() } label: {
+                Label(enables(selectedClipIDs) ? LocalizedStringKey("Enable") : LocalizedStringKey("Disable"),
+                      systemImage: enables(selectedClipIDs) ? "eye.slash.fill" : "eye")
+            }
+            .tint(enables(selectedClipIDs) ? .orange : .secondary)
+            .disabled(selectedClipIDs.isEmpty)
+            .accessibilityIdentifier("timeline.enable")
+            .help("Enable or disable the selected clips (V): a disabled clip keeps its place but is left out of the preview and the render")
         }
         .buttonStyle(.bordered)
         .controlSize(.small)
@@ -453,7 +478,9 @@ public struct SequenceTimelineView: View {
                         HStack(spacing: 4) {
                             Image(systemName: "line.3.horizontal")
                                 .font(.system(size: 9)).foregroundStyle(.secondary)
-                            Text(track.name).font(.caption.weight(.semibold))
+                            Text(track.name)
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(track.isEnabled ? .primary : .secondary)
                             Spacer(minLength: 0)
                         }
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -463,6 +490,20 @@ public struct SequenceTimelineView: View {
                         .accessibilityElement(children: .ignore)
                         .accessibilityLabel("Reorder \(track.name)")
                         .accessibilityIdentifier("timeline.track.drag.\(track.id.uuidString)")
+                        Button {
+                            performEdit { try TimelineEditor.setTrackEnabled(&timeline, trackID: track.id, isEnabled: !track.isEnabled) }
+                        } label: {
+                            Image(systemName: track.isEnabled ? "eye" : "eye.slash.fill")
+                                .font(.caption2)
+                        }
+                        .buttonStyle(.borderless)
+                        .tint(track.isEnabled ? .secondary : .orange)
+                        .accessibilityIdentifier("timeline.track.enabled.\(track.id.uuidString)")
+                        .accessibilityLabel(track.isEnabled ? "Disable \(track.name)" : "Enable \(track.name)")
+                        .accessibilityValue(track.isEnabled ? "On" : "Off")
+                        .help(track.isEnabled
+                              ? "Disable track: its clips stay in place but are left out of the preview and the render"
+                              : "Enable track")
                         if track.kind.carriesAudio {
                             Button {
                                 if let index = timeline.tracks.firstIndex(where: { $0.id == track.id }) {
@@ -592,7 +633,7 @@ public struct SequenceTimelineView: View {
     private func lane(_ track: Track, width: CGFloat) -> some View {
         ZStack(alignment: .topLeading) {
             Rectangle()
-                .fill(laneColor(track.kind))
+                .fill(laneColor(track.kind).opacity(track.isEnabled ? 1 : 0.55))
                 .contentShape(Rectangle())
                 .gesture(marqueeGesture(scrubs: true))
             ForEach(track.clips) { clip in
@@ -804,6 +845,9 @@ public struct SequenceTimelineView: View {
         let waveformTop: CGFloat? = waveformHeight > 0 ? laneHeight - inset * 2 - waveformHeight : nil
         let adjustingVolume = isDragging && dragState.mode == .volume
         let volumeLit = adjustingVolume || hoveredVolumeClipID == clip.id
+        // A clip on a disabled lane is left out of the render as surely as one
+        // turned off itself, so both read the same way.
+        let renders = clip.isEnabled && track.isEnabled
 
         return ZStack(alignment: .topLeading) {
             RoundedRectangle(cornerRadius: 5)
@@ -832,7 +876,7 @@ public struct SequenceTimelineView: View {
                     duration: displayedClip.duration,
                     playbackRate: displayedClip.playbackRate,
                     isReversed: clip.isReversed,
-                    volume: track.isMuted ? 0 : (adjustingVolume ? dragState.previewVolume ?? clip.volume : clip.volume)
+                    volume: track.isMuted || !clip.isEnabled ? 0 : (adjustingVolume ? dragState.previewVolume ?? clip.volume : clip.volume)
                 )
                 .frame(height: waveformHeight)
                 .overlay(alignment: .top) {
@@ -864,14 +908,34 @@ public struct SequenceTimelineView: View {
             }
             .clipShape(RoundedRectangle(cornerRadius: 5))
             RoundedRectangle(cornerRadius: 5)
-                .strokeBorder(isSelected ? Color.white : Color.black.opacity(0.25), lineWidth: isSelected ? 2 : 1)
-            if isDragging {
-                // The volume readout sits above the waveform being dragged.
-                dragReadout(alignment: adjustingVolume ? .topTrailing : dragState.mode.isLeading ? .bottomLeading : .bottomTrailing)
-            }
+                .strokeBorder(isSelected ? Color.white : Color.black.opacity(0.25),
+                              style: StrokeStyle(lineWidth: isSelected ? 2 : 1, dash: renders ? [] : [4, 3]))
         }
         .frame(width: width, height: laneHeight - inset * 2)
+        .saturation(renders ? 1 : 0)
+        .opacity(renders ? 1 : 0.55)
+        // The badge sits outside the dimming so it stays readable on a clip
+        // that is off, which is the one time it is drawn.
+        .overlay(alignment: .topTrailing) {
+            if !renders {
+                Image(systemName: "eye.slash.fill")
+                    .font(.system(size: 9))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 4)
+                    .padding(.top, 2)
+                    .allowsHitTesting(false)
+                    .accessibilityHidden(true)
+            }
+        }
         .contentShape(Rectangle())
+        // The readout is an overlay, not a layer of the stack: it keeps its
+        // own width on a clip too short to hold it, and a layer that wide
+        // would stretch the stack — and with it the clip's own box — past
+        // the picture rail and handles, which stay at the clip's real width.
+        // The volume readout sits above the waveform being dragged.
+        .overlay(alignment: adjustingVolume ? .topTrailing : dragState.mode.isLeading ? .bottomLeading : .bottomTrailing) {
+            if isDragging { dragReadout() }
+        }
         .overlay {
             if tool == .select, clip.source.capabilities.contains(.duration) {
                 HStack(spacing: 0) {
@@ -941,6 +1005,12 @@ public struct SequenceTimelineView: View {
                 .disabled(!clip.source.capabilities.contains(.speed))
             Button(clip.isReversed ? "Play Forward" : "Reverse") { performEdit { try TimelineEditor.reverse(&timeline, clipID: clip.id) } }
                 .disabled(!clip.source.capabilities.contains(.reverse))
+            let enabling = enables(targets)
+            Button(enabling
+                   ? (targets.count > 1 ? "Enable \(targets.count) Clips" : "Enable")
+                   : (targets.count > 1 ? "Disable \(targets.count) Clips" : "Disable")) {
+                performEdit { try TimelineEditor.setEnabled(&timeline, clipIDs: targets, isEnabled: enabling) }
+            }
             if let alignment = alignment?(clip, timeline) {
                 Button(alignment.title) {
                     guard let target = alignment.targetClipID else { return }
@@ -1008,7 +1078,7 @@ public struct SequenceTimelineView: View {
     }
 
     /// The length and edge times of the clip being moved or trimmed.
-    private func dragReadout(alignment: Alignment) -> some View {
+    private func dragReadout() -> some View {
         let start = dragState.previewStart
         let end = start + dragState.previewDuration
         let text: String
@@ -1029,7 +1099,6 @@ public struct SequenceTimelineView: View {
             .padding(.vertical, 2)
             .background(.black.opacity(0.7), in: RoundedRectangle(cornerRadius: 3))
             .padding(3)
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: alignment)
             .allowsHitTesting(false)
     }
 

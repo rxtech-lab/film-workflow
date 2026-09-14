@@ -16,6 +16,7 @@ struct CaptionInspectorFooter: View {
     @State private var errorMessage: String?
     @State private var showError = false
     @State private var insufficientCredits: InsufficientCreditsNotice?
+    @State private var unavailableModel: UnavailableModelNotice?
     @State private var successNotice: String?
     @State private var confirmRetranscribe = false
 
@@ -32,6 +33,7 @@ struct CaptionInspectorFooter: View {
         }
         .alert("Error", isPresented: $showError) { Button("OK") {} } message: { Text(errorMessage ?? "An unknown error occurred.") }
         .insufficientCreditsAlert($insufficientCredits)
+        .unavailableModelAlert($unavailableModel)
         .alert("Captions ready", isPresented: Binding(get: { successNotice != nil }, set: { if !$0 { successNotice = nil } })) {
             Button("OK") { successNotice = nil }
         } message: { Text(successNotice ?? "") }
@@ -71,6 +73,8 @@ struct CaptionInspectorFooter: View {
             } catch let error as URLError where error.code == .cancelled {
             } catch {
                 if let notice = InsufficientCreditsNotice(error) { insufficientCredits = notice; return }
+                // A stale saved model needs the picker, not a retry.
+                if let notice = UnavailableModelNotice(error) { unavailableModel = notice; return }
                 errorMessage = error.localizedDescription
                 showError = true
             }

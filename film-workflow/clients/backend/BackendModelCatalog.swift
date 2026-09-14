@@ -11,6 +11,15 @@ nonisolated struct PickableModel: Codable, Identifiable, Hashable, Sendable {
     let displayName: String
     let capability: String
     let estimate: Estimate?
+    /// The model the server curation says a picker should preselect for this
+    /// capability. Optional, and `var` so the memberwise initializer defaults
+    /// it: a snapshot cached before this key existed still has to decode, and
+    /// callers that only care about the id should not have to spell it.
+    var isDefault: Bool?
+
+    /// The catalog's own recommendation, for code choosing a model with
+    /// nothing saved to go on.
+    var isPreferred: Bool { isDefault == true }
 
     var pickerLabel: String {
         guard let estimate else { return displayName }

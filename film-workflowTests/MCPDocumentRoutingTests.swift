@@ -24,7 +24,7 @@ struct MCPDocumentRoutingTests {
     func schemasAndListing() async throws {
         let tools = MCPToolRegistry.allDescriptors()
         #expect(tools.contains { $0.name == "film_list" })
-        for tool in tools where tool.name != "film_list" && tool.name != "show_sign_in_dialog" {
+        for tool in tools where !MCPToolRegistry.filmlessTools.contains(tool.name) {
             let props = tool.inputSchema["properties"] as? [String: Any]
             #expect(props?["film"] != nil, "\(tool.name) lacks film")
         }

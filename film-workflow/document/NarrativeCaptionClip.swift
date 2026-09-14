@@ -40,8 +40,13 @@ enum NarrativeCaptionClip {
     /// of the audio, which is where the cues begin — the same rule
     /// `CaptionAudioAlignment` uses to align captions after the fact.
     static func narrationClip(for generated: GeneratedNarrative, in timeline: Timeline) -> Clip? {
-        let sourceID = DocumentMediaResolver.sourceID(.narration, generated.id)
-        return timeline.allClips
+        clip(playing: DocumentMediaResolver.sourceID(.narration, generated.id), in: timeline)
+    }
+
+    /// The same rule for any audio the captions accompany, so captions for a
+    /// music take or an imported file land over it too.
+    static func clip(playing sourceID: String, in timeline: Timeline) -> Clip? {
+        timeline.allClips
             .filter { $0.source.id == sourceID }
             .min { ($0.start, $0.inPoint) < ($1.start, $1.inPoint) }
     }
@@ -54,7 +59,17 @@ enum NarrativeCaptionClip {
         audioDuration: TimeInterval,
         fallbackStart: TimeInterval
     ) -> Placement? {
-        if let clip = narrationClip(for: generated, in: timeline) {
+        placement(playing: DocumentMediaResolver.sourceID(.narration, generated.id), in: timeline,
+                  audioDuration: audioDuration, fallbackStart: fallbackStart)
+    }
+
+    static func placement(
+        playing sourceID: String,
+        in timeline: Timeline,
+        audioDuration: TimeInterval,
+        fallbackStart: TimeInterval
+    ) -> Placement? {
+        if let clip = clip(playing: sourceID, in: timeline) {
             return Placement(start: clip.start, duration: clip.duration, inPoint: clip.inPoint)
         }
         guard audioDuration > 0 else { return nil }

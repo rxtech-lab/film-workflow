@@ -171,6 +171,20 @@ public extension WizardPromptSet {
               returns. Do not create extra sequences.
             - Prefer the user's own footage over marketplace footage wherever a
               shot allows it.
+            - A marketplace asset reaches the film through
+              `\(tool("marketplace_add_to_film"))`, which returns the `sourceId`
+              a clip needs. `\(tool("marketplace_install"))` only downloads it;
+              an item installed and not added is in no film. Neither one buys
+              anything: a paid item the user does not own comes back as an
+              error, and the only way to offer it is
+              `\(tool("show_marketplace_item"))`, whose card carries the Buy
+              button. Leave it out and say so at the end rather than stalling.
+            - Model ids are curated per account, so read
+              `\(tool("models_list"))` rather than naming one from memory. An
+              item with no model set uses the account default, which is usually
+              what you want; if a generator reports the model is unavailable,
+              list again with `refresh` and set `subscriptionModel` from what
+              comes back.
 
             ### Page format for \(tool(WizardTool.presentOptions))
 
@@ -231,7 +245,10 @@ public extension WizardPromptSet {
                - the style choices the template actually offers, as Toggles \
             under `/style/…` (captions, an end card with the website, and so on).
                - music: an OptionGroup under `/music/track` with two or three \
-            marketplace tracks and a "No music" option.
+            marketplace tracks and a "No music" option. Offer only tracks \
+            `\(tool("marketplace_list"))` reports as free or owned — a track \
+            the user would have to buy cannot be added during the build, so \
+            offering it asks them to choose something you cannot deliver.
             Preselect your recommendation in `initial_state`, then stop.
             """
         },
@@ -257,7 +274,10 @@ public extension WizardPromptSet {
                - the style choices, as Toggles under `/style/…` (captions, an \
             end card with the website, and so on).
                - music: an OptionGroup under `/music/track` with two or three \
-            marketplace tracks and a "No music" option.
+            marketplace tracks and a "No music" option. Offer only tracks \
+            `\(tool("marketplace_list"))` reports as free or owned — a track \
+            the user would have to buy cannot be added during the build, so \
+            offering it asks them to choose something you cannot deliver.
             Preselect your recommendation in `initial_state`, then stop.
             """
         },
@@ -276,10 +296,16 @@ public extension WizardPromptSet {
             the user asked for one, drop optional requirements the user skipped, \
             and call it again with the same `application_id`. If a blocker is a \
             paid item the user does not own, leave it out and say so at the end.
-            3. On the sequence it returns, apply the rest of the choices: add \
-            the chosen music to the audio track for the sequence's length, add \
-            captions if asked, add the end card if asked.
-            4. Call `\(tool(WizardTool.reportProgress))` before each of these steps.
+            3. On the sequence it returns, apply the rest of the choices: take \
+            the chosen music into the film with \
+            `\(tool("marketplace_add_to_film"))` and add the `sourceId` it \
+            returns to the audio track for the sequence's length, add captions \
+            if asked, add the end card if asked.
+            4. A title or end card is a Remotion composition: write its source, \
+            then look at it with `\(tool("remotion_take_screenshot"))` before \
+            you move on. The user does not see the cut until the preview, so a \
+            card that renders wrong is yours to catch.
+            5. Call `\(tool(WizardTool.reportProgress))` before each of these steps.
 
             Finish with one sentence describing the cut. Do not call a wizard \
             tool in this phase.
@@ -298,10 +324,15 @@ public extension WizardPromptSet {
             each shot's footage from `/footage/…`. Generate a still with \
             `\(tool("image_generate"))` where the user asked for one, and leave \
             out any shot they skipped.
-            2. Apply the rest of the choices: add the chosen music to the audio \
-            track for the sequence's length, add captions if asked, add the end \
-            card if asked.
-            3. Call `\(tool(WizardTool.reportProgress))` before each of these steps.
+            2. Apply the rest of the choices: take the chosen music into the \
+            film with `\(tool("marketplace_add_to_film"))` and add the \
+            `sourceId` it returns to the audio track for the sequence's length, \
+            add captions if asked, add the end card if asked.
+            3. A title or end card is a Remotion composition: write its source, \
+            then look at it with `\(tool("remotion_take_screenshot"))` before \
+            you move on. The user does not see the cut until the preview, so a \
+            card that renders wrong is yours to catch.
+            4. Call `\(tool(WizardTool.reportProgress))` before each of these steps.
 
             Work on that one sequence and no other. Finish with one sentence \
             describing the cut. Do not call a wizard tool in this phase.

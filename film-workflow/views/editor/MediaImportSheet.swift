@@ -33,6 +33,7 @@ struct MediaImportSheet: View {
                 Text("Leave in place (reference)").tag(false)
             }
             .pickerStyle(.radioGroup)
+            .filmTip(.importStorage, when: !isImporting)
             Text(copyIntoFilm
                  ? "The film stays self-contained and portable. Large footage takes space twice."
                  : "The film stays small, but breaks if the original file moves.")
@@ -63,6 +64,7 @@ struct MediaImportSheet: View {
     }
 
     private func runImport() async {
+        FilmFeatureTip.importStorage.didPerform()
         isImporting = true
         defer { isImporting = false }
         for url in supported {

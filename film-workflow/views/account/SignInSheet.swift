@@ -78,31 +78,14 @@ extension View {
 private struct SignInSheetPresenter: ViewModifier {
     let auth: AuthManager
     @State private var navigation = AppNavigation.shared
-    @State private var windowReference = SignInWindowReference()
+    @State private var windowReference = KeyWindowReference()
     @State private var isPresented = false
 
     func body(content: Content) -> some View {
         content
-            .background {
-                SignInWindowReader { window in
-                    windowReference.window = window
-                    presentIfRequested()
-                }
-                .frame(width: 0, height: 0)
-            }
+            .trackingKeyWindow(windowReference) { presentIfRequested() }
             .onChange(of: navigation.signInRequestCount) { _, _ in
                 presentIfRequested()
-            }
-            .onReceive(NotificationCenter.default.publisher(for: NSWindow.didBecomeKeyNotification)) { notification in
-                guard notification.object as? NSWindow === windowReference.window else { return }
-                presentIfRequested()
-            }
-            .onReceive(NotificationCenter.default.publisher(for: NSWindow.didEndSheetNotification)) { notification in
-                guard notification.object as? NSWindow === windowReference.window else { return }
-                Task { @MainActor in
-                    await Task.yield()
-                    presentIfRequested()
-                }
             }
             .sheet(isPresented: $isPresented) {
                 SignInSheet(auth: auth)
@@ -115,40 +98,8 @@ private struct SignInSheetPresenter: ViewModifier {
             _ = navigation.consumeSignInRequest()
             return
         }
-        guard let window = windowReference.window, window.isKeyWindow,
-              window.isVisible, window.sheetParent == nil, window.attachedSheet == nil,
+        guard windowReference.isReadyForSheet,
               navigation.consumeSignInRequest(), !auth.isAuthenticated else { return }
         isPresented = true
-    }
-}
-
-private final class SignInWindowReference {
-    weak var window: NSWindow?
-}
-
-/// Scene-root modifiers do not reliably inherit SwiftUI's active-window state.
-private struct SignInWindowReader: NSViewRepresentable {
-    let onWindow: (NSWindow?) -> Void
-
-    func makeNSView(context: Context) -> ReaderView {
-        let view = ReaderView()
-        view.onWindow = onWindow
-        return view
-    }
-
-    func updateNSView(_ nsView: ReaderView, context: Context) {
-        nsView.onWindow = onWindow
-    }
-
-    final class ReaderView: NSView {
-        var onWindow: ((NSWindow?) -> Void)?
-
-        override func viewDidMoveToWindow() {
-            super.viewDidMoveToWindow()
-            DispatchQueue.main.async { [weak self] in
-                guard let self else { return }
-                onWindow?(window)
-            }
-        }
     }
 }

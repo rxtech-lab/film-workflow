@@ -84,6 +84,12 @@ extension Skill {
                 paragraphs line by line. Captions for a narration come from \
                 \(tool("caption_create")) with `narration_id`, which keeps the words \
                 exactly as written.
+                - Which model runs is curated per account, not fixed by the app. An \
+                item with no model set uses the account default, which is usually the \
+                right choice; to pick another, read \(tool("models_list")) and set the \
+                id it reports. If a generator answers that the model is not available \
+                for the capability, list again with `refresh` — the id was retired — \
+                rather than trying other names.
                 - Generation spends the user's credits or provider keys. Do not loop on \
                 regenerate to "improve" a result unless the user asked for variations.
                 """

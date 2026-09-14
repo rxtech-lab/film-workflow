@@ -4,7 +4,7 @@ import VideoEditorCore
 
 @MainActor enum MCPMarketplaceHandlers {
     static let adminNames: Set<String> = ["marketplace_create", "marketplace_update", "marketplace_upload", "marketplace_generate", "marketplace_render_preview", "marketplace_job_status", "marketplace_retry", "marketplace_publish", "marketplace_workspace", "project_template_from_film"]
-    static let names: Set<String> = adminNames.union(["marketplace_list", "marketplace_get", "show_marketplace_item", "marketplace_install", "project_template_apply"])
+    static let names: Set<String> = adminNames.union(["marketplace_list", "marketplace_get", "show_marketplace_item", "marketplace_install", "marketplace_add_to_film", "project_template_apply"])
     static func isMarketplaceTool(_ name: String) -> Bool { names.contains(name.components(separatedBy: "__").last ?? name) }
     private static let text: [String: Any] = ["type": "string"]
     private static func descriptor(_ name: String, _ description: String, _ properties: [String: Any] = [:], required: [String] = []) -> MCPToolDescriptor {
@@ -26,7 +26,8 @@ import VideoEditorCore
             descriptor("marketplace_workspace", "Admin: get the separate authoring film for a draft. Use its film id with existing generation/Remotion/sequence tools to create mock demonstrations. Original project footage must not be copied here for template previews.", ["item_id": text], required: ["item_id"]),
             descriptor("project_template_from_film", "Admin: extract the selected (or only) sequence into a template draft. Read the returned draft, generalize the project prompt/style and per-shot instructions with marketplace_update, then render a mock preview and call show_marketplace_item once. marketplace_bindings explicitly maps sourceId (or modifier:definitionId) to marketplace item ID. Explicitly map unidentified marketplace assets; never infer marketplace identities from names.", ["sequence_id": text, "prompt": text, "title": text, "draft_id": text, "marketplace_bindings": ["type": "object", "additionalProperties": text]]),
             descriptor("project_template_apply", "Use an entitled template in the specified film. Creates/resumes a NEW sequence without changing existing sequences. footage_bindings maps requirement id to sourceId from footage_list. Returns missing requirements, dependency costs/blockers and sequence_id. Request missing footage and offer generation; paid assets require the user's purchase. Repeat with application_id and bindings to resume. When ready, adapt ONLY the returned sequence then sequence_render.", ["item_id": text, "application_id": text, "footage_bindings": ["type": "object", "additionalProperties": text]], required: ["item_id"]),
-            descriptor("marketplace_install", "Install an owned/free marketplace item. Never purchases or charges credits. Returns data without displaying a card. Missing paid items must be bought with the Buy button on show_marketplace_item.", ["item_id": text], required: ["item_id"]),
+            descriptor("marketplace_install", "Install an owned/free marketplace item into the shared library on this Mac. Never purchases or charges credits. Returns data without displaying a card. Installing does NOT put the item in a film — use marketplace_add_to_film for that. Missing paid items must be bought with the Buy button on show_marketplace_item.", ["item_id": text], required: ["item_id"]),
+            descriptor("marketplace_add_to_film", "Put an owned/free marketplace item into this film's library, installing it first if needed, and return it with the `sourceId` sequence_add_clip takes. This is how marketplace music, footage, sound effects and Remotion compositions reach a timeline: marketplace_install only downloads them. Never purchases or charges credits — a paid item the user does not own comes back as an error naming its price, and must be bought with the Buy button on show_marketplace_item. Fonts, effects, transitions and project templates cannot be added: fonts and modifiers are global once installed, and a template is applied with project_template_apply.", ["item_id": text, "folder_id": text], required: ["item_id"]),
         ]
     }
     static func handle(name: String, arguments: [String: Any], container: ModelContainer?) async throws -> [String: Any] {
@@ -104,12 +105,66 @@ import VideoEditorCore
             let item = try await MarketplaceClient().item(value.itemId)
             return try result(MarketplaceCardPayload(marketplaceItem: item, definition: value.template, status: "published", application: value))
         case "marketplace_install":
-            let item = try await MarketplaceClient().item(required("item_id"))
-            guard await MarketplaceStore.shared.install(item) else { throw MarketplaceAuthoringError.invalid(MarketplaceStore.shared.lastError ?? "Could not install item.") }
+            let (item, _) = try await installed(required("item_id"))
             return try await show(item.id)
+        case "marketplace_add_to_film":
+            let film = try document()
+            let (item, manifest) = try await installed(required("item_id"))
+            guard item.kind.addsToFilm else {
+                throw MarketplaceAuthoringError.invalid(
+                    item.kind == .projectTemplate
+                        ? "\(item.title) is a project template; apply it with project_template_apply."
+                        : "\(item.title) is a \(item.kind.rawValue) and is available to every film once installed; it is not added to a library."
+                )
+            }
+            let store = MarketplaceStore.shared
+            let context = film.container.mainContext
+            let folderID = try (arguments["folder_id"] as? String).map {
+                guard let uuid = UUID(uuidString: $0) else { throw MCPToolError.invalidArguments("\($0) is not a folder id; ids come from folder_list") }
+                return uuid
+            }
+            let added = try await MarketplaceInstaller.addToFilm(
+                manifest,
+                contentURL: manifest.contentURL(in: store.directory(for: manifest)),
+                document: film,
+                groupID: folderID
+            )
+            var payload = MCPLibraryHandlers.full(
+                try MCPLibraryHandlers.item(id: added.id.uuidString, kind: added.kind, context: context),
+                context: context
+            )
+            payload["marketplaceItemId"] = item.id
+            return MCPToolRegistry.jsonResult(payload)
         default: throw MCPToolError.invalidArguments("Unknown marketplace tool.")
         }
     }
+    /// The item and its on-disk manifest, downloading it if this Mac does not
+    /// have it yet.
+    ///
+    /// Entitlement is checked here rather than left to `MarketplaceStore`,
+    /// which reports a refusal through `lastError` and returns false — the same
+    /// answer it gives for a download that failed. A paid item nobody bought is
+    /// the common case and the only one with something to tell the user, so it
+    /// gets a message naming the item and its price.
+    private static func installed(_ itemId: String) async throws -> (MarketplaceItem, InstalledMarketplaceManifest) {
+        let item = try await MarketplaceClient().item(itemId)
+        let store = MarketplaceStore.shared
+        guard item.isEntitled else {
+            throw MarketplaceAuthoringError.invalid(
+                "\(item.title) costs \(item.pricePoints) credits and this account does not own it. Show it with show_marketplace_item so the user can buy it; nothing here can purchase on their behalf."
+            )
+        }
+        if !store.isInstalled(item.id) {
+            guard await store.install(item) else {
+                throw MarketplaceAuthoringError.invalid(store.lastError ?? "Could not install \(item.title).")
+            }
+        }
+        guard let manifest = store.manifest(for: item.id) else {
+            throw MarketplaceAuthoringError.invalid("\(item.title) installed but left no manifest behind.")
+        }
+        return (item, manifest)
+    }
+
     /// Packages a composition into the zip the marketplace stores as content.
     ///
     /// A Remotion item publishes its *source*, not a render: the buyer installs

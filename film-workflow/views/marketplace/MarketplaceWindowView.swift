@@ -135,8 +135,8 @@ struct MarketplaceWindowView: View {
         .task { await store.loadTaxonomy() }
         .task { _ = await authoring.refreshAccess(); applyRoutedSelection() }
         .onChange(of: router.requested) { applyRoutedSelection() }
-        .onChange(of: selection) { category = nil; Task { await reload() } }
-        .onChange(of: category) { Task { await reload() } }
+        .onChange(of: selection) { FilmFeatureTip.marketplaceBrowse.didPerform(); category = nil; Task { await reload() } }
+        .onChange(of: category) { FilmFeatureTip.marketplaceCategories.didPerform(); Task { await reload() } }
         .onChange(of: search) { Task { await reload(debounced: true) } }
         .onChange(of: auth.isAuthenticated) { Task { _ = await authoring.refreshAccess(); await reload() } }
         .onChange(of: authoring.canAuthor) {
@@ -178,6 +178,7 @@ struct MarketplaceWindowView: View {
             Section {
                 Label("All Items", systemImage: "square.grid.2x2")
                     .tag(MarketplaceSidebarSelection.all)
+                    .filmTip(.marketplaceBrowse, when: !selection.isAuthoring && presented == nil)
                 ForEach(store.taxonomy.kinds) { entry in
                     Label(entry.label, systemImage: MarketplaceSymbol.resolve(entry.icon, fallback: entry.kind.systemImage))
                         .badge(entry.count)
@@ -232,6 +233,7 @@ struct MarketplaceWindowView: View {
                 .labelsHidden()
                 .fixedSize()
                 .accessibilityIdentifier("marketplace-category-filter")
+                .filmTip(.marketplaceCategories, when: presented == nil && !store.isLoading)
                 Spacer()
             }
             .padding(.horizontal, 14)

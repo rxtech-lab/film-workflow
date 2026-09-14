@@ -55,7 +55,7 @@ private struct SimpleModePreviewContent: View {
     }
 
     private var hasRemotion: Bool {
-        sequence?.timeline.allClips.contains { $0.source.kind == .remotion } ?? false
+        sequence?.timeline.renderedClips.contains { $0.source.kind == .remotion } ?? false
     }
 
     var body: some View {
@@ -198,6 +198,7 @@ struct SimpleModeClipStrip: View {
             .padding(.horizontal, 20)
             .padding(.vertical, 8)
             .accessibilityIdentifier("wizard.preview.strip")
+            .filmTip(.simpleTimeline)
         }
     }
 
@@ -210,6 +211,7 @@ struct SimpleModeClipStrip: View {
     private func block(_ clip: Clip, width: CGFloat) -> some View {
         let isFocused = clip.id == focusedClipID
         return Button {
+            FilmFeatureTip.simpleTimeline.didPerform()
             onSeek(clip.start)
         } label: {
             Text(clip.source.displayName)

@@ -42,11 +42,25 @@ enum AgentClientFactory {
     /// Built unconditionally rather than filtered by availability: a client that
     /// cannot run reports so through `isAvailable()`, and the engine menu needs
     /// to list it anyway so it can explain *why* it is unavailable.
-    static func makeClients(config: AppConfig?) -> [any AgentClient] {
-        AgentBackend.supported.compactMap { make($0, config: config) }
+    /// - Parameter onModelRejected: Called on the main actor when the
+    ///   subscription gateway refuses the model a turn asked for. The SDK
+    ///   flattens a thrown error into a description string by the time it
+    ///   reaches `AgentEvent.failed`, so the one chance to hand the app a
+    ///   *typed* rejection — the thing an "open the picker" alert needs — is
+    ///   here, inside the transport. Clients are built per thread, so the
+    ///   handler already knows which thread to tell.
+    static func makeClients(
+        config: AppConfig?,
+        onModelRejected: (@MainActor @Sendable (BackendError) -> Void)? = nil
+    ) -> [any AgentClient] {
+        AgentBackend.supported.compactMap { make($0, config: config, onModelRejected: onModelRejected) }
     }
 
-    static func make(_ backend: AgentBackend, config: AppConfig?) -> (any AgentClient)? {
+    static func make(
+        _ backend: AgentBackend,
+        config: AppConfig?,
+        onModelRejected: (@MainActor @Sendable (BackendError) -> Void)? = nil
+    ) -> (any AgentClient)? {
         switch backend {
         case .appleIntelligence:
             return FoundationModelsClient(
@@ -66,7 +80,10 @@ enum AgentClientFactory {
             return OpenAIChatClient(
                 id: clientID(for: backend),
                 displayName: backend.engineLabel,
-                configuration: subscriptionConfiguration(config: config)
+                configuration: subscriptionConfiguration(
+                    config: config,
+                    onModelRejected: onModelRejected
+                )
             )
 
         case .claudeCode:
@@ -129,22 +146,50 @@ enum AgentClientFactory {
     /// The cost is streaming — `BackendClient` returns `Data`, so a subscription
     /// turn arrives in one block. Everything else behaves identically.
     private static func subscriptionConfiguration(
-        config: AppConfig?
+        config: AppConfig?,
+        onModelRejected: (@MainActor @Sendable (BackendError) -> Void)? = nil
     ) -> OpenAIChatClient.Configuration {
-        OpenAIChatClient.Configuration.hosted(
-            model: config?.subscriptionChatModel.trimmingCharacters(in: .whitespaces),
+        let configured = config?.subscriptionChatModel.trimmingCharacters(in: .whitespaces)
+        return OpenAIChatClient.Configuration.hosted(
+            model: configured,
             extraBody: gatewayCaching
         ) { body in
-            let data = try await BackendClient.shared.data(
-                "api/v1/ai/chat",
-                method: "POST",
-                body: body,
-                contentType: "application/json",
-                idempotencyKey: "chat:\(UUID().uuidString)"
-            )
-            await applyCreditBalance(from: data)
-            return data
+            do {
+                let data = try await BackendClient.shared.data(
+                    "api/v1/ai/chat",
+                    method: "POST",
+                    body: body,
+                    contentType: "application/json",
+                    idempotencyKey: "chat:\(UUID().uuidString)"
+                )
+                await applyCreditBalance(from: data)
+                return data
+            } catch let error as BackendError {
+                // Read off the body rather than off `configured`: a thread can
+                // pin its own model in the engine menu, and it is that id —
+                // not the one in Settings — the server just refused.
+                let named = error.namingModel(
+                    requestedModel(in: body) ?? configured ?? "",
+                    capability: .chat
+                )
+                if named.unavailableModel != nil, let onModelRejected {
+                    await MainActor.run { onModelRejected(named) }
+                }
+                throw named
+            }
         }
+    }
+
+    /// The `model` field of an outgoing chat request.
+    ///
+    /// `nonisolated` because it is read from inside the transport closure,
+    /// which the SDK runs off the main actor.
+    private nonisolated static func requestedModel(in body: Data) -> String? {
+        guard let json = try? JSONSerialization.jsonObject(with: body) as? [String: Any],
+              let model = json["model"] as? String,
+              !model.isEmpty
+        else { return nil }
+        return model
     }
 
     /// Lets the Vercel AI Gateway pin a prompt-cache breakpoint. Every iteration

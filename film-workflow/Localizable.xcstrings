@@ -38,12 +38,25 @@
     "·" : {
 
     },
+    "“%@”" : {
+
+    },
     "\"%@\" and its known spelling variants will be permanently deleted." : {
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "“%@”及其已知拼写变体将被永久删除。"
+          }
+        }
+      }
+    },
+    "“%@” is no longer offered for %@ on your plan. Pick a replacement above — generations using it will be refused." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "“%1$@” is no longer offered for %2$@ on your plan. Pick a replacement above — generations using it will be refused."
           }
         }
       }
@@ -282,6 +295,16 @@
         }
       }
     },
+    "%@ captions" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ 字幕"
+          }
+        }
+      }
+    },
     "%@ credits" : {
       "localizations" : {
         "zh-Hans" : {
@@ -331,6 +354,32 @@
           }
         }
       }
+    },
+    "%@ is not available for %@ on this account. Open Settings to pick a new %@." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ is not available for %2$@ on this account. Open Settings to pick a new %3$@."
+          }
+        }
+      }
+    },
+    "%@ is not available for %@ on this account. Pick another one under %@ in Settings ▸ AI Provider." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ is not available for %2$@ on this account. Pick another one under %3$@ in Settings ▸ AI Provider."
+          }
+        }
+      }
+    },
+    "%@ is not available on this account. Open Settings to pick one your plan offers." : {
+
+    },
+    "%@ is not available on this account. Pick another one in Settings ▸ AI Provider." : {
+
     },
     "%@ is unavailable. Disable or remove it before exporting." : {
       "localizations" : {
@@ -919,6 +968,9 @@
         }
       }
     },
+    "A subscription is required to use AI features." : {
+
+    },
     "A world of creative assets for your next film." : {
       "localizations" : {
         "zh-Hans" : {
@@ -1029,6 +1081,9 @@
         }
       }
     },
+    "Add another language" : {
+
+    },
     "Add at least one lyric line or choose captions with text." : {
 
     },
@@ -1052,12 +1107,32 @@
         }
       }
     },
+    "Add captions for this audio to the timeline, ready to transcribe" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "把这段音频的字幕加入时间线，随时可以转写"
+          }
+        }
+      }
+    },
     "Add captions for this narration to the timeline, ready to transcribe" : {
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "将此旁白的字幕添加到时间线，准备转录"
+          }
+        }
+      }
+    },
+    "Add captions for this take to the timeline, ready to transcribe" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "把这个版本的字幕加入时间线，随时可以转写"
           }
         }
       }
@@ -1111,6 +1186,9 @@
           }
         }
       }
+    },
+    "Add effects and transitions" : {
+
     },
     "Add Images" : {
       "localizations" : {
@@ -1198,6 +1276,9 @@
         }
       }
     },
+    "Add something to your film" : {
+
+    },
     "Add Speaker" : {
       "localizations" : {
         "zh-Hans" : {
@@ -1217,6 +1298,9 @@
           }
         }
       }
+    },
+    "Add the installed item to the film in front. Then find it in the library and place footage on your timeline." : {
+
     },
     "Add this item to the film in front" : {
       "localizations" : {
@@ -1289,6 +1373,9 @@
         }
       }
     },
+    "Adding an asset to the film…" : {
+
+    },
     "Adding captions…" : {
       "localizations" : {
         "zh-Hans" : {
@@ -1318,6 +1405,9 @@
           }
         }
       }
+    },
+    "Adjust the thinking level" : {
+
     },
     "Adults only" : {
       "localizations" : {
@@ -1796,6 +1886,9 @@
           }
         }
       }
+    },
+    "Apply this style to timeline captions" : {
+
     },
     "Apply to %lld Clips on the Timeline" : {
       "localizations" : {
@@ -2304,6 +2397,12 @@
         }
       }
     },
+    "Bring this item into your film" : {
+
+    },
+    "Browse by kind in this sidebar, then use the search field to narrow the catalog. Open an item to preview it and see its price." : {
+
+    },
     "Browse footage, music, sound effects, fonts, transitions, effects and Remotion prompts." : {
       "localizations" : {
         "zh-Hans" : {
@@ -2364,6 +2463,9 @@
         }
       }
     },
+    "Build with this template" : {
+
+    },
     "Build your first sequence" : {
       "localizations" : {
         "zh-Hans" : {
@@ -2373,6 +2475,9 @@
           }
         }
       }
+    },
+    "Build your marketplace library" : {
+
     },
     "Building captions…" : {
       "localizations" : {
@@ -2475,6 +2580,9 @@
           }
         }
       }
+    },
+    "Buy once with credits" : {
+
     },
     "Buy once, use in your films" : {
       "localizations" : {
@@ -2769,6 +2877,16 @@
         }
       }
     },
+    "Change Audio…" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "更换音频…"
+          }
+        }
+      }
+    },
     "Change caption" : {
       "localizations" : {
         "zh-Hans" : {
@@ -2819,6 +2937,9 @@
         }
       }
     },
+    "chat" : {
+
+    },
     "Chat model" : {
       "localizations" : {
         "zh-Hans" : {
@@ -2848,6 +2969,15 @@
           }
         }
       }
+    },
+    "Checking available models…" : {
+
+    },
+    "Checking how it looks…" : {
+
+    },
+    "Checking subscription…" : {
+
     },
     "Chinese" : {
       "localizations" : {
@@ -2891,6 +3021,9 @@
         }
       }
     },
+    "Choose a category within this kind. Search and category filters work together; All Categories clears this filter." : {
+
+    },
     "Choose a chat model in Settings › AI Provider, or pick one from the engine menu below the composer." : {
       "extractionState" : "stale",
       "localizations" : {
@@ -2901,6 +3034,9 @@
           }
         }
       }
+    },
+    "Choose a language and translation engine. Translations belong to the current transcript version; Update fills missing or outdated lines." : {
+
     },
     "Choose a location" : {
       "localizations" : {
@@ -2921,6 +3057,9 @@
           }
         }
       }
+    },
+    "Choose a name and save location. The film project keeps your imported footage, edits and generated media together." : {
+
     },
     "Choose a Narration" : {
       "localizations" : {
@@ -2953,6 +3092,12 @@
           }
         }
       }
+    },
+    "Choose a Plan" : {
+
+    },
+    "Choose a plan to use RxFilm Studio." : {
+
     },
     "Choose a project from the sidebar or create a new one." : {
       "extractionState" : "stale",
@@ -2987,6 +3132,7 @@
       }
     },
     "Choose an audio file or a narration you've already generated." : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -3022,6 +3168,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "为侧边栏行选择 SF Symbol"
+          }
+        }
+      }
+    },
+    "Choose audio from this film, a file on disk, or a narration you've already generated." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "选择本片中的音频、磁盘上的文件，或已生成的旁白。"
           }
         }
       }
@@ -3072,6 +3228,12 @@
         }
       }
     },
+    "Choose how files are stored" : {
+
+    },
+    "Choose how much reasoning this model uses. Higher levels can help with complex edits but may take longer." : {
+
+    },
     "Choose Location…" : {
       "localizations" : {
         "zh-Hans" : {
@@ -3105,6 +3267,12 @@
     "Choose the music take for these captions." : {
 
     },
+    "Choose video, audio, size and destination in the render sheet. Save a version inside the film or export to a folder." : {
+
+    },
+    "Choose what this chat works on" : {
+
+    },
     "Choose where AI work runs" : {
       "localizations" : {
         "zh-Hans" : {
@@ -3124,6 +3292,9 @@
           }
         }
       }
+    },
+    "Choose your film's AI engine" : {
+
     },
     "Choose…" : {
       "localizations" : {
@@ -3304,6 +3475,9 @@
         }
       }
     },
+    "Click a clip to pause and jump to its start. The highlighted shot follows the agent's latest edit as your film is built." : {
+
+    },
     "Click to preview, drag onto the timeline or into a library group" : {
       "localizations" : {
         "zh-Hans" : {
@@ -3464,6 +3638,9 @@
         }
       }
     },
+    "Complete the purchase in the browser window that just opened. Your balance updates here once it clears." : {
+
+    },
     "Composing music…" : {
       "localizations" : {
         "zh-Hans" : {
@@ -3609,6 +3786,9 @@
         }
       }
     },
+    "Control how effects combine" : {
+
+    },
     "Copied" : {
       "localizations" : {
         "zh-Hans" : {
@@ -3638,6 +3818,9 @@
           }
         }
       }
+    },
+    "Copy keeps the film portable. Reference saves disk space but needs the original file to stay in its current location." : {
+
     },
     "Copy Path" : {
       "localizations" : {
@@ -3792,6 +3975,9 @@
         }
       }
     },
+    "Couldn’t reach the subscription service. Try again in a moment." : {
+
+    },
     "Couldn’t Refresh Account" : {
       "localizations" : {
         "zh-Hans" : {
@@ -3802,7 +3988,16 @@
         }
       }
     },
+    "Couldn’t Remove Lyrics" : {
+
+    },
     "Couldn’t Save Lyrics" : {
+
+    },
+    "Couldn’t Set Language" : {
+
+    },
+    "Couldn’t Start Checkout" : {
 
     },
     "Couldn’t Update Project Groups" : {
@@ -3814,6 +4009,9 @@
           }
         }
       }
+    },
+    "Couldn’t verify your subscription. You can keep working." : {
+
     },
     "Country" : {
       "localizations" : {
@@ -3874,6 +4072,15 @@
           }
         }
       }
+    },
+    "Create a separate thread for a new request. Your earlier conversations stay in the Threads menu." : {
+
+    },
+    "Create a video take" : {
+
+    },
+    "Create an image take" : {
+
     },
     "Create an item, prepare its content and previews, then publish it to the marketplace." : {
       "localizations" : {
@@ -3944,6 +4151,9 @@
           }
         }
       }
+    },
+    "Create music, narration, captions, images, video or a composition here. Select the new item to configure it in the inspector." : {
+
     },
     "Create Timing…" : {
 
@@ -4633,6 +4843,9 @@
         }
       }
     },
+    "Describe the image and set its options above, then generate. Earlier takes remain available in the library's Versions view." : {
+
+    },
     "Describe the overall vibe..." : {
       "extractionState" : "stale",
       "localizations" : {
@@ -4714,6 +4927,9 @@
           }
         }
       }
+    },
+    "Dismiss" : {
+
     },
     "Displayed Translation" : {
 
@@ -4807,6 +5023,9 @@
           }
         }
       }
+    },
+    "Download to your library" : {
+
     },
     "Downloading — %lld%%" : {
       "localizations" : {
@@ -5159,6 +5378,9 @@
         }
       }
     },
+    "Editing a card…" : {
+
+    },
     "Editing guidance" : {
       "localizations" : {
         "zh-Hans" : {
@@ -5208,6 +5430,9 @@
           }
         }
       }
+    },
+    "Effects are applied in order. Move an effect earlier or later to change the result, or turn it off to compare." : {
+
     },
     "Effects browser width" : {
       "localizations" : {
@@ -5360,6 +5585,9 @@
         }
       }
     },
+    "Ends %@" : {
+
+    },
     "Ends after the audio ends." : {
       "localizations" : {
         "zh-Hans" : {
@@ -5409,6 +5637,9 @@
           }
         }
       }
+    },
+    "Enter a duration in seconds and press Return. For a transition joining two clips, those clips move together until you remove it." : {
+
     },
     "Enter a valid URL starting with https:// or http://." : {
       "localizations" : {
@@ -5532,6 +5763,7 @@
       }
     },
     "Every thread targets one project" : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -5651,6 +5883,9 @@
           }
         }
       }
+    },
+    "Export your finished sequence" : {
+
     },
     "Export…" : {
       "localizations" : {
@@ -5793,6 +6028,9 @@
         }
       }
     },
+    "Filter by name and use the kind picker to narrow the list. Clear the filter to show everything again." : {
+
+    },
     "Finalizing" : {
       "localizations" : {
         "zh-Hans" : {
@@ -5803,6 +6041,12 @@
         }
       }
     },
+    "Find footage in this library" : {
+
+    },
+    "Find something for your film" : {
+
+    },
     "Find your next inspiration" : {
       "localizations" : {
         "zh-Hans" : {
@@ -5812,6 +6056,9 @@
           }
         }
       }
+    },
+    "Finish in Your Browser" : {
+
     },
     "Finishing your film." : {
       "localizations" : {
@@ -5872,6 +6119,9 @@
           }
         }
       }
+    },
+    "Follow the live conversation" : {
+
     },
     "Follow the project glossary" : {
       "localizations" : {
@@ -6822,6 +7072,9 @@
     "https://provider.example/{z}/{x}/{y}.png" : {
 
     },
+    "I’ve Completed the Purchase" : {
+
+    },
     "If the configured port is in use, the next free port (up to base+9) will be used instead. The actual port is shown below." : {
       "localizations" : {
         "zh-Hans" : {
@@ -6841,6 +7094,12 @@
           }
         }
       }
+    },
+    "image generation" : {
+
+    },
+    "Image model" : {
+
     },
     "Image Parameters" : {
       "localizations" : {
@@ -6964,6 +7223,9 @@
         }
       }
     },
+    "Import video, audio or images. You can also drop files into the library, then choose whether to copy them into the film." : {
+
+    },
     "Import…" : {
       "localizations" : {
         "zh-Hans" : {
@@ -7046,6 +7308,16 @@
         }
       }
     },
+    "In This Film" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "本片素材"
+          }
+        }
+      }
+    },
     "In your library" : {
       "localizations" : {
         "zh-Hans" : {
@@ -7106,6 +7378,12 @@
         }
       }
     },
+    "Inspect the composition source" : {
+
+    },
+    "Inspect the selected item" : {
+
+    },
     "Inspector" : {
       "localizations" : {
         "zh-Hans" : {
@@ -7145,6 +7423,9 @@
           }
         }
       }
+    },
+    "Install this item on your Mac. It will be available from the editor's Marketplace library across your films." : {
+
     },
     "Install to your library" : {
       "localizations" : {
@@ -7277,6 +7558,12 @@
         }
       }
     },
+    "Jump to a shot" : {
+
+    },
+    "Keep a conversation handy" : {
+
+    },
     "Keep assets in your shared library and add installed media to any film." : {
       "localizations" : {
         "zh-Hans" : {
@@ -7336,6 +7623,9 @@
           }
         }
       }
+    },
+    "Keep your film together" : {
+
     },
     "Keeps characters or objects consistent across shots. Describe the scene in the prompt — Veo has no token syntax for referring to them." : {
       "localizations" : {
@@ -7905,6 +8195,12 @@
         }
       }
     },
+    "Manage Subscription" : {
+
+    },
+    "Manage this download" : {
+
+    },
     "MapKit maps are ready to use in Remotion compositions." : {
       "localizations" : {
         "zh-Hans" : {
@@ -8055,6 +8351,9 @@
         }
       }
     },
+    "Mention footage and use chat commands" : {
+
+    },
     "Merge" : {
       "localizations" : {
         "zh-Hans" : {
@@ -8074,8 +8373,21 @@
     "Merge Captions as Lyrics" : {
 
     },
+    "Merge Captions as Lyrics?" : {
+
+    },
     "Merge Captions as Lyrics…" : {
 
+    },
+    "Merge captions from “%@” into “%@”? This adds a new lyrics version with the captions’ timings and translations." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Merge captions from “%1$@” into “%2$@”? This adds a new lyrics version with the captions’ timings and translations."
+          }
+        }
+      }
     },
     "Merge with Next" : {
       "localizations" : {
@@ -8086,6 +8398,9 @@
           }
         }
       }
+    },
+    "Messages and tool activity appear as the agent works. Expand a tool call for details; closing this panel lets the build continue." : {
+
     },
     "Messages will appear here as your film is built." : {
       "localizations" : {
@@ -8156,6 +8471,9 @@
           }
         }
       }
+    },
+    "Model unavailable" : {
+
     },
     "Models download from Hugging Face and run entirely on this device. Larger models are more accurate and slower. On-device Whisper doesn't detect speakers, so you assign them in the editor." : {
       "localizations" : {
@@ -8267,6 +8585,9 @@
         }
       }
     },
+    "music" : {
+
+    },
     "Music" : {
       "localizations" : {
         "zh-Hans" : {
@@ -8287,6 +8608,9 @@
           }
         }
       }
+    },
+    "Music model" : {
+
     },
     "Music, SFX, narration — anything audio. Files are copied into public/audio/. Reference them via staticFile(\"audio/<name>\")." : {
       "localizations" : {
@@ -8379,6 +8703,9 @@
         }
       }
     },
+    "narration" : {
+
+    },
     "Narration" : {
       "localizations" : {
         "zh-Hans" : {
@@ -8388,6 +8715,9 @@
           }
         }
       }
+    },
+    "Narration model" : {
+
     },
     "Narrative" : {
       "extractionState" : "stale",
@@ -8451,6 +8781,9 @@
           }
         }
       }
+    },
+    "Narrow down this collection" : {
+
     },
     "Needed: %@ — %@" : {
       "localizations" : {
@@ -8681,6 +9014,9 @@
         }
       }
     },
+    "No active plan" : {
+
+    },
     "No audio preview available" : {
 
     },
@@ -8715,6 +9051,9 @@
           }
         }
       }
+    },
+    "No captions available" : {
+
     },
     "No Captions Yet" : {
       "localizations" : {
@@ -8755,6 +9094,9 @@
           }
         }
       }
+    },
+    "No Credit Packs Available" : {
+
     },
     "No drafts" : {
       "localizations" : {
@@ -8805,6 +9147,9 @@
           }
         }
       }
+    },
+    "No longer offered on your plan: %@. Pick a replacement in each highlighted row below." : {
+
     },
     "No Lyrics" : {
       "localizations" : {
@@ -8888,6 +9233,9 @@
         }
       }
     },
+    "No music available" : {
+
+    },
     "No Narrations Yet" : {
       "localizations" : {
         "zh-Hans" : {
@@ -8908,6 +9256,9 @@
           }
         }
       }
+    },
+    "No packs are on sale for this account right now." : {
+
     },
     "No Paragraphs" : {
       "localizations" : {
@@ -9418,6 +9769,19 @@
         }
       }
     },
+    "Open Captions" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "打开字幕"
+          }
+        }
+      }
+    },
+    "Open Credits Page" : {
+
+    },
     "Open Film…" : {
       "localizations" : {
         "zh-Hans" : {
@@ -9478,6 +9842,9 @@
         }
       }
     },
+    "Open Settings" : {
+
+    },
     "Open Settings…" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -9519,6 +9886,15 @@
           }
         }
       }
+    },
+    "Open the browser, then drag an effect onto a clip or a transition onto a clip edge. Adjust it in the inspector." : {
+
+    },
+    "Open the source to review or edit the composition. Source changes refresh the live preview." : {
+
+    },
+    "Open this menu to reveal the local files or uninstall the download. Purchased items can be installed again." : {
+
     },
     "Open…" : {
       "localizations" : {
@@ -9672,6 +10048,9 @@
           }
         }
       }
+    },
+    "Original language" : {
+
     },
     "Original only" : {
       "localizations" : {
@@ -9920,6 +10299,9 @@
         }
       }
     },
+    "Pick an engine and model" : {
+
+    },
     "Pick something from the list to preview it." : {
       "extractionState" : "stale",
       "localizations" : {
@@ -9971,6 +10353,9 @@
         }
       }
     },
+    "Pinned threads stay at the top of the Threads menu. Click again to unpin." : {
+
+    },
     "Pinned words keep their exact times when the caption is retimed." : {
       "localizations" : {
         "zh-Hans" : {
@@ -10020,6 +10405,9 @@
           }
         }
       }
+    },
+    "Plans Unavailable" : {
+
     },
     "Play" : {
       "localizations" : {
@@ -10144,6 +10532,9 @@
           }
         }
       }
+    },
+    "Prepare changed compositions" : {
+
     },
     "Preparing audio…" : {
       "localizations" : {
@@ -10638,6 +11029,9 @@
         }
       }
     },
+    "Recover a running generation" : {
+
+    },
     "Reference Image" : {
       "localizations" : {
         "zh-Hans" : {
@@ -10872,6 +11266,9 @@
         }
       }
     },
+    "Remove “%@” from this music? The captions will stay in the library, and the music’s audio will be kept." : {
+
+    },
     "Remove effect" : {
       "localizations" : {
         "zh-Hans" : {
@@ -10881,6 +11278,15 @@
           }
         }
       }
+    },
+    "Remove Lyrics" : {
+
+    },
+    "Remove Lyrics from Music?" : {
+
+    },
+    "Remove Lyrics…" : {
+
     },
     "Remove punctuation" : {
       "localizations" : {
@@ -11024,6 +11430,9 @@
         }
       }
     },
+    "Render creates a video take of this composition. Previous renders stay in Versions so you can compare or export them." : {
+
+    },
     "Render failed" : {
       "localizations" : {
         "zh-Hans" : {
@@ -11094,6 +11503,9 @@
           }
         }
       }
+    },
+    "Render the Remotion clips that need updating for this sequence's size. This prepares those clips without exporting the entire film." : {
+
     },
     "Render the sequence to create version 1." : {
       "localizations" : {
@@ -11190,6 +11602,9 @@
           }
         }
       }
+    },
+    "Renews %@" : {
+
     },
     "Reorder" : {
       "extractionState" : "stale",
@@ -11324,6 +11739,9 @@
         }
       }
     },
+    "Resume checks the video job already running at the provider and downloads it when ready." : {
+
+    },
     "Resume It" : {
       "localizations" : {
         "zh-Hans" : {
@@ -11399,6 +11817,9 @@
           }
         }
       }
+    },
+    "Return to a conversation" : {
+
     },
     "Reveal" : {
       "localizations" : {
@@ -11497,6 +11918,9 @@
           }
         }
       }
+    },
+    "Review before creating speech" : {
+
     },
     "Review before it applies" : {
       "localizations" : {
@@ -11644,6 +12068,9 @@
           }
         }
       }
+    },
+    "RxFilm Studio needs your RxLab account to check your subscription." : {
+
     },
     "RxFilm subscription" : {
       "localizations" : {
@@ -12264,6 +12691,9 @@
         }
       }
     },
+    "Set Language" : {
+
+    },
     "Set Start" : {
       "localizations" : {
         "zh-Hans" : {
@@ -12295,6 +12725,15 @@
         }
       }
     },
+    "Set the language of the existing text. Its wording and timings stay the same." : {
+
+    },
+    "Set the prompt and clip options above, then generate. Each completed run is kept as another take in the library." : {
+
+    },
+    "Set the transition's length" : {
+
+    },
     "Set Up Endpoint…" : {
       "localizations" : {
         "zh-Hans" : {
@@ -12315,6 +12754,9 @@
           }
         }
       }
+    },
+    "Set your script and voices, then open the transcript preview here. Start Generation in that preview creates a new narration take." : {
+
     },
     "Sets the overall feeling or atmosphere of the music. Included at the top of the generated prompt." : {
       "localizations" : {
@@ -12517,6 +12959,9 @@
         }
       }
     },
+    "Showing a marketplace item…" : {
+
+    },
     "sighs" : {
       "localizations" : {
         "zh-Hans" : {
@@ -12599,6 +13044,9 @@
         }
       }
     },
+    "Sign In to Continue" : {
+
+    },
     "Sign In to Install" : {
       "localizations" : {
         "zh-Hans" : {
@@ -12608,6 +13056,9 @@
           }
         }
       }
+    },
+    "Sign in to install free items or buy paid items with credits. You can browse and preview before signing in." : {
+
     },
     "Sign in to RxLab" : {
       "localizations" : {
@@ -13021,6 +13472,9 @@
         }
       }
     },
+    "Start a fresh conversation" : {
+
+    },
     "Start a marketplace draft from this take, with its file attached" : {
       "localizations" : {
         "zh-Hans" : {
@@ -13347,6 +13801,9 @@
         }
       }
     },
+    "Style edits here set the project's defaults. Use this button to copy them to the caption clips already on the timeline." : {
+
+    },
     "Submitting…" : {
       "localizations" : {
         "zh-Hans" : {
@@ -13368,6 +13825,9 @@
         }
       }
     },
+    "Subscription" : {
+
+    },
     "Subscription key" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -13379,6 +13839,9 @@
         }
       }
     },
+    "Subscription Required" : {
+
+    },
     "Suggested seconds" : {
       "localizations" : {
         "zh-Hans" : {
@@ -13388,6 +13851,9 @@
           }
         }
       }
+    },
+    "Switch between saved threads here. A dotted circle means work is running; a filled circle marks a finished reply you haven't seen." : {
+
     },
     "Switch between transcription runs" : {
       "localizations" : {
@@ -13409,6 +13875,9 @@
         }
       }
     },
+    "Switch to Marketplace to browse your downloads alongside this film's library. Add an item to the film before editing it." : {
+
+    },
     "Synthesizer" : {
       "localizations" : {
         "zh-Hans" : {
@@ -13418,6 +13887,9 @@
           }
         }
       }
+    },
+    "Tabs change with your selection. Footage settings control the source; Clip controls the selected timeline clip; Sequence controls the whole cut." : {
+
     },
     "Tags" : {
       "extractionState" : "stale",
@@ -13429,6 +13901,9 @@
           }
         }
       }
+    },
+    "Target the whole film or a specific library item. Each conversation remembers its own target." : {
+
     },
     "Tell the model what kind of video to build (style, motion, mood, structure). Used as context whenever the agent edits this composition." : {
       "localizations" : {
@@ -13501,6 +13976,19 @@
         }
       }
     },
+    "That audio is unavailable. Restore or import the file, then try again." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "该音频不可用。请恢复或重新导入该文件后再试。"
+          }
+        }
+      }
+    },
+    "The agent checks your film's footage, asks for anything missing and creates a new sequence using this template." : {
+
+    },
     "The archive could not be created: %@" : {
       "localizations" : {
         "zh-Hans" : {
@@ -13521,6 +14009,9 @@
           }
         }
       }
+    },
+    "The button shows this item's price. After purchase, install it to use it in your films." : {
+
     },
     "The caption changed after this was translated" : {
       "localizations" : {
@@ -13765,6 +14256,9 @@
         }
       }
     },
+    "The language of the original text in this version, used for lyrics and publishing." : {
+
+    },
     "The marketplace has no slot for this clip’s file." : {
       "localizations" : {
         "zh-Hans" : {
@@ -13794,6 +14288,9 @@
           }
         }
       }
+    },
+    "The model this used" : {
+
     },
     "The music duration could not be read." : {
 
@@ -13901,6 +14398,9 @@
           }
         }
       }
+    },
+    "The selected model" : {
+
     },
     "The shortcode will be permanently removed from this paragraph." : {
       "localizations" : {
@@ -14069,6 +14569,9 @@
         }
       }
     },
+    "This choice applies to this conversation. Choose a model inside an engine's menu, or use Default to follow Settings." : {
+
+    },
     "This clip has no file to upload yet. Render it first." : {
       "localizations" : {
         "zh-Hans" : {
@@ -14149,6 +14652,9 @@
           }
         }
       }
+    },
+    "This engine researches, plans and builds your film. Resolve any setup message before continuing; you can switch engines later in the Agent window." : {
+
     },
     "This Film · Version %lld" : {
       "localizations" : {
@@ -14518,6 +15024,9 @@
         }
       }
     },
+    "transcription" : {
+
+    },
     "Transcription" : {
       "localizations" : {
         "zh-Hans" : {
@@ -14752,6 +15261,9 @@
         }
       }
     },
+    "Trial" : {
+
+    },
     "Trumpet" : {
       "localizations" : {
         "zh-Hans" : {
@@ -14771,6 +15283,9 @@
           }
         }
       }
+    },
+    "Try it before adding it" : {
+
     },
     "Turkish" : {
       "localizations" : {
@@ -14802,6 +15317,9 @@
         }
       }
     },
+    "Turn the composition into video" : {
+
+    },
     "Turning this on starts a local server your editor or agent can connect to with the generated token." : {
       "localizations" : {
         "zh-Hans" : {
@@ -14823,6 +15341,7 @@
       }
     },
     "Type @ in the composer to switch the project. The thread keeps that target, so several conversations can work on different projects." : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -14831,6 +15350,9 @@
           }
         }
       }
+    },
+    "Type @ to mention footage from your film. Type / for commands such as /new, /compact or /stop. Use the target menu above to choose what this conversation works on." : {
+
     },
     "Type @ to pick footage, / for commands." : {
       "localizations" : {
@@ -14861,6 +15383,9 @@
           }
         }
       }
+    },
+    "Unavailable" : {
+
     },
     "Unavailable Effect" : {
       "extractionState" : "stale",
@@ -15084,6 +15609,9 @@
     "Use a language code such as en or zh-Hans, or leave the language empty." : {
 
     },
+    "Use a language code such as en or zh-Hans." : {
+
+    },
     "Use a provider licensed for rendering. The public OpenStreetMap tile server is not available for automated exports." : {
       "localizations" : {
         "zh-Hans" : {
@@ -15110,6 +15638,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "使用应用默认值"
+          }
+        }
+      }
+    },
+    "Use Audio…" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "使用音频…"
           }
         }
       }
@@ -15214,6 +15752,9 @@
         }
       }
     },
+    "Use the preview to inspect this item. Installing adds it to your library; Add to Film brings supported items into your open film." : {
+
+    },
     "Use this model" : {
       "localizations" : {
         "zh-Hans" : {
@@ -15243,6 +15784,9 @@
           }
         }
       }
+    },
+    "Use your own footage" : {
+
     },
     "Used" : {
       "localizations" : {
@@ -15422,6 +15966,9 @@
         }
       }
     },
+    "video generation" : {
+
+    },
     "Video generation usually takes a few minutes." : {
       "localizations" : {
         "zh-Hans" : {
@@ -15431,6 +15978,9 @@
           }
         }
       }
+    },
+    "Video model" : {
+
     },
     "Video Parameters" : {
       "localizations" : {
@@ -15942,6 +16492,9 @@
         }
       }
     },
+    "Writing a card…" : {
+
+    },
     "Writing caption files" : {
       "localizations" : {
         "zh-Hans" : {
@@ -16079,6 +16632,9 @@
           }
         }
       }
+    },
+    "Your installed marketplace items" : {
+
     },
     "Your key is stored securely in the Keychain." : {
       "localizations" : {

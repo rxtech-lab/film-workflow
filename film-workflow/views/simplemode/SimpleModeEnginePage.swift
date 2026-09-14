@@ -61,11 +61,15 @@ struct SimpleModeEnginePage: View {
                 .frame(maxWidth: .infinity)
             }
             .accessibilityIdentifier("wizard.engine")
+            .filmTip(.simpleEngine, when: !showEndpointSetup)
         } footer: {
             Button("Back", action: onBack)
                 .help("Back to template selection")
                 .accessibilityIdentifier("wizard.engine.back")
-            Button("Continue") { onContinue(selection) }
+            Button("Continue") {
+                FilmFeatureTip.simpleEngine.didPerform()
+                onContinue(selection)
+            }
                 .buttonStyle(.glassProminent)
                 .keyboardShortcut(.defaultAction)
                 .disabled(problem(for: selection) != nil)
@@ -283,7 +287,7 @@ private struct EngineCard: View {
         case .signIn:
             AppNavigation.shared.requestSignIn()
         case .addCredits:
-            CreditBalanceStore.shared.openTopUp()
+            SubscriptionCheckout.presentTopUp()
         case .setUpEndpoint:
             configureEndpoint()
         }

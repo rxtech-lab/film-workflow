@@ -28,6 +28,9 @@ final class AppNavigation {
     /// A specific control to reveal once a settings section is showing.
     enum SettingsFocus: String, Hashable {
         case whisperModels
+        /// The subscription model pickers, asked for when a generation was
+        /// refused because the id one of them holds is no longer offered.
+        case subscriptionModels
     }
 
     var settingsSection: SettingsSection = .account
@@ -36,6 +39,8 @@ final class AppNavigation {
     /// watches it and raises the sign-in sheet.
     private(set) var signInRequestCount = 0
     private var handledSignInRequestCount = 0
+    private(set) var topUpRequestCount = 0
+    private var handledTopUpRequestCount = 0
 
     /// What the app is currently showing, so the agent window can follow along.
     ///
@@ -84,9 +89,9 @@ final class AppNavigation {
     ///
     /// Same macOS caveat as `showCaptionSettings`: the caller must also invoke
     /// `openSettings()` from the environment.
-    func showAIProviderSettings() {
+    func showAIProviderSettings(focus: SettingsFocus? = nil) {
         settingsSection = .aiProvider
-        pendingSettingsFocus = nil
+        pendingSettingsFocus = focus
     }
 
     func showAccountSettings() {
@@ -109,6 +114,24 @@ final class AppNavigation {
     func consumeSignInRequest() -> Bool {
         guard handledSignInRequestCount < signInRequestCount else { return false }
         handledSignInRequestCount = signInRequestCount
+        return true
+    }
+
+    /// Asks the active window to present the top-up sheet. Raised the same way
+    /// as sign-in so the Account menu, which has no view of its own, can do it.
+    func requestTopUp() {
+        topUpRequestCount += 1
+        #if os(macOS)
+        NSApp.activate(ignoringOtherApps: true)
+        let window = NSApp.keyWindow ?? NSApp.mainWindow
+            ?? NSApp.windows.first { $0.isVisible && $0.canBecomeKey && $0.sheetParent == nil }
+        window?.makeKeyAndOrderFront(nil)
+        #endif
+    }
+
+    func consumeTopUpRequest() -> Bool {
+        guard handledTopUpRequestCount < topUpRequestCount else { return false }
+        handledTopUpRequestCount = topUpRequestCount
         return true
     }
 }
