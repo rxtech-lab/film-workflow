@@ -116,15 +116,17 @@ final class ProjectDocumentController {
     // MARK: - Panels
 
     /// Asks where to create a new film. Returns a URL ending in `.rxfilmstudio`.
-    func presentNewPanel() async -> URL? {
+    func presentNewPanel(name: String = "Untitled Film", directory: URL? = nil) async -> URL? {
         let panel = NSSavePanel()
         panel.title = "New Film"
         panel.prompt = "Create"
         panel.nameFieldLabel = "Film name:"
-        panel.nameFieldStringValue = "Untitled Film"
+        panel.nameFieldStringValue = Self.sanitized(URL(fileURLWithPath: "/").appendingPathComponent(
+            name.components(separatedBy: CharacterSet(charactersIn: "/:\\")).joined(separator: "-")
+        )).deletingPathExtension().lastPathComponent
         panel.allowedContentTypes = [.rxFilmStudioProject]
         panel.canCreateDirectories = true
-        panel.directoryURL = FileManager.default.urls(for: .moviesDirectory, in: .userDomainMask).first
+        panel.directoryURL = directory ?? FileManager.default.urls(for: .moviesDirectory, in: .userDomainMask).first
         guard await panel.begin() == .OK, let url = panel.url else { return nil }
         return Self.sanitized(url)
     }

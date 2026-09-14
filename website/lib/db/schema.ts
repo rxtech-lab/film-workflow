@@ -1,5 +1,6 @@
 import {
   bigint,
+  boolean,
   index,
   integer,
   jsonb,
@@ -223,3 +224,38 @@ export type MarketplaceKindRow = typeof marketplaceKinds.$inferSelect;
 export type MarketplaceCategoryRow = typeof marketplaceCategories.$inferSelect;
 export type MarketplaceItemRow = typeof marketplaceItems.$inferSelect;
 export type MarketplacePurchaseRow = typeof marketplacePurchases.$inferSelect;
+
+// MARK: - Model catalog
+
+/**
+ * The models we offer, chosen by an admin on behalf of everyone.
+ *
+ * Discovery finds what *could* be offered — the live gateway and Google lists in
+ * `lib/ai/catalog.ts`; this table decides what *is*. A row names a model by the
+ * id and capability discovery reports and nothing more: display name, provider
+ * and the credit estimate are still joined from the live list at read time, so a
+ * provider's price change needs no edit here, and a model that stops being
+ * discoverable stops being served rather than being quoted from a stale copy.
+ *
+ * `display_name_override` is the one exception — null means "use the provider's
+ * name", which is what almost every row wants.
+ */
+export const catalogModels = pgTable("catalog_models", {
+  id: text("id").primaryKey(),
+  /** The id discovery reports, e.g. `openai/gpt-5.4-mini` or `veo-3.1-generate-001`. */
+  modelId: text("model_id").notNull(),
+  capability: capabilityEnum("capability").notNull(),
+  displayNameOverride: text("display_name_override"),
+  enabled: boolean("enabled").notNull().default(true),
+  /** The model a picker preselects for this capability. At most one row per capability, enforced by a partial unique index. */
+  isDefault: boolean("is_default").notNull().default(false),
+  /** Picker order within a capability, low first; ties break on display name. */
+  sortOrder: integer("sort_order").notNull().default(0),
+  ...timestamps(),
+  updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" }).notNull(),
+}, (table) => [
+  uniqueIndex("catalog_models_capability_model_idx").on(table.capability, table.modelId),
+  index("catalog_models_capability_order_idx").on(table.capability, table.sortOrder),
+]);
+
+export type CatalogModelRow = typeof catalogModels.$inferSelect;

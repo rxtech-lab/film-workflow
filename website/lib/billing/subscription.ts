@@ -298,6 +298,44 @@ export async function getLedger(input: { user: AppUser; page: number; pageSize?:
   );
 }
 
+/**
+ * Ledger kinds that record a metered spend. `/usage` lists those as operations
+ * with the provider, model and unit count behind them, so repeating them as
+ * credit movements says less about more rows.
+ */
+const SPEND_KINDS = new Set(["usage", "overage"]);
+
+/** rx-subscription caps a ledger page at 100 entries. */
+const LEDGER_PAGE_SIZE = 100;
+/** 10,000 movements deep; a user with more keeps the newest of them. */
+const LEDGER_PAGE_LIMIT = 100;
+
+/**
+ * How credits arrived and changed — topups, plan grants, refunds, adjustments,
+ * expiries — without the per-operation spends.
+ *
+ * rx-subscription's ledger endpoint has no kind filter, so the movements are
+ * read in upstream pages, filtered, and paged here. Swap this for a filtered
+ * query the day that endpoint takes one; the shape is deliberately the same as
+ * `getLedger`'s.
+ */
+export async function getCreditHistory(input: { user: AppUser; page: number; pageSize?: number }) {
+  const pageSize = input.pageSize ?? 20;
+  const first = await getLedger({ user: input.user, page: 1, pageSize: LEDGER_PAGE_SIZE });
+  const remaining = Math.max(0, Math.min(first.pageCount, LEDGER_PAGE_LIMIT) - 1);
+  const rest = await Promise.all(
+    Array.from({ length: remaining }, (_, index) =>
+      getLedger({ user: input.user, page: index + 2, pageSize: LEDGER_PAGE_SIZE })),
+  );
+  const entries = [first, ...rest]
+    .flatMap((result) => result.entries)
+    .filter((entry) => !SPEND_KINDS.has(entry.kind));
+  const total = entries.length;
+  const pageCount = Math.max(1, Math.ceil(total / pageSize));
+  const page = Math.min(Math.max(1, input.page), pageCount);
+  return { entries: entries.slice((page - 1) * pageSize, page * pageSize), total, page, pageSize, pageCount };
+}
+
 /** Grow an open hold when an estimate is revised upward mid-flight. */
 export async function increaseReservation(input: { reservationId: string; amount: number; idempotencyKey: string }) {
   return request<Reservation>(

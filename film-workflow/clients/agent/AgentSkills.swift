@@ -31,6 +31,17 @@ extension Skill {
                 Omit `start` to append after the last clip on that track; pass `ripple` \
                 to make room in the middle. Stills default to 5 seconds — pass \
                 `duration` for a different length. Clips on one track cannot overlap.
+                - Reuse an existing suitable track when possible. For another video \
+                layer, simultaneous audio (such as music and narration), or a missing \
+                track kind, call \(tool("sequence_add_track")) with `kind` video, audio \
+                or overlay. Pass its returned `track_id` as `track` to \
+                \(tool("sequence_add_clip")); set `start` to align overlapping clips \
+                on separate tracks. Adding a track preserves the existing edit.
+                - To change track order, read \(tool("sequence_get")) and call \
+                \(tool("sequence_reorder_tracks")) with every track UUID exactly once \
+                in `track_ids`, ordered top to bottom. Higher video and overlay \
+                tracks draw over lower picture tracks. Track names, clips, timing \
+                and audio settings stay with their tracks.
                 - For a wholesale re-arrangement, take the JSON from \
                 \(tool("sequence_get")), edit it, and write it back with \
                 \(tool("sequence_set_timeline")). Use \(tool("sequence_remove_clip")) \

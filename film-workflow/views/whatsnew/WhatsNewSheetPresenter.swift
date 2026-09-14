@@ -14,7 +14,9 @@ private struct WhatsNewSheetPresenter: ViewModifier {
     @State private var owner = UUID()
     @State private var batch: [WhatsNewFeature] = []
     @State private var presentation: WhatsNewPresentation?
-    @State private var exploreAfterDismissal = false
+    /// A sheet cannot open a window while it is up, so the card's button is
+    /// remembered and acted on once the sheet is gone.
+    @State private var actionAfterDismissal: WhatsNewFeature.CallToAction?
 
     func body(content: Content) -> some View {
         content
@@ -41,8 +43,8 @@ private struct WhatsNewSheetPresenter: ViewModifier {
                     features: presentation.features,
                     onSeen: { store.markSeen([$0]) },
                     onDismiss: { self.presentation = nil },
-                    onExploreMarketplace: {
-                        exploreAfterDismissal = true
+                    onCallToAction: { action in
+                        actionAfterDismissal = action
                         self.presentation = nil
                     }
                 )
@@ -72,10 +74,16 @@ private struct WhatsNewSheetPresenter: ViewModifier {
         store.markSeen(batch)
         store.endPresentation(owner: owner)
         batch = []
-        if exploreAfterDismissal {
-            exploreAfterDismissal = false
+        switch actionAfterDismissal {
+        case .exploreMarketplace:
             openWindow(id: MarketplaceWindowID.value)
+        case .startNewFilm:
+            AppNavigation.shared.requestWelcomeRoute(.gallery)
+            openWindow(id: WelcomeWindowID.value)
+        case nil:
+            break
         }
+        actionAfterDismissal = nil
     }
 }
 

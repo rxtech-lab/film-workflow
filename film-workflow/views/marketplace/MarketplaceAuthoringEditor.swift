@@ -4,30 +4,13 @@ import SwiftUI
 import UniformTypeIdentifiers
 import VideoEditorCore
 
-struct MarketplaceManageItems: View {
-    @Environment(\.dismiss) private var dismiss
-    @State private var page: MarketplaceAuthoringPage?
-    @State private var error: String?
-    @State private var selected: MarketplaceAuthoringItem?
-    @State private var creating = false
-    @State private var number = 1
-    var body: some View {
-        VStack(spacing: 12) {
-            HStack { Text("Manage Marketplace Items").font(.title2); Spacer(); Button("Create Item", systemImage: "plus") { creating = true }; Button("Done") { dismiss() } }
-            if let error { Text(error).foregroundStyle(.red) }
-            List(page?.items ?? []) { draft in
-                Button { selected = draft } label: {
-                    HStack { Label(draft.item.title, systemImage: draft.item.kind.systemImage); Spacer(); Text(draft.status.capitalized).foregroundStyle(.secondary); MarketplacePriceBadge(item: draft.item) }
-                }.buttonStyle(.plain)
-            }
-            HStack { Button("Previous") { number -= 1 }.disabled(number <= 1); Spacer(); Text("Page \(number)"); Spacer(); Button("Next") { number += 1 }.disabled(number >= (page?.pageCount ?? 1)) }
-        }.padding().frame(width: 700, height: 520)
-        .task(id: number) { await load() }
-        .sheet(item: $selected, onDismiss: { Task { await load() } }) { item in MarketplaceAuthoringEditor(itemId: item.id) }
-        .sheet(isPresented: $creating, onDismiss: { Task { await load() } }) { MarketplaceAuthoringEditor() }
-        .accessibilityIdentifier("marketplace-manage-items")
-    }
-    private func load() async { do { page = try await MarketplaceAuthoringService.shared.list(page: number); error = nil } catch { self.error = error.localizedDescription } }
+/// What a library take seeds a new marketplace draft with: the item it should
+/// become, and the file that becomes its content the first time it is saved.
+struct MarketplaceAuthoringSeed: Identifiable, Hashable {
+    let id = UUID()
+    var title: String
+    var kind: MarketplaceKind
+    var contentFile: URL
 }
 
 /// Create or edit one marketplace item.
@@ -37,6 +20,9 @@ struct MarketplaceManageItems: View {
 /// schema and the item have landed.
 struct MarketplaceAuthoringEditor: View {
     var itemId: String?
+    /// Set when the editor was opened from footage rather than from the
+    /// marketplace window. Only ever read for a new item.
+    var seed: MarketplaceAuthoringSeed?
     @Environment(\.dismiss) private var dismiss
     @Environment(\.openWindow) private var openWindow
     @State private var service = MarketplaceAuthoringService.shared
@@ -58,8 +44,9 @@ struct MarketplaceAuthoringEditor: View {
     @State private var generationPrompt = ""
     @State private var choosingFilmAsset = false
     @State private var generationKind: String?
-    @State private var confirmingDelete = false
-    @State private var confirmingDeleteAgain = false
+    /// A file waiting to become this item's content. It cannot be uploaded
+    /// before the draft exists, so it rides along with the first save.
+    @State private var stagedContent: URL?
 
     /// Every job of this draft, finished ones included: their states drive the
     /// refresh below, so an upload that lands updates the previews.
@@ -75,6 +62,8 @@ struct MarketplaceAuthoringEditor: View {
             header
             Divider()
             content
+            Divider()
+            footer
         }
         .frame(minWidth: 700, idealWidth: 760, minHeight: 600, idealHeight: 780)
         .task { await load() }
@@ -91,48 +80,70 @@ struct MarketplaceAuthoringEditor: View {
             }
         } }
         .sheet(isPresented: Binding(get: { generationKind != nil }, set: { if !$0 { generationKind = nil } })) { generationSheet }
-        .confirmationDialog("Delete “\(input.title)”?", isPresented: $confirmingDelete, titleVisibility: .visible) {
-            Button("Delete…", role: .destructive) { confirmingDeleteAgain = true }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("This removes the item and everything uploaded for it from the marketplace.")
-        }
-        // Deleting takes the files with it, so it asks twice.
-        .alert("Delete permanently?", isPresented: $confirmingDeleteAgain) {
-            Button("Delete Permanently", role: .destructive) { deleteDraft() }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("The item, its content file and its previews cannot be recovered.")
-        }
         .accessibilityIdentifier("marketplace-author-editor")
     }
 
     // MARK: - Chrome
 
+    /// Identity, not actions: what is being edited and what state it is in.
+    /// Publishing and deleting belong to the item's row in the authoring list.
     private var header: some View {
-        HStack {
-            Text(draft == nil ? "Create Marketplace Item" : "Edit Marketplace Item").font(.title2)
-            Spacer()
-            Button("Done") { dismiss() }
-            if draft != nil {
-                Button("Delete", role: .destructive) { confirmingDelete = true }
-                    .disabled(busy)
-                    .accessibilityIdentifier("marketplace-author-delete")
+        HStack(spacing: 12) {
+            Image(systemName: input.kind.systemImage)
+                .font(.title3)
+                .foregroundStyle(.secondary)
+                .frame(width: 34, height: 34)
+                .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 8))
+            VStack(alignment: .leading, spacing: 2) {
+                Text(headerTitle).font(.headline).lineLimit(1)
+                HStack(spacing: 6) {
+                    Text(layout?.label ?? input.kind.displayName)
+                    if let draft {
+                        Text("\u{00B7}")
+                        Text(draft.status == "published" ? "Published" : "Draft")
+                            .foregroundStyle(draft.status == "published" ? Color.green : Color.orange)
+                    }
+                }
+                .font(.caption)
+                .foregroundStyle(.secondary)
             }
+            Spacer()
+        }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 14)
+    }
+
+    private var headerTitle: String {
+        let title = input.title.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !title.isEmpty { return title }
+        return draft == nil ? String(localized: "New Marketplace Item") : String(localized: "Untitled Item")
+    }
+
+    /// One place for progress and the last message, so the form itself never
+    /// jumps as a save succeeds or fails.
+    private var footer: some View {
+        HStack(spacing: 10) {
+            if busy { ProgressView().controlSize(.small) }
+            if let error {
+                Label(error, systemImage: "exclamationmark.triangle")
+                    .foregroundStyle(.red)
+                    .textSelection(.enabled)
+                    .lineLimit(2)
+            } else if let notice {
+                Label(notice, systemImage: "checkmark.circle")
+                    .foregroundStyle(.secondary)
+            }
+            Spacer(minLength: 12)
+            Button("Done") { dismiss() }
+                .keyboardShortcut(.cancelAction)
             Button("Save Draft") { run { _ = try await save(); notice = "Draft saved" } }
                 .keyboardShortcut("s", modifiers: .command)
+                .buttonStyle(.borderedProminent)
                 .disabled(schema == nil || !canSave)
-            if let draft {
-                Button(draft.status == "published" ? "Unpublish" : "Publish") {
-                    run {
-                        let publishing = draft.status != "published"
-                        let saved = try await save()
-                        self.draft = try await service.publish(saved.id, published: publishing)
-                        notice = self.draft?.status == "published" ? "Published to Marketplace" : "Unpublished"
-                    }
-                }.disabled(busy || schema == nil)
-            }
-        }.padding()
+        }
+        .font(.callout)
+        .padding(.horizontal, 20)
+        .padding(.vertical, 12)
     }
 
     @ViewBuilder
@@ -156,33 +167,22 @@ struct MarketplaceAuthoringEditor: View {
 
     private func form(_ schema: MarketplaceFormSchema) -> some View {
         Form {
-            if error != nil || notice != nil {
-                Section {
-                    if let error { Label(error, systemImage: "exclamationmark.triangle").foregroundStyle(.red).textSelection(.enabled) }
-                    if let notice { Text(notice).foregroundStyle(.secondary) }
-                }
-            }
-            if let draft {
-                Section {
-                    MarketplacePreviewPlayer(item: draft.item)
-                        .aspectRatio(16 / 9, contentMode: .fit)
-                        .frame(maxHeight: 240)
-                        .clipShape(RoundedRectangle(cornerRadius: 10))
-                }
-            }
+            if let draft { heroSection(draft) }
             ForEach(schema.sections) { section in
-                Section(section.title) {
-                    if let help = section.help { Text(help).font(.caption).foregroundStyle(.secondary) }
+                Section {
                     ForEach(schema.fields(section, for: input.kind)) { field in row(field) }
+                } header: {
+                    Text(section.title)
+                } footer: {
+                    if let help = section.help { hint(help) }
                 }
             }
             if let layout {
                 contentSection(layout)
                 previewSection(layout)
             }
-            agentSection
             if !running.isEmpty {
-                Section("In progress") {
+                Section("In Progress") {
                     ForEach(running) { job in
                         VStack(alignment: .leading, spacing: 4) {
                             Text(job.message).font(.callout)
@@ -194,6 +194,28 @@ struct MarketplaceAuthoringEditor: View {
         }
         .formStyle(.grouped)
         .disabled(busy)
+    }
+
+    /// The listing as buyers see it, edge to edge above the fields, so the
+    /// effect of every upload below is visible without leaving the sheet.
+    private func heroSection(_ draft: MarketplaceAuthoringItem) -> some View {
+        Section {
+            MarketplacePreviewPlayer(item: draft.item)
+                .aspectRatio(16 / 9, contentMode: .fit)
+                .frame(maxHeight: 220)
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+                .overlay(RoundedRectangle(cornerRadius: 8).stroke(.quaternary))
+        } footer: {
+            hint(draft.item.previewImageUrl == nil
+                 ? String(localized: "No cover art yet. Buyers see the placeholder above until one is uploaded.")
+                 : String(localized: "How this item appears in the catalog."))
+        }
+    }
+
+    /// Secondary explanatory copy, used for every section footer and field help
+    /// so the form has one voice.
+    private func hint(_ text: String) -> some View {
+        Text(text).font(.caption).foregroundStyle(.secondary)
     }
 
     /// One schema field. The schema names it and says what it accepts; this
@@ -213,7 +235,8 @@ struct MarketplaceAuthoringEditor: View {
                         }
                         .disabled(field.lockedWhenSaved == true && draft != nil)
                     case .multiline:
-                        TextField(field.title, text: value, axis: .vertical).lineLimit(2...6)
+                        TextField(field.title, text: value, axis: .vertical)
+                            .lineLimit(3...8)
                     case .toggle:
                         Toggle(field.title, isOn: Binding(get: { value.wrappedValue == "true" }, set: { value.wrappedValue = $0 ? "true" : "false" }))
                     case .text, .tags, .number:
@@ -221,86 +244,142 @@ struct MarketplaceAuthoringEditor: View {
                     }
                 }
                 .accessibilityIdentifier("marketplace-author-\(field.id.replacingOccurrences(of: ".", with: "-"))")
-                if let help = field.help { Text(help).font(.caption).foregroundStyle(.secondary) }
+                if let help = field.help { hint(help) }
             }
         }
     }
 
+    /// The category picker, with its own escape hatch for a kind that has none
+    /// yet, so a first item never dead-ends on a missing category.
     @ViewBuilder
     private func categoryRow(_ field: MarketplaceFormSchema.Field) -> some View {
-        Picker(field.title, selection: $input.categoryId) {
-            Text("Choose a category").tag("")
-            ForEach(categories.filter { $0.kind == input.kind }) { category in Text(category.name).tag(category.id) }
+        let available = categories.filter { $0.kind == input.kind }
+        VStack(alignment: .leading, spacing: 6) {
+            Picker(field.title, selection: $input.categoryId) {
+                Text("Choose a category").tag("")
+                ForEach(available) { category in Text(category.name).tag(category.id) }
+            }
+            HStack {
+                Spacer()
+                Button("New Category\u{2026}", systemImage: "folder.badge.plus") { addingCategory = true }
+                    .buttonStyle(.borderless)
+                    .controlSize(.small)
+            }
+            if available.isEmpty { hint(String(localized: "This kind has no categories yet. Add one to continue.")) }
         }
-        Button("New Category…") { addingCategory = true }
     }
 
     @ViewBuilder
     private func contentSection(_ layout: MarketplaceFormSchema.KindLayout) -> some View {
-        Section(layout.content.title) {
+        Section {
             switch layout.content.editor {
             case .template:
                 MarketplaceTemplateEditor(definition: $definition)
             case .descriptor:
                 MarketplaceModifierEditor(kind: input.kind, text: $contentText)
             case .text:
-                TextEditor(text: $contentText).frame(minHeight: 160).border(.quaternary)
+                TextEditor(text: $contentText)
+                    .font(.body.monospaced())
+                    .frame(minHeight: 160)
+                    .padding(4)
+                    .overlay(RoundedRectangle(cornerRadius: 6).stroke(.quaternary))
             case .upload:
-                if let filename = draft?.item.contentFilename { LabeledContent("File", value: filename) }
+                LabeledContent("File") {
+                    if let filename = draft?.item.contentFilename {
+                        Text(filename).lineLimit(1).truncationMode(.middle)
+                    } else if let stagedContent {
+                        VStack(alignment: .trailing, spacing: 2) {
+                            Text(stagedContent.lastPathComponent).lineLimit(1).truncationMode(.middle)
+                            hint(String(localized: "Uploads when you save the draft."))
+                        }
+                    } else {
+                        Text("Nothing uploaded yet").foregroundStyle(.secondary)
+                    }
+                }
             }
-            HStack {
-                Button("Choose File…") { selectFile(role: "content") }
+            actionRow {
+                Button("Choose File…", systemImage: "folder") { selectFile(role: "content") }
                 if layout.filmAsset {
-                    Button("Use Film Footage…") { choosingFilmAsset = true }
+                    Button("Use Film Footage…", systemImage: "film") { choosingFilmAsset = true }
                         .disabled(ProjectDocumentController.shared.activeDocument == nil)
                 }
                 ForEach(layout.generators.filter { $0 != .image }, id: \.self) { generator in
-                    Button(generator.title) { generationKind = generator.rawValue; generationPrompt = input.description }
+                    Button(generator.title, systemImage: "sparkles") { generationKind = generator.rawValue; generationPrompt = input.description }
                 }
             }
-            Text(layout.content.hint).font(.caption).foregroundStyle(.secondary)
+        } header: {
+            Text(layout.content.title)
+        } footer: {
+            hint(layout.content.hint)
         }
+    }
+
+    /// The small bordered buttons a file slot offers, kept on one line and
+    /// aligned with the fields above them.
+    private func actionRow(@ViewBuilder _ buttons: () -> some View) -> some View {
+        HStack(spacing: 8) {
+            buttons()
+            Spacer(minLength: 0)
+        }
+        .buttonStyle(.bordered)
+        .controlSize(.small)
     }
 
     @ViewBuilder
     private func previewSection(_ layout: MarketplaceFormSchema.KindLayout) -> some View {
-        Section("Previews") {
-            VStack(alignment: .leading, spacing: 4) {
-                HStack {
-                    Button("Choose Cover…") { selectFile(role: "preview-image") }
+        Section {
+            VStack(alignment: .leading, spacing: 6) {
+                LabeledContent("Cover") {
+                    Text(draft?.item.previewImageUrl == nil ? "Not set" : "Uploaded")
+                        .foregroundStyle(draft?.item.previewImageUrl == nil ? AnyShapeStyle(.secondary) : AnyShapeStyle(.primary))
+                }
+                actionRow {
+                    Button("Choose Cover…", systemImage: "photo") { selectFile(role: "preview-image") }
                     if layout.generators.contains(.image) {
-                        Button("Generate Cover…") { generationKind = "image"; generationPrompt = "Cover art for \(input.title). \(input.description)" }
+                        Button("Generate Cover…", systemImage: "sparkles") {
+                            generationKind = "image"
+                            generationPrompt = "Cover art for \(input.title). \(input.description)"
+                        }
                     }
                 }
-                Text(layout.previewImage.hint).font(.caption).foregroundStyle(.secondary)
+                hint(layout.previewImage.hint)
             }
             if let video = layout.previewVideo {
-                VStack(alignment: .leading, spacing: 4) {
-                    HStack {
-                        Button("Choose Preview Video…") { selectFile(role: "preview-video") }
-                        TextField("Start seconds", value: $previewStart, format: .number).frame(width: 110)
-                        TextField("Length seconds", value: $previewDuration, format: .number).frame(width: 110)
-                        Button("Generate Preview") { generatePreview(layout) }
+                VStack(alignment: .leading, spacing: 6) {
+                    LabeledContent("Video") {
+                        Text(draft?.item.previewVideoUrl == nil ? "Not set" : "Uploaded")
+                            .foregroundStyle(draft?.item.previewVideoUrl == nil ? AnyShapeStyle(.secondary) : AnyShapeStyle(.primary))
                     }
-                    Text(video.hint).font(.caption).foregroundStyle(.secondary)
+                    // Both fields drive the rendered preview, so they sit
+                    // together rather than beside the buttons that use them.
+                    HStack(spacing: 14) {
+                        LabeledContent("Start") {
+                            TextField("Start seconds", value: $previewStart, format: .number)
+                                .labelsHidden()
+                                .frame(width: 70)
+                        }
+                        LabeledContent("Length") {
+                            TextField("Length seconds", value: $previewDuration, format: .number)
+                                .labelsHidden()
+                                .frame(width: 70)
+                        }
+                        Spacer(minLength: 0)
+                    }
+                    .font(.callout)
+                    actionRow {
+                        Button("Choose Preview Video…", systemImage: "film") { selectFile(role: "preview-video") }
+                        Button("Generate Preview", systemImage: "wand.and.stars") { generatePreview(layout) }
+                    }
+                    hint(video.hint)
                 }
                 if layout.mockPreview {
                     Toggle("Uploaded preview uses mock images, without original project footage", isOn: $mock)
                 }
             }
-        }
-    }
-
-    private var agentSection: some View {
-        Section {
-            Button("Continue with Agent", systemImage: "bubble.left.and.bubble.right") {
-                askAgent("Help me finish this marketplace draft. Read and show it, prepare missing content and previews, and keep it as a draft until I request publishing.")
-            }
-            if input.kind == .projectTemplate, ProjectDocumentController.shared.activeDocument != nil {
-                Button("Create from Current Film with Agent") {
-                    askAgent("Inspect my film and selected sequence. Turn it into an adaptable project template with generalized prompt, style, shots, footage instructions and marketplace references. Update this draft and prepare a mock-image preview.")
-                }
-            }
+        } header: {
+            Text("Previews")
+        } footer: {
+            hint(String(localized: "Cover art is required before an item can be published."))
         }
     }
 
@@ -379,6 +458,10 @@ struct MarketplaceAuthoringEditor: View {
             if let itemId {
                 load(try await service.get(itemId))
                 _ = try? service.savedJobs(itemId: itemId)
+            } else if let seed, draft == nil {
+                input.kind = seed.kind
+                input.title = seed.title
+                stagedContent = seed.contentFile
             }
             chooseCategory()
         } catch {
@@ -406,17 +489,14 @@ struct MarketplaceAuthoringEditor: View {
         case .descriptor, .text: contentText.isEmpty ? nil : contentText
         case .upload: nil
         }
-        let value = try await service.save(input, id: draft?.id, content: content)
+        var value = try await service.save(input, id: draft?.id, content: content)
+        if let file = stagedContent {
+            // Only after the upload lands, so a failure leaves it staged to retry.
+            value = try await service.upload(itemId: value.id, role: "content", file: file)
+            stagedContent = nil
+        }
         draft = value
         return value
-    }
-
-    private func deleteDraft() {
-        guard let id = draft?.id else { return }
-        run {
-            try await service.delete(id)
-            dismiss()
-        }
     }
 
     private func generatePreview(_ layout: MarketplaceFormSchema.KindLayout) {
@@ -447,6 +527,7 @@ struct MarketplaceAuthoringEditor: View {
         guard panel.runModal() == .OK, let file = panel.url else { return }
         if role == "preview-video", layout?.mockPreview == true, !mock { error = "Confirm that this uploaded preview uses mock images first."; return }
         let editor = layout?.content.editor ?? .upload
+        if role == "content" { stagedContent = nil }
         run {
             if role == "content", editor != .upload {
                 let text = try String(contentsOf: file, encoding: .utf8)

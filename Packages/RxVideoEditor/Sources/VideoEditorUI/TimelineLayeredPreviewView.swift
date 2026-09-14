@@ -100,8 +100,9 @@ private struct CaptionPreviewLayer: View {
     private static let context = CIContext()
 
     var body: some View {
-        let sourceTime = clip.sourceTime(at: controller.transport.currentTime)
-        let text = cues.filter { $0.start <= sourceTime && sourceTime < $0.end }.map(\.text).joined(separator: "\n")
+        // The clip's own language and punctuation choices, on the timeline
+        // clock, exactly as the compositor burns them in.
+        let text = clip.captionText(at: controller.transport.currentTime, in: cues)
         let size = controller.timeline.size
         if !text.isEmpty, let raster = TextRenderer.shared.image(for: text, style: clip.text ?? .caption, frameSize: size),
            let image = Self.context.createCGImage(raster, from: CGRect(origin: .zero, size: size)) {

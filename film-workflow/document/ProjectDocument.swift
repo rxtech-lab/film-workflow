@@ -51,6 +51,11 @@ final class ProjectDocument: Identifiable {
         packageURL.deletingPathExtension().lastPathComponent
     }
 
+    /// The moment a view showing this film should move to next; see
+    /// ``TimelineFocus``. Set by whatever changed the timeline, consumed by the
+    /// editor window and the Simple mode preview.
+    var pendingTimelineFocus: TimelineFocus?
+
     /// Every model persisted inside a film. Agent threads live in the app-level
     /// store instead (`AppModelContainer`), because they span films.
     static let schema = Schema([

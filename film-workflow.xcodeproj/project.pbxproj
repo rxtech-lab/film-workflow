@@ -8,6 +8,9 @@
 
 /* Begin PBXBuildFile section */
 		DF639B703057003B0021FF67 /* RxAgentSDK in Frameworks */ = {isa = PBXBuildFile; productRef = DF639B6F3057003B0021FF67 /* RxAgentSDK */; };
+		DF63A1A1305706A20021FF67 /* FilmTemplateKit in Frameworks */ = {isa = PBXBuildFile; productRef = DFFT0002000000000000E001 /* FilmTemplateKit */; };
+		DF63A1A2305706A20021FF67 /* JSONRenderUI in Frameworks */ = {isa = PBXBuildFile; productRef = DFFT0002000000000000E003 /* JSONRenderUI */; };
+		DF63A1A3305706A20021FF67 /* FilmTemplateUI in Frameworks */ = {isa = PBXBuildFile; productRef = DFFT0002000000000000E002 /* FilmTemplateUI */; };
 		DF8C30C03054213400302857 /* appicon.icon in Resources */ = {isa = PBXBuildFile; fileRef = DF8C30BF3054213400302857 /* appicon.icon */; };
 		DF9D8F11302D630100CD3C3D /* RxAuthSwift in Frameworks */ = {isa = PBXBuildFile; productRef = DF9D8F10302D630100CD3C3D /* RxAuthSwift */; };
 		DF9D8F13302D630100CD3C3D /* RxAuthSwiftUI in Frameworks */ = {isa = PBXBuildFile; productRef = DF9D8F12302D630100CD3C3D /* RxAuthSwiftUI */; };
@@ -68,6 +71,9 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				DF63A1A3305706A20021FF67 /* FilmTemplateUI in Frameworks */,
+				DF63A1A2305706A20021FF67 /* JSONRenderUI in Frameworks */,
+				DF63A1A1305706A20021FF67 /* FilmTemplateKit in Frameworks */,
 				DF9D8F11302D630100CD3C3D /* RxAuthSwift in Frameworks */,
 				DFC60EA52FAF81D200B99679 /* Textual in Frameworks */,
 				DFCA0001000000000000B001 /* WhisperKit in Frameworks */,
@@ -150,6 +156,9 @@
 				DFAB0002000000000000D002 /* RxRemotion */,
 				DFVE0005000000000000D005 /* VideoEditorUI */,
 				DF639B6F3057003B0021FF67 /* RxAgentSDK */,
+				DFFT0002000000000000E001 /* FilmTemplateKit */,
+				DFFT0002000000000000E003 /* JSONRenderUI */,
+				DFFT0002000000000000E002 /* FilmTemplateUI */,
 			);
 			productName = "film-workflow";
 			productReference = DF4F80FA2F9120D300DE82DA /* film-workflow.app */;
@@ -243,6 +252,7 @@
 				DFAB0003000000000000D003 /* XCLocalSwiftPackageReference "Packages/RxRemotion" */,
 				DF9D8F0F302D630100CD3C3D /* XCRemoteSwiftPackageReference "RxAuthSwift" */,
 				DF639B6E3057003B0021FF67 /* XCRemoteSwiftPackageReference "RxAgentSDK" */,
+				DFFT0003000000000000E003 /* XCLocalSwiftPackageReference "Packages/RxFilmTemplates" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = DF4F80FB2F9120D300DE82DA /* Products */;
@@ -666,6 +676,10 @@
 			isa = XCLocalSwiftPackageReference;
 			relativePath = Packages/RxRemotion;
 		};
+		DFFT0003000000000000E003 /* XCLocalSwiftPackageReference "Packages/RxFilmTemplates" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = Packages/RxFilmTemplates;
+		};
 		DFSP0003000000000000C003 /* XCLocalSwiftPackageReference "Vendor/Sparkle" */ = {
 			isa = XCLocalSwiftPackageReference;
 			relativePath = Vendor/Sparkle;
@@ -745,6 +759,21 @@
 			isa = XCSwiftPackageProductDependency;
 			package = DFCA0003000000000000B003 /* XCRemoteSwiftPackageReference "WhisperKit" */;
 			productName = WhisperKit;
+		};
+		DFFT0002000000000000E001 /* FilmTemplateKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = DFFT0003000000000000E003 /* XCLocalSwiftPackageReference "Packages/RxFilmTemplates" */;
+			productName = FilmTemplateKit;
+		};
+		DFFT0002000000000000E002 /* FilmTemplateUI */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = DFFT0003000000000000E003 /* XCLocalSwiftPackageReference "Packages/RxFilmTemplates" */;
+			productName = FilmTemplateUI;
+		};
+		DFFT0002000000000000E003 /* JSONRenderUI */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = DFFT0003000000000000E003 /* XCLocalSwiftPackageReference "Packages/RxFilmTemplates" */;
+			productName = JSONRenderUI;
 		};
 		DFSP0002000000000000C002 /* Sparkle */ = {
 			isa = XCSwiftPackageProductDependency;

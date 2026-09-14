@@ -17,6 +17,9 @@ struct SequenceRenderSheet: View {
     @State private var options = SequenceRenderDefaults.options
     @State private var captions = SequenceRenderDefaults.captions
     @State private var captionStyle: TextStyle
+    /// Set once the sheet has adopted the sequence's own caption choices, so
+    /// that adoption does not read as the user picking a language.
+    @State private var didAdoptCaptions = false
     @State private var destination: DestinationChoice = SequenceRenderDefaults.folder.map { .folder($0) } ?? .film
 
     init(sequence: SequenceProject, onRender: @escaping (TimelineExporter.Options, CaptionRenderRequest, SequenceRenderDestination) -> Void, onCancel: @escaping () -> Void) {
@@ -108,20 +111,30 @@ struct SequenceRenderSheet: View {
         }
         .frame(width: 500)
         .onAppear {
-            // Follow the language the caption editor is showing unless the
-            // last render chose one, and drop languages this film lacks.
+            // The caption clips are the authority: they are what the viewer
+            // draws and what a render burns in. Only when they say nothing
+            // beyond the transcript does the sheet fall back to the language
+            // the caption editor is showing.
             let available = availableLanguages
-            if captions.burnInLanguage.isEmpty,
-               let displayed = SequenceCaptionSources.captionClips(in: sequence, context: modelContext).first?.project.displayedTranslationLanguage,
-               available.contains(displayed) {
+            if let chosen = SequenceCaptionSources.effectiveBurnInLanguages(in: sequence), chosen != [""] {
+                captions.burnInLanguage = chosen.last ?? ""
+                captions.burnInBilingual = chosen.count > 1
+            } else if captions.burnInLanguage.isEmpty,
+                      let displayed = SequenceCaptionSources.captionClips(in: sequence, context: modelContext).first?.project.displayedTranslationLanguage,
+                      available.contains(displayed) {
                 captions.burnInLanguage = displayed
                 captions.burnInBilingual = true
             }
             captions = captions.narrowed(to: available)
+            didAdoptCaptions = true
         }
         .onChange(of: options.video) { _, _ in options = options.normalized }
         .onChange(of: options.container) { _, _ in options = options.normalized }
         .onChange(of: captionStyle) { _, style in applyCaptionStyle(style) }
+        .onChange(of: captions.burnInLanguages) { _, languages in
+            guard didAdoptCaptions else { return }
+            applyCaptionLanguages(languages)
+        }
         .onChange(of: destination) { old, new in
             guard new == .choose else { return }
             if let url = chooseFolder() {
@@ -164,6 +177,21 @@ struct SequenceRenderSheet: View {
 
     /// Writes the sheet's style onto every caption clip, so the viewer behind
     /// the sheet and the burn-in agree. One undo step per change.
+    /// The sheet's language rows edit the same per-clip choice the inspector
+    /// does, so the viewer shows what the render will draw.
+    private func applyCaptionLanguages(_ languages: [String]) {
+        var timeline = sequence.timeline
+        var changed = false
+        for clip in timeline.allClips where clip.source.kind == .captions && clip.captions.languages != languages {
+            try? TimelineEditor.update(&timeline, clipID: clip.id) {
+                $0.captions = CaptionOptions(languages: languages, stripsPunctuation: $0.captions.stripsPunctuation)
+            }
+            changed = true
+        }
+        guard changed else { return }
+        sequence.editTimeline(timeline, undoManager: undoManager, actionName: String(localized: "Change Caption Language"))
+    }
+
     private func applyCaptionStyle(_ style: TextStyle) {
         var timeline = sequence.timeline
         var changed = false

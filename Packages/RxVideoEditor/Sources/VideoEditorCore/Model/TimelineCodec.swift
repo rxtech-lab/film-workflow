@@ -16,6 +16,11 @@ public enum TimelineCodec {
 
     public static func decode(_ data: Data) throws -> Timeline {
         let decoder = JSONDecoder()
-        return try decoder.decode(Envelope.self, from: data).timeline
+        let envelope = try decoder.decode(Envelope.self, from: data)
+        guard envelope.formatVersion < 2 else { return envelope.timeline }
+        // Written before caption lanes existed: put the cues on one.
+        var timeline = envelope.timeline
+        timeline.tracks = Timeline.migratedTracks(timeline.tracks)
+        return timeline
     }
 }

@@ -90,19 +90,29 @@ once per launch; the window's Refresh button forces a re-fetch.
 
 ## Admin authoring in the app and agent
 
-Admins see **My Marketplace** in the sidebar, with their own drafts and published
-items, status filters, search, pagination, and direct Publish/Unpublish and Edit
-actions. The server filters by the authenticated author's `createdBy` before
+Admins get two sidebar destinations backed by the same list view: **My
+Marketplace** (their own drafts and published items) and **Manage Items**
+(everything this account may manage). Both offer status filters, search and
+pagination. The server filters by the authenticated author's `createdBy` before
 counting and paginating (`GET /api/v1/admin/marketplace/items?scope=mine`).
-Publishing uses the existing content and preview validation; changes refresh
-the author's list and catalog. **Create Item** and the admin-wide **Manage Items**
-remain in the toolbar. The editor
-supports free-by-default credit pricing, categories, tags, content files or
-film assets, generated covers/content, excerpt selection, preview jobs and
-Publish/Unpublish. Effects and transitions have native preset controls and an
-advanced descriptor editor. Catalog and draft operations also work with no
-film open. Roles from `/api/v1/me` are decoded; the admin capabilities endpoint
-and every authoring operation independently enforce the administrator role.
+Edit, Publish/Unpublish and Delete live in each row's context menu, so a
+destructive action is never one stray click away and the editor itself carries
+no publishing controls; clicking a row opens the editor. Publishing uses the
+existing content and preview validation; changes refresh the author's list and
+catalog. **Create Item** remains in the toolbar. The editor supports
+free-by-default credit pricing, categories, tags, content files or film assets,
+generated covers/content, excerpt selection and preview jobs, with the listing
+preview as a hero above the fields, per-section help as footers, and one status
+bar carrying progress, errors, Done and Save Draft. Effects and transitions have
+native preset controls and an advanced descriptor editor. Catalog and draft
+operations also work with no film open. Roles from `/api/v1/me` are decoded; the
+admin capabilities endpoint and every authoring operation independently enforce
+the administrator role.
+
+A sequence's context menu in the library offers **Create Marketplace Template…**
+for admins: it opens the agent on `project_template_from_film` for that
+sequence, which extracts it into a draft, generalizes it and prepares a mock
+preview. The item never publishes itself from there.
 
 Both editors are drawn from one description of the form. `lib/marketplace/form-schema.ts`
 names the fields, what they accept, which kinds they belong to, and what each
@@ -113,7 +123,8 @@ item input it edits (`title`, `pricePoints`, `metadata.tags`). The app decides
 only which control draws a field, drawing the form once the schema and the item
 have loaded, and drops a field type or kind this build does not know rather
 than failing the payload. Deleting an item is available in both, asks twice in
-the app, and the server still refuses once the item has been bought.
+the app (from the row's context menu), and the server still refuses once the
+item has been bought.
 
 `MarketplaceAuthoringService` is shared by the native editor and MCP handlers.
 The website server actions and `/api/v1/admin/marketplace/*` share

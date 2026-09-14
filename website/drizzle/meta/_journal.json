@@ -43,6 +43,13 @@
       "when": 1789306601301,
       "tag": "0005_marketplace_taxonomy",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1789352462549,
+      "tag": "0006_catalog_models",
+      "breakpoints": true
     }
   ]
 }

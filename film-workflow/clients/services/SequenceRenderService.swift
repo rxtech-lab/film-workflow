@@ -172,12 +172,18 @@ enum SequenceRenderService {
 
         let resolver = DocumentMediaResolver(document: document, width: sequence.width, height: sequence.height, fps: sequence.fps,
                                              captionText: options.captions == .burnIn ? captions.burnInSelection : .original)
+        // Caption clips carry their own languages, which the inspector and the
+        // render sheet both edit. A request that names one — an agent render,
+        // say — overrides them for this export only.
+        let timeline = options.captions == .burnIn && captions.burnInLanguages != [""]
+            ? SequenceCaptionSources.timeline(sequence.timeline, burningIn: captions.burnInLanguages)
+            : sequence.timeline
         onProgress(.exporting(0))
         var isExporting = true
         defer { isExporting = false }
         var captionFiles: [URL] = []
         do {
-            try await TimelineExporter.export(sequence.timeline, resolver: resolver, to: exportURL, options: options) { fraction in
+            try await TimelineExporter.export(timeline, resolver: resolver, to: exportURL, options: options) { fraction in
                 Task { @MainActor in
                     // Export callbacks may already be queued when the exporter
                     // returns. Do not let them replace finalizing or reopen a

@@ -34,10 +34,12 @@ struct RemotionRenderListView: View {
                             .tag(render)
                     }
                     .frame(minWidth: 220, idealWidth: 260, maxWidth: 320)
+                    .accessibilityIdentifier("remotion.versions.list")
 
                     VStack(spacing: 0) {
                         VideoPlayer(player: player)
                             .frame(minHeight: 240)
+                            .accessibilityIdentifier("remotion.versions.player")
                         if let selected {
                             detailBar(selected)
                         }
@@ -86,6 +88,8 @@ struct RemotionRenderListView: View {
         }
         .padding(.vertical, 2)
         .contextMenu { actions(render) }
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("remotion.version.\(render.versionNumber)")
     }
 
     @ViewBuilder
@@ -101,6 +105,7 @@ struct RemotionRenderListView: View {
         HStack {
             Text("\(render.versionLabel) · \(render.dimensionsLabel)")
                 .font(.callout)
+                .accessibilityIdentifier("remotion.versions.selection")
             Spacer()
             actions(render)
         }
