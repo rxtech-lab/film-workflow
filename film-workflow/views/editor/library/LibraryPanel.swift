@@ -96,7 +96,20 @@ struct LibraryPanel: View {
                         LibraryMarketplaceGrid(rows: marketplaceRows, groups: groups, taxonomy: marketplace?.taxonomy ?? .builtIn,
                                                onAdd: addMarketplaceItem,
                                                onReveal: { marketplace?.revealInFinder($0.id) },
-                                               onOpenMarketplace: { openWindow(id: MarketplaceWindowID.value) })
+                                               onOpenMarketplace: { openWindow(id: MarketplaceWindowID.value) },
+                                               selectedID: state.marketplaceSelection?.rowID,
+                                               onDeselect: state.clearMarketplacePreview,
+                                               player: state.footagePlayer,
+                                               onSkim: { row, fraction in
+                                                   if let fraction, let preview = row.preview {
+                                                       state.skimMarketplace(preview, fraction: fraction)
+                                                   } else {
+                                                       state.endMarketplaceSkim()
+                                                   }
+                                               },
+                                               onSeek: { row, fraction in
+                                                   if let preview = row.preview { state.selectMarketplace(preview, fraction: fraction) }
+                                               })
                             .task { await marketplace?.loadTaxonomy() }
                     }
                 }
@@ -104,6 +117,9 @@ struct LibraryPanel: View {
                 // does for a field elsewhere on macOS. Simultaneous so the
                 // grid's own selection and drag gestures still see the click.
                 .simultaneousGesture(TapGesture().onEnded { dismissTextFieldFocus() })
+                // An installed item previews only while its tab is on screen;
+                // leaving hands the viewer back to this film.
+                .onChange(of: tab) { _, _ in state.clearMarketplacePreview() }
             }
             .frame(maxWidth: .infinity, minHeight: 180, maxHeight: .infinity)
         } footage: {
@@ -216,7 +232,8 @@ struct LibraryPanel: View {
             if let item = state.selection { state.seekFootage(item, cellID: cell.id, fraction: fraction) }
         },
         isExpanded: footageVisible,
-        onToggle: toggleFootage
+        onToggle: toggleFootage,
+        isFromMarketplace: state.selection.map(index.isFromMarketplace) ?? false
     )
     }
 

@@ -42,15 +42,15 @@ struct RemotionParametersView: View {
 
         var title: String {
             switch self {
-            case .uploadedImage: return "Delete this image?"
-            case .referenceImage: return "Delete the reference image?"
-            case .audio: return "Delete this audio file?"
-            case .generatedImage: return "Delete this generated image?"
+            case .uploadedImage: return String(localized: "Delete this image?")
+            case .referenceImage: return String(localized: "Delete the reference image?")
+            case .audio: return String(localized: "Delete this audio file?")
+            case .generatedImage: return String(localized: "Delete this generated image?")
             }
         }
 
         var message: String {
-            "The file will be removed from disk and cannot be recovered."
+            String(localized: "The file will be removed from disk and cannot be recovered.")
         }
     }
 

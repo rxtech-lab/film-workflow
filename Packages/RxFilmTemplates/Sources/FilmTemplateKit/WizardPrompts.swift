@@ -45,9 +45,18 @@ public struct WizardPromptSet: Hashable, Sendable {
         _ title: String,
         _ tool: @Sendable (String) -> String
     ) -> String
+    /// Phase 2 for a run with no template behind it: the agent designs the
+    /// shot plan itself before asking.
+    public var planOptionsWithoutTemplate: @Sendable (_ tool: @Sendable (String) -> String) -> String
     /// Third turn: build the sequence.
     public var build: @Sendable (
         _ itemId: String,
+        _ selectionsJSON: String,
+        _ tool: @Sendable (String) -> String
+    ) -> String
+    /// Phase 3 for a run with no template: the agent cuts the sequence from
+    /// the plan it made in phase 2.
+    public var buildWithoutTemplate: @Sendable (
         _ selectionsJSON: String,
         _ tool: @Sendable (String) -> String
     ) -> String
@@ -58,13 +67,17 @@ public struct WizardPromptSet: Hashable, Sendable {
         systemBlock: @escaping @Sendable (@Sendable (String) -> String) -> String,
         research: @escaping @Sendable (IntakeSubmission, [WizardUploadDescription], [String], @Sendable (String) -> String) -> String,
         planOptions: @escaping @Sendable (String, String, @Sendable (String) -> String) -> String,
+        planOptionsWithoutTemplate: @escaping @Sendable (@Sendable (String) -> String) -> String,
         build: @escaping @Sendable (String, String, @Sendable (String) -> String) -> String,
+        buildWithoutTemplate: @escaping @Sendable (String, @Sendable (String) -> String) -> String,
         refine: @escaping @Sendable (String, @Sendable (String) -> String) -> String
     ) {
         self.systemBlock = systemBlock
         self.research = research
         self.planOptions = planOptions
+        self.planOptionsWithoutTemplate = planOptionsWithoutTemplate
         self.build = build
+        self.buildWithoutTemplate = buildWithoutTemplate
         self.refine = refine
     }
 
@@ -135,11 +148,15 @@ public extension WizardPromptSet {
             the user's answer arrives as your next turn.
 
             1. Research — read the site, rank marketplace project templates,
-               call `\(tool(WizardTool.presentTemplates))`.
+               call `\(tool(WizardTool.presentTemplates))`. If nothing in the
+               marketplace fits — including a catalog with no project templates
+               at all — call `\(tool(WizardTool.skipTemplates))` instead and
+               build the film from the brief.
             2. Plan — inspect the chosen template, call
                `\(tool(WizardTool.presentOptions))` with a page of choices.
-            3. Build — apply the template and finish the sequence, then reply
-               with one sentence.
+            3. Build — apply the template (or cut the sequence yourself, if
+               there is no template) and finish it, then reply with one
+               sentence.
             4. Refine — change what exists when the user asks.
 
             Rules for the whole run:
@@ -218,6 +235,32 @@ public extension WizardPromptSet {
             Preselect your recommendation in `initial_state`, then stop.
             """
         },
+        planOptionsWithoutTemplate: { tool in
+            """
+            Phase 2 — plan. No marketplace template fitted this company, so \
+            this film is yours to design: the shot plan comes from the brief \
+            and the user's own footage.
+
+            Do this:
+            1. `\(tool("footage_list"))` to see the user's uploads with their \
+            sourceIds and durations.
+            2. `\(tool("marketplace_list"))` for music that suits the tone, and \
+            for footage that could cover a shot the uploads cannot.
+            3. Work out a shot plan yourself: four to six shots, thirty to \
+            ninety seconds in all, opening on the strongest upload and closing \
+            on what the company says about itself.
+            4. Call `\(tool(WizardTool.presentOptions))` with one page that asks:
+               - for each shot in your plan, an OptionGroup of the uploads that \
+            fit it, plus "Generate one" and "Skip". Show a thumbnail by passing \
+            the upload's sourceId as `imageUrl`. Bind each to `/footage/shot-<n>`, \
+            and title each group with what the shot is for.
+               - the style choices, as Toggles under `/style/…` (captions, an \
+            end card with the website, and so on).
+               - music: an OptionGroup under `/music/track` with two or three \
+            marketplace tracks and a "No music" option.
+            Preselect your recommendation in `initial_state`, then stop.
+            """
+        },
         build: { itemId, selectionsJSON, tool in
             """
             Phase 3 — build. The user confirmed these choices:
@@ -240,6 +283,28 @@ public extension WizardPromptSet {
 
             Finish with one sentence describing the cut. Do not call a wizard \
             tool in this phase.
+            """
+        },
+        buildWithoutTemplate: { selectionsJSON, tool in
+            """
+            Phase 3 — build. There is no template to apply; you are cutting \
+            this one yourself. The user confirmed these choices:
+
+            \(selectionsJSON)
+
+            Do this:
+            1. `\(tool("sequence_create"))` one sequence for the film, then lay \
+            your shot plan onto it with `\(tool("sequence_add_clip"))`, taking \
+            each shot's footage from `/footage/…`. Generate a still with \
+            `\(tool("image_generate"))` where the user asked for one, and leave \
+            out any shot they skipped.
+            2. Apply the rest of the choices: add the chosen music to the audio \
+            track for the sequence's length, add captions if asked, add the end \
+            card if asked.
+            3. Call `\(tool(WizardTool.reportProgress))` before each of these steps.
+
+            Work on that one sequence and no other. Finish with one sentence \
+            describing the cut. Do not call a wizard tool in this phase.
             """
         },
         refine: { instruction, tool in

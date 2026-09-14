@@ -106,7 +106,7 @@ export const aiJobs = pgTable("ai_jobs", {
 
 export const marketplaceKindEnum = pgEnum("marketplace_kind", [
   "footage",
-  "remotion_prompt",
+  "remotion",
   "audio",
   "sound_effect",
   "font",
@@ -115,6 +115,14 @@ export const marketplaceKindEnum = pgEnum("marketplace_kind", [
   "project_template",
 ]);
 export type MarketplaceKind = (typeof marketplaceKindEnum.enumValues)[number];
+
+/**
+ * Admin-authored text in the languages the base columns are not written in,
+ * keyed by locale then field: `{ "zh-Hans": { "title": "…" } }`. A locale with
+ * no entry reads through to the base column, so a row is never blank in a
+ * language nobody has translated yet. See `lib/i18n/translations.ts`.
+ */
+export type MarketplaceTranslations = import("@/lib/i18n/translations").Translations;
 
 export const marketplaceItemStatusEnum = pgEnum("marketplace_item_status", ["draft", "published"]);
 export type MarketplaceItemStatus = (typeof marketplaceItemStatusEnum.enumValues)[number];
@@ -129,10 +137,13 @@ export type MarketplaceItemMetadata = {
   fontFamily?: string;
   /** Effects and transitions: a summary of the CIFilter descriptor. */
   descriptor?: { filterName: string; parameterCount: number };
-  /** Remotion prompts: the first lines, for the card. */
+  /** Project templates and Remotion compositions: the first lines of the prompt, for the card. */
   promptExcerpt?: string;
+  /** Footage: whether the content file is a still or a clip. Derived at finalize. */
+  mediaType?: "image" | "video";
   tags?: string[];
-  preview?: { durationSeconds?: number; width?: number; height?: number; mock?: boolean };
+  preview?: { durationSeconds?: number; width?: number; height?: number; mock?: boolean; startSeconds?: number };
+  lyricTracks?: import("@/lib/marketplace/lyrics").LyricTrack[];
   template?: import("@/lib/marketplace/template").TemplateSummary;
 };
 
@@ -149,6 +160,8 @@ export const marketplaceKinds = pgTable("marketplace_kinds", {
   icon: text("icon").notNull(),
   /** Sidebar order, low first; ties break on label. */
   sortOrder: integer("sort_order").notNull().default(0),
+  /** `label` in the other locales the app ships. */
+  translations: jsonb("translations").$type<MarketplaceTranslations>().notNull().default({}),
   ...timestamps(),
   updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" }).notNull(),
 });
@@ -166,6 +179,8 @@ export const marketplaceCategories = pgTable("marketplace_categories", {
   slug: text("slug").notNull(),
   name: text("name").notNull(),
   icon: text("icon").notNull().default("folder"),
+  /** `name` in the other locales the app ships. */
+  translations: jsonb("translations").$type<MarketplaceTranslations>().notNull().default({}),
   ...timestamps(),
   updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" }).notNull(),
 }, (table) => [
@@ -191,6 +206,8 @@ export const marketplaceItems = pgTable("marketplace_items", {
   contentSizeBytes: bigint("content_size_bytes", { mode: "number" }),
   contentType: text("content_type"),
   metadata: jsonb("metadata").$type<MarketplaceItemMetadata>().notNull().default({}),
+  /** `title` and `description` in the other locales the app ships. */
+  translations: jsonb("translations").$type<MarketplaceTranslations>().notNull().default({}),
   status: marketplaceItemStatusEnum("status").notNull().default("draft"),
   createdBy: text("created_by").notNull(),
   ...timestamps(),

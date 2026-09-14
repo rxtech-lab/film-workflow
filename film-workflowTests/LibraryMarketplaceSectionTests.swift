@@ -24,7 +24,7 @@ struct LibraryMarketplaceSectionTests {
             manifest(.font, id: "serif", title: "Serif", installedAt: now),
             manifest(.soundEffect, id: "door", title: "Door", installedAt: now.addingTimeInterval(-10)),
             manifest(.effect, id: "glow", title: "Glow", installedAt: now),
-            manifest(.remotionPrompt, id: "intro", title: "Intro", installedAt: now.addingTimeInterval(-30)),
+            manifest(.remotion, id: "intro", title: "Intro", installedAt: now.addingTimeInterval(-30)),
         ]
         for m in manifests {
             let dir = FileStorage.marketplaceItemDir(kind: m.kind.rawValue, itemID: m.itemID, root: root)
@@ -42,7 +42,7 @@ struct LibraryMarketplaceSectionTests {
         let manifests = [
             manifest(.footage, id: "harbor", title: "Harbor sunrise", installedAt: Date(), category: "nature", metadata: .init(durationSeconds: 12.5, width: 1920, height: 1080)),
             manifest(.soundEffect, id: "door", title: "Door slam", installedAt: Date(), category: "foley"),
-            manifest(.remotionPrompt, id: "intro", title: "Cold open", installedAt: Date(), category: "intros"),
+            manifest(.remotion, id: "intro", title: "Cold open", installedAt: Date(), category: "intros"),
         ]
         let directory: (InstalledMarketplaceManifest) -> URL = { root.appendingPathComponent($0.itemID) }
 
@@ -59,7 +59,12 @@ struct LibraryMarketplaceSectionTests {
 
         #expect(LibraryMarketplaceRow.rows(from: manifests, directory: directory, search: "SLAM").map(\.id) == ["door"])
         #expect(LibraryMarketplaceRow.rows(from: manifests, directory: directory, search: "zzz").isEmpty)
-        #expect(LibraryMarketplaceRow.sectionKinds == [.footage, .remotionPrompt, .audio, .soundEffect])
+        #expect(LibraryMarketplaceRow.sectionKinds == [.footage, .remotion, .audio, .soundEffect])
+        // A composition's content file is an archive, so its card holds a still.
+        #expect(all[2].isStill)
+        #expect(all[2].posterVideoURL == nil)
+        // A clip is not a still, and is the only row a player may pull frames from.
+        #expect(!harbor.isStill)
     }
 
     @Test("The Marketplace tab lists installed items by kind as cards that add to the film")

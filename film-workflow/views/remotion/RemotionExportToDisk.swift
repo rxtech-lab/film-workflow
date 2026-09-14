@@ -45,7 +45,7 @@ struct RemotionExportToDiskModifier: ViewModifier {
             .alert("Export failed", isPresented: Binding(get: { errorMessage != nil }, set: { if !$0 { errorMessage = nil } })) {
                 Button("OK") {}
             } message: {
-                Text(errorMessage ?? "An unknown error occurred.")
+                Text(errorMessage ?? String(localized: "An unknown error occurred."))
             }
     }
 

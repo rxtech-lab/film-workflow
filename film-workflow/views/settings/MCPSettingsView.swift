@@ -154,8 +154,8 @@ struct MCPSettingsView: View {
     private var statusText: String {
         if server.isRunning, let port = settings.actualPort {
             return port == settings.basePort
-                ? "Running on port \(port)"
-                : "Running on port \(port) (base \(settings.basePort) was busy)"
+                ? String(localized: "Running on port \(port)")
+                : String(localized: "Running on port \(port) (base \(settings.basePort) was busy)")
         }
         return settings.statusMessage
     }
@@ -188,7 +188,7 @@ struct MCPSettingsView: View {
                 .contentTransition(.symbolEffect(.replace))
         }
         .buttonStyle(.borderless)
-        .help(copied ? "Copied" : "Copy")
+        .help(copied ? String(localized: "Copied") : String(localized: "Copy"))
     }
 
     private func copyToClipboard(_ s: String, key: String) {

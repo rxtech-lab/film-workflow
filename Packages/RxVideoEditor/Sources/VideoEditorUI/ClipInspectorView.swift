@@ -165,7 +165,7 @@ public struct ClipInspectorView: View {
         )
     }
 
-    private func slider(_ title: String, _ value: Binding<Double>, in range: ClosedRange<Double>, percent: Bool = false) -> some View {
+    private func slider(_ title: LocalizedStringKey, _ value: Binding<Double>, in range: ClosedRange<Double>, percent: Bool = false) -> some View {
         HStack {
             Text(title)
             Slider(value: value, in: range)
@@ -176,14 +176,14 @@ public struct ClipInspectorView: View {
         }
     }
 
-    private func timecodeField(_ title: String, value: TimeInterval, commit: @escaping (TimeInterval) -> Void) -> some View {
+    private func timecodeField(_ title: LocalizedStringKey, value: TimeInterval, commit: @escaping (TimeInterval) -> Void) -> some View {
         TimecodeField(title: title, seconds: value, fps: timeline.fps, commit: commit)
     }
 }
 
 /// A text field showing `HH:MM:SS:FF` that commits on return or focus loss.
 struct TimecodeField: View {
-    let title: String
+    let title: LocalizedStringKey
     let seconds: TimeInterval
     let fps: Int
     let commit: (TimeInterval) -> Void

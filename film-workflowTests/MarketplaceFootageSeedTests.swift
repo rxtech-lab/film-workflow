@@ -27,6 +27,12 @@ struct MarketplaceFootageSeedTests {
             (.audio, "take.wav", .audio),
             // Movies are allowed for audio: the upload extracts their track.
             (.audio, "take.mp4", .audio),
+            // Stills shelve under footage now; the server decides which shelf.
+            (.image, "frame.png", .footage),
+            (.image, "frame.jpg", .footage),
+            (.image, "frame.webp", .footage),
+            // A composition publishes its project, whatever file is in front of it.
+            (.remotion, "render.mp4", .remotion),
           ])
     func supportedTakes(kind: SourceKind, filename: String, expected: MarketplaceKind) {
         #expect(cell(kind, filename).marketplaceKind == expected)
@@ -34,10 +40,10 @@ struct MarketplaceFootageSeedTests {
 
     @Test("A take the marketplace has no slot for offers nothing",
           arguments: [
-            // Footage only takes movies; a bare audio container is not one.
+            // Footage only takes movies and stills; a bare audio container is neither.
             (SourceKind.video, "clip.wav" as String?),
-            // The marketplace has no kind for a still or for captions.
-            (.image, "frame.png"),
+            (.image, "frame.tiff"),
+            // The marketplace has no kind for captions.
             (.captions, "captions.json"),
             // Nothing rendered yet, so there is no file to upload.
             (.remotion, nil),
@@ -63,8 +69,27 @@ struct MarketplaceFootageSeedTests {
         #expect(MarketplaceKind.canBeFootage(.video))
         #expect(MarketplaceKind.canBeFootage(.audio))
         #expect(MarketplaceKind.canBeFootage(.remotion))
-        #expect(!MarketplaceKind.canBeFootage(.image))
+        #expect(MarketplaceKind.canBeFootage(.image))
         #expect(!MarketplaceKind.canBeFootage(.captions))
+    }
+
+    /// A composition's content is an archive of its whole project, which only
+    /// the seed host can build, so the file-only initializer must decline it
+    /// even though `forFootage` happily names the kind.
+    @Test("A composition is not seeded from its rendered file")
+    func remotionNeedsItsProject() {
+        #expect(MarketplaceKind.forFootage(.remotion, file: URL(fileURLWithPath: "/tmp/render.mp4")) == .remotion)
+        #expect(MarketplaceKind.remotion.seedsFromFileAlone == false)
+        #expect(MarketplaceKind.footage.seedsFromFileAlone)
+        #expect(MarketplaceAuthoringSeed(title: "Cold open", sourceKind: .remotion, file: URL(fileURLWithPath: "/tmp/render.mp4")) == nil)
+    }
+
+    @Test("A still seeds a footage draft carrying the image itself")
+    func stillSeed() throws {
+        let take = cell(.image, "harbor-dawn.png")
+        let seed = try #require(MarketplaceAuthoringSeed(title: "Harbor dawn", sourceKind: take.kind, file: take.mediaURL))
+        #expect(seed.kind == .footage)
+        #expect(seed.contentFile.lastPathComponent == "harbor-dawn.png")
     }
 
     @Test("Nothing is seeded without a file, whatever the kind")

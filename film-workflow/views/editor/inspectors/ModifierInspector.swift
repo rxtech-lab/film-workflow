@@ -41,8 +41,8 @@ struct ModifierInspector: View {
         if let definition = ModifierCatalog.current.definition(item) {
             Section {
                 ModifierThumbnail(item: item).frame(maxHeight: 140)
-                Text(definition.name).font(.headline)
-                Text(definition.summary).foregroundStyle(.secondary)
+                Text(LocalizedStringKey(definition.name)).font(.headline)
+                Text(LocalizedStringKey(definition.summary)).foregroundStyle(.secondary)
             }
             Section("Parameters") {
                 ModifierParameterEditor(definition: definition, parameters: .constant(definition.defaults)).disabled(true)
@@ -57,10 +57,10 @@ struct ModifierInspector: View {
             if clip.effects.isEmpty { Text("Drag an effect onto this clip to get started.").foregroundStyle(.secondary) }
             ForEach(Array(clip.effects.enumerated()), id: \.element.id) { index, instance in
                 let definition = ModifierCatalog.current.effect(instance.definitionID)
-                Section(definition?.name ?? "Unavailable Effect") {
+                Section(LocalizedStringKey(definition?.name ?? "Unavailable Effect")) {
                     if let definition {
                         ModifierThumbnail(item: .init(kind: .effect, definitionID: instance.definitionID), parameters: instance.parameters).frame(maxHeight: 140)
-                        Text(definition.summary).font(.caption).foregroundStyle(.secondary)
+                        Text(LocalizedStringKey(definition.summary)).font(.caption).foregroundStyle(.secondary)
                         ModifierParameterEditor(definition: definition, parameters: Binding(get: {
                             sequence.timeline.clip(id: clipID)?.effects.first { $0.id == instance.id }?.parameters ?? instance.parameters
                         }, set: { value in editEffect(clipID, instance.id) { $0.parameters = value } }))
@@ -88,10 +88,10 @@ struct ModifierInspector: View {
     @ViewBuilder private func transition(_ id: UUID) -> some View {
         if let sequence, let instance = sequence.timeline.transitions.first(where: { $0.id == id }) {
             let definition = ModifierCatalog.current.transition(instance.definitionID)
-            Section(definition?.name ?? "Unavailable Transition") {
+            Section(LocalizedStringKey(definition?.name ?? "Unavailable Transition")) {
                 if let definition {
                     ModifierThumbnail(item: .init(kind: .transition, definitionID: instance.definitionID), parameters: instance.parameters).frame(maxHeight: 140)
-                    Text(definition.summary).font(.caption).foregroundStyle(.secondary)
+                    Text(LocalizedStringKey(definition.summary)).font(.caption).foregroundStyle(.secondary)
                     ModifierParameterEditor(definition: definition, parameters: Binding(get: {
                         sequence.timeline.transitions.first { $0.id == id }?.parameters ?? instance.parameters
                     }, set: { value in editTransition(id) { $0.parameters = value } }))

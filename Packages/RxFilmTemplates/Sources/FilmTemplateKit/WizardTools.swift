@@ -7,10 +7,16 @@ import Foundation
 /// wizard and stops, and how the wizard's answer comes back as the next turn.
 public enum WizardTool {
     public static let presentTemplates = "wizard_present_templates"
+    /// The way out of phase 1 when the marketplace has nothing to offer.
+    ///
+    /// Without it a run whose catalog holds no fitting project template — an
+    /// empty catalog included — has no legal move left: templates cannot be
+    /// presented and options do not belong in research yet.
+    public static let skipTemplates = "wizard_skip_templates"
     public static let presentOptions = "wizard_present_options"
     public static let reportProgress = "wizard_report_progress"
 
-    public static let all: [String] = [presentTemplates, presentOptions, reportProgress]
+    public static let all: [String] = [presentTemplates, skipTemplates, presentOptions, reportProgress]
 
     public static func isWizardTool(_ name: String) -> Bool { all.contains(name) }
 }

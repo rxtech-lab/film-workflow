@@ -10,7 +10,7 @@ export default async function EditMarketplaceItemPage({ params, searchParams }: 
   const item = await getItem(id);
   if (!item) notFound();
   // The kinds whose content is text edited in the form rather than an uploaded file.
-  const isInlineContent = ["effect", "transition", "project_template", "remotion_prompt"].includes(item.kind);
+  const isInlineContent = ["effect", "transition", "project_template"].includes(item.kind);
   const [previewImageUrl, previewVideoUrl, descriptorText, categories] = await Promise.all([
     previewURL(item.previewImageKey).catch(() => null),
     previewURL(item.previewVideoKey).catch(() => null),
@@ -27,6 +27,7 @@ export default async function EditMarketplaceItemPage({ params, searchParams }: 
     description: item.description,
     pricePoints: item.pricePoints,
     metadata: item.metadata,
+    translations: item.translations,
     status: item.status,
     previewImageUrl,
     previewVideoUrl,

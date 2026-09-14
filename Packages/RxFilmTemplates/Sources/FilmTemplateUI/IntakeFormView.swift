@@ -36,8 +36,8 @@ public struct IntakeFormView: View {
 
     public var body: some View {
         WizardShell(
-            title: template.title,
-            subtitle: template.summary,
+            title: LocalizedStringKey(template.title),
+            subtitle: LocalizedStringKey(template.summary),
             current: .intake,
             onCancel: onCancel
         ) {
@@ -71,7 +71,7 @@ public struct IntakeFormView: View {
                     .frame(maxWidth: .infinity)
                 } else {
                     WizardErrorView(
-                        message: "This template's form could not be read.",
+                        message: String(localized: "This template's form could not be read."),
                         onRetry: nil,
                         onCancel: onCancel
                     )

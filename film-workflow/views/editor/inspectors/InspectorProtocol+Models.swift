@@ -28,7 +28,7 @@ extension NarrativeProject: InspectorProtocol, EditorTabProviding {
     func makeEditorTab(_ context: InspectorContext) -> AnyView { AnyView(TranscriptEditorView(project: self)) }
 }
 
-extension CaptionProject: InspectorProtocol, EditorTabProviding, CaptionStyleProviding {
+extension CaptionProject: InspectorProtocol, EditorTabProviding, CaptionStyleProviding, TranslationTabProviding {
     var libraryItemID: LibraryItemID { LibraryItemID(kind: .caption, id: projectUUID) }
     var footageName: String { name }
     func makeSettingsTab(_ context: InspectorContext) -> AnyView {
@@ -40,6 +40,7 @@ extension CaptionProject: InspectorProtocol, EditorTabProviding, CaptionStylePro
     var editorTabSystemImage: String { "captions.bubble" }
     func makeEditorTab(_ context: InspectorContext) -> AnyView { AnyView(CaptionProjectViewer(project: self).id(projectUUID)) }
     func makeStyleTab(_ context: InspectorContext) -> AnyView { AnyView(CaptionStyleTab(project: self, context: context)) }
+    func makeTranslationTab(_ context: InspectorContext) -> AnyView { AnyView(CaptionTranslationTab(project: self)) }
 }
 
 extension ImageGenProject: InspectorProtocol {

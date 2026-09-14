@@ -137,6 +137,54 @@ struct SimpleModeSessionTests {
         }
     }
 
+    @Test("An empty catalog leaves research with a way out")
+    func skipsTemplatesWhenNoneFit() throws {
+        let session = session()
+        session.step_forTesting(.researching)
+        // The deadlock this replaces: present(templates:) refuses an empty list
+        // and options do not belong in research, so a catalog with no project
+        // templates left the agent no legal move at all.
+        let message = try session.skipTemplates(reason: "The marketplace has no project templates yet.")
+        #expect(message.contains("Stop now"))
+        guard case .templatesUnavailable(let reason) = session.step else {
+            Issue.record("expected templatesUnavailable, got \(session.step)")
+            return
+        }
+        #expect(reason == "The marketplace has no project templates yet.")
+        #expect(session.step.wizardStep == .chooseTemplate)
+    }
+
+    @Test("Skipping templates without a reason still reads as a sentence")
+    func skipTemplatesSuppliesAReason() throws {
+        let session = session()
+        session.step_forTesting(.researching)
+        try session.skipTemplates(reason: "   ")
+        guard case .templatesUnavailable(let reason) = session.step else {
+            Issue.record("expected templatesUnavailable, got \(session.step)")
+            return
+        }
+        #expect(!reason.isEmpty)
+    }
+
+    @Test("Templates cannot be skipped once the build is under way")
+    func skipTemplatesRespectsThePhase() {
+        let session = session()
+        session.step_forTesting(.building)
+        #expect(throws: SimpleModeError.self) {
+            try session.skipTemplates(reason: "too late")
+        }
+        #expect(session.step == .building)
+    }
+
+    @Test("Planning with no template leaves the build without one")
+    func planningWithoutATemplate() {
+        let session = session()
+        session.step_forTesting(.templatesUnavailable("nothing fitted"))
+        session.beginPlanning(with: nil)
+        #expect(session.chosenTemplate == nil)
+        #expect(session.step == .planning)
+    }
+
     @Test("A tool that arrives in the wrong phase is refused, not applied")
     func rejectsOutOfPhase() throws {
         let session = session()

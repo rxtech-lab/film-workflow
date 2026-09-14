@@ -29,7 +29,7 @@ public struct OptionsPageView: View {
 
     public var body: some View {
         WizardShell(
-            title: title,
+            title: LocalizedStringKey(title),
             subtitle: "Choose how your film should look. You can change any of it later.",
             current: .chooseOptions,
             onCancel: onCancel

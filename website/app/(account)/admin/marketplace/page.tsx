@@ -1,8 +1,9 @@
 import Link from "next/link";
 import { ArrowLeft, ArrowRight, Plus, Tags } from "lucide-react";
-import { deleteItemAction, togglePublishAction } from "@/lib/marketplace/actions";
+import { togglePublishAction } from "@/lib/marketplace/actions";
+import { DeleteMarketplaceItem } from "@/components/marketplace-delete-item";
 import { listAllItemsForAdmin } from "@/lib/marketplace/repository";
-import { marketplaceKindLabels } from "@/lib/marketplace/schema";
+import { marketplaceKindLabels, resolutionLabel } from "@/lib/marketplace/schema";
 
 function pageHref(page: number) {
   return `/admin/marketplace?page=${Math.max(1, page)}`;
@@ -18,7 +19,7 @@ export default async function AdminMarketplacePage({ searchParams }: { searchPar
         <div>
           <p className="font-mono text-xs tracking-[.2em] text-accent uppercase">Admin</p>
           <h1 className="mt-2 text-4xl font-semibold">Marketplace</h1>
-          <p className="mt-3 max-w-2xl text-muted">Footage, prompts, sounds, fonts and effects the app can install. Drafts stay invisible until published.</p>
+          <p className="mt-3 max-w-2xl text-muted">Footage, Remotion compositions, sounds, fonts and effects the app can install. Drafts stay invisible until published.</p>
         </div>
         <div className="flex items-center gap-3">
           <Link href="/admin/marketplace/taxonomy" className="inline-flex items-center gap-2 rounded-full border border-line px-4 py-2 text-sm hover:bg-elevated"><Tags size={14} /> Sidebar</Link>
@@ -32,7 +33,7 @@ export default async function AdminMarketplacePage({ searchParams }: { searchPar
             {items.length === 0 ? <tr><td className="p-4 text-muted" colSpan={6}>No items yet.</td></tr> : null}
             {items.map((item) => (
               <tr key={item.id}>
-                <td className="p-4"><Link href={`/admin/marketplace/${item.id}`} className="block font-medium hover:text-accent">{item.title}</Link><small className="text-xs text-muted">{item.contentFilename ?? "No content file"} · updated {item.updatedAt.toLocaleDateString("en-US")}</small></td>
+                <td className="p-4"><Link href={`/admin/marketplace/${item.id}`} className="block font-medium hover:text-accent">{item.title}</Link><small className="text-xs text-muted">{item.contentFilename ?? "No content file"}{item.kind === "footage" && resolutionLabel(item.metadata) ? ` · ${resolutionLabel(item.metadata)}` : ""} · updated {item.updatedAt.toLocaleDateString("en-US")}</small></td>
                 <td className="p-4">{marketplaceKindLabels[item.kind]}</td>
                 <td className="p-4">{item.categoryName}</td>
                 <td className="p-4 tabular-nums">{item.pricePoints === 0 ? "Free" : `${item.pricePoints.toLocaleString("en-US")} credits`}</td>
@@ -40,7 +41,7 @@ export default async function AdminMarketplacePage({ searchParams }: { searchPar
                 <td className="p-4">
                   <div className="flex justify-end gap-2">
                     <form action={togglePublishAction}><input type="hidden" name="id" value={item.id} /><input type="hidden" name="published" value={item.status === "published" ? "false" : "true"} /><button type="submit" className="rounded-full border border-line px-3 py-1 text-xs hover:bg-elevated" disabled={item.status !== "published" && !item.contentKey} title={item.status !== "published" && !item.contentKey ? "Upload the content file first" : undefined}>{item.status === "published" ? "Unpublish" : "Publish"}</button></form>
-                    <form action={deleteItemAction}><input type="hidden" name="id" value={item.id} /><button type="submit" className="rounded-full border border-line px-3 py-1 text-xs text-red-400 hover:bg-elevated">Delete</button></form>
+                    <DeleteMarketplaceItem id={item.id} title={item.title} className="rounded-full border border-line px-3 py-1 text-xs text-red-400 hover:bg-elevated disabled:opacity-40" />
                   </div>
                 </td>
               </tr>

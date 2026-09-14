@@ -16,7 +16,6 @@ import Foundation
             let editor = switch kind {
             case .projectTemplate: "template"
             case .effect, .transition: "descriptor"
-            case .remotionPrompt: "text"
             default: "upload"
             }
             let content = #"{"role":"content","title":"Content","hint":"The file this item installs.","extensions":[],"editor":"\#(editor)"}"#
@@ -43,6 +42,21 @@ import Foundation
             if path == "capabilities" { return Data(#"{"can_author":true,"user_id":"ui-test-admin"}"#.utf8) }
             if path == "form-schema", method == "GET" { return MarketplaceAuthoringFixtures.formSchema }
             if path == "categories", method == "GET" { return try encode(["categories": categories]) }
+            if path == "categories", method == "POST", let data {
+                struct Input: Decodable { var kind: MarketplaceKind; var name: String; var icon: String? }
+                let input = try JSONDecoder().decode(Input.self, from: data)
+                let category = MarketplaceCategory(id: UUID().uuidString, kind: input.kind, slug: input.name.lowercased(), name: input.name, icon: input.icon)
+                categories.append(category)
+                return try encode(["category": category])
+            }
+            if path.hasPrefix("categories/"), method == "PATCH", let data {
+                struct Input: Decodable { var name: String; var icon: String? }
+                let input = try JSONDecoder().decode(Input.self, from: data)
+                let id = String(path.dropFirst("categories/".count))
+                guard let index = categories.firstIndex(where: { $0.id == id }) else { throw MarketplaceAuthoringError.invalid("Fixture category not found.") }
+                categories[index].name = input.name; categories[index].icon = input.icon
+                return try encode(["category": categories[index]])
+            }
             if path.hasPrefix("items?"), method == "GET" { return try encode(MarketplaceAuthoringPage(items: Array(items.values), page: 1, pageCount: 1, total: items.count)) }
             if path == "items", method == "POST", let data {
                 let input = try JSONDecoder().decode(MarketplaceItemInput.self, from: data)

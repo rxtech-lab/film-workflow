@@ -11,16 +11,20 @@ function refresh(id?: string) {
 }
 /** Taxonomy edits change every item page's labels, so the whole section goes stale. */
 function refreshTaxonomy() {
-  revalidatePath("/admin/marketplace/taxonomy");
-  refresh();
+  revalidatePath("/admin/marketplace", "layout");
 }
 export async function createCategory(input: unknown) {
   const result = await authoring.createCategory(await requireAdminPageUser(), input);
-  if (result.ok) refresh();
+  if (result.ok) refreshTaxonomy();
   return result;
 }
 export async function updateCategory(input: unknown) {
   const result = await authoring.updateCategory(await requireAdminPageUser(), input);
+  if (result.ok) refreshTaxonomy();
+  return result;
+}
+export async function deleteCategory(input: unknown) {
+  const result = await authoring.deleteCategory(await requireAdminPageUser(), input);
   if (result.ok) refreshTaxonomy();
   return result;
 }
@@ -82,7 +86,6 @@ export async function removeAsset(itemId: string, role: AssetRole) {
 export async function togglePublishAction(formData: FormData) {
   await publishItem(String(formData.get("id") ?? ""), formData.get("published") === "true");
 }
-export async function deleteItemAction(formData: FormData) { await deleteItem(String(formData.get("id") ?? "")); }
 export async function deleteItemAndReturn(id: string) {
   const result = await deleteItem(id);
   if (result.ok) redirect("/admin/marketplace");

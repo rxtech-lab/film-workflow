@@ -72,7 +72,7 @@ struct FilePickerField: View {
                 }
                 Spacer(minLength: 0)
                 if !paths.isEmpty {
-                    Text("\(paths.count) file\(paths.count == 1 ? "" : "s")")
+                    Text(String(localized: "\(paths.count) file\(paths.count == 1 ? "" : "s")"))
                         .font(.system(size: 11))
                         .foregroundStyle(.secondary)
                 }
@@ -116,8 +116,8 @@ struct FilePickerField: View {
         panel.canChooseDirectories = false
         panel.canChooseFiles = true
         panel.allowedContentTypes = contentTypes
-        panel.prompt = "Add"
-        panel.message = "Choose footage, images or music for this film."
+        panel.prompt = String(localized: "Add")
+        panel.message = String(localized: "Choose footage, images or music for this film.")
         guard panel.runModal() == .OK else { return }
         append(panel.urls)
     }

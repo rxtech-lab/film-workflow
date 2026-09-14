@@ -2,6 +2,8 @@ import "server-only";
 
 import { createHash } from "node:crypto";
 import { getCurrentUser, isAdmin, type AppUser } from "@/lib/auth";
+import { requestLocale } from "@/lib/i18n/request";
+import { t } from "@/lib/i18n/messages";
 
 export class UnauthorizedError extends Error {
   constructor() {
@@ -91,16 +93,21 @@ export async function requireAdminUser(request: Request): Promise<AppUser> {
   return user;
 }
 
-export function forbiddenResponse() {
+/**
+ * The refusals, in the caller's language. Both read `Accept-Language` off the
+ * request being handled rather than taking it as an argument, so every route
+ * that already returns them keeps doing so unchanged.
+ */
+export async function forbiddenResponse() {
   return Response.json(
-    { code: "forbidden", error: "This action requires the admin role" },
-    { status: 403, headers: { "Cache-Control": "private, no-store" } },
+    { code: "forbidden", error: t(await requestLocale(), "error.forbidden") },
+    { status: 403, headers: { "Cache-Control": "private, no-store", Vary: "Accept-Language" } },
   );
 }
 
-export function unauthorizedResponse() {
+export async function unauthorizedResponse() {
   return Response.json(
-    { code: "unauthorized", error: "Authentication is required" },
-    { status: 401, headers: { "WWW-Authenticate": "Bearer", "Cache-Control": "private, no-store" } },
+    { code: "unauthorized", error: t(await requestLocale(), "error.unauthorized") },
+    { status: 401, headers: { "WWW-Authenticate": "Bearer", "Cache-Control": "private, no-store", Vary: "Accept-Language" } },
   );
 }

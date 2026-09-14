@@ -90,7 +90,7 @@ struct MarketplaceItemDetail: View {
                     if item.kind == .projectTemplate {
                         MarketplaceTemplateSections(item: item, definition: templateDefinition)
                     }
-                    if item.kind == .remotionPrompt, let excerpt = item.metadata.promptExcerpt, !excerpt.isEmpty {
+                    if item.kind == .remotion, let excerpt = item.metadata.promptExcerpt, !excerpt.isEmpty {
                         MarketplacePromptSection(title: "Prompt preview", prompt: excerpt)
                     }
                     if isInstalled, !item.kind.installedHint.isEmpty {
@@ -118,7 +118,16 @@ struct MarketplaceItemDetail: View {
     }
 
     private var hero: some View {
-        MarketplacePreviewPlayer(item: item)
+        Group {
+            if item.kind == .audio || item.kind == .soundEffect {
+                MarketplaceMusicPreview(item: item,
+                    canPlay: item.previewVideoUrl != nil || isInstalled || (item.isEntitled && isSignedIn)) {
+                    try await store.audioPreviewSource(for: item)
+                }
+            } else {
+                MarketplacePreviewPlayer(item: item)
+            }
+        }
             .aspectRatio(16 / 9, contentMode: .fit)
             .clipShape(.rect(cornerRadius: 24))
             .overlay {
@@ -196,7 +205,7 @@ struct MarketplaceItemDetail: View {
                 Text("Open a film to use this item")
                     .font(.caption).foregroundStyle(.secondary)
             } else if !isInstalled {
-                Text(item.isEntitled ? "Install to your library" : "Buy once, use in your films")
+                Text(item.isEntitled ? LocalizedStringKey("Install to your library") : LocalizedStringKey("Buy once, use in your films"))
                     .font(.caption).foregroundStyle(.secondary)
             }
         }
@@ -206,7 +215,7 @@ struct MarketplaceItemDetail: View {
     private var actionRow: some View {
         HStack(spacing: 10) {
             if !isSignedIn && (!item.isFree || !isInstalled) {
-                Button("Sign In to \(item.isFree ? "Install" : "Buy")") { navigation.requestSignIn() }
+                Button(item.isFree ? LocalizedStringKey("Sign In to Install") : LocalizedStringKey("Sign In to Buy")) { navigation.requestSignIn() }
                     .buttonStyle(.borderedProminent)
                     .accessibilityIdentifier("marketplace-sign-in")
             } else if !item.isEntitled {

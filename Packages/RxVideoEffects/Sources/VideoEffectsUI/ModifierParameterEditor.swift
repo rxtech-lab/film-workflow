@@ -15,18 +15,18 @@ public struct ModifierParameterEditor: View {
             switch descriptor.control {
             case .number(let range, let step):
                 if case .number(let value) = current {
-                    CommittingSlider(title: descriptor.title, value: value, range: range, step: step) {
+                    CommittingSlider(title: LocalizedStringKey(descriptor.title), value: value, range: range, step: step) {
                         parameters[descriptor.id] = .number($0)
                     }
                 }
             case .choice(let choices):
-                Picker(descriptor.title, selection: Binding(get: {
+                Picker(LocalizedStringKey(descriptor.title), selection: Binding(get: {
                     if case .string(let value) = current { return value }; return choices.first ?? ""
                 }, set: { parameters[descriptor.id] = .string($0) })) {
-                    ForEach(choices, id: \.self) { Text($0).tag($0) }
+                    ForEach(choices, id: \.self) { Text(LocalizedStringKey($0)).tag($0) }
                 }
             case .color:
-                CommittingColorField(title: descriptor.title, value: {
+                    CommittingColorField(title: LocalizedStringKey(descriptor.title), value: {
                     if case .string(let value) = current { return value }; return "#000000"
                 }()) { parameters[descriptor.id] = .string($0) }
             }
@@ -35,7 +35,7 @@ public struct ModifierParameterEditor: View {
 }
 
 private struct CommittingSlider: View {
-    let title: String
+    let title: LocalizedStringKey
     let value: Double
     let range: ClosedRange<Double>
     let step: Double
@@ -57,7 +57,7 @@ private struct CommittingSlider: View {
 
 /// Presets and a hex field allow arbitrary colors without recording each keystroke.
 private struct CommittingColorField: View {
-    let title: String
+    let title: LocalizedStringKey
     let value: String
     let commit: (String) -> Void
     @State private var draft: String?
@@ -74,7 +74,7 @@ private struct CommittingColorField: View {
             }.fixedSize()
             TextField("#RRGGBB", text: Binding(get: { draft ?? value }, set: { draft = $0 }))
                 .frame(width: 85).focused($focused).onSubmit(submit)
-                .accessibilityLabel("\(title) hex value")
+                .accessibilityLabel(LocalizedStringKey("Hex color value"))
                 .help("A six-digit RGB color, such as #204080")
         }
         .onChange(of: focused) { _, active in if !active { submit() } }

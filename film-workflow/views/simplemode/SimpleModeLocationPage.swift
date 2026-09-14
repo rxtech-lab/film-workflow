@@ -42,7 +42,7 @@ struct SimpleModeLocationPage: View {
                                 .font(.title2)
                                 .foregroundStyle(.secondary)
                             VStack(alignment: .leading, spacing: 5) {
-                                Text(session.destinationURL == nil ? "Choose a location" : "Save to")
+                                Text(session.destinationURL == nil ? LocalizedStringKey("Choose a location") : LocalizedStringKey("Save to"))
                                     .font(.headline)
                                 Text(session.destinationURL?.path(percentEncoded: false)
                                      ?? "Select a folder and name your film.")
@@ -56,7 +56,7 @@ struct SimpleModeLocationPage: View {
                             Spacer(minLength: 0)
                         }
                         Button(action: chooseLocation) {
-                            Label(session.destinationURL == nil ? "Choose Location…" : "Change Location…", systemImage: "folder")
+                            Label(session.destinationURL == nil ? LocalizedStringKey("Choose Location…") : LocalizedStringKey("Change Location…"), systemImage: "folder")
                                 .frame(maxWidth: .infinity)
                         }
                         .buttonStyle(.glass)

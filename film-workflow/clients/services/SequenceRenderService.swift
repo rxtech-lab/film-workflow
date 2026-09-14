@@ -41,11 +41,11 @@ enum SequenceRenderProgress: Equatable {
     var label: String {
         switch self {
         case .preparingRemotion(let i, let n, let p):
-            return "Rendering Remotion clip \(i + 1) of \(n)" + (p.detail.map { " · \($0)" } ?? "")
-        case .exporting: return "Exporting sequence"
-        case .embeddingCaptions: return "Embedding captions"
-        case .writingCaptions: return "Writing caption files"
-        case .finalizing: return "Finalizing"
+            return String(localized: "Rendering Remotion clip \(i + 1) of \(n)") + (p.detail.map { " · \($0)" } ?? "")
+        case .exporting: return String(localized: "Exporting sequence")
+        case .embeddingCaptions: return String(localized: "Embedding captions")
+        case .writingCaptions: return String(localized: "Writing caption files")
+        case .finalizing: return String(localized: "Finalizing")
         }
     }
 

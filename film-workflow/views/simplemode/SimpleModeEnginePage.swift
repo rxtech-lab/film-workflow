@@ -31,8 +31,8 @@ struct SimpleModeEnginePage: View {
 
     var body: some View {
         WizardShell(
-            title: session.template.title,
-            subtitle: String(localized: "Choose the engine that builds your film."),
+            title: LocalizedStringKey(session.template.title),
+            subtitle: "Choose the engine that builds your film.",
             current: .engine,
             onCancel: onCancel
         ) {

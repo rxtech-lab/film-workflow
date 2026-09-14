@@ -17,11 +17,11 @@ struct TimelinePanel: View {
     @Environment(\.undoManager) private var undoManager
     @State private var dropError: String?
     @State private var captionError: String?
-    @State private var marketplaceError: String?
     @State private var browserVisible: Bool
     /// Gates the marketplace action on a clip; refreshed by `LibraryPanel`.
     @State private var authoring = MarketplaceAuthoringService.shared
-    @State private var authoringSeed: MarketplaceAuthoringSeed?
+    @State private var seedRequest: MarketplaceSeedRequest?
+    @State private var lyricsRequest: MusicLyricsRequest?
 
     init(state: EditorWindowState, document: ProjectDocument, sequence: SequenceProject?, previewRevision: String = "", onCreateSequence: @escaping () -> Void) {
         self.state = state
@@ -44,6 +44,9 @@ struct TimelinePanel: View {
         }
         .background(Color(nsColor: .textBackgroundColor))
         .onReceive(NotificationCenter.default.publisher(for: .remotionPreviewChanged)) { _ in remotionRevision += 1 }
+        .onChange(of: lyricsRequest) { _, request in
+            if request != nil { state.player.pause(); state.footagePlayer.pause() }
+        }
     }
 
     private var timelineColumn: some View {
@@ -92,7 +95,7 @@ struct TimelinePanel: View {
                     CaptionAudioAlignment.alignment(for: clip, in: timeline, context: modelContext)
                 },
                 clipMenuItems: { clip, _ in
-                    narrativeCaptionItems(for: clip, in: sequence) + marketplaceItems(for: clip, in: sequence)
+                    narrativeCaptionItems(for: clip, in: sequence) + musicLyricsItems(for: clip) + marketplaceItems(for: clip, in: sequence)
                 },
                 selectedTransitionID: state.selectedTransitionID,
                 onInspectEffects: { state.inspectEffects($0) },
@@ -108,12 +111,8 @@ struct TimelinePanel: View {
             } message: {
                 Text(captionError ?? "")
             }
-            .alert("Couldn’t Create a Marketplace Item", isPresented: Binding(get: { marketplaceError != nil }, set: { if !$0 { marketplaceError = nil } })) {
-                Button("OK") { marketplaceError = nil }
-            } message: {
-                Text(marketplaceError ?? "")
-            }
-            .sheet(item: $authoringSeed) { MarketplaceAuthoringEditor(seed: $0) }
+            .marketplaceSeedHost($seedRequest)
+            .musicLyricsHost($lyricsRequest)
         } else {
             VStack(spacing: 0) {
                 StudioEmptyState(title: "Build your first sequence", symbol: "film.stack",
@@ -131,6 +130,41 @@ struct TimelinePanel: View {
         }
     }
 
+    private func musicLyricsItems(for clip: Clip) -> [ClipMenuItem] {
+        if let (prefix, id) = DocumentMediaResolver.parse(clip.source.id), prefix == .caption,
+           let captions = try? modelContext.fetch(FetchDescriptor<CaptionProject>(predicate: #Predicate { $0.projectUUID == id })).first {
+            var items: [ClipMenuItem] = []
+            if let musicID = captions.lyricsSourceID {
+                items.append(ClipMenuItem(id: "music-lyrics-edit", title: String(localized: "Edit Lyrics & Timing…"), systemImage: "music.note.list") {
+                    lyricsRequest = .init(sourceID: musicID)
+                })
+            }
+            items.append(ClipMenuItem(id: "music-lyrics-target", title: String(localized: "Merge as Lyrics into Music…"),
+                                     systemImage: "music.note.list", isEnabled: !captions.activeSegments.isEmpty) {
+                lyricsRequest = .init(sourceID: clip.source.id, action: .chooseMusic)
+            })
+            return items
+        }
+        guard clip.source.kind == .audio,
+              let (prefix, _) = DocumentMediaResolver.parse(clip.source.id), prefix == .music || prefix == .imported
+        else { return [] }
+        let project = try? MusicLyrics.project(for: clip.source.id, context: modelContext)
+        var items = [ClipMenuItem(id: "music-lyrics-edit", title: project == nil
+                                 ? String(localized: "Add Lyrics Timing…") : String(localized: "Edit Lyrics & Timing…"),
+                                 systemImage: "music.note.list") {
+            lyricsRequest = .init(sourceID: clip.source.id)
+        }]
+        if let project, !project.activeSegments.isEmpty {
+            items.append(ClipMenuItem(id: "music-lyrics-retime", title: String(localized: "Retime Lyrics…"), systemImage: "timeline.selection") {
+                lyricsRequest = .init(sourceID: clip.source.id, action: .retime)
+            })
+        }
+        items.append(ClipMenuItem(id: "music-lyrics-merge", title: String(localized: "Merge Captions as Lyrics…"), systemImage: "captions.bubble") {
+            lyricsRequest = .init(sourceID: clip.source.id, action: .chooseCaptions)
+        })
+        return items
+    }
+
     /// "Create Marketplace Item…" on a clip, which starts a draft from the
     /// file behind it.
     ///
@@ -139,7 +173,8 @@ struct TimelinePanel: View {
     /// is chosen, and a source the marketplace turns out to have no slot for
     /// says so in an alert rather than going missing from the menu.
     private func marketplaceItems(for clip: Clip, in sequence: SequenceProject) -> [ClipMenuItem] {
-        guard authoring.canAuthor, MarketplaceKind.canBeFootage(clip.source.kind) else { return [] }
+        guard authoring.canAuthor, MarketplaceKind.canBeFootage(clip.source.kind),
+              !isFromMarketplace(clip.source) else { return [] }
         return [
             ClipMenuItem(id: "marketplace-item", title: String(localized: "Create Marketplace Item…"), systemImage: "storefront") {
                 seedMarketplaceItem(from: clip, in: sequence)
@@ -147,17 +182,33 @@ struct TimelinePanel: View {
         ]
     }
 
+    /// Whether the clip stands on something added from the marketplace, which
+    /// is never offered back to it. Only the two kinds `MarketplaceInstaller`
+    /// creates can be, and both name their model in the source id, so this
+    /// stays a lookup a menu can afford.
+    private func isFromMarketplace(_ source: ClipSource) -> Bool {
+        guard let (prefix, id) = DocumentMediaResolver.parse(source.id) else { return false }
+        switch prefix {
+        case .imported:
+            return (try? modelContext.fetch(FetchDescriptor<ImportedAsset>(predicate: #Predicate { $0.id == id })))?.first?.marketplaceItemId != nil
+        case .remotion:
+            return (try? modelContext.fetch(FetchDescriptor<RemotionProject>(predicate: #Predicate { $0.id == id })))?.first?.marketplaceItemId != nil
+        case .music, .narration, .image, .video, .caption:
+            return false
+        }
+    }
+
     private func seedMarketplaceItem(from clip: Clip, in sequence: SequenceProject) {
+        // A composition publishes its project, which the clip's id names
+        // directly — no need to resolve it to a rendered file first.
+        if clip.source.kind == .remotion, let (prefix, id) = DocumentMediaResolver.parse(clip.source.id), prefix == .remotion {
+            seedRequest = .remotion(title: clip.source.displayName, projectID: id, renderID: nil)
+            return
+        }
         Task {
             let resolver = DocumentMediaResolver(document: document, width: sequence.width, height: sequence.height, fps: sequence.fps)
             let file = try? await resolver.resolve(clip.source).fileURL
-            guard let seed = MarketplaceAuthoringSeed(title: clip.source.displayName, sourceKind: clip.source.kind, file: file) else {
-                marketplaceError = file == nil
-                    ? String(localized: "This clip has no file to upload yet. Render it first.")
-                    : String(localized: "The marketplace has no slot for this clip’s file.")
-                return
-            }
-            authoringSeed = seed
+            seedRequest = .file(title: clip.source.displayName, sourceKind: clip.source.kind, file: file)
         }
     }
 

@@ -18,13 +18,19 @@ nonisolated struct MarketplaceEmptyBody: Encodable {}
 actor MarketplaceClient {
     private let transport: any MarketplaceTransport
 
+    /// What this build can decode. The server withholds any kind above it,
+    /// which is what keeps an older app from failing a whole catalog page on
+    /// one item it has never heard of.
+    static let catalogVersion = "3"
+
     init(transport: any MarketplaceTransport = BackendClient.shared) {
         self.transport = transport
     }
 
-    func items(kind: MarketplaceKind?, category: String?, query: String, page: Int) async throws -> MarketplaceCatalogPage {
-        var parameters: [URLQueryItem] = [URLQueryItem(name: "page", value: String(max(1, page))), URLQueryItem(name: "catalog_version", value: "2")]
+    func items(kind: MarketplaceKind?, mediaType: MarketplaceMediaType? = nil, category: String?, query: String, page: Int) async throws -> MarketplaceCatalogPage {
+        var parameters: [URLQueryItem] = [URLQueryItem(name: "page", value: String(max(1, page))), URLQueryItem(name: "catalog_version", value: Self.catalogVersion)]
         if let kind { parameters.append(URLQueryItem(name: "kind", value: kind.rawValue)) }
+        if let mediaType { parameters.append(URLQueryItem(name: "media_type", value: mediaType.rawValue)) }
         if let category, !category.isEmpty { parameters.append(URLQueryItem(name: "category", value: category)) }
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
         if !trimmed.isEmpty { parameters.append(URLQueryItem(name: "q", value: String(trimmed.prefix(100)))) }
@@ -38,7 +44,7 @@ actor MarketplaceClient {
     /// The sidebar: kinds with their labels and symbols, categories with theirs.
     /// Public like the catalog, so a signed-out browse still gets it.
     func taxonomy() async throws -> MarketplaceTaxonomy {
-        let parameters = [URLQueryItem(name: "catalog_version", value: "2")]
+        let parameters = [URLQueryItem(name: "catalog_version", value: Self.catalogVersion)]
         do {
             return try await transport.get("api/v1/marketplace/taxonomy", query: parameters)
         } catch BackendError.notSignedIn {
@@ -64,7 +70,7 @@ actor MarketplaceClient {
     }
 
     func purchases() async throws -> [MarketplacePurchaseRecord] {
-        let response: MarketplacePurchasesResponse = try await transport.get("api/v1/marketplace/purchases", query: [URLQueryItem(name: "catalog_version", value: "2")])
+        let response: MarketplacePurchasesResponse = try await transport.get("api/v1/marketplace/purchases", query: [URLQueryItem(name: "catalog_version", value: Self.catalogVersion)])
         return response.purchases
     }
 
@@ -81,6 +87,8 @@ actor MarketplaceClient {
         if !query.isEmpty { url.append(queryItems: query) }
         var request = URLRequest(url: url)
         request.setValue("application/json", forHTTPHeaderField: "Accept")
+        // Signed out or not, the catalog comes back in the app's language.
+        request.setValue(BackendConfig.acceptLanguage, forHTTPHeaderField: "Accept-Language")
         let (data, response) = try await URLSession.shared.data(for: request)
         guard let http = response as? HTTPURLResponse else { throw BackendError.server(0, nil) }
         guard (200..<300).contains(http.statusCode) else {

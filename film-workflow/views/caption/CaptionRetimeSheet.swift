@@ -130,7 +130,7 @@ struct CaptionRetimeSheet: View {
     private var header: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .firstTextBaseline) {
-                Text("Retime Captions")
+                Text(project.lyricsSourceID == nil ? "Retime Captions" : "Retime Lyrics")
                     .font(.headline)
                 Spacer()
                 if let index = focusedIndex {
@@ -356,6 +356,7 @@ struct CaptionRetimeSheet: View {
                 }
                 .buttonStyle(.borderless)
                 .help("Play / Pause")
+                .accessibilityIdentifier("caption-retime-play")
 
                 Button { player.step(byMs: -1000) } label: { Image(systemName: "gobackward.1") }
                     .buttonStyle(.borderless)
@@ -428,6 +429,7 @@ struct CaptionRetimeSheet: View {
             .controlSize(.large)
             .keyboardShortcut("s", modifiers: [.command])
             .disabled(player == nil || focusedID == nil)
+            .accessibilityIdentifier("caption-retime-set-boundary")
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
@@ -462,6 +464,7 @@ struct CaptionRetimeSheet: View {
 
             Button("Cancel", role: .cancel) { dismiss() }
             Button("Save \(pendingIDs.isEmpty ? "" : "(\(pendingIDs.count))")") { save() }
+                .accessibilityIdentifier("caption-retime-save")
                 .keyboardShortcut(.defaultAction)
                 .buttonStyle(.borderedProminent)
                 .disabled(pendingIDs.isEmpty || hasInvalidRange)

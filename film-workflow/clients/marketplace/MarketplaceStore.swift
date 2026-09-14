@@ -62,14 +62,14 @@ final class MarketplaceStore {
     /// cancellation as a failure nor overwrites the fresher result.
     private var loadToken = 0
 
-    func load(kind: MarketplaceKind?, category: String?, query: String, page: Int = 1) async {
+    func load(kind: MarketplaceKind?, mediaType: MarketplaceMediaType? = nil, category: String?, query: String, page: Int = 1) async {
         loadToken += 1
         let token = loadToken
         isLoading = true
         lastError = nil
         defer { if token == loadToken { isLoading = false } }
         do {
-            let result = try await client.items(kind: kind, category: category, query: query, page: page)
+            let result = try await client.items(kind: kind, mediaType: mediaType, category: category, query: query, page: page)
             guard token == loadToken else { return }
             items = result.items.map { item in
                 var item = item
@@ -98,6 +98,9 @@ final class MarketplaceStore {
 
     /// The categories the sidebar lists under one kind.
     func categories(for kind: MarketplaceKind) -> [MarketplaceCategoryCount] { taxonomy.categories(for: kind) }
+
+    /// The sub-level the backend reports under a kind, if any.
+    func mediaTypes(for kind: MarketplaceKind) -> [MarketplaceMediaTypePresentation] { taxonomy.mediaTypes(for: kind) }
 
     /// The label the backend gives a kind, falling back to the built-in one.
     func label(for kind: MarketplaceKind) -> String { taxonomy.presentation(for: kind).label }
@@ -146,6 +149,18 @@ final class MarketplaceStore {
     func isInstalled(_ id: String) -> Bool { installed[id] != nil }
 
     func manifest(for id: String) -> InstalledMarketplaceManifest? { installed[id] }
+
+    /// Resolve only when Play is pressed: signed content URLs expire. Public
+    /// previews remain available before purchase; full audio uses entitlement.
+    func audioPreviewSource(for item: MarketplaceItem) async throws -> (url: URL, start: Double) {
+        if let url = item.previewVideoUrl { return (url, item.metadata.preview?.startSeconds ?? 0) }
+        if let manifest = manifest(for: item.id) {
+            let url = manifest.contentURL(in: directory(for: manifest))
+            if FileManager.default.fileExists(atPath: url.path) { return (url, 0) }
+        }
+        guard item.isEntitled else { throw MarketplaceError.notEntitled }
+        return (try await client.downloadURL(item.id).url, 0)
+    }
 
     /// Installed items a film can take in (footage, music, sound effects,
     /// Remotion prompts), newest install first. Fonts, effects and transitions
@@ -218,7 +233,10 @@ final class MarketplaceStore {
             InstalledModifierLoader.reload(root: root)
         case .projectTemplate:
             _ = try ProjectTemplateDefinition.decode(Data(contentsOf: contentURL))
-        case .footage, .audio, .soundEffect, .remotionPrompt:
+        case .remotion:
+            // Proved safe here, before the item can be added to any film.
+            _ = try RemotionProjectArchive.validate(archive: contentURL)
+        case .footage, .audio, .soundEffect:
             break
         }
     }

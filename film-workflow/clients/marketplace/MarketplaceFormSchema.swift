@@ -149,7 +149,12 @@ nonisolated struct MarketplaceFormSchema: Decodable, Sendable {
     }
 
     /// How the content file is produced: uploaded, or edited inside the form
-    /// as a template, a Core Image descriptor, or plain text.
+    /// as a template or a Core Image descriptor.
+    ///
+    /// `text` is no longer produced by any kind — it belonged to the retired
+    /// `remotion_prompt`. It stays decodable for one release so that a new app
+    /// running against a deploy that predates the removal does not drop every
+    /// layout it is sent; remove it after that.
     enum ContentEditor: String, Decodable, Sendable {
         case upload, descriptor, template, text
     }

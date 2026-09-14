@@ -35,6 +35,11 @@ final class CaptionProject: GroupableProject {
     var sourceNarrativeID: UUID?
     var sourceNarrativeName: String = ""
 
+    /// The exact music take or imported audio these lyrics accompany. A weak
+    /// source id keeps older films compatible and leaves captions editable if
+    /// the original music is removed.
+    var lyricsSourceID: String?
+
     // MARK: - Provider configuration
 
     /// Empty means "use the app-wide default from `CaptionSettings`".

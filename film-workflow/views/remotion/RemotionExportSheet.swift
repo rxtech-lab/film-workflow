@@ -10,11 +10,11 @@ enum ExportResolution: String, CaseIterable, Identifiable {
 
     var label: String {
         switch self {
-        case .p480: return "480p (854 × 480)"
-        case .p720: return "720p (1280 × 720)"
-        case .p1080: return "1080p (1920 × 1080)"
-        case .p1440: return "1440p (2560 × 1440)"
-        case .p2160: return "4K (3840 × 2160)"
+        case .p480: return String(localized: "480p (854 × 480)")
+        case .p720: return String(localized: "720p (1280 × 720)")
+        case .p1080: return String(localized: "1080p (1920 × 1080)")
+        case .p1440: return String(localized: "1440p (2560 × 1440)")
+        case .p2160: return String(localized: "4K (3840 × 2160)")
         }
     }
 
@@ -45,7 +45,7 @@ enum ExportFrameRate: Int, CaseIterable, Identifiable {
     case fps60 = 60
 
     var id: Int { rawValue }
-    var label: String { "\(rawValue) fps" }
+    var label: String { String(localized: "\(rawValue) fps") }
 }
 
 struct RemotionExportOptions: Equatable {
@@ -90,7 +90,7 @@ struct RemotionExportSheet: View {
                 .font(.title2)
                 .foregroundStyle(.tint)
             VStack(alignment: .leading, spacing: 2) {
-                Text(savesToDisk ? "Export to Disk" : "Render Version")
+                Text(savesToDisk ? LocalizedStringKey("Export to Disk") : LocalizedStringKey("Render Version"))
                     .font(.headline)
                 Text(projectName)
                     .font(.caption)

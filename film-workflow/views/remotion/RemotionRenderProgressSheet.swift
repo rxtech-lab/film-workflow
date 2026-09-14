@@ -72,7 +72,7 @@ struct RemotionRenderProgressSheet: View {
         }
     }
 
-    private var stageLabel: String {
+    private var stageLabel: LocalizedStringKey {
         switch progress.stage {
         case .starting: return "Preparing…"
         case .bundling: return "Bundling composition…"

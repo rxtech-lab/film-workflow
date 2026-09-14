@@ -103,7 +103,9 @@ nonisolated enum VideoGenProgress: Sendable, Equatable {
     }
 
     private static func elapsedText(_ seconds: Int) -> String {
-        seconds >= 60 ? "\(seconds / 60)m \(seconds % 60)s elapsed" : "\(seconds)s elapsed"
+            seconds >= 60
+                ? String(localized: "\(seconds / 60)m \(seconds % 60)s elapsed")
+                : String(localized: "\(seconds)s elapsed")
     }
 }
 

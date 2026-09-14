@@ -1,10 +1,10 @@
 import SwiftUI
 
-/// The authoring list: the signed-in author's drafts and published items, or
+/// The authoring grid: the signed-in author's drafts and published items, or
 /// every item this account may manage. Filtered before pagination.
 ///
-/// Publishing and deleting live in each row's context menu rather than on the
-/// row or inside the editor, so the list stays readable and a destructive
+/// Publishing and deleting live in each card's context menu rather than on the
+/// card or inside the editor, so the grid stays readable and a destructive
 /// action is never one stray click away.
 struct MarketplaceAuthoringListView: View {
     /// Whose items the list shows. The editor and the row actions are the same
@@ -35,6 +35,7 @@ struct MarketplaceAuthoringListView: View {
     var onItemsChanged: () -> Void
 
     @State private var service = MarketplaceAuthoringService.shared
+    @State private var store = MarketplaceStore.shared
     @State private var page: MarketplaceAuthoringPage?
     @State private var number = 1
     @State private var status: String?
@@ -74,16 +75,19 @@ struct MarketplaceAuthoringListView: View {
                 .frame(maxWidth: 280)
                 .accessibilityIdentifier("marketplace-my-status")
             }
+            .padding(.horizontal, 16)
+            .padding(.top, 16)
 
             if let error {
                 Label(error, systemImage: "exclamationmark.triangle")
                     .foregroundStyle(.red)
                     .textSelection(.enabled)
+                    .padding(.horizontal, 16)
             }
 
             content
+                .marketplaceLoadingOverlay(isLoading)
         }
-        .padding(16)
         .task(id: request) { await load() }
         .onChange(of: query) { number = 1 }
         .onChange(of: status) { number = 1 }
@@ -112,23 +116,23 @@ struct MarketplaceAuthoringListView: View {
 
     @ViewBuilder
     private var content: some View {
-        if isLoading {
-            ProgressView("Loading items…")
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-        } else if let page, !page.items.isEmpty {
-            List(page.items) { item in
-                row(item)
-            }
-            .listStyle(.inset)
-            if page.pageCount > 1 {
-                HStack {
-                    Button("Previous") { number = page.page - 1 }.disabled(page.page <= 1)
-                    Spacer()
-                    Text("Page \(page.page) of \(page.pageCount)").foregroundStyle(.secondary)
-                    Spacer()
-                    Button("Next") { number = page.page + 1 }.disabled(page.page >= page.pageCount)
+        if let page, !page.items.isEmpty {
+            ScrollView {
+                MarketplaceItemGrid {
+                    ForEach(page.items) { item in card(item) }
+                }
+                if page.pageCount > 1 {
+                    HStack {
+                        Button("Previous") { number = page.page - 1 }.disabled(page.page <= 1 || isLoading)
+                        Text("Page \(page.page) of \(page.pageCount)").foregroundStyle(.secondary)
+                        Button("Next") { number = page.page + 1 }.disabled(page.page >= page.pageCount || isLoading)
+                    }
+                    .padding(.bottom, 14)
                 }
             }
+            .accessibilityIdentifier("marketplace-authoring-grid")
+        } else if isLoading {
+            Color.clear
         } else if error != nil, page == nil {
             ContentUnavailableView {
                 Label("Couldn’t load your items", systemImage: "wifi.exclamationmark")
@@ -149,35 +153,12 @@ struct MarketplaceAuthoringListView: View {
         }
     }
 
-    private func row(_ value: MarketplaceAuthoringItem) -> some View {
-        let published = value.status == "published"
-        return Button { selected = value } label: {
-            HStack(spacing: 12) {
-                Image(systemName: value.item.kind.systemImage)
-                    .font(.title2)
-                    .foregroundStyle(.secondary)
-                    .frame(width: 32)
-                VStack(alignment: .leading, spacing: 5) {
-                    HStack(spacing: 8) {
-                        MarketplacePriceBadge(item: value.item)
-                        Text(value.item.title).font(.headline).lineLimit(2)
-                    }
-                    HStack(spacing: 8) {
-                        Text(value.item.kind.displayName)
-                        Text(published ? "Published" : "Draft")
-                            .foregroundStyle(published ? Color.green : Color.orange)
-                            .accessibilityIdentifier("marketplace-item-status-\(value.id)")
-                    }
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                }
-                Spacer()
-                if busyItemID == value.id { ProgressView().controlSize(.small) }
-            }
-            .contentShape(Rectangle())
-            .padding(.vertical, 8)
+    private func card(_ value: MarketplaceAuthoringItem) -> some View {
+        MarketplaceItemCard(item: value.item, isInstalled: store.isInstalled(value.id),
+                            symbol: store.symbol(for: value.item.kind), publicationStatus: value.status,
+                            isBusy: busyItemID == value.id) {
+            selected = value
         }
-        .buttonStyle(.plain)
         .disabled(busyItemID != nil)
         .contextMenu { menu(value) }
         .accessibilityIdentifier("marketplace-row-\(value.id)")
@@ -201,7 +182,6 @@ struct MarketplaceAuthoringListView: View {
         let loading = request
         isLoading = true
         error = nil
-        page = nil
         defer { if !Task.isCancelled { isLoading = false } }
         do {
             if !loading.query.isEmpty { try await Task.sleep(for: .milliseconds(300)) }

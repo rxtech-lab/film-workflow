@@ -166,29 +166,43 @@ final class SimpleModeCoordinator {
         )
     }
 
+    /// Starts planning with no template behind it, after the agent reported
+    /// that the marketplace had nothing worth offering.
+    func continueWithoutTemplate(for session: SimpleModeSession) {
+        guard let thread = session.thread else { return }
+        session.beginPlanning(with: nil)
+        note("No marketplace template fitted, so the user asked you to build this film from the brief.", in: session)
+        send(session.template.prompts.planOptionsWithoutTemplate(namer(for: thread)), in: session)
+    }
+
     func confirmOptions(for session: SimpleModeSession) {
-        guard let thread = session.thread, let item = session.chosenTemplate else { return }
+        guard let thread = session.thread else { return }
         let selections = session.optionsState.snapshotJSON
         session.beginBuilding(selections: selections)
         note("The user confirmed their choices on the options page.", in: session)
-        send(
-            session.template.prompts.build(item.id, selections, namer(for: thread)),
-            in: session
-        )
+        send(buildPrompt(for: session, selections: selections, thread: thread), in: session)
     }
 
     /// Skips the options page after the agent failed to produce a usable one.
     func continueWithoutOptions(for session: SimpleModeSession) {
-        guard let thread = session.thread, let item = session.chosenTemplate else { return }
+        guard let thread = session.thread else { return }
         session.beginBuilding(selections: nil)
         note(
             "The options page could not be shown, so the user asked you to go ahead with your own recommendation.",
             in: session
         )
-        send(
-            session.template.prompts.build(item.id, "{}", namer(for: thread)),
-            in: session
-        )
+        send(buildPrompt(for: session, selections: "{}", thread: thread), in: session)
+    }
+
+    /// Phase 3 comes in two shapes: apply the chosen template, or cut the
+    /// sequence from the agent's own plan when there was never one to apply.
+    private func buildPrompt(for session: SimpleModeSession, selections: String, thread: AgentThread) -> String {
+        let prompts = session.template.prompts
+        let tool = namer(for: thread)
+        guard let item = session.chosenTemplate else {
+            return prompts.buildWithoutTemplate(selections, tool)
+        }
+        return prompts.build(item.id, selections, tool)
     }
 
     /// Runs the current phase's turn again after it failed.
@@ -215,11 +229,13 @@ final class SimpleModeCoordinator {
                 in: session
             )
         case .planning:
-            guard let item = session.chosenTemplate else { return }
+            guard let item = session.chosenTemplate else {
+                send(prompts.planOptionsWithoutTemplate(tool), in: session)
+                return
+            }
             send(prompts.planOptions(item.id, item.title, tool), in: session)
         case .building:
-            guard let item = session.chosenTemplate else { return }
-            send(prompts.build(item.id, session.confirmedSelections ?? "{}", tool), in: session)
+            send(buildPrompt(for: session, selections: session.confirmedSelections ?? "{}", thread: thread), in: session)
         default:
             return
         }

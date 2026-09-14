@@ -16,6 +16,9 @@ final class MarketplaceAuthoringUITests: XCTestCase {
         app.buttons["Save Draft"].click()
         XCTAssertTrue(app.staticTexts["Draft saved"].waitForExistence(timeout: 5))
         let screenshot = XCTAttachment(screenshot: app.screenshot()); screenshot.name = "Template editor draft saved"; screenshot.lifetime = .keepAlways; add(screenshot)
+        // The confirmation replaces the form and its action bar, so the way
+        // back to the fields is its own button.
+        app.buttons["Keep Editing"].firstMatch.click()
         app.buttons["Done"].firstMatch.click()
         // Publishing and deleting moved to the row's context menu, so the
         // editor is reopened from the sidebar's authoring list.

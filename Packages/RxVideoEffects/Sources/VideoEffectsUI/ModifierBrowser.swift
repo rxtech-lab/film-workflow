@@ -73,7 +73,7 @@ public struct ModifierBrowser: View {
         VStack(spacing: 8) {
             ModifierBrowserTabs(selection: $kind)
                 .frame(maxWidth: .infinity).frame(height: 24)
-            TextField("Search effects and transitions", text: $search)
+            TextField(LocalizedStringKey("Search effects and transitions"), text: $search)
                 .textFieldStyle(.roundedBorder)
                 .accessibilityIdentifier("modifier-search")
             ScrollView {
@@ -82,7 +82,7 @@ public struct ModifierBrowser: View {
                         let definition = ModifierCatalog.current.definition(item)
                         VStack(alignment: .leading, spacing: 4) {
                             ModifierThumbnail(item: item)
-                            Text(definition?.name ?? item.definitionID).font(.caption.weight(.medium)).lineLimit(2)
+                            Text(LocalizedStringKey(definition?.name ?? item.definitionID)).font(.caption.weight(.medium)).lineLimit(2)
                         }
                         .contentShape(Rectangle())
                         .onTapGesture { onSelect(item) }
@@ -97,13 +97,13 @@ public struct ModifierBrowser: View {
                         } preview: {
                             ModifierThumbnail(item: item).frame(width: 140)
                         }
-                        .help(definition?.summary ?? "")
+                        .help(LocalizedStringKey(definition?.summary ?? ""))
                         .accessibilityElement(children: .combine)
                         .accessibilityAddTraits(.isButton)
                         .accessibilityIdentifier(item.definitionID)
                     }
                 }
-                if items.isEmpty { Text("No matching items").foregroundStyle(.secondary).padding() }
+                if items.isEmpty { Text(LocalizedStringKey("No matching items")).foregroundStyle(.secondary).padding() }
             }
         }.padding(10)
         .onReceive(NotificationCenter.default.publisher(for: ModifierCatalog.didChangeNotification).receive(on: RunLoop.main)) { _ in catalogGeneration += 1 }

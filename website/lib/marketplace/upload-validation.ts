@@ -14,6 +14,10 @@ export function validateAssetHeader(
   let valid = false;
   switch (ext) {
     case "json": valid = b.toString("utf8").trimStart().startsWith("{"); break;
+    // Local file header, or the empty/spanned central-directory markers a
+    // zip writer may lead with. The archive's real structure is checked by
+    // the app when it installs it.
+    case "zip": valid = starts("504b0304") || starts("504b0506") || starts("504b0708"); break;
     case "md": case "txt": valid = !b.includes(0); break;
     case "png": valid = starts("89504e470d0a1a0a"); break;
     case "jpg": case "jpeg": valid = starts("ffd8ff"); break;

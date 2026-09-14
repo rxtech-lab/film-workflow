@@ -106,6 +106,7 @@ actor BackendClient {
         request.timeoutInterval = 300
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.setValue(BackendConfig.acceptLanguage, forHTTPHeaderField: "Accept-Language")
         request.setValue(Self.platform, forHTTPHeaderField: "X-Client-Platform")
         request.setValue(Self.appVersion, forHTTPHeaderField: "X-Client-Version")
         request.setValue(Self.deviceID, forHTTPHeaderField: "X-Client-Device-Id")
@@ -155,6 +156,7 @@ actor BackendClient {
         request.timeoutInterval = 30 * 60
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.setValue(BackendConfig.acceptLanguage, forHTTPHeaderField: "Accept-Language")
         request.setValue(contentType, forHTTPHeaderField: "Content-Type")
         request.setValue(Self.platform, forHTTPHeaderField: "X-Client-Platform")
         request.setValue(Self.appVersion, forHTTPHeaderField: "X-Client-Version")

@@ -3,7 +3,7 @@ import Foundation
 /// Mirrors `marketplace_kind` on the server; raw values are the wire strings.
 nonisolated enum MarketplaceKind: String, Codable, CaseIterable, Identifiable, Sendable {
     case footage
-    case remotionPrompt = "remotion_prompt"
+    case remotion
     case audio
     case soundEffect = "sound_effect"
     case font
@@ -18,7 +18,7 @@ nonisolated enum MarketplaceKind: String, Codable, CaseIterable, Identifiable, S
     var displayName: String {
         switch self {
         case .footage: return String(localized: "Footage")
-        case .remotionPrompt: return String(localized: "Remotion Prompts")
+        case .remotion: return String(localized: "Remotion Compositions")
         case .audio: return String(localized: "Music")
         case .soundEffect: return String(localized: "Sound Effects")
         case .font: return String(localized: "Fonts")
@@ -33,7 +33,7 @@ nonisolated enum MarketplaceKind: String, Codable, CaseIterable, Identifiable, S
     var systemImage: String {
         switch self {
         case .footage: return "film"
-        case .remotionPrompt: return "text.quote"
+        case .remotion: return "cube.transparent"
         case .audio: return "music.note"
         case .soundEffect: return "waveform"
         case .font: return "textformat"
@@ -43,19 +43,10 @@ nonisolated enum MarketplaceKind: String, Codable, CaseIterable, Identifiable, S
         }
     }
 
-    /// The footage kind an installed file becomes when added to a film, if any.
-    var importedAssetKind: ImportedAssetKind? {
-        switch self {
-        case .footage: return .video
-        case .audio, .soundEffect: return .audio
-        case .remotionPrompt, .font, .transition, .effect, .projectTemplate: return nil
-        }
-    }
-
     /// Fonts, effects and transitions are global once installed; the rest are added per film.
     var addsToFilm: Bool {
         switch self {
-        case .footage, .audio, .soundEffect, .remotionPrompt: return true
+        case .footage, .audio, .soundEffect, .remotion: return true
         case .font, .transition, .effect, .projectTemplate: return false
         }
     }
@@ -81,10 +72,16 @@ nonisolated struct MarketplaceItemMetadata: Codable, Hashable, Sendable {
     var fontFamily: String?
     var descriptor: Descriptor?
     var promptExcerpt: String?
+    /// `"image"` or `"video"` for footage, absent for every other kind. A raw
+    /// string rather than an enum: a media type a future server invents must
+    /// not fail the whole item's decode, it should simply match nothing.
+    var mediaType: String?
     var tags: [String]?
+    var lyricTracks: [MarketplaceLyricTrack]?
     var preview: Preview?
     var template: ProjectTemplateSummary?
     struct Preview: Codable, Hashable, Sendable {
+        var startSeconds: Double?
         var durationSeconds: Double?
         var width: Int?
         var height: Int?
@@ -92,10 +89,13 @@ nonisolated struct MarketplaceItemMetadata: Codable, Hashable, Sendable {
     }
 
     init(durationSeconds: Double? = nil, width: Int? = nil, height: Int? = nil, fontFamily: String? = nil,
-         descriptor: Descriptor? = nil, promptExcerpt: String? = nil, tags: [String]? = nil) {
+         descriptor: Descriptor? = nil, promptExcerpt: String? = nil, mediaType: String? = nil, tags: [String]? = nil) {
         self.durationSeconds = durationSeconds; self.width = width; self.height = height; self.fontFamily = fontFamily
-        self.descriptor = descriptor; self.promptExcerpt = promptExcerpt; self.tags = tags
+        self.descriptor = descriptor; self.promptExcerpt = promptExcerpt; self.mediaType = mediaType; self.tags = tags
     }
+
+    /// The media type, when it is one this build understands.
+    var footageMediaType: MarketplaceMediaType? { mediaType.flatMap(MarketplaceMediaType.init(rawValue:)) }
 }
 
 /// One catalog entry as `GET api/v1/marketplace/items` returns it. Decoded
@@ -160,6 +160,26 @@ nonisolated struct MarketplaceCatalogPage: Codable, Sendable {
     var pageCount: Int
     var pageSize: Int
     var categories: [MarketplaceCategoryCount]
+
+    init(items: [MarketplaceItem] = [], total: Int = 0, page: Int = 1, pageCount: Int = 1, pageSize: Int = 0,
+         categories: [MarketplaceCategoryCount] = []) {
+        self.items = items; self.total = total; self.page = page; self.pageCount = pageCount
+        self.pageSize = pageSize; self.categories = categories
+    }
+
+    /// An item of a kind this build does not know is dropped rather than
+    /// failing the page, the way `MarketplaceTaxonomy` already treats its rows.
+    /// `catalog_version` still keeps such items off the wire; this is the
+    /// belt-and-braces that means the next new kind needs no version bump.
+    init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        items = try container.decodeIfPresent([Lenient<MarketplaceItem>].self, forKey: .items)?.compactMap(\.value) ?? []
+        total = try container.decodeIfPresent(Int.self, forKey: .total) ?? 0
+        page = try container.decodeIfPresent(Int.self, forKey: .page) ?? 1
+        pageCount = try container.decodeIfPresent(Int.self, forKey: .pageCount) ?? 1
+        pageSize = try container.decodeIfPresent(Int.self, forKey: .pageSize) ?? 0
+        categories = try container.decodeIfPresent([Lenient<MarketplaceCategoryCount>].self, forKey: .categories)?.compactMap(\.value) ?? []
+    }
 }
 
 nonisolated struct MarketplacePurchaseResponse: Codable, Sendable {
@@ -187,6 +207,14 @@ nonisolated struct MarketplacePurchaseRecord: Codable, Identifiable, Sendable {
 
 nonisolated struct MarketplacePurchasesResponse: Codable, Sendable {
     let purchases: [MarketplacePurchaseRecord]
+
+    init(purchases: [MarketplacePurchaseRecord] = []) { self.purchases = purchases }
+
+    /// Lenient for the same reason as the catalog page.
+    init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        purchases = try container.decodeIfPresent([Lenient<MarketplacePurchaseRecord>].self, forKey: .purchases)?.compactMap(\.value) ?? []
+    }
 }
 
 /// `manifest.json` beside an installed item's content. Written and read with
@@ -208,6 +236,17 @@ nonisolated struct InstalledMarketplaceManifest: Codable, Hashable, Identifiable
     var id: String { itemID }
 
     static let filename = "manifest.json"
+
+    /// The imported-asset kind this item becomes in a film, if any. A manifest
+    /// written before media types existed carries none, and footage was only
+    /// ever video then.
+    var importedAssetKind: ImportedAssetKind? {
+        switch kind {
+        case .footage: return metadata.footageMediaType == .image ? .image : .video
+        case .audio, .soundEffect: return .audio
+        case .remotion, .font, .transition, .effect, .projectTemplate: return nil
+        }
+    }
 
     func contentURL(in directory: URL) -> URL { directory.appendingPathComponent(contentRelativePath) }
     func previewURL(in directory: URL) -> URL? { previewImagePath.map { directory.appendingPathComponent($0) } }

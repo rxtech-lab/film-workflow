@@ -51,7 +51,7 @@ struct MarketplacePromptSection: View {
             if hasMore {
                 Button { isExpanded.toggle() } label: {
                     HStack(spacing: 6) {
-                        Text(isExpanded ? "Show less" : "Read full prompt")
+                        Text(isExpanded ? LocalizedStringKey("Show less") : LocalizedStringKey("Read full prompt"))
                         Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
                             .font(.caption2.weight(.semibold))
                     }
@@ -61,7 +61,7 @@ struct MarketplacePromptSection: View {
                 }
                 .buttonStyle(.plain)
                 .foregroundStyle(.tint)
-                .accessibilityValue(isExpanded ? "Expanded" : "Collapsed")
+                .accessibilityValue(isExpanded ? String(localized: "Expanded") : String(localized: "Collapsed"))
                 .accessibilityIdentifier("marketplace-prompt-expand")
             }
         }
@@ -185,7 +185,7 @@ private struct MarketplaceFootageRequirementCard: View {
                     Text(mediaLabel).font(.caption).foregroundStyle(.secondary)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
-                Text(requirement.required ? "Required" : "Optional")
+                Text(requirement.required ? LocalizedStringKey("Required") : LocalizedStringKey("Optional"))
                     .font(.caption2.weight(.semibold))
                     .foregroundStyle(requirement.required ? Color.accentColor : .secondary)
                     .padding(.horizontal, 10)
