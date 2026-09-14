@@ -57,6 +57,28 @@ nonisolated enum BackendConfig {
             && URL(string: redirectURI)?.scheme != nil
     }
 
+    /// The `Accept-Language` every request to our backend carries.
+    ///
+    /// The languages are the bundle's, not the system's: they are what the app
+    /// is actually drawn in, so a marketplace title, a taxonomy label or a
+    /// refusal comes back in the language the window around it is already in.
+    /// The server answers in the first one it has, and falls back to the text
+    /// as an admin typed it where nobody has translated a row yet.
+    static var acceptLanguage: String {
+        acceptLanguage(for: Bundle.main.preferredLocalizations)
+    }
+
+    /// The header value for an ordered list of language tags, most wanted
+    /// first, as `zh-Hans,en;q=0.9`. Anything past the fourth is dropped: no
+    /// backend negotiates that far down, and the header stays readable.
+    static func acceptLanguage(for languages: [String]) -> String {
+        let tags = languages.filter { !$0.isEmpty && $0 != "Base" }.prefix(4)
+        guard !tags.isEmpty else { return "en" }
+        return tags.enumerated().map { index, tag in
+            index == 0 ? tag : "\(tag);q=\(String(format: "%.1f", 1 - Double(index) / 10))"
+        }.joined(separator: ",")
+    }
+
     static var diagnostics: String {
         "issuer=\(oidcIssuer), client=\(clientID), redirect=\(redirectURI), api=\(apiBaseURL.absoluteString)"
     }

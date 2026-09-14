@@ -142,7 +142,7 @@ struct AccountDetailContent: View {
         VStack(alignment: .leading, spacing: 12) {
             Link("View full history in browser", destination: BackendConfig.webBaseURL.appending(path: "usage"))
             HStack {
-                Text(auth.currentUser?.email ?? auth.currentUser?.name ?? "RxLab account")
+                Text(auth.currentUser?.email ?? auth.currentUser?.name ?? String(localized: "RxLab account"))
                     .foregroundStyle(.secondary)
                 Spacer()
                 Button("Sign Out") { confirmSignOut = true }

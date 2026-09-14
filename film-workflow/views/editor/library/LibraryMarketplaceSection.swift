@@ -7,28 +7,68 @@ import VideoEditorUI
 struct LibraryMarketplaceRow: Identifiable, Hashable {
     let id: String
     let kind: MarketplaceKind
+    /// Footage only: whether the content file is a still or a clip. Nil from a
+    /// manifest written before media types existed, where footage meant video.
+    let mediaType: MarketplaceMediaType?
     let title: String
     let subtitle: String
     let previewURL: URL?
     let mediaURL: URL
     let duration: TimeInterval?
+    let width: Int?
+    let height: Int?
     let installedAt: Date
 
     init(manifest: InstalledMarketplaceManifest, directory: URL) {
         id = manifest.itemID
         kind = manifest.kind
+        mediaType = manifest.metadata.footageMediaType
         title = manifest.title
         previewURL = manifest.previewURL(in: directory)
         mediaURL = manifest.contentURL(in: directory)
         duration = manifest.metadata.durationSeconds.flatMap { $0 > 0 ? $0 : nil }
+        width = manifest.metadata.width.flatMap { $0 > 0 ? $0 : nil }
+        height = manifest.metadata.height.flatMap { $0 > 0 ? $0 : nil }
         installedAt = manifest.installedAt
         var parts = [manifest.category]
-        if let w = manifest.metadata.width, let h = manifest.metadata.height, w > 0, h > 0 { parts.append("\(w)×\(h)") }
+        if let w = width, let h = height { parts.append("\(w)×\(h)") }
         subtitle = parts.joined(separator: " · ")
     }
 
-    /// What the poster shows: the cached still, else a frame of the footage itself.
-    var posterVideoURL: URL? { kind == .footage ? mediaURL : nil }
+    /// What the content file is, as the filmstrip and the viewer see it — the
+    /// same reading `MarketplaceInstaller` gives it when the item joins a film.
+    /// Nil when there is no media to play: a composition ships an archive of
+    /// its project, and the global kinds ship no footage at all.
+    var sourceKind: SourceKind? {
+        switch kind {
+        case .footage: return mediaType == .image ? .image : .video
+        case .audio, .soundEffect: return .audio
+        case .remotion, .font, .transition, .effect, .projectTemplate: return nil
+        }
+    }
+
+    /// The installed file as a piece of footage, so the Marketplace tab
+    /// previews and plays it exactly as the Library tab does its own.
+    var footage: FootageCell? {
+        guard let sourceKind else { return nil }
+        return FootageCell(marketplaceItemID: id, title: title, subtitle: subtitle, kind: sourceKind,
+                           mediaURL: mediaURL, thumbnailURL: previewURL, duration: duration,
+                           width: width, height: height)
+    }
+
+    /// How the viewer shows this item. Marketplace content belongs to no film,
+    /// so it has no library item to hang the preview off.
+    var preview: MarketplacePreview? {
+        footage.map { MarketplacePreview(rowID: id, name: title, cell: $0) }
+    }
+
+    /// Whether the card should draw a held frame rather than a strip: a still,
+    /// or a composition whose content file is an archive rather than media.
+    var isStill: Bool { kind == .remotion || (kind == .footage && mediaType == .image) }
+
+    /// What the poster shows: the cached still, else a frame of the footage
+    /// itself. Only a clip has frames to pull — never a still or an archive.
+    var posterVideoURL: URL? { kind == .footage && mediaType != .image ? mediaURL : nil }
 
     /// Rows that pass the panel's search field, in install order.
     static func rows(from manifests: [InstalledMarketplaceManifest], directory: (InstalledMarketplaceManifest) -> URL,
@@ -56,6 +96,17 @@ struct LibraryMarketplaceGrid: View {
     let onAdd: (LibraryMarketplaceRow, UUID?) -> Void
     let onReveal: (LibraryMarketplaceRow) -> Void
     let onOpenMarketplace: () -> Void
+    /// The card the viewer is showing, so it reads as picked the way a
+    /// library card does.
+    var selectedID: String?
+    /// Clears the preview when the click lands between the cards.
+    var onDeselect: () -> Void = {}
+    /// Drives the playhead the cards draw, shared with the viewer.
+    var player: FootagePlayer?
+    /// The card under the pointer and how far across it, or nil on the way out.
+    var onSkim: (LibraryMarketplaceRow, Double?) -> Void = { _, _ in }
+    /// A click: show this item in the viewer, at this point of its length.
+    var onSeek: (LibraryMarketplaceRow, Double) -> Void = { _, _ in }
 
     @State private var collapsed: Set<MarketplaceKind> = []
 
@@ -74,6 +125,8 @@ struct LibraryMarketplaceGrid: View {
             .accessibilityElement(children: .contain)
             .padding(8)
         }
+        .contentShape(Rectangle())
+        .onTapGesture(perform: onDeselect)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("library.marketplace.grid")
         .contextMenu {
@@ -96,8 +149,10 @@ struct LibraryMarketplaceGrid: View {
     private func section(kind: MarketplaceKind, rows: [LibraryMarketplaceRow]) -> some View {
         Section {
             if !collapsed.contains(kind) {
-                ForEach(rows) { row in
-                    rowView(row)
+                FootageFlowLayout {
+                    ForEach(rows) { row in
+                        rowView(row)
+                    }
                 }
             }
         } header: {
@@ -131,8 +186,15 @@ struct LibraryMarketplaceGrid: View {
     }
 
     private func rowView(_ row: LibraryMarketplaceRow) -> some View {
-        LibraryMarketplaceCard(row: row, symbol: MarketplaceSymbol.resolve(taxonomy.presentation(for: row.kind).icon, fallback: row.kind.systemImage))
+        LibraryMarketplaceCard(row: row, symbol: MarketplaceSymbol.resolve(taxonomy.presentation(for: row.kind).icon, fallback: row.kind.systemImage),
+                               isSelected: row.id == selectedID, player: player,
+                               onSkim: { onSkim(row, $0) }, onSeek: { onSeek(row, $0) })
+            // Single-click previews, so adding to the film moves to the
+            // double-click a library card has no use for.
             .onTapGesture(count: 2) { onAdd(row, nil) }
+            // A still has no frame to seek to, so its filmstrip takes no
+            // clicks; this is what puts one in the viewer.
+            .onTapGesture { onSeek(row, 0) }
             .accessibilityAction { onAdd(row, nil) }
             .contextMenu {
                 Button { onAdd(row, nil) } label: { Label("Add to Film", systemImage: "plus.square.on.square") }
@@ -150,18 +212,37 @@ struct LibraryMarketplaceGrid: View {
     }
 }
 
-/// An installed item's poster, title and kind, in the same frame as a
-/// library card so the two tabs read alike.
+/// An installed item in the same frame as a library card, so the two tabs read
+/// and behave alike: media plays under the pointer and seeks on a click, and
+/// an item with no footage of its own — a composition's archive — holds its
+/// poster instead.
 struct LibraryMarketplaceCard: View {
     let row: LibraryMarketplaceRow
     /// The kind's symbol as the backend names it; nil falls back to the built-in one.
     var symbol: String?
+    var isSelected = false
+    var player: FootagePlayer?
+    var onSkim: (Double?) -> Void = { _ in }
+    var onSeek: (Double) -> Void = { _ in }
+
+    /// Read off the file when the manifest carries no length, so a strip is
+    /// as long as the take it shows.
+    @State private var loadedDuration: TimeInterval?
+
+    private var footage: FootageCell? { row.footage }
+    private var duration: TimeInterval? { row.duration ?? loadedDuration }
+    private var isTemporal: Bool { footage?.previewSource?.isTemporal == true }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 5) {
-            FootageThumbnail(thumbnailURL: row.previewURL, videoURL: row.posterVideoURL, icon: symbol ?? row.kind.systemImage,
-                             duration: row.duration, isStill: row.kind == .remotionPrompt)
-                .frame(width: FilmstripLayout.posterWidth, height: FilmstripLayout.height)
+            if let footage {
+                FootageFilmstrip(cell: footage, duration: duration, isSelected: isSelected,
+                                 player: player, onSkim: onSkim, onSeek: onSeek)
+            } else {
+                FootageThumbnail(thumbnailURL: row.previewURL, videoURL: row.posterVideoURL, icon: symbol ?? row.kind.systemImage,
+                                 duration: row.duration, isStill: row.isStill, isSelected: isSelected)
+                    .frame(width: FilmstripLayout.posterWidth, height: FilmstripLayout.height)
+            }
             Text(row.title)
                 .font(.caption.weight(.medium))
                 .lineLimit(1)
@@ -170,13 +251,22 @@ struct LibraryMarketplaceCard: View {
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
         }
+        .frame(minWidth: 0,
+               idealWidth: ceil(FilmstripLayout.preferredWidth(duration: duration, isTemporal: isTemporal)),
+               maxWidth: .infinity, alignment: .leading)
         .padding(5)
-        .frame(maxWidth: .infinity, alignment: .leading)
         .contentShape(Rectangle())
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel([row.title, row.duration.map(DurationLabel.short)].compactMap { $0 }.joined(separator: ", "))
-        .accessibilityAddTraits(.isButton)
+        .accessibilityLabel([row.title, duration.map(DurationLabel.short)].compactMap { $0 }.joined(separator: ", "))
+        .accessibilityAddTraits(isSelected ? [.isSelected, .isButton] : [.isButton])
         .accessibilityIdentifier("library.marketplace.\(row.id)")
-        .help(String(localized: "\(row.title)\n\(row.subtitle)\nDouble-click to add to this film."))
+        .help(String(localized: "\(row.title)\n\(row.subtitle)\nClick to preview, double-click to add to this film."))
+        .task(id: row.id) {
+            loadedDuration = nil
+            guard row.duration == nil, let kind = row.sourceKind, kind == .audio || kind == .video else { return }
+            let result = await MediaDurationCache.duration(of: row.mediaURL)
+            guard !Task.isCancelled else { return }
+            loadedDuration = result
+        }
     }
 }

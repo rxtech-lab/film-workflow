@@ -40,7 +40,8 @@ struct LibraryGrid: View {
     /// Gates the marketplace actions: only an author can create drafts.
     /// `LibraryPanel` refreshes the flag.
     @State private var authoring = MarketplaceAuthoringService.shared
-    @State private var authoringSeed: MarketplaceAuthoringSeed?
+    @State private var seedRequest: MarketplaceSeedRequest?
+    @State private var lyricsRequest: MusicLyricsRequest?
 
     var body: some View {
         ScrollView {
@@ -60,7 +61,8 @@ struct LibraryGrid: View {
         .contextMenu {
             creationMenu(groupID: nil)
         }
-        .sheet(item: $authoringSeed) { MarketplaceAuthoringEditor(seed: $0) }
+        .marketplaceSeedHost($seedRequest)
+        .musicLyricsHost($lyricsRequest)
     }
 
     @ViewBuilder
@@ -104,6 +106,9 @@ struct LibraryGrid: View {
         .accessibilityAction { selection = row.id }
         .contextMenu {
             versionsMenu(row)
+            MusicLyricsContextMenu(sourceID: row.id.kind == .caption
+                                   ? DocumentMediaResolver.sourceID(.caption, row.id.id)
+                                   : footage(row.id)?.drag.source.id) { player?.pause(); lyricsRequest = $0 }
             if row.id.kind == .narration {
                 Button { onCreateCaptions(row) } label: {
                     Label("Create Captions", systemImage: "captions.bubble")
@@ -123,11 +128,17 @@ struct LibraryGrid: View {
                     Label("Create Marketplace Template…", systemImage: "storefront")
                 }
             }
-            // Seeded from the version in force, which is the one the card shows.
-            if authoring.canAuthor, let cell = footage(row.id),
-               let seed = MarketplaceAuthoringSeed(title: row.name, sourceKind: cell.kind, file: cell.mediaURL) {
+            // Seeded from the version in force, which is the one the card
+            // shows. A composition publishes its project rather than that
+            // version's file, so it asks for the project instead. An item that
+            // came from the marketplace is never offered back to it.
+            if authoring.canAuthor, !row.isFromMarketplace, let cell = footage(row.id), MarketplaceKind.canBeFootage(cell.kind) {
                 Divider()
-                Button { authoringSeed = seed } label: {
+                Button {
+                    seedRequest = row.id.kind == .remotion
+                        ? .remotion(title: row.name, projectID: row.id.id, renderID: currentVersion(row.id))
+                        : .file(title: row.name, sourceKind: cell.kind, file: cell.mediaURL)
+                } label: {
                     Label("Create Marketplace Item…", systemImage: "storefront")
                 }
             }

@@ -18,6 +18,10 @@ struct RemotionRenderListView: View {
     @State private var selected: RemotionRender?
     @State private var player = AVPlayer()
     @State private var pendingDeletion: RemotionRender?
+    /// Authoring is admin-only; observing the service rebuilds the menu when
+    /// the flag lands.
+    @State private var authoring = MarketplaceAuthoringService.shared
+    @State private var seedRequest: MarketplaceSeedRequest?
 
     var body: some View {
         Group {
@@ -48,6 +52,7 @@ struct RemotionRenderListView: View {
                 }
             }
         }
+        .marketplaceSeedHost($seedRequest)
         .task(id: refreshToken) { reload() }
         .onChange(of: selected?.id) { _, _ in
             if let selected {
@@ -121,6 +126,16 @@ struct RemotionRenderListView: View {
         Button {
             exportRender(render)
         } label: { Label("Export…", systemImage: "square.and.arrow.down") }
+        // A composition installed from the marketplace is never offered back to it.
+        if authoring.canAuthor, project.marketplaceItemId == nil {
+            Divider()
+            // The one surface that picks a particular render for the listing's
+            // preview; everywhere else takes the newest.
+            Button {
+                seedRequest = .remotion(title: project.name, projectID: project.id, renderID: render.id)
+            } label: { Label("Create Marketplace Item…", systemImage: "storefront") }
+            Divider()
+        }
         Button(role: .destructive) {
             pendingDeletion = render
         } label: { Label("Delete…", systemImage: "trash") }

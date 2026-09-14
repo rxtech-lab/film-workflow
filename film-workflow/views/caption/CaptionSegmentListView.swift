@@ -1,6 +1,5 @@
 import SwiftData
 import SwiftUI
-import Translation
 
 /// The caption editor's main list.
 ///
@@ -36,16 +35,8 @@ struct CaptionSegmentListView: View {
     @State private var aiNotice: String?
 
     @State private var showTranslateSheet = false
-    @State private var translationTask: Task<Void, Never>?
-    @State private var translationProgress: CaptionProgress?
-    @State private var isTranslating = false
-    @State private var translationError: String?
-    @State private var translationNotice: String?
+    @State private var translator = CaptionTranslationController()
     @State private var removingTranslation: String?
-    /// Set when a run needs an Apple `TranslationSession`, which only the
-    /// `.translationTask` modifier can produce.
-    @State private var translationConfig: TranslationSession.Configuration?
-    @State private var pendingChoice: CaptionTranslateChoice?
 
     private var segments: [CaptionSegment] { project.orderedSegments }
 
@@ -60,7 +51,7 @@ struct CaptionSegmentListView: View {
     }
 
     var body: some View {
-        Group {
+        VStack(spacing: 0) {
             if segments.isEmpty {
                 ContentUnavailableView(
                     "No Captions Yet",
@@ -68,9 +59,12 @@ struct CaptionSegmentListView: View {
                     description: Text("Run transcription to create captions from your audio.")
                 )
             } else {
+                actionBar
+                Divider()
                 list
             }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .toolbar { toolbarContent }
         .sheet(item: $editingSegment) { segment in
             CaptionSegmentEditorSheet(project: project, segment: segment)
@@ -91,24 +85,15 @@ struct CaptionSegmentListView: View {
         }
         .sheet(isPresented: $showTranslateSheet) {
             CaptionTranslateSheet(project: project, selection: selection) { choice in
-                startTranslation(choice)
+                translator.start(choice, project: project, context: modelContext)
             }
         }
-        .sheet(isPresented: $isTranslating) {
-            CaptionTranscriptionProgressView(progress: translationProgress) {
-                translationTask?.cancel()
-            }
-        }
-        // Apple's engine only exists inside this modifier. `translationConfig`
-        // stays nil for the AI engine, which leaves the task dormant.
-        .translationTask(translationConfig) { session in
-            await runAppleTranslation(session: session)
-        }
+        .captionTranslation(translator, project: project)
         .sheet(item: $pendingProposal) { proposal in
             CaptionAIReviewSheet(project: project, proposal: proposal) { applied in
                 aiNotice = applied == 0
-                    ? "No changes were applied."
-                    : "Applied \(applied) change\(applied == 1 ? "" : "s")."
+                    ? String(localized: "No changes were applied.")
+                    : String(localized: "Applied \(applied) change\(applied == 1 ? "" : "s").")
             }
         }
         .alert(
@@ -143,28 +128,6 @@ struct CaptionSegmentListView: View {
             Button("OK") { gapNotice = nil }
         } message: {
             Text(gapNotice ?? "")
-        }
-        .alert(
-            "Translation",
-            isPresented: Binding(
-                get: { translationNotice != nil },
-                set: { if !$0 { translationNotice = nil } }
-            )
-        ) {
-            Button("OK") { translationNotice = nil }
-        } message: {
-            Text(translationNotice ?? "")
-        }
-        .alert(
-            "Translation failed",
-            isPresented: Binding(
-                get: { translationError != nil },
-                set: { if !$0 { translationError = nil } }
-            )
-        ) {
-            Button("OK") { translationError = nil }
-        } message: {
-            Text(translationError ?? "")
         }
         .confirmationDialog(
             "Remove this translation?",
@@ -201,6 +164,34 @@ struct CaptionSegmentListView: View {
     }
 
     // MARK: - List
+
+    /// The retimer's only other entry points are `toolbarContent` and the
+    /// warning banner. This view's home is the inspector panel, which has no
+    /// toolbar of its own and only shows the banner when the alignment needs
+    /// review — so without a button here the timestamp editor is unreachable.
+    private var actionBar: some View {
+        HStack {
+            Button {
+                showRetimeSheet = true
+            } label: {
+                Label("Retimer…", systemImage: "timeline.selection")
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+            .help("Edit caption start and end times")
+
+            if project.lyricsSourceID != nil {
+                Button("Translate…") { showTranslateSheet = true }
+                    .disabled(translator.isRunning)
+                    .accessibilityIdentifier("music-lyrics-translate")
+                versionMenu
+            }
+
+            Spacer()
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+    }
 
     private var list: some View {
         // Built once per list pass and handed down, not recomputed inside the
@@ -287,8 +278,7 @@ struct CaptionSegmentListView: View {
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 6) {
                     Text(
-                        "\(CaptionExporter.shortTimestamp(segment.startMs))–"
-                        + "\(CaptionExporter.shortTimestamp(segment.endMs))"
+                        "\(timestamp(segment.startMs))–\(timestamp(segment.endMs))"
                     )
                     .font(.caption.monospacedDigit())
                     .foregroundStyle(.secondary)
@@ -335,6 +325,11 @@ struct CaptionSegmentListView: View {
         .onTapGesture(count: 2) { editingSegment = segment }
         .contextMenu {
             Button("Edit Text & Timing…") { editingSegment = segment }
+            if project.lyricsSourceID != nil {
+                Button("Retime Lyrics…") { showRetimeSheet = true }
+                Button("Translate Lyrics…") { showTranslateSheet = true }
+                    .disabled(translator.isRunning)
+            }
             Button("Word Timings…") { inspectingSegment = segment }
                 .disabled(segment.words.isEmpty && segment.text.isEmpty)
             Divider()
@@ -463,13 +458,15 @@ struct CaptionSegmentListView: View {
 
                 Menu {
                     Button("Translate…") { showTranslateSheet = true }
-                        .disabled(isTranslating)
+                        .disabled(translator.isRunning)
 
                     if !project.translatedLanguages.isEmpty {
                         Divider()
                         ForEach(project.translatedLanguages, id: \.self) { code in
-                            Button(updateLabel(for: code)) { updateTranslation(code) }
-                                .disabled(isTranslating)
+                            Button(CaptionTranslationController.updateLabel(for: code, in: project)) {
+                                translator.update(code, project: project, context: modelContext, settings: settings)
+                            }
+                            .disabled(translator.isRunning)
                         }
                         Divider()
                         Menu("Remove Translation") {
@@ -600,149 +597,9 @@ struct CaptionSegmentListView: View {
 
     // MARK: - Translation
 
-    /// e.g. "Update Chinese (412 of 900)" — the counts are what tell the user
-    /// whether a run is worth starting.
-    private func updateLabel(for code: String) -> String {
-        let counts = CaptionTranslationService.counts(for: code, in: project)
-        let name = CaptionTranslationAvailability.displayName(code)
-        let outstanding = counts.total - counts.translated + counts.stale
-        guard outstanding > 0 else { return "\(name) — up to date" }
-        return "Update \(name) (\(outstanding) to do)"
-    }
-
-    private func updateTranslation(_ code: String) {
-        startTranslation(
-            CaptionTranslateChoice(
-                languageCode: code,
-                engine: settings.translationEngine,
-                preferredBackend: settings.translationEngine == .aiBackend
-                    ? settings.aiBackend
-                    : nil,
-                scope: .missingOrStale
-            )
-        )
-    }
-
-    /// Routes a run to the right engine.
-    ///
-    /// The AI engine can start immediately. Apple's can't: its session comes
-    /// from `.translationTask`, so all this can do is stash the choice and set
-    /// the configuration that wakes the modifier up.
-    private func startTranslation(_ choice: CaptionTranslateChoice) {
-        guard !isTranslating else { return }
-        pendingChoice = choice
-
-        switch choice.engine {
-        case .aiBackend:
-            runAITranslation(choice)
-
-        case .appleTranslation:
-            let target = Locale.Language(identifier: choice.languageCode)
-            let source = project.sourceLanguageCode.isEmpty
-                ? nil
-                : Locale.Language(identifier: project.sourceLanguageCode)
-
-            isTranslating = true
-            translationProgress = .translating(
-                done: 0,
-                total: 0,
-                language: CaptionTranslationAvailability.displayName(choice.languageCode)
-            )
-            // Re-requesting the same pair produces no new session, so an
-            // unchanged target has to be invalidated to fire the task again.
-            if translationConfig?.target == target, translationConfig?.source == source {
-                translationConfig?.invalidate()
-            } else {
-                translationConfig = TranslationSession.Configuration(source: source, target: target)
-            }
-        }
-    }
-
-    private func runAppleTranslation(session: TranslationSession) async {
-        guard let choice = pendingChoice, choice.engine == .appleTranslation else { return }
-        pendingChoice = nil
-
-        let runner = AppleTranslationRunner(
-            session: session,
-            sourceLanguage: project.sourceLanguageCode,
-            targetLanguage: choice.languageCode
-        )
-        await perform(choice: choice, runner: runner)
-    }
-
-    private func runAITranslation(_ choice: CaptionTranslateChoice) {
-        pendingChoice = nil
-        let config = try? AppConfig.loadFromKeychain()
-        let runner: AICaptionTranslationRunner
-        do {
-            runner = try CaptionTranslationService.makeAIRunner(
-                project: project,
-                targetLanguage: choice.languageCode,
-                config: config,
-                preferredBackend: choice.preferredBackend
-            )
-        } catch {
-            translationError = error.localizedDescription
-            return
-        }
-
-        isTranslating = true
-        translationProgress = .translating(
-            done: 0,
-            total: 0,
-            language: CaptionTranslationAvailability.displayName(choice.languageCode)
-        )
-        translationTask = Task { await perform(choice: choice, runner: runner) }
-    }
-
-    /// Shared tail: run, report, and make sure the progress sheet comes down on
-    /// every path, including cancellation.
-    ///
-    /// Partial results are deliberately kept — the service writes each batch as
-    /// it lands, so cancelling half way through a nine-hundred-caption run
-    /// leaves the first half translated rather than throwing the work away.
-    private func perform(choice: CaptionTranslateChoice, runner: any CaptionTranslationRunner) async {
-        defer {
-            isTranslating = false
-            translationProgress = nil
-            translationTask = nil
-        }
-        do {
-            let outcome = try await CaptionTranslationService.translate(
-                project: project,
-                runner: runner,
-                scope: choice.scope,
-                context: modelContext,
-                onProgress: { translationProgress = $0 }
-            )
-            let name = CaptionTranslationAvailability.displayName(choice.languageCode)
-            let written = outcome.written
-            if written == 0, outcome.failed == 0 {
-                translationNotice = "Nothing needed translating into \(name)."
-            } else {
-                var notice = "Translated \(written) caption\(written == 1 ? "" : "s") into \(name)."
-                if outcome.failed > 0 {
-                    // Named rather than swallowed: the captions are still there,
-                    // untranslated, and re-running the sheet retries just them.
-                    notice += " \(outcome.failed) couldn't be translated — run it "
-                        + "again to retry them."
-                }
-                translationNotice = notice
-            }
-        } catch is CancellationError {
-            // User pressed Cancel; whatever was written stays written.
-        } catch {
-            translationError = error.localizedDescription
-        }
-    }
-
     private func removeTranslation(_ code: String) {
         removingTranslation = nil
-        do {
-            try CaptionTranslationService.removeTranslation(code, from: project, context: modelContext)
-        } catch {
-            translationError = error.localizedDescription
-        }
+        translator.removeTranslation(code, project: project, context: modelContext)
     }
 
     // MARK: - AI actions
@@ -840,6 +697,10 @@ struct CaptionSegmentListView: View {
     }
 
     // MARK: - Actions
+
+    private func timestamp(_ ms: Int) -> String {
+        project.lyricsSourceID == nil ? CaptionExporter.shortTimestamp(ms) : CaptionExporter.vttTimestamp(ms)
+    }
 
     private func nextSegment(after segment: CaptionSegment) -> CaptionSegment? {
         let ordered = segments

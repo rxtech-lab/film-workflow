@@ -26,9 +26,9 @@ public struct TemplateGalleryView: View {
                 ForEach(groups, id: \.group) { entry in
                     VStack(alignment: .leading, spacing: 10) {
                         VStack(alignment: .leading, spacing: 2) {
-                            Text(entry.group.title)
+                            Text(LocalizedStringKey(entry.group.title))
                                 .font(.system(size: 15, weight: .semibold))
-                            Text(entry.group.summary)
+                            Text(LocalizedStringKey(entry.group.summary))
                                 .font(.system(size: 12))
                                 .foregroundStyle(.secondary)
                         }
@@ -81,10 +81,10 @@ struct TemplateGalleryCard: View {
                     .background(Color.accentColor.opacity(0.10), in: RoundedRectangle(cornerRadius: 11))
                     .accessibilityHidden(true)
 
-                Text(template.title)
+                Text(LocalizedStringKey(template.title))
                     .font(.system(size: 15, weight: .semibold))
                     .foregroundStyle(.primary)
-                Text(template.summary)
+                Text(LocalizedStringKey(template.summary))
                     .font(.system(size: 12))
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.leading)

@@ -41,6 +41,20 @@ enum MCPWizardHandlers {
             ]
         ),
         MCPToolDescriptor(
+            name: WizardTool.skipTemplates,
+            description: "Report that no marketplace project template fits, so the film should be built from the brief instead. Use this when marketplace_list with kind project_template returns nothing, or nothing close enough to be worth offering — never present a template of another kind. Only valid during the research phase. After calling this, stop: the user's answer arrives as your next message.",
+            inputSchema: [
+                "type": "object",
+                "properties": [
+                    "reason": [
+                        "type": "string",
+                        "description": "One sentence the user will read, saying what you searched for and what you found.",
+                    ] as [String: Any],
+                ] as [String: Any],
+                "required": ["reason"],
+            ]
+        ),
+        MCPToolDescriptor(
             name: WizardTool.presentOptions,
             description: "Show the user a page of choices — which footage goes where, style, music — described as a json-render spec. Only valid during the planning phase of a Simple mode run. After calling this, stop: the user's answers arrive as your next message. The system prompt lists the element types and props you may use.",
             inputSchema: [
@@ -86,6 +100,9 @@ enum MCPWizardHandlers {
         switch name {
         case WizardTool.presentTemplates:
             return try await presentTemplates(arguments, session: session)
+        case WizardTool.skipTemplates:
+            let reason = (arguments["reason"] as? String) ?? ""
+            return MCPToolRegistry.textResult(try session.skipTemplates(reason: reason))
         case WizardTool.presentOptions:
             return try presentOptions(arguments, session: session)
         case WizardTool.reportProgress:
@@ -104,7 +121,7 @@ enum MCPWizardHandlers {
     ) async throws -> [String: Any] {
         let raw = (arguments["candidates"] as? [[String: Any]]) ?? []
         guard !raw.isEmpty else {
-            throw MCPToolError.invalidArguments("candidates must list at least one template, each with an item_id from marketplace_list")
+            throw MCPToolError.invalidArguments("candidates must list at least one template, each with an item_id from marketplace_list; if the marketplace has no project template that fits, call \(WizardTool.skipTemplates) instead")
         }
 
         let client = MarketplaceClient()
@@ -132,7 +149,7 @@ enum MCPWizardHandlers {
             throw MCPToolError.invalidArguments(
                 "none of those ids is a marketplace project template"
                     + (unknown.isEmpty ? "" : " (\(unknown.joined(separator: ", ")))")
-                    + "; call marketplace_list with kind project_template and use the ids it returns"
+                    + "; call marketplace_list with kind project_template and use the ids it returns, or \(WizardTool.skipTemplates) if it returns none"
             )
         }
 

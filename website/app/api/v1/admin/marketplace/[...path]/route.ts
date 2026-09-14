@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { z } from "zod";
 import { requireAdminUser } from "@/lib/auth/bearer";
+import { requestLocale } from "@/lib/i18n/request";
 import { marketplaceRouteError } from "@/lib/marketplace/http";
 import { toWireItem } from "@/lib/marketplace/presenter";
 import { listAllCategories, listAllItemsForAdmin, requireItem, ownedItemIds, type MarketplaceItem } from "@/lib/marketplace/repository";
@@ -9,14 +10,20 @@ import { marketplaceFormSchema } from "@/lib/marketplace/form-schema";
 import { assetRoles } from "@/lib/marketplace/schema";
 import { getObjectBytes, objectDownloadURL } from "@/lib/storage/s3";
 
-const headers = { "Cache-Control": "private, no-store" };
+const headers = { "Cache-Control": "private, no-store", Vary: "Accept-Language" };
 const json = (body: unknown, status = 200) => Response.json(body, { status, headers });
 type Context = { params: Promise<{ path: string[] }> };
 
+/**
+ * One item for an editor rather than a reader: `item` keeps the text as it was
+ * typed — `toWireItem` is left at the default locale on purpose — and
+ * `translations` carries the other languages beside it, which is what the form
+ * edits. Only the form's own labels follow `Accept-Language` here.
+ */
 async function adminItem(item: MarketplaceItem, owned = false) {
-  const structured = ["project_template", "effect", "transition", "remotion_prompt"].includes(item.kind);
+  const structured = ["project_template", "effect", "transition"].includes(item.kind);
   const contentText = structured && item.contentKey ? (await getObjectBytes(item.contentKey)).bytes.toString("utf8") : null;
-  return { item: await toWireItem(item, owned), category_id: item.categoryId, status: item.status, updated_at: item.updatedAt.toISOString(), content_text: contentText,
+  return { item: await toWireItem(item, owned), translations: item.translations, category_id: item.categoryId, status: item.status, updated_at: item.updatedAt.toISOString(), content_text: contentText,
     content_revision: item.contentKey ? createHash("sha256").update(item.contentKey).digest("hex") : null,
     content_download_url: item.contentKey ? await objectDownloadURL(item.contentKey) : null };
 }
@@ -30,7 +37,7 @@ async function handle(request: Request, context: Context) {
     if (request.method === "GET") {
       if (resource === "capabilities") return json({ can_author: true, user_id: user.id });
       // The app renders its authoring form from this, so both forms stay the same shape.
-      if (resource === "form-schema") return json(marketplaceFormSchema());
+      if (resource === "form-schema") return json(marketplaceFormSchema(await requestLocale(request)));
       if (resource === "categories") return json({ categories: await listAllCategories() });
       if (resource === "items" && !id) {
         const query = z.object({
@@ -59,6 +66,9 @@ async function handle(request: Request, context: Context) {
       if (resource === "items" && id && operation === "publish") result = await authoring.publishItem(user, id, z.object({ published: z.boolean() }).parse(body).published);
     }
     if (request.method === "PATCH" && resource === "items" && id && !operation) result = await authoring.updateItem(user, id, body);
+    // Renaming or re-iconing a category. The slug is what items filter on, so
+    // it is not part of the patch and stays put.
+    if (request.method === "PATCH" && resource === "categories" && id && !operation) result = await authoring.updateCategory(user, { ...body, id });
     if (request.method === "PUT" && resource === "items" && id && operation === "content") result = await authoring.saveContent(user, id, z.object({ text: z.string().max(1_000_000) }).parse(body).text);
     if (request.method === "DELETE" && resource === "items" && id && operation) result = await authoring.removeAsset(user, id, z.enum(assetRoles).parse(operation));
     if (request.method === "DELETE" && resource === "items" && id && !operation) result = await authoring.deleteItem(user, id);

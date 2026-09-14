@@ -64,7 +64,6 @@ private struct SimpleModePreviewContent: View {
             status: statusText,
             isBusy: session.isAgentRunning,
             summary: session.lastSummary,
-            hasAgentActivity: session.thread != nil,
             onRefine: { SimpleModeCoordinator.shared.refine($0, for: session) },
             onOpenEditor: onOpenEditor,
             onCancel: onCancel
@@ -102,10 +101,6 @@ private struct SimpleModePreviewContent: View {
                     player.pause()
                     player.seek(to: time)
                 }
-            }
-        } agentActivity: {
-            if let thread = session.thread {
-                SimpleModeAgentActivityView(thread: thread)
             }
         }
         .onChange(of: sequence?.timelineData, initial: true) { _, _ in reload() }

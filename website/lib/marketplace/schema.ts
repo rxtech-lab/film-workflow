@@ -1,9 +1,21 @@
 import { z } from "zod";
+import { lyricTracks } from "./lyrics";
+import { translationsInput, type Translations } from "@/lib/i18n/translations";
+
+/**
+ * Which fields of each row an admin can translate. The base column stays the
+ * source; a locale left blank reads through to it.
+ */
+export const translatableFields = {
+  kind: ["label"],
+  category: ["name"],
+  item: ["title", "description"],
+} as const;
 
 /** Mirrors `marketplace_kind` in `lib/db/schema.ts`; the wire and the app use these raw strings. */
 export const marketplaceKinds = [
   "footage",
-  "remotion_prompt",
+  "remotion",
   "audio",
   "sound_effect",
   "font",
@@ -15,7 +27,7 @@ export type MarketplaceKind = (typeof marketplaceKinds)[number];
 
 export const marketplaceKindLabels: Record<MarketplaceKind, string> = {
   footage: "Footage",
-  remotion_prompt: "Remotion prompt",
+  remotion: "Remotion composition",
   audio: "Music",
   sound_effect: "Sound effect",
   font: "Font",
@@ -31,7 +43,7 @@ export const marketplaceKindLabels: Record<MarketplaceKind, string> = {
  */
 export const marketplaceKindDefaults: Record<MarketplaceKind, { label: string; icon: string; sortOrder: number }> = {
   footage: { label: "Footage", icon: "film", sortOrder: 0 },
-  remotion_prompt: { label: "Remotion Prompts", icon: "text.quote", sortOrder: 1 },
+  remotion: { label: "Remotion Compositions", icon: "cube.transparent", sortOrder: 1 },
   audio: { label: "Music", icon: "music.note", sortOrder: 2 },
   sound_effect: { label: "Sound Effects", icon: "waveform", sortOrder: 3 },
   font: { label: "Fonts", icon: "textformat", sortOrder: 4 },
@@ -47,11 +59,14 @@ export type AssetRole = (typeof assetRoles)[number];
 
 const previewImageExtensions = ["jpg", "jpeg", "png", "webp"];
 const previewVideoExtensions = ["mp4", "mov", "webm"];
+/** Stills a footage item may carry as its content. Shared with `mediaTypeForContent`. */
+const stillExtensions = ["png", "jpg", "jpeg", "webp"];
+const clipExtensions = ["mp4", "mov"];
 
 /** What the content file of each kind may be. Enforced when an upload is authorized and again when it is finalized. */
 export const contentExtensions: Record<MarketplaceKind, string[]> = {
-  footage: ["mp4", "mov"],
-  remotion_prompt: ["md", "txt"],
+  footage: [...clipExtensions, ...stillExtensions],
+  remotion: ["zip"],
   audio: ["mp3", "wav", "m4a", "aac"],
   sound_effect: ["mp3", "wav", "m4a", "aac"],
   font: ["ttf", "otf"],
@@ -62,7 +77,8 @@ export const contentExtensions: Record<MarketplaceKind, string[]> = {
 
 export function allowedExtensions(kind: MarketplaceKind, role: AssetRole) {
   if (role === "preview-image") return previewImageExtensions;
-  if (role === "preview-video") return previewVideoExtensions;
+  if (role === "preview-video") return kind === "audio" || kind === "sound_effect"
+    ? [...previewVideoExtensions, ...contentExtensions.audio] : previewVideoExtensions;
   return contentExtensions[kind];
 }
 
@@ -75,12 +91,81 @@ export function isAllowedFilename(kind: MarketplaceKind, role: AssetRole, filena
   return allowedExtensions(kind, role).includes(fileExtension(filename));
 }
 
+// MARK: - Media types
+
+/**
+ * The sub-dimension footage carries: a still or a clip. Derived from the stored
+ * content file, never from the client, so the shelf an item sits on always
+ * matches the bytes behind it.
+ */
+export const mediaTypes = ["image", "video"] as const;
+export type MediaType = (typeof mediaTypes)[number];
+
+/** Kinds whose content can be either a still or a clip. The only one today. */
+export const kindsWithMediaType: MarketplaceKind[] = ["footage"];
+
+/** How the app's sidebar draws the Footage sub-level; sent on the taxonomy wire. */
+export const mediaTypeDefaults: Record<MediaType, { label: string; icon: string; sortOrder: number }> = {
+  image: { label: "Images", icon: "photo", sortOrder: 0 },
+  video: { label: "Video", icon: "film", sortOrder: 1 },
+};
+
+/** The media type a content filename implies, or undefined when it implies none. */
+export function mediaTypeForContent(filename: string): MediaType | undefined {
+  const ext = fileExtension(filename);
+  if (stillExtensions.includes(ext)) return "image";
+  if (clipExtensions.includes(ext)) return "video";
+  return undefined;
+}
+
+/**
+ * The bucket a card prints: 4K / 1440p / 1080p / 720p / SD, measured on the
+ * short side so a portrait clip reads the same as its landscape equivalent
+ * (1080x1920 is 1080p, not 1440p). The detail sheet keeps the exact dimensions.
+ *
+ * Mirrored by `MarketplaceResolution.bucket` in the macOS app; change both.
+ */
+export function resolutionLabel(metadata: { width?: number; height?: number }): string | undefined {
+  const { width = 0, height = 0 } = metadata;
+  const short = width > 0 && height > 0 ? Math.min(width, height) : height;
+  if (!short || short <= 0) return undefined;
+  if (short >= 2160) return "4K";
+  if (short >= 1440) return "1440p";
+  if (short >= 1080) return "1080p";
+  if (short >= 720) return "720p";
+  return "SD";
+}
+
+// MARK: - Catalog versions
+
+/**
+ * What a client must ask for to be sent a kind it can decode. This is not
+ * cosmetic: `MarketplaceCatalogPage.items` in the app is a plain array, so one
+ * kind a shipped build does not know fails the decode of the whole page.
+ */
+export const CATALOG_VERSION = 3;
+
+export const kindMinimumCatalogVersion: Partial<Record<MarketplaceKind, number>> = {
+  project_template: 2,
+  remotion: 3,
+};
+
+export function kindAllowed(kind: MarketplaceKind, catalogVersion: number) {
+  return catalogVersion >= (kindMinimumCatalogVersion[kind] ?? 1);
+}
+
+export function kindsForCatalogVersion(catalogVersion: number) {
+  return marketplaceKinds.filter((kind) => kindAllowed(kind, catalogVersion));
+}
+
 export const previewMetadata = z.object({
+  startSeconds: z.number().finite().min(0).max(86_400).optional(),
   durationSeconds: z.number().nonnegative().optional(), width: z.number().int().positive().optional(),
   height: z.number().int().positive().optional(), mock: z.boolean().optional(),
 });
 
 export const itemMetadata = z.object({
+  lyricTracks: lyricTracks.optional(),
   durationSeconds: z.number().nonnegative().optional(),
   width: z.number().int().positive().optional(),
   height: z.number().int().positive().optional(),
@@ -88,6 +173,7 @@ export const itemMetadata = z.object({
   descriptor: z.object({ filterName: z.string().max(80), parameterCount: z.number().int().nonnegative() }).optional(),
   promptExcerpt: z.string().max(400).optional(),
   preview: previewMetadata.optional(),
+  mediaType: z.enum(mediaTypes).optional(),
   tags: z.array(z.string().min(1).max(40)).max(20).optional(),
 });
 export type ItemMetadata = z.infer<typeof itemMetadata>;
@@ -110,9 +196,11 @@ export function slugify(name: string) {
  */
 const symbolPattern = /^[A-Za-z0-9]+(\.[A-Za-z0-9]+)*$/;
 const symbolMessage = "Use an SF Symbol name, e.g. “music.note”.";
-export const symbolName = z.string().trim().max(80).regex(symbolPattern, symbolMessage);
+/** The longest name Apple ships is 100 characters, so 120 leaves headroom. */
+const SYMBOL_MAX = 120;
+export const symbolName = z.string().trim().max(SYMBOL_MAX).regex(symbolPattern, symbolMessage);
 /** An icon field an admin may leave blank, which means "keep the default". */
-const optionalIcon = z.string().trim().max(80).refine((icon) => icon === "" || symbolPattern.test(icon), symbolMessage).optional();
+const optionalIcon = z.string().trim().max(SYMBOL_MAX).refine((icon) => icon === "" || symbolPattern.test(icon), symbolMessage).optional();
 
 export const categoryInput = z.object({
   kind: z.enum(marketplaceKinds),
@@ -121,6 +209,8 @@ export const categoryInput = z.object({
   slug: categorySlug.optional(),
   /** SF Symbol for the sidebar row; blank falls back to `DEFAULT_CATEGORY_ICON`. */
   icon: optionalIcon,
+  /** `name` in the other locales, e.g. `{ "zh-Hans": { "name": "舒缓" } }`. */
+  translations: translationsInput(translatableFields.category),
 }).transform((input) => ({ ...input, slug: input.slug ?? slugify(input.name), icon: input.icon || DEFAULT_CATEGORY_ICON }))
   .refine((input) => input.slug.length > 0, { message: "The name needs at least one letter or digit.", path: ["name"] });
 export type CategoryInput = z.infer<typeof categoryInput>;
@@ -130,8 +220,10 @@ export const categoryPatch = z.object({
   id: z.string().uuid(),
   name: z.string().trim().min(1).max(64),
   icon: optionalIcon.transform((icon) => icon || DEFAULT_CATEGORY_ICON),
+  translations: translationsInput(translatableFields.category),
 });
 export type CategoryPatch = z.infer<typeof categoryPatch>;
+export const categoryDelete = z.object({ id: z.string().uuid() });
 
 /** The label and icon one kind shows in the app sidebar. */
 export const kindPatch = z.object({
@@ -139,11 +231,12 @@ export const kindPatch = z.object({
   label: z.string().trim().min(1).max(64),
   icon: optionalIcon.transform((icon) => icon || DEFAULT_CATEGORY_ICON),
   sortOrder: z.coerce.number().int().min(0).max(999).default(0),
+  translations: translationsInput(translatableFields.kind),
 });
 export type KindPatch = z.infer<typeof kindPatch>;
 
 /** A category as the admin form sees it. */
-export type MarketplaceCategory = { id: string; kind: MarketplaceKind; slug: string; name: string; icon: string };
+export type MarketplaceCategory = { id: string; kind: MarketplaceKind; slug: string; name: string; icon: string; translations: Translations };
 
 export const itemInput = z.object({
   draftId: z.string().uuid().optional(),
@@ -153,12 +246,16 @@ export const itemInput = z.object({
   description: z.string().trim().max(4000).default(""),
   pricePoints: z.number().int().min(0).max(1_000_000),
   metadata: itemMetadata.default({}),
+  /** `title` and `description` in the other locales the app ships. */
+  translations: translationsInput(translatableFields.item),
 });
 export type ItemInput = z.infer<typeof itemInput>;
 
 export const listQuery = z.object({
-  catalog_version: z.coerce.number().int().min(1).max(2).default(1),
+  catalog_version: z.coerce.number().int().min(1).max(CATALOG_VERSION).default(1),
   kind: z.enum(marketplaceKinds).optional(),
+  /** Footage only: narrows the shelf to stills or to clips. */
+  media_type: z.enum(mediaTypes).optional(),
   /** A category slug. */
   category: z.string().trim().min(1).max(64).optional(),
   q: z.string().trim().max(100).optional(),

@@ -15,8 +15,8 @@ timeline.
 | Engine | Available AI engines and setup status | — |
 | Brief | A form: film name, website, description, file picker | — |
 | Location | Native save picker, selected path, **Create Film** | — |
-| Research | A spinner with a status line | `web_read` the site, `marketplace_list` project templates, then `wizard_present_templates` |
-| Template | Ranked template cards | waits |
+| Research | A spinner with a status line | `web_read` the site, `marketplace_list` project templates, then `wizard_present_templates` — or `wizard_skip_templates` when none fit |
+| Template | Ranked template cards, or the no-template page | waits |
 | Style | A page the agent authored | `marketplace_get`, `footage_list`, then `wizard_present_options` |
 | Build | The preview, filling up | `project_template_apply`, then the sequence tools |
 | Preview | Player with scrubber, clip strip, refine field, **Edit in Editor** (disabled while generating) | waits, or refines |
@@ -64,6 +64,7 @@ user's answer arrives as the next turn, written into the transcript as a system
 line by `AgentController.recordDecision`.
 
 - `wizard_present_templates { candidates: [{ item_id, reason, fit_score? }], summary? }`
+- `wizard_skip_templates { reason }`
 - `wizard_present_options { spec, initial_state?, title? }`
 - `wizard_report_progress { message }`
 - `web_read { url, max_chars? }` — the only route to the open web; public
@@ -97,6 +98,18 @@ recommendation instead of stranding the user.
 
 `imageUrl` on an option accepts a `sourceId` as well as a URL, so a card can
 show the user's own upload; `SimpleModeThumbnails` resolves it.
+
+## When there is no template
+
+The catalog can hold no project template that fits, or none at all. Presenting
+an empty list is refused and an options page does not belong in research, so
+that combination used to leave the agent with no legal move and the user on a
+spinner that never resolved. `wizard_skip_templates` is the way out: the wizard
+shows what the agent searched for and offers **Build Without a Template**, and
+the run continues on `planOptionsWithoutTemplate` and `buildWithoutTemplate` —
+the agent designs the shot plan itself and cuts the sequence with the
+`sequence_*` tools instead of `project_template_apply`. It is the same shape as
+the options fallback: the user is told what happened and decides.
 
 ## Watching it build
 

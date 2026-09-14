@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, count, desc, eq, ilike, inArray, ne, or, type SQL } from "drizzle-orm";
+import { and, count, desc, eq, ilike, inArray, or, sql, type SQL } from "drizzle-orm";
 import { db } from "@/lib/db";
 import {
   marketplaceCategories,
@@ -13,16 +13,26 @@ import {
   type MarketplaceItemRow,
   type MarketplaceItemStatus,
   type MarketplacePurchaseRow,
+  type MarketplaceTranslations,
 } from "@/lib/db/schema";
+import { DEFAULT_LOCALE, type Locale } from "@/lib/i18n/locale";
+import { kindDefaultTranslations, mediaTypeDefaultTranslations } from "@/lib/marketplace/i18n";
 import {
+  CATALOG_VERSION,
+  kindAllowed,
+  kindsForCatalogVersion,
+  kindsWithMediaType,
   marketplaceKindDefaults,
   marketplaceKinds as marketplaceKindValues,
+  mediaTypeDefaults,
+  mediaTypes,
   type CategoryInput,
   type CategoryPatch,
   type ItemInput,
   type KindPatch,
   type ListQuery,
   type MarketplaceKind,
+  type MediaType,
 } from "@/lib/marketplace/schema";
 
 export const MARKETPLACE_PAGE_SIZE = 24;
@@ -32,14 +42,29 @@ export type { MarketplaceCategoryRow, MarketplaceItemRow, MarketplaceKindRow, Ma
 
 /**
  * An item row with its category joined in. `category` is the slug — the
- * string the wire has always carried — and `categoryName` is for display.
+ * string the wire has always carried — and `categoryName` is for display,
+ * with `categoryTranslations` carrying that name in the other locales.
  */
-export type MarketplaceItem = MarketplaceItemRow & { category: string; categoryName: string };
+export type MarketplaceItem = MarketplaceItemRow & { category: string; categoryName: string; categoryTranslations: MarketplaceTranslations };
 
-const itemWithCategory = { item: marketplaceItems, category: marketplaceCategories.slug, categoryName: marketplaceCategories.name };
+const itemWithCategory = {
+  item: marketplaceItems,
+  category: marketplaceCategories.slug,
+  categoryName: marketplaceCategories.name,
+  categoryTranslations: marketplaceCategories.translations,
+};
 
-function flatten(row: { item: MarketplaceItemRow; category: string; categoryName: string }): MarketplaceItem {
-  return { ...row.item, category: row.category, categoryName: row.categoryName };
+/** Footage's sub-dimension, read out of the metadata jsonb. */
+const mediaTypeColumn = sql<string>`${marketplaceItems.metadata} ->> 'mediaType'`;
+
+/** Kinds an older client cannot decode are withheld rather than failing its page. */
+function visibleKinds(catalogVersion: number): SQL | undefined {
+  const visible = kindsForCatalogVersion(catalogVersion);
+  return visible.length === marketplaceKindValues.length ? undefined : inArray(marketplaceItems.kind, visible);
+}
+
+function flatten(row: { item: MarketplaceItemRow; category: string; categoryName: string; categoryTranslations: MarketplaceTranslations }): MarketplaceItem {
+  return { ...row.item, category: row.category, categoryName: row.categoryName, categoryTranslations: row.categoryTranslations };
 }
 
 function itemsJoined() {
@@ -53,21 +78,29 @@ function page(total: number, requested: number, size: number) {
   return { pageCount, currentPage, offset: (currentPage - 1) * size };
 }
 
-function publishedFilter(query: ListQuery): SQL | undefined {
+function publishedFilter(query: ListQuery, locale: Locale): SQL | undefined {
   const clauses: SQL[] = [eq(marketplaceItems.status, "published")];
-  if (query.catalog_version !== 2) clauses.push(ne(marketplaceItems.kind, "project_template"));
+  const gated = visibleKinds(query.catalog_version);
+  if (gated) clauses.push(gated);
   if (query.kind) clauses.push(eq(marketplaceItems.kind, query.kind));
+  if (query.media_type) clauses.push(sql`${mediaTypeColumn} = ${query.media_type}`);
   if (query.category) clauses.push(eq(marketplaceCategories.slug, query.category));
   if (query.q) {
     const pattern = `%${query.q.replace(/[%_]/g, (char) => `\\${char}`)}%`;
-    const match = or(ilike(marketplaceItems.title, pattern), ilike(marketplaceItems.description, pattern));
+    // Someone browsing in Chinese types Chinese: the translated text has to be
+    // searchable too, or the shelf they can read is one they cannot find.
+    const translated = locale === DEFAULT_LOCALE ? [] : [
+      sql`jsonb_extract_path_text(${marketplaceItems.translations}, ${locale}, 'title') ILIKE ${pattern}`,
+      sql`jsonb_extract_path_text(${marketplaceItems.translations}, ${locale}, 'description') ILIKE ${pattern}`,
+    ];
+    const match = or(ilike(marketplaceItems.title, pattern), ilike(marketplaceItems.description, pattern), ...translated);
     if (match) clauses.push(match);
   }
   return and(...clauses);
 }
 
-export async function listPublishedItems(query: ListQuery) {
-  const where = publishedFilter(query);
+export async function listPublishedItems(query: ListQuery, locale: Locale = DEFAULT_LOCALE) {
+  const where = publishedFilter(query, locale);
   const [{ total }] = await db.select({ total: count() }).from(marketplaceItems)
     .innerJoin(marketplaceCategories, eq(marketplaceCategories.id, marketplaceItems.categoryId))
     .where(where);
@@ -81,20 +114,49 @@ export async function listPublishedItems(query: ListQuery) {
 }
 
 /** Categories that have at least one published item, with the count, for the app's sidebar. */
-export async function listCategories(kind?: MarketplaceKind, catalogVersion = 2) {
+export async function listCategories(kind?: MarketplaceKind, catalogVersion = CATALOG_VERSION, mediaType?: MediaType) {
   return db.select({
     id: marketplaceCategories.id,
     kind: marketplaceCategories.kind,
     slug: marketplaceCategories.slug,
     name: marketplaceCategories.name,
     icon: marketplaceCategories.icon,
+    translations: marketplaceCategories.translations,
     count: count(marketplaceItems.id),
   })
     .from(marketplaceCategories)
     .innerJoin(marketplaceItems, and(eq(marketplaceItems.categoryId, marketplaceCategories.id), eq(marketplaceItems.status, "published")))
-    .where(and(kind ? eq(marketplaceCategories.kind, kind) : undefined, catalogVersion === 2 ? undefined : ne(marketplaceCategories.kind, "project_template")))
+    .where(and(
+      kind ? eq(marketplaceCategories.kind, kind) : undefined,
+      kindsForCatalogVersion(catalogVersion).length === marketplaceKindValues.length
+        ? undefined
+        : inArray(marketplaceCategories.kind, kindsForCatalogVersion(catalogVersion)),
+      mediaType ? sql`${mediaTypeColumn} = ${mediaType}` : undefined,
+    ))
     .groupBy(marketplaceCategories.id)
     .orderBy(marketplaceCategories.kind, marketplaceCategories.name);
+}
+
+/**
+ * Published-item counts per media type, for the Footage sub-level of the app's
+ * sidebar. Empty when the client is too old to be shown footage at all.
+ */
+export async function listMediaTypes(catalogVersion = CATALOG_VERSION) {
+  const kinds = kindsWithMediaType.filter((kind) => kindAllowed(kind, catalogVersion));
+  if (kinds.length === 0) return [];
+  const rows = await db.select({ kind: marketplaceItems.kind, mediaType: mediaTypeColumn, count: count(marketplaceItems.id) })
+    .from(marketplaceItems)
+    .where(and(eq(marketplaceItems.status, "published"), inArray(marketplaceItems.kind, kinds)))
+    .groupBy(marketplaceItems.kind, mediaTypeColumn);
+  const byKey = new Map(rows.map((row) => [`${row.kind}/${row.mediaType}`, row.count]));
+  return kinds.flatMap((kind) => mediaTypes.map((mediaType) => ({
+    kind,
+    mediaType,
+    ...mediaTypeDefaults[mediaType],
+    // These shelves have no table of their own; their names are built in.
+    translations: mediaTypeDefaultTranslations(mediaType),
+    count: byKey.get(`${kind}/${mediaType}`) ?? 0,
+  }))).sort((a, b) => a.sortOrder - b.sortOrder);
 }
 
 /** Every category, including empty ones, for the admin form's picker. */
@@ -102,7 +164,7 @@ export async function listAllCategories() {
   return db.select().from(marketplaceCategories).orderBy(marketplaceCategories.kind, marketplaceCategories.name);
 }
 
-/** Every category with how many published items sit in it, for the admin taxonomy page. */
+/** Include drafts in the total: any item prevents its category from being deleted. */
 export async function listCategoriesForAdmin() {
   return db.select({
     id: marketplaceCategories.id,
@@ -110,10 +172,12 @@ export async function listCategoriesForAdmin() {
     slug: marketplaceCategories.slug,
     name: marketplaceCategories.name,
     icon: marketplaceCategories.icon,
-    count: count(marketplaceItems.id),
+    translations: marketplaceCategories.translations,
+    count: sql<number>`count(${marketplaceItems.id}) filter (where ${marketplaceItems.status} = 'published')`.mapWith(Number),
+    totalCount: count(marketplaceItems.id),
   })
     .from(marketplaceCategories)
-    .leftJoin(marketplaceItems, and(eq(marketplaceItems.categoryId, marketplaceCategories.id), eq(marketplaceItems.status, "published")))
+    .leftJoin(marketplaceItems, eq(marketplaceItems.categoryId, marketplaceCategories.id))
     .groupBy(marketplaceCategories.id)
     .orderBy(marketplaceCategories.kind, marketplaceCategories.name);
 }
@@ -130,6 +194,7 @@ export async function insertCategory(input: CategoryInput) {
     slug: input.slug,
     name: input.name,
     icon: input.icon,
+    translations: input.translations,
     createdAt: now,
     updatedAt: now,
   }).onConflictDoNothing().returning())[0];
@@ -140,11 +205,26 @@ export async function insertCategory(input: CategoryInput) {
 /** Renames or re-icons a category. The slug stays put so published items keep filtering the same. */
 export async function updateCategory(patch: CategoryPatch) {
   const updated = (await db.update(marketplaceCategories)
-    .set({ name: patch.name, icon: patch.icon, updatedAt: new Date() })
+    .set({ name: patch.name, icon: patch.icon, translations: patch.translations, updatedAt: new Date() })
     .where(eq(marketplaceCategories.id, patch.id))
     .returning())[0];
-  if (!updated) throw new Error("NOT_FOUND");
+  if (!updated) throw new Error("CATEGORY_NOT_FOUND");
   return updated;
+}
+
+/** The restrictive foreign key also protects against an item being added during deletion. */
+export async function deleteCategory(id: string) {
+  try {
+    const deleted = (await db.delete(marketplaceCategories)
+      .where(eq(marketplaceCategories.id, id))
+      .returning({ id: marketplaceCategories.id }))[0];
+    if (!deleted) throw new Error("CATEGORY_NOT_FOUND");
+  } catch (cause) {
+    // Drizzle wraps driver errors in `cause`; the driver may also throw directly.
+    const error = cause as { code?: string; cause?: { code?: string } } | null;
+    if (error?.code === "23503" || error?.cause?.code === "23503") throw new Error("CATEGORY_HAS_ITEMS");
+    throw cause;
+  }
 }
 
 // MARK: - Kinds
@@ -154,7 +234,7 @@ export async function updateCategory(patch: CategoryPatch) {
  * missing a row fall back to the built-in defaults, so the sidebar is whole
  * even before the seed migration has run.
  */
-export async function listKinds(catalogVersion = 2) {
+export async function listKinds(catalogVersion = CATALOG_VERSION) {
   const [rows, counts] = await Promise.all([
     db.select().from(marketplaceKinds),
     db.select({ kind: marketplaceItems.kind, count: count(marketplaceItems.id) })
@@ -165,7 +245,7 @@ export async function listKinds(catalogVersion = 2) {
   const byKind = new Map(rows.map((row) => [row.kind, row]));
   const countByKind = new Map(counts.map((row) => [row.kind, row.count]));
   return marketplaceKindValues
-    .filter((kind) => catalogVersion === 2 || kind !== "project_template")
+    .filter((kind) => kindAllowed(kind, catalogVersion))
     .map((kind) => {
       const defaults = marketplaceKindDefaults[kind];
       const row = byKind.get(kind);
@@ -174,6 +254,9 @@ export async function listKinds(catalogVersion = 2) {
         label: row?.label ?? defaults.label,
         icon: row?.icon ?? defaults.icon,
         sortOrder: row?.sortOrder ?? defaults.sortOrder,
+        // No row yet: the built-in label, in every language, so the sidebar
+        // reads the same before the seed migration as after it.
+        translations: row?.translations ?? kindDefaultTranslations(kind),
         count: countByKind.get(kind) ?? 0,
       };
     })
@@ -188,11 +271,12 @@ export async function upsertKind(patch: KindPatch) {
     label: patch.label,
     icon: patch.icon,
     sortOrder: patch.sortOrder,
+    translations: patch.translations,
     createdAt: now,
     updatedAt: now,
   }).onConflictDoUpdate({
     target: marketplaceKinds.kind,
-    set: { label: patch.label, icon: patch.icon, sortOrder: patch.sortOrder, updatedAt: now },
+    set: { label: patch.label, icon: patch.icon, sortOrder: patch.sortOrder, translations: patch.translations, updatedAt: now },
   }).returning())[0];
 }
 
@@ -235,6 +319,7 @@ export async function insertItem(input: ItemInput, createdBy: string) {
     description: input.description,
     pricePoints: input.pricePoints,
     metadata: input.metadata,
+    translations: input.translations,
     status: "draft",
     createdBy,
     createdAt: now,

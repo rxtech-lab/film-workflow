@@ -67,9 +67,9 @@ struct NarrativeGenerationProgressView: View {
 
     private var title: String {
         switch progress {
-        case .synthesizing: return "Generating Audio"
-        case .stitching: return "Stitching Audio"
-        case .captioning: return "Generating Captions"
+        case .synthesizing: return String(localized: "Generating Audio")
+        case .stitching: return String(localized: "Stitching Audio")
+        case .captioning: return String(localized: "Generating Captions")
         }
     }
 
@@ -79,13 +79,13 @@ struct NarrativeGenerationProgressView: View {
             // Show the highest chunk currently being worked on (completed + the ones in flight), so a
             // run with 4 parallel requests reads "Chunk 4 of 13" up front rather than crawling 1→2→3.
             let working = min(completed + inFlight, max(total, 1))
-            return "Chunk \(working) of \(total)"
+            return String(localized: "Chunk \(working) of \(total)")
         case .stitching:
-            return "Combining the chunks into one file…"
+            return String(localized: "Combining the chunks into one file…")
         case let .captioning(captionProgress):
             // Reuse the caption progress's own wording so the two flows can't drift.
             return captionProgress.detail.isEmpty
-                ? "Timing your script against the audio…"
+                ? String(localized: "Timing your script against the audio…")
                 : captionProgress.detail
         }
     }
@@ -93,9 +93,9 @@ struct NarrativeGenerationProgressView: View {
     private var parallelDetail: String? {
         switch progress {
         case let .synthesizing(completed, _, inFlight) where inFlight > 0:
-            return "\(completed) done · \(inFlight) generating in parallel"
+            return String(localized: "\(completed) done · \(inFlight) generating in parallel")
         case .captioning:
-            return "Caption text stays exactly as you wrote it."
+            return String(localized: "Caption text stays exactly as you wrote it.")
         case .synthesizing, .stitching:
             return nil
         }

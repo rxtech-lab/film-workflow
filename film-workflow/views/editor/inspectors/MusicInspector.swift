@@ -19,7 +19,7 @@ struct MusicInspectorFooter: View {
             showPromptSheet = true
         }
         .padding(10)
-        .alert("Error", isPresented: $showError) { Button("OK") {} } message: { Text(errorMessage ?? "An unknown error occurred.") }
+        .alert("Error", isPresented: $showError) { Button("OK") {} } message: { Text(errorMessage ?? String(localized: "An unknown error occurred.")) }
         .insufficientCreditsAlert($insufficientCredits)
         .sheet(isPresented: $showPromptSheet) { promptPreviewSheet }
     }

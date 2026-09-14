@@ -34,7 +34,7 @@ struct RemotionSourceSheetView: View {
                     .padding()
             }
         }
-        .navigationTitle(selected ?? "Source")
+        .navigationTitle(selected ?? String(localized: "Source"))
         .toolbar {
             ToolbarItem(placement: .cancellationAction) {
                 Button("Done") { onDismiss() }

@@ -25,6 +25,9 @@ final class SimpleModeSession: Identifiable {
         /// The agent is reading the website and searching the marketplace.
         case researching
         case chooseTemplate([TemplateChoice])
+        /// The marketplace held no template worth offering; build from the
+        /// brief instead.
+        case templatesUnavailable(String)
         /// The agent is working out what to ask about.
         case planning
         case chooseOptions(JSONRenderSpec, String)
@@ -40,7 +43,7 @@ final class SimpleModeSession: Identifiable {
             case .intake: .intake
             case .chooseLocation, .creating: .location
             case .researching: .research
-            case .chooseTemplate: .chooseTemplate
+            case .chooseTemplate, .templatesUnavailable: .chooseTemplate
             case .planning, .chooseOptions, .optionsUnavailable: .chooseOptions
             case .building: .build
             case .preview, .failed: .preview
@@ -166,7 +169,10 @@ final class SimpleModeSession: Identifiable {
 
     func candidate(id: String) -> MarketplaceItem? { candidates[id] }
 
-    func beginPlanning(with item: MarketplaceItem) {
+    /// Moves to planning. A nil item is a run with no template behind it: the
+    /// agent designs the shot plan itself and the build skips
+    /// `project_template_apply`.
+    func beginPlanning(with item: MarketplaceItem?) {
         chosenTemplate = item
         statusText = nil
         step = .planning
@@ -230,7 +236,7 @@ final class SimpleModeSession: Identifiable {
         switch step {
         case .researching, .chooseTemplate:
             guard !templates.isEmpty else {
-                throw SimpleModeError.rejected("No usable templates were listed. Search again and include at least one item_id that marketplace_list returned.")
+                throw SimpleModeError.rejected("No usable templates were listed. Search again and include at least one item_id that marketplace_list returned with kind project_template — or, if it returns none at all, call \(WizardTool.skipTemplates) to build this film without one.")
             }
             if let summary, !summary.isEmpty { lastSummary = summary }
             statusText = nil
@@ -238,6 +244,25 @@ final class SimpleModeSession: Identifiable {
             return "Presented \(templates.count) template\(templates.count == 1 ? "" : "s") to the user. Stop now; their choice arrives as your next message."
         default:
             throw SimpleModeError.rejected("Templates cannot be presented during \(phaseName). \(nextExpectedHint)")
+        }
+    }
+
+    /// The agent found nothing in the marketplace worth offering.
+    ///
+    /// Without this a run against a catalog with no project templates has no
+    /// legal move: templates cannot be presented empty, and options do not
+    /// belong in research. The user still decides — the wizard shows what the
+    /// agent found and offers to build from the brief alone.
+    @discardableResult
+    func skipTemplates(reason: String) throws -> String {
+        switch step {
+        case .researching, .chooseTemplate:
+            let trimmed = reason.trimmingCharacters(in: .whitespacesAndNewlines)
+            statusText = nil
+            step = .templatesUnavailable(trimmed.isEmpty ? "No marketplace template fitted this brief." : trimmed)
+            return "Told the user no template fitted. Stop now; their answer arrives as your next message."
+        default:
+            throw SimpleModeError.rejected("Templates cannot be skipped during \(phaseName). \(nextExpectedHint)")
         }
     }
 
@@ -308,6 +333,7 @@ final class SimpleModeSession: Identifiable {
         case .creating: "setup"
         case .researching: "research"
         case .chooseTemplate: "template selection"
+        case .templatesUnavailable: "the no-template page"
         case .planning: "planning"
         case .chooseOptions, .optionsUnavailable: "the options page"
         case .building: "the build"

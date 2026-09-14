@@ -9,19 +9,31 @@ nonisolated enum MarketplaceWindowID {
     static let value = "marketplace"
 }
 
-/// The public catalog (everything or one kind), or the current author's items.
-/// Categories live in the content view's dropdown so the sidebar stays flat.
+/// The public catalog (everything, one kind, or one kind's media type), or the
+/// current author's items. Categories stay in the content view's dropdown; the
+/// sidebar carries at most one level below a kind, and only where the backend
+/// reports one — footage, today, split into stills and clips.
 enum MarketplaceSidebarSelection: Hashable {
     case all
     case kind(MarketplaceKind)
+    case media(MarketplaceKind, MarketplaceMediaType)
     case mine
     case manage
 
+    /// The kind filtering the grid. A media row still filters by its kind, so
+    /// everything that reads this keeps working unchanged.
     var kind: MarketplaceKind? {
         switch self {
         case .all, .mine, .manage: return nil
         case .kind(let kind): return kind
+        case .media(let kind, _): return kind
         }
+    }
+
+    /// The sub-level, when one is selected.
+    var mediaType: MarketplaceMediaType? {
+        if case .media(_, let mediaType) = self { return mediaType }
+        return nil
     }
 
     /// The authoring destinations, which read the author API rather than the
@@ -29,8 +41,29 @@ enum MarketplaceSidebarSelection: Hashable {
     var isAuthoring: Bool {
         switch self {
         case .mine, .manage: return true
-        case .all, .kind: return false
+        case .all, .kind, .media: return false
         }
+    }
+}
+
+/// Lets anything outside the window ask it to open on one of its destinations.
+///
+/// The marketplace is a single `Window` scene rather than a `WindowGroup`, so
+/// the request cannot ride along with `openWindow` as a value; it is left here
+/// and picked up when the window appears or, if it is already open, as soon as
+/// it changes.
+@MainActor @Observable
+final class MarketplaceWindowRouter {
+    static let shared = MarketplaceWindowRouter()
+    private(set) var requested: MarketplaceSidebarSelection?
+
+    func show(_ selection: MarketplaceSidebarSelection) { requested = selection }
+
+    /// Reads the pending request once, so a second window or a later redraw
+    /// does not pull the selection back.
+    func take() -> MarketplaceSidebarSelection? {
+        defer { requested = nil }
+        return requested
     }
 }
 
@@ -59,6 +92,7 @@ struct MarketplaceWindowView: View {
     @State private var creatingItem = false
     @State private var authoring = MarketplaceAuthoringService.shared
     @State private var authoringRevision = 0
+    @State private var router = MarketplaceWindowRouter.shared
 
     init(store: MarketplaceStore = .shared) {
         _store = State(initialValue: store)
@@ -99,13 +133,17 @@ struct MarketplaceWindowView: View {
         .sheet(isPresented: $creatingItem, onDismiss: authoringDidChange) { MarketplaceAuthoringEditor() }
         .task { await reload() }
         .task { await store.loadTaxonomy() }
-        .task { _ = await authoring.refreshAccess() }
+        .task { _ = await authoring.refreshAccess(); applyRoutedSelection() }
+        .onChange(of: router.requested) { applyRoutedSelection() }
         .onChange(of: selection) { category = nil; Task { await reload() } }
         .onChange(of: category) { Task { await reload() } }
         .onChange(of: search) { Task { await reload(debounced: true) } }
         .onChange(of: auth.isAuthenticated) { Task { _ = await authoring.refreshAccess(); await reload() } }
         .onChange(of: authoring.canAuthor) {
-            if !authoring.canAuthor {
+            if authoring.canAuthor {
+                // A request that arrived before access was known is still pending.
+                applyRoutedSelection()
+            } else {
                 if selection.isAuthoring { selection = .all }
                 creatingItem = false
             }
@@ -117,6 +155,17 @@ struct MarketplaceWindowView: View {
             Text(addedMessage ?? "")
         }
         .frame(minWidth: 720, minHeight: 520)
+    }
+
+    /// Honours a destination another view asked for. Authoring destinations
+    /// only exist for an author, so a request for one is dropped rather than
+    /// landing the reader on an empty pane.
+    private func applyRoutedSelection() {
+        guard let requested = router.requested else { return }
+        guard !requested.isAuthoring || authoring.canAuthor else { return }
+        _ = router.take()
+        columnVisibility = .all
+        selection = requested
     }
 
     // MARK: - Sidebar
@@ -133,6 +182,15 @@ struct MarketplaceWindowView: View {
                     Label(entry.label, systemImage: MarketplaceSymbol.resolve(entry.icon, fallback: entry.kind.systemImage))
                         .badge(entry.count)
                         .tag(MarketplaceSidebarSelection.kind(entry.kind))
+                    // Indented rather than a DisclosureGroup, whose label does
+                    // not reliably take a tag inside a selection-driven List —
+                    // clicking the kind itself has to keep showing everything.
+                    ForEach(store.mediaTypes(for: entry.kind)) { child in
+                        Label(child.label, systemImage: MarketplaceSymbol.resolve(child.icon, fallback: child.mediaType.systemImage))
+                            .badge(child.count)
+                            .padding(.leading, 18)
+                            .tag(MarketplaceSidebarSelection.media(entry.kind, child.mediaType))
+                    }
                 }
             }
             .accessibilityIdentifier("marketplace-kinds")
@@ -186,12 +244,13 @@ struct MarketplaceWindowView: View {
             categoryFilter
             gridContent
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 
     private var gridContent: some View {
         Group {
             if store.isLoading && store.items.isEmpty {
-                ProgressView("Loading…").frame(maxWidth: .infinity, maxHeight: .infinity)
+                Color.clear
             } else if let error = store.lastError, store.items.isEmpty {
                 ContentUnavailableView {
                     Label("Couldn’t load the marketplace", systemImage: "wifi.exclamationmark")
@@ -204,18 +263,19 @@ struct MarketplaceWindowView: View {
                 ContentUnavailableView.search(text: search)
             } else {
                 ScrollView {
-                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 200, maximum: 260), spacing: 14, alignment: .top)], spacing: 14) {
+                    MarketplaceItemGrid {
                         ForEach(store.items) { item in
                             MarketplaceItemCard(item: item, isInstalled: store.isInstalled(item.id), symbol: store.symbol(for: item.kind)) {
                                 presented = MarketplacePresentedItem(id: item.id)
                             }
                         }
                     }
-                    .padding(14)
                     if store.pageCount > 1 { pager.padding(.bottom, 14) }
                 }
             }
         }
+        .marketplaceLoadingOverlay(store.isLoading)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .overlay(alignment: .bottom) {
             if let error = store.lastError, !store.items.isEmpty {
                 Text(error).font(.caption).foregroundStyle(.red).padding(8)
@@ -240,7 +300,7 @@ struct MarketplaceWindowView: View {
         let selection = selection, category = category, search = search
         let task = Task { @MainActor in
             if debounced { try? await Task.sleep(for: .milliseconds(300)); if Task.isCancelled { return } }
-            await store.load(kind: selection.kind, category: category, query: search, page: page)
+            await store.load(kind: selection.kind, mediaType: selection.mediaType, category: category, query: search, page: page)
             if let presented, store.item(presented.id) == nil { self.presented = nil }
         }
         reloadTask = task
@@ -266,61 +326,148 @@ struct MarketplaceWindowView: View {
     }
 }
 
-/// A catalog card. Hovering plays the item's preview video in place when it has one.
+/// Shared card sizing and spacing for the catalog and authoring destinations.
+struct MarketplaceItemGrid<Content: View>: View {
+    @ViewBuilder var content: Content
+
+    var body: some View {
+        GlassEffectContainer(spacing: 8) {
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 200, maximum: 260), spacing: 14, alignment: .top)], spacing: 14) {
+                content
+            }
+        }
+        .padding(14)
+    }
+}
+
+extension View {
+    /// Keep the last page in place while a replacement request is in flight.
+    func marketplaceLoadingOverlay(_ isLoading: Bool) -> some View {
+        overlay {
+            if isLoading {
+                ZStack {
+                    Color.primary.opacity(0.025)
+                    ProgressView("Loading items…")
+                        .padding(20)
+                        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
+                }
+                .allowsHitTesting(false)
+                .accessibilityIdentifier("marketplace-loading-overlay")
+            }
+        }
+    }
+}
+
+/// A shared Liquid Glass card with in-place video playback on hover.
 struct MarketplaceItemCard: View {
     let item: MarketplaceItem
     let isInstalled: Bool
     /// The SF Symbol for the item's kind, already resolved against this Mac.
     var symbol: String?
+    var publicationStatus: String?
+    var isBusy = false
     let onOpen: () -> Void
     @State private var isHovering = false
     @State private var isVideoReady = false
+    @ScaledMetric(relativeTo: .callout) private var titleHeight = 32
+    @ScaledMetric(relativeTo: .caption2) private var metadataHeight = 18
 
     var body: some View {
         Button(action: onOpen) {
             VStack(alignment: .leading, spacing: 6) {
-                ZStack(alignment: .topTrailing) {
-                    ZStack {
-                        MarketplacePreviewImage(url: item.previewImageUrl, kind: item.kind, symbol: symbol)
-                        if isHovering, let video = item.previewVideoUrl {
-                            MarketplaceHoverVideo(url: video) {
-                                withAnimation(.easeInOut(duration: 0.3)) { isVideoReady = true }
+                // The frame owns the layout; loaded images and AVPlayer must
+                // never change its size with their intrinsic aspect ratios.
+                Color.clear
+                    .aspectRatio(16 / 9, contentMode: .fit)
+                    .overlay {
+                        ZStack {
+                            MarketplacePreviewImage(url: item.previewImageUrl, kind: item.kind, symbol: symbol)
+                            if isHovering, item.kind != .audio, item.kind != .soundEffect, let video = item.previewVideoUrl {
+                                MarketplaceHoverVideo(url: video) {
+                                    withAnimation(.easeInOut(duration: 0.3)) { isVideoReady = true }
+                                }
+                                .opacity(isVideoReady ? 1 : 0)
+                                .allowsHitTesting(false)
+                                .transition(.opacity)
+                                .accessibilityLabel("Preview video")
+                                .accessibilityIdentifier("marketplace-hover-preview-\(item.id)")
                             }
-                            .opacity(isVideoReady ? 1 : 0)
-                            .transition(.opacity)
-                            .accessibilityLabel("Preview video")
                         }
                     }
-                    .aspectRatio(16 / 9, contentMode: .fit)
-                    .clipShape(RoundedRectangle(cornerRadius: 8))
-                    if isInstalled {
-                        Image(systemName: "checkmark.circle.fill")
-                            .foregroundStyle(.white, .green)
-                            .padding(6)
-                            .accessibilityLabel("Installed")
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                    .overlay(alignment: .topLeading) {
+                        if let publicationStatus {
+                            Text(publicationStatus == "published" ? LocalizedStringKey("Published") : LocalizedStringKey("Draft"))
+                                .font(.caption2.weight(.semibold))
+                                .foregroundStyle(publicationStatus == "published" ? Color.green : Color.orange)
+                                .padding(.horizontal, 7)
+                                .padding(.vertical, 4)
+                                .background(.regularMaterial, in: Capsule())
+                                .padding(6)
+                                .accessibilityIdentifier("marketplace-item-status-\(item.id)")
+                        }
                     }
-                    if !isHovering, item.previewVideoUrl != nil {
-                        Image(systemName: "play.fill")
+                    .overlay {
+                        if isBusy {
+                            ProgressView().controlSize(.small)
+                                .padding(10)
+                                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8))
+                        }
+                    }
+                    .overlay(alignment: .topTrailing) {
+                        if isInstalled {
+                            Image(systemName: "checkmark.circle.fill")
+                                .foregroundStyle(.white, .green)
+                                .padding(6)
+                                .accessibilityLabel("Installed")
+                        }
+                    }
+                    .overlay(alignment: .bottomLeading) {
+                        if !isHovering, item.previewVideoUrl != nil {
+                            Image(systemName: "play.fill")
+                                .font(.caption2)
+                                .foregroundStyle(.white)
+                                .padding(5)
+                                .background(.black.opacity(0.45), in: Circle())
+                                .padding(6)
+                                .accessibilityHidden(true)
+                        }
+                    }
+                Text(item.title).font(.callout.weight(.medium))
+                    .lineLimit(2).multilineTextAlignment(.leading)
+                    .frame(height: titleHeight, alignment: .topLeading)
+                HStack(spacing: 4) {
+                    ForEach(Array((item.metadata.tags ?? []).prefix(2)), id: \.self) { tag in
+                        Text(tag)
                             .font(.caption2)
-                            .foregroundStyle(.white)
-                            .padding(5)
-                            .background(.black.opacity(0.45), in: Circle())
-                            .padding(6)
-                            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
-                            .accessibilityHidden(true)
+                            .foregroundStyle(.secondary)
+                            .padding(.horizontal, 6).padding(.vertical, 1)
+                            .background(.quaternary.opacity(0.6), in: Capsule())
                     }
+                    Spacer(minLength: 0)
                 }
-                Text(item.title).font(.callout.weight(.medium)).lineLimit(2).multilineTextAlignment(.leading)
-                HStack {
+                .lineLimit(1)
+                .frame(height: metadataHeight, alignment: .leading)
+                HStack(spacing: 6) {
                     Text(item.categoryLabel).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                    if let badge = item.resolutionBadge {
+                        Text(badge)
+                            .font(.caption2.weight(.medium))
+                            .foregroundStyle(.secondary)
+                            .padding(.horizontal, 5).padding(.vertical, 1)
+                            .background(.quaternary.opacity(0.6), in: RoundedRectangle(cornerRadius: 4))
+                            .accessibilityLabel("Resolution \(badge)")
+                    }
                     Spacer()
                     MarketplacePriceBadge(item: item)
                 }
+                .lineLimit(1)
+                .frame(height: metadataHeight)
             }
-            .padding(8)
-            .background(RoundedRectangle(cornerRadius: 10).fill(isHovering ? Color.primary.opacity(0.07) : Color.clear))
-            .overlay(RoundedRectangle(cornerRadius: 10).stroke(isHovering ? Color.accentColor.opacity(0.6) : Color.clear, lineWidth: 1))
-            .contentShape(RoundedRectangle(cornerRadius: 10))
+            .padding(12)
+            .glassEffect(.regular.interactive(), in: .rect(cornerRadius: 18))
+            .overlay(RoundedRectangle(cornerRadius: 18).stroke(isHovering ? Color.accentColor.opacity(0.4) : Color.clear, lineWidth: 1))
+            .contentShape(RoundedRectangle(cornerRadius: 18))
         }
         .buttonStyle(.plain)
         .onHover { hovering in
@@ -330,6 +477,7 @@ struct MarketplaceItemCard: View {
             if hovering { isVideoReady = false }
             withAnimation(.easeInOut(duration: 0.15)) { isHovering = hovering }
         }
+        .onDisappear { isHovering = false }
         .accessibilityElement(children: .combine)
         .accessibilityIdentifier("marketplace-item-\(item.id)")
     }
@@ -419,12 +567,13 @@ struct MarketplacePreviewImage: View {
     let kind: MarketplaceKind
     /// The kind's symbol as the backend names it; nil falls back to the built-in one.
     var symbol: String?
+    var contentMode: ContentMode = .fill
     var body: some View {
         ZStack {
             Rectangle().fill(.quaternary)
             if let url {
                 AsyncImage(url: url) { phase in
-                    if let image = phase.image { image.resizable().scaledToFill() }
+                    if let image = phase.image { image.resizable().aspectRatio(contentMode: contentMode) }
                     else if phase.error != nil { placeholder }
                     else { ProgressView().controlSize(.small) }
                 }
@@ -619,7 +768,7 @@ extension MarketplaceItem {
                         description: "A clean geometric sans for captions.", pricePoints: 200,
                         previewImageUrl: URL(string: "https://picsum.photos/seed/font/640/360"),
                         metadata: .init(fontFamily: "Studio Grotesk")),
-        MarketplaceItem(id: "prompt-product", kind: .remotionPrompt, category: "product", title: "Product Reveal",
+        MarketplaceItem(id: "prompt-product", kind: .remotion, category: "product", title: "Product Reveal",
                         description: "A prompt that builds a three-scene product reveal.", pricePoints: 40,
                         metadata: .init(promptExcerpt: "Create a 15 second product reveal with a dark gradient background…")),
         MarketplaceItem(id: "fx-glow", kind: .effect, category: "stylize", title: "Neon Glow",

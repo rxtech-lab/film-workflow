@@ -49,7 +49,7 @@ struct RemotionInspectorFooter: View {
         .sheet(isPresented: $showProgressSheet) {
             RemotionRenderProgressSheet(projectName: project.name, progress: $renderProgress) { renderTask?.cancel() }
         }
-        .alert("Render failed", isPresented: $showRenderError) { Button("OK") {} } message: { Text(renderError ?? "An unknown error occurred.") }
+        .alert("Render failed", isPresented: $showRenderError) { Button("OK") {} } message: { Text(renderError ?? String(localized: "An unknown error occurred.")) }
     }
 
     private func beginRender() {

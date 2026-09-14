@@ -1,3 +1,6 @@
+import { requestLocale } from "@/lib/i18n/request";
+import { t } from "@/lib/i18n/messages";
+
 export class InsufficientCreditsError extends Error {
   constructor(
     readonly availablePoints: number,
@@ -8,13 +11,13 @@ export class InsufficientCreditsError extends Error {
   }
 }
 
-export function insufficientCreditsResponse(error: InsufficientCreditsError) {
+export async function insufficientCreditsResponse(error: InsufficientCreditsError) {
   return Response.json({
-    error: "You do not have enough points for this operation.",
+    error: t(await requestLocale(), "error.insufficientCredits"),
     code: "insufficient_points",
     availablePoints: error.availablePoints,
     requiredPoints: error.requiredPoints,
     creditsUrl: "/credits",
-  }, { status: 402, headers: { "Cache-Control": "private, no-store" } });
+  }, { status: 402, headers: { "Cache-Control": "private, no-store", Vary: "Accept-Language" } });
 }
 

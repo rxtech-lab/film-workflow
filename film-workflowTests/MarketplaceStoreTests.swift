@@ -58,7 +58,7 @@ struct MarketplaceStoreTests {
         let source = root.appendingPathComponent("source.txt")
         try Data("hello".utf8).write(to: source)
         let items = [
-            MarketplaceItem(id: "free", kind: .remotionPrompt, category: "intros", title: "Free prompt", contentFilename: "prompt.md"),
+            MarketplaceItem(id: "free", kind: .footage, category: "intros", title: "Free still", contentFilename: "frame.png", metadata: .init(mediaType: "image")),
             MarketplaceItem(id: "paid", kind: .soundEffect, category: "foley", title: "Door", pricePoints: 10, contentFilename: "door.wav"),
         ]
         let page = MarketplaceCatalogPage(items: items, total: 2, page: 1, pageCount: 1, pageSize: 24,
@@ -212,6 +212,6 @@ struct MarketplaceStoreTests {
         #expect(await store.install(free) == false)
         #expect(store.lastError != nil)
         #expect(!store.isInstalled("free"))
-        #expect(!FileManager.default.fileExists(atPath: FileStorage.marketplaceItemDir(kind: "remotion_prompt", itemID: "free", root: root).path))
+        #expect(!FileManager.default.fileExists(atPath: FileStorage.marketplaceItemDir(kind: "footage", itemID: "free", root: root).path))
     }
 }

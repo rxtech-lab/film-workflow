@@ -1,5 +1,8 @@
 "use client";
 
+import { DeleteMarketplaceItem } from "./marketplace-delete-item";
+import { IconField } from "./marketplace-icon-field";
+import { MarketplaceLyricsEditor } from "./marketplace-lyrics-editor";
 import { TemplateEditor, emptyTemplate } from "./project-template-editor";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, useTransition } from "react";
@@ -7,7 +10,6 @@ import {
   createCategory,
   createItem,
   createUploadUrl,
-  deleteItemAndReturn,
   finalizeUpload,
   publishItem,
   removeAsset,
@@ -21,11 +23,13 @@ import {
   marketplaceFormSchema,
   type FormField,
 } from "@/lib/marketplace/form-schema";
+import type { Locale } from "@/lib/i18n/locale";
+import { TRANSLATABLE_LOCALES, type Translations } from "@/lib/i18n/translations";
 import {
   allowedExtensions,
-  DEFAULT_CATEGORY_ICON,
   marketplaceKindLabels,
   slugify,
+  translatableFields,
   type AssetRole,
   type ItemInput,
   type ItemMetadata,
@@ -41,6 +45,8 @@ export type AdminItemView = {
   description: string;
   pricePoints: number;
   metadata: ItemMetadata;
+  /** Title and description in the other languages the app ships. */
+  translations: Translations;
   status: "draft" | "published";
   previewImageUrl: string | null;
   previewVideoUrl: string | null;
@@ -87,11 +93,13 @@ export function MarketplaceItemForm({ item, descriptorText, categories: initialC
   const [pricePoints, setPricePoints] = useState(item?.pricePoints ?? 0);
   const [fontFamily, setFontFamily] = useState(item?.metadata.fontFamily ?? "");
   const [tags, setTags] = useState((item?.metadata.tags ?? []).join(", "));
+  const [lyricTracks, setLyricTracks] = useState(item?.metadata.lyricTracks ?? []);
+  const [previewStart, setPreviewStart] = useState(item?.metadata.preview?.startSeconds ?? 0);
+  const [translations, setTranslations] = useState<Translations>(item?.translations ?? {});
   // A new item has no id to upload against yet, so its files wait here until the draft exists.
   const [staged, setStaged] = useState<Partial<Record<AssetRole, File>>>({});
   const [templateText, setTemplateText] = useState(item?.kind === "project_template" && descriptorText ? descriptorText : JSON.stringify(emptyTemplate));
   // Kinds whose content is plain text — today the Remotion prompt.
-  const [inlineText, setInlineText] = useState(item?.kind === "remotion_prompt" ? descriptorText : "");
   const [mockPreview, setMockPreview] = useState(item?.metadata.preview?.mock ?? false);
   const [stagedDescriptor, setStagedDescriptor] = useState(descriptorText || descriptorTemplate(kind));
   const [descriptorEdited, setDescriptorEdited] = useState(Boolean(descriptorText));
@@ -109,10 +117,11 @@ export function MarketplaceItemForm({ item, descriptorText, categories: initialC
 
   function input(): ItemInput {
     const metadata: ItemMetadata = { ...(item?.metadata ?? {}) };
+    if (kind === "audio") metadata.lyricTracks = lyricTracks;
     if (kind === "font") metadata.fontFamily = fontFamily.trim() || undefined; else delete metadata.fontFamily;
     const parsedTags = tags.split(",").map((tag) => tag.trim()).filter(Boolean);
     metadata.tags = parsedTags.length > 0 ? parsedTags : undefined;
-    return { kind, categoryId, title: title.trim(), description: description.trim(), pricePoints, metadata };
+    return { kind, categoryId, title: title.trim(), description: description.trim(), pricePoints, metadata, translations };
   }
 
   /** Field id from the schema -> the state it edits. */
@@ -123,9 +132,18 @@ export function MarketplaceItemForm({ item, descriptorText, categories: initialC
     pricePoints: String(pricePoints),
     "metadata.tags": tags,
     "metadata.fontFamily": fontFamily,
+    // One box per translatable field per language, matching the ids the form
+    // schema hands both this form and the Mac app's.
+    ...Object.fromEntries(TRANSLATABLE_LOCALES.flatMap((locale) =>
+      translatableFields.item.map((name) => [`translations.${locale}.${name}`, translations[locale]?.[name] ?? ""]))),
   };
 
   function setValue(id: string, next: string) {
+    if (id.startsWith("translations.")) {
+      const [, locale, name] = id.split(".");
+      setTranslations((previous) => ({ ...previous, [locale as Locale]: { ...previous[locale as Locale], [name]: next } }));
+      return;
+    }
     if (id === "kind") { changeKind(next as MarketplaceKind); return; }
     if (id === "title") { setTitle(next); return; }
     if (id === "description") { setDescription(next); return; }
@@ -154,8 +172,8 @@ export function MarketplaceItemForm({ item, descriptorText, categories: initialC
       if (!result.ok) { setError(result.error); return; }
       const created = { id: result.id, kind };
       const failures: string[] = [];
-      if (layout.content.editor === "template" || layout.content.editor === "text") {
-        const saved = await saveContent(created.id, layout.content.editor === "template" ? templateText : inlineText);
+      if (layout.content.editor === "template") {
+        const saved = await saveContent(created.id, templateText);
         if (!saved.ok) failures.push(saved.error);
       }
       if (layout.content.editor === "descriptor") {
@@ -168,7 +186,7 @@ export function MarketplaceItemForm({ item, descriptorText, categories: initialC
         if (!file) continue;
         setNotice(`Uploading ${slotTitles[role]}…`);
         try {
-          await uploadAsset(created, role, file, (fraction) => setNotice(`Uploading ${slotTitles[role]} ${Math.round(fraction * 100)}%`), mockPreview);
+          await uploadAsset(created, role, file, (fraction) => setNotice(`Uploading ${slotTitles[role]} ${Math.round(fraction * 100)}%`), mockPreview, previewStart);
         } catch (cause) {
           failures.push(`${slotTitles[role]}: ${errorMessage(cause, "the upload failed.")}`);
         }
@@ -200,17 +218,14 @@ export function MarketplaceItemForm({ item, descriptorText, categories: initialC
         </section>
       ))}
 
+      {kind === "audio" ? <MarketplaceLyricsEditor tracks={lyricTracks} onChange={setLyricTracks} disabled={pending}
+        itemId={item?.id} previewUrl={item?.previewVideoUrl} previewStart={item?.metadata.preview?.startSeconds}
+        stagedAudio={staged.content} /> : null}
+
       <section className="rounded-2xl border border-line bg-surface p-6">
         <h2 className="text-lg font-semibold">{marketplaceKindLabels[kind]} files</h2>
         <p className="mt-1 text-sm text-muted">{item ? "Uploads go straight to storage; each slot is recorded once the file has landed." : "Files are uploaded right after the draft is created."}</p>
         <div className="mt-4 grid gap-5">
-          {layout.content.editor === "text"
-            ? <div className="grid gap-2">
-                <div><span className="text-sm font-medium">{layout.content.title}</span><p className="text-xs text-muted">{layout.content.hint}</p></div>
-                <textarea className={`${field} min-h-56`} value={inlineText} onChange={(event) => setInlineText(event.target.value)} disabled={pending} />
-                {item ? <div><button type="button" className={secondary} disabled={pending || !inlineText.trim()} onClick={() => run(() => saveContent(item.id, inlineText), "Saved.")}>Save {layout.content.title.toLowerCase()}</button></div> : null}
-              </div>
-            : null}
           {layout.content.editor === "template" ? <TemplateEditor text={templateText} onChange={setTemplateText} /> : null}
           {layout.content.editor === "template" && item ? <button type="button" className={secondary} disabled={pending} onClick={() => run(() => saveContent(item.id, templateText), "Template saved.")}>Save template</button> : null}
           {layout.mockPreview ? <label className="text-sm"><input type="checkbox" checked={mockPreview} onChange={(event) => setMockPreview(event.target.checked)} /> This preview uses mock images, without original project footage.</label> : null}
@@ -219,8 +234,13 @@ export function MarketplaceItemForm({ item, descriptorText, categories: initialC
             : layout.content.editor === "descriptor" ? <DescriptorEditor item={item} text={stagedDescriptor} onChange={(text) => { setStagedDescriptor(text); setDescriptorEdited(true); }} onError={setError} disabled={pending} /> : null}
           <UploadSlot item={item} kind={kind} role="preview-image" title={layout.previewImage.title} hint={layout.previewImage.hint} staged={staged["preview-image"] ?? null} onStage={(file) => setStaged((previous) => ({ ...previous, "preview-image": file ?? undefined }))} current={item?.previewImageUrl ? <PreviewStill src={item.previewImageUrl} /> : null} onError={setError} disabled={pending} />
           {layout.previewVideo
-            ? <UploadSlot item={item} kind={kind} role="preview-video" mockPreview={mockPreview} title={layout.previewVideo.title} hint={layout.previewVideo.hint} staged={staged["preview-video"] ?? null} onStage={(file) => setStaged((previous) => ({ ...previous, "preview-video": file ?? undefined }))} current={item?.previewVideoUrl ? <video src={item.previewVideoUrl} className="h-24 rounded-lg" controls /> : null} onError={setError} disabled={pending} />
+            ? <UploadSlot item={item} kind={kind} role="preview-video" mockPreview={mockPreview} previewStart={previewStart} title={layout.previewVideo.title} hint={layout.previewVideo.hint} staged={staged["preview-video"] ?? null} onStage={(file) => setStaged((previous) => ({ ...previous, "preview-video": file ?? undefined }))} current={item?.previewVideoUrl ? (kind === "audio" ? <span className="text-sm">Audio preview uploaded</span> : kind === "sound_effect" ? <audio src={item.previewVideoUrl} controls /> : <video src={item.previewVideoUrl} className="h-24 rounded-lg" controls />) : null} onError={setError} disabled={pending} />
             : null}
+          {kind === "audio" ? <label className="text-sm">Preview starts at (seconds into the full song)
+            <input type="number" min={0} max={86400} step={0.1} value={previewStart} disabled={pending} className={field}
+              onChange={(event) => setPreviewStart(Math.max(0, Number(event.target.value) || 0))} />
+            <span className="text-xs text-muted">Set this before uploading an excerpt so its lyrics stay in sync.</span>
+          </label> : null}
         </div>
       </section>
 
@@ -228,7 +248,7 @@ export function MarketplaceItemForm({ item, descriptorText, categories: initialC
         <div className="flex flex-wrap items-center gap-3">
           <button type="button" className={primary} onClick={save} disabled={!canSave}>{item ? "Save" : "Create draft"}</button>
           {item ? <button type="button" className={secondary} disabled={pending || !canPublish} title={canPublish ? undefined : "Upload the content file first"} onClick={() => run(() => publishItem(item.id, item.status !== "published"), item.status === "published" ? "Unpublished." : "Published.")}>{item.status === "published" ? "Unpublish" : "Publish"}</button> : null}
-          {item ? <button type="button" className={`${secondary} text-red-400`} disabled={pending} onClick={() => { if (window.confirm("Delete this item and its files?")) run(() => deleteItemAndReturn(item.id)); }}>Delete</button> : null}
+          {item ? <DeleteMarketplaceItem id={item.id} title={item.title} className={`${secondary} text-red-400`} disabled={pending} returnToList onError={setError} /> : null}
           {notice ? <span className="text-sm text-muted">{notice}</span> : null}
         </div>
         {error ? <p className="mt-4 text-sm text-red-400" role="alert">{error}</p> : null}
@@ -340,34 +360,6 @@ function NewCategoryDialog({ kind, onClose, onCreated, onError }: {
 }
 
 /**
- * The SF Symbol a sidebar row draws. macOS resolves the name, so the field
- * takes it as text and the app falls back to its own symbol when the name
- * means nothing to the running system.
- */
-export function IconField({ value, onChange, disabled, className }: {
-  value: string;
-  onChange: (icon: string) => void;
-  disabled: boolean;
-  className?: string;
-}) {
-  return (
-    <label className={`${label} mt-4 ${className ?? ""}`}>Icon (SF Symbol)
-      <input
-        className={field}
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        placeholder={DEFAULT_CATEGORY_ICON}
-        maxLength={80}
-        spellCheck={false}
-        autoCapitalize="none"
-        disabled={disabled}
-      />
-      <span className="mt-1 block text-xs text-muted">Name it as SF Symbols does, e.g. <span className="font-mono">music.note</span>. Blank means <span className="font-mono">{DEFAULT_CATEGORY_ICON}</span>.</span>
-    </label>
-  );
-}
-
-/**
  * One schema field. The schema says what it is called, what it accepts and
  * which kinds it belongs to; this only decides which control draws it.
  */
@@ -406,6 +398,16 @@ function readVideoMetadata(file: File): Promise<Partial<ItemMetadata>> {
   });
 }
 
+function readImageMetadata(file: File): Promise<Partial<ItemMetadata>> {
+  return new Promise((resolve) => {
+    const url = URL.createObjectURL(file);
+    const image = new Image();
+    image.onload = () => { resolve({ width: image.naturalWidth || undefined, height: image.naturalHeight || undefined }); URL.revokeObjectURL(url); };
+    image.onerror = () => { resolve({}); URL.revokeObjectURL(url); };
+    image.src = url;
+  });
+}
+
 function readAudioDuration(file: File): Promise<Partial<ItemMetadata>> {
   return new Promise((resolve) => {
     const url = URL.createObjectURL(file);
@@ -432,15 +434,20 @@ function putWithProgress(url: string, headers: Record<string, string>, file: Fil
 }
 
 /** Presigned PUT straight to storage, then record the slot with whatever the browser could read from the file. */
-async function uploadAsset(item: { id: string; kind: MarketplaceKind }, role: AssetRole, file: File, onProgress: (fraction: number) => void = () => {}, mockPreview = false) {
+async function uploadAsset(item: { id: string; kind: MarketplaceKind }, role: AssetRole, file: File, onProgress: (fraction: number) => void = () => {}, mockPreview = false, previewStart = 0) {
   const contentType = file.type || "application/octet-stream";
   const authorized = await createUploadUrl({ itemId: item.id, role, filename: file.name, contentType, sizeBytes: file.size });
   if (!authorized.ok) throw new Error(authorized.error);
   await putWithProgress(authorized.uploadURL, authorized.headers, file, onProgress);
-  const metadata = role === "preview-video" || (role === "content" && item.kind === "footage")
+  // Footage content is a clip or a still; a Remotion archive is a zip the
+  // browser can read nothing out of, so its facts come from the app instead.
+  const isStill = /\.(png|jpe?g|webp)$/i.test(file.name);
+  const metadata = (role === "preview-video" && /\.(mp3|wav|m4a|aac)$/i.test(file.name)) ? await readAudioDuration(file)
+    : role === "preview-video" || (role === "content" && item.kind === "footage" && !isStill)
     ? await readVideoMetadata(file)
+    : role === "content" && item.kind === "footage" ? await readImageMetadata(file)
     : role === "content" && (item.kind === "audio" || item.kind === "sound_effect") ? await readAudioDuration(file) : {};
-  const finalized = await finalizeUpload({ itemId: item.id, role, filename: file.name, contentType, sizeBytes: file.size, objectKey: authorized.objectKey, metadata: role === "preview-video" ? { ...metadata, preview: { mock: mockPreview } } : metadata });
+  const finalized = await finalizeUpload({ itemId: item.id, role, filename: file.name, contentType, sizeBytes: file.size, objectKey: authorized.objectKey, metadata: role === "preview-video" ? { ...metadata, preview: { mock: mockPreview, startSeconds: previewStart } } : metadata });
   if (!finalized.ok) throw new Error(finalized.error);
 }
 
@@ -448,7 +455,8 @@ async function uploadAsset(item: { id: string; kind: MarketplaceKind }, role: As
  * One file slot. With a saved item the file uploads as soon as it is picked;
  * without one it is staged and the form uploads it after creating the draft.
  */
-function UploadSlot({ item, kind, role, title, hint, staged, onStage, current, onError, disabled, mockPreview = false }: {
+function UploadSlot({ item, kind, role, title, hint, staged, onStage, current, onError, disabled, mockPreview = false, previewStart = 0 }: {
+  previewStart?: number;
   mockPreview?: boolean;
   item: AdminItemView | null;
   kind: MarketplaceKind;
@@ -476,7 +484,7 @@ function UploadSlot({ item, kind, role, title, hint, staged, onStage, current, o
     setFailedFile(null);
     setProgress(0);
     try {
-      await uploadAsset(saved, role, file, setProgress, mockPreview);
+      await uploadAsset(saved, role, file, setProgress, mockPreview, previewStart);
       startTransition(() => router.refresh());
     } catch (cause) {
       const message = errorMessage(cause, "The upload failed.");

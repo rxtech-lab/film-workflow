@@ -23,7 +23,7 @@ generated media. See `docs/document-package.md`.
   (`footage_list`, `sequence_add_clip`, `sequence_render`, …). See
   `docs/agent-tools.md`.
 - A Marketplace window (⌘⌥M) for installing footage, music, sound effects,
-  fonts, transitions, effects and Remotion prompts published from the
+  fonts, transitions, effects and Remotion compositions published from the
   website's admin page; paid items are bought with credits. See `docs/marketplace.md`.
 
 ## Project Structure

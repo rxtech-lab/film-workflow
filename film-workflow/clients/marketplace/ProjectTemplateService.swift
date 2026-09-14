@@ -233,7 +233,7 @@ nonisolated struct ProjectTemplateApplication: Codable, Identifiable, Sendable {
             let media: ResolvedMedia?
             if source.kind == .remotion {
                 media = try? await resolver.resolve(source)
-                if media == nil { application.blockers.append("Prepare and render Remotion composition \(source.id) from its prompt in the new sequence, then resume this application.") }
+                if media == nil { application.blockers.append("Render Remotion composition \(source.id) in the new sequence, then resume this application.") }
             } else { media = try await resolver.resolve(source) }
             var length = shot.durationSeconds
             if case .file(_, let natural, _)? = media, let natural { length = min(length, natural) }

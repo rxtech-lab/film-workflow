@@ -150,7 +150,7 @@ struct CaptionSegmentEditorSheet: View {
 
     private var header: some View {
         HStack {
-            Text("Edit Caption")
+            Text(project.lyricsSourceID == nil ? "Edit Caption" : "Edit Lyric")
                 .font(.headline)
             Spacer()
         }

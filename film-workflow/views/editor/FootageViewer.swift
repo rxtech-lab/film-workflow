@@ -20,6 +20,7 @@ struct FootageViewer: View {
     var document: ProjectDocument? = nil
     @State private var fitsViewer = true
     @State private var previewRevision = 0
+    @State private var lyricsRequest: MusicLyricsRequest?
     private struct LoadRequest: Hashable { let cell: FootageCell; let revision: Int }
 
     var body: some View {
@@ -39,6 +40,13 @@ struct FootageViewer: View {
             if let fraction { player.skim(toFraction: fraction) } else { player.endSkim() }
         }
         .onDisappear { player.unload() }
+        .contextMenu {
+            MusicLyricsContextMenu(sourceID: cell.drag.source.id) {
+                player.pause()
+                lyricsRequest = $0
+            }
+        }
+        .musicLyricsHost($lyricsRequest)
         .onReceive(NotificationCenter.default.publisher(for: .remotionPreviewChanged)) { note in
             if let directory = note.userInfo?["directory"] as? URL, directory.standardizedFileURL == cell.previewDirectory {
                 previewRevision += 1
@@ -72,6 +80,8 @@ struct FootageViewer: View {
                         .frame(height: 64)
                         .padding(.horizontal, 24)
                 }
+                MusicLyricsPlayback(sourceID: cell.drag.source.id, player: player)
+                    .id(cell.drag.source.id)
             }
         }
     }

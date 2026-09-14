@@ -20,8 +20,12 @@ describe("marketplace form schema", () => {
     expect(layoutForKind(schema, "project_template").content.editor).toBe("template");
     expect(layoutForKind(schema, "effect").content.editor).toBe("descriptor");
     expect(layoutForKind(schema, "transition").content.editor).toBe("descriptor");
-    expect(layoutForKind(schema, "remotion_prompt").content.editor).toBe("text");
     expect(layoutForKind(schema, "footage").content.editor).toBe("upload");
+    // A Remotion composition is an uploaded archive, not structured content.
+    expect(layoutForKind(schema, "remotion").content.editor).toBe("upload");
+    expect(layoutForKind(schema, "remotion").content.extensions).toEqual(["zip"]);
+    // Nothing is edited inline any more; the kind that was is gone.
+    expect(schema.layouts.map((layout) => layout.content.editor)).not.toContain("text");
     // Only templates are previewed with mock images.
     expect(marketplaceFormSchema().layouts.filter((layout) => layout.mockPreview).map((layout) => layout.kind)).toEqual(["project_template"]);
   });

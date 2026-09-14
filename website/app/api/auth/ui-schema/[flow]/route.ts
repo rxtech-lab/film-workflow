@@ -1,5 +1,14 @@
+import { localeHeaders } from "@/lib/i18n/locale";
+import { requestLocale } from "@/lib/i18n/request";
+import { t } from "@/lib/i18n/messages";
+
+/**
+ * The sign-in and sign-up forms the app draws. Labels follow the caller's
+ * `Accept-Language`, so the form matches the language the rest of the app is
+ * in; the field keys, types and autocomplete hints never change with it.
+ */
 export async function GET(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ flow: string }> }
 ) {
   const { flow } = await params;
@@ -9,16 +18,18 @@ export async function GET(
   }
 
   const isSignUp = flow === "signup";
+  const locale = await requestLocale(request);
+  const submitLabel = t(locale, isSignUp ? "auth.signUp.title" : "auth.signIn.title");
 
   const schema = {
     flow,
-    title: isSignUp ? "Create Account" : "Sign In",
-    submitLabel: isSignUp ? "Create Account" : "Sign In",
+    title: submitLabel,
+    submitLabel,
     fields: [
       {
         key: "username",
-        label: "Email",
-        placeholder: "you@example.com",
+        label: t(locale, "auth.field.email"),
+        placeholder: t(locale, "auth.field.email.placeholder"),
         type: "email",
         isPassword: false,
         required: true,
@@ -29,8 +40,8 @@ export async function GET(
         ? [
             {
               key: "name",
-              label: "Name",
-              placeholder: "Your name",
+              label: t(locale, "auth.field.name"),
+              placeholder: t(locale, "auth.field.name.placeholder"),
               type: "name",
               isPassword: false,
               required: false,
@@ -41,8 +52,8 @@ export async function GET(
         : []),
       {
         key: "password",
-        label: "Password",
-        placeholder: "Password",
+        label: t(locale, "auth.field.password"),
+        placeholder: t(locale, "auth.field.password"),
         type: "password",
         isPassword: true,
         required: true,
@@ -55,7 +66,7 @@ export async function GET(
     supportedMethods: [
       {
         id: "password",
-        label: isSignUp ? "Create Account" : "Sign In",
+        label: submitLabel,
         primary: true,
       },
     ],
@@ -63,6 +74,8 @@ export async function GET(
   };
 
   return Response.json(schema, {
-    headers: { "Cache-Control": "public, max-age=300" },
+    // Cached for five minutes, but per language: without `Vary` a shared cache
+    // would hand the next caller whichever language warmed it.
+    headers: localeHeaders(locale, { "Cache-Control": "public, max-age=300" }),
   });
 }
