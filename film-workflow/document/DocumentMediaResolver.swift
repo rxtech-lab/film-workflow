@@ -123,6 +123,10 @@ struct DocumentMediaResolver: MediaResolver {
 
     /// A caption project's active transcript as cues on its own clock, in the
     /// chosen language with `{{term}}` placeholders rendered.
+    ///
+    /// Every translation rides along on each cue: the selection decides what a
+    /// caption reads by default, and a clip whose `CaptionOptions` name a
+    /// language picks from these without the transcript being resolved again.
     @MainActor
     static func cues(for project: CaptionProject, text selection: CaptionTextSelection) -> [TextCue] {
         let snapshot = project.snapshot()
@@ -131,7 +135,13 @@ struct DocumentMediaResolver: MediaResolver {
             let original = resolver.render(segment.text, language: snapshot.sourceLanguage)
             let text = selection.text(original: original, translations: segment.translations)
             guard !text.isEmpty, segment.endMs > segment.startMs else { return nil }
-            return TextCue(start: Double(segment.startMs) / 1000, end: Double(segment.endMs) / 1000, text: text)
+            var translations: [String: String] = [:]
+            for (code, translated) in segment.translations where !translated.isEmpty {
+                translations[code] = resolver.render(translated, language: code)
+            }
+            translations[""] = original
+            return TextCue(start: Double(segment.startMs) / 1000, end: Double(segment.endMs) / 1000,
+                           text: text, translations: translations)
         }
     }
 

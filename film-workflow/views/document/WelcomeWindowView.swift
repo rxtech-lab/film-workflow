@@ -1,16 +1,68 @@
+import FilmTemplateKit
+import FilmTemplateUI
 import SwiftUI
 
 nonisolated enum WelcomeWindowID {
     static let value = "welcome"
 }
 
+/// Where the wizard is, inside the Welcome window.
+enum WelcomeRoute: Hashable {
+    case gallery
+    case wizard(templateID: String)
+}
+
 /// Shown at launch and whenever no film is open: New, Open, and recents.
+///
+/// "New Film" no longer goes straight to a save panel. It pushes the template
+/// gallery, and picking a guided template runs the Simple mode wizard in this
+/// same window — which grows to fit it. The blank-film card keeps the old
+/// path for anyone who wants an empty timeline.
 struct WelcomeWindowView: View {
     @Environment(\.openWindow) private var openWindow
     @State private var controller = ProjectDocumentController.shared
+    @State private var navigation = AppNavigation.shared
+    @State private var coordinator = SimpleModeCoordinator.shared
     @State private var errorMessage: String?
+    @State private var path: [WelcomeRoute] = []
 
     var body: some View {
+        NavigationStack(path: $path) {
+            home
+                .navigationDestination(for: WelcomeRoute.self) { route in
+                    destination(route)
+                        .navigationBarBackButtonHidden(route.hidesBackButton)
+                        .toolbar(route.hidesToolbar ? .hidden : .automatic)
+                }
+        }
+        .frame(
+            minWidth: path.isEmpty ? 760 : 900,
+            idealWidth: path.isEmpty ? 760 : 1040,
+            minHeight: path.isEmpty ? 460 : 620,
+            idealHeight: path.isEmpty ? 460 : 720
+        )
+        .onAppear {
+            controller.openWindowRequest = { url in
+                openWindow(id: EditorWindowID.value, value: url)
+            }
+            if !consumeRequestedRoute() { restore() }
+        }
+        // `initial: true` because a window opened *by* the request renders once
+        // with the route already set, and would otherwise never see a change.
+        .onChange(of: navigation.welcomeRouteRequestCount, initial: true) { _, _ in
+            _ = consumeRequestedRoute()
+        }
+        .alert("Couldn’t Open Film", isPresented: Binding(
+            get: { errorMessage != nil },
+            set: { if !$0 { errorMessage = nil } }
+        )) {
+            Button("OK") { errorMessage = nil }
+        } message: {
+            Text(errorMessage ?? "")
+        }
+    }
+
+    private var home: some View {
         HStack(spacing: 0) {
             introduction
                 .padding(32)
@@ -24,19 +76,46 @@ struct WelcomeWindowView: View {
                 .background(Color(nsColor: .controlBackgroundColor))
         }
         .frame(width: 760, height: 460)
-        .onAppear {
-            controller.openWindowRequest = { url in
-                openWindow(id: EditorWindowID.value, value: url)
+    }
+
+    @ViewBuilder private func destination(_ route: WelcomeRoute) -> some View {
+        switch route {
+        case .gallery:
+            TemplateGalleryView(
+                onPick: { template in
+                    _ = coordinator.begin(template: template)
+                    path.append(.wizard(templateID: template.id))
+                },
+                onBlank: { Task { await createFilm() } }
+            )
+        case .wizard(let templateID):
+            if let session = coordinator.activeSession, session.template.id == templateID {
+                SimpleModeHostView(
+                    session: session,
+                    onOpenEditor: open,
+                    onBackToTemplates: { path = [.gallery] },
+                    onClose: { path = [] }
+                )
+            } else {
+                // The run was finished or abandoned elsewhere; there is nothing
+                // left to show.
+                Color.clear.onAppear { path = [] }
             }
         }
-        .alert("Couldn’t Open Film", isPresented: Binding(
-            get: { errorMessage != nil },
-            set: { if !$0 { errorMessage = nil } }
-        )) {
-            Button("OK") { errorMessage = nil }
-        } message: {
-            Text(errorMessage ?? "")
-        }
+    }
+
+    /// Opens on the page something outside the window asked for.
+    @discardableResult
+    private func consumeRequestedRoute() -> Bool {
+        guard let route = navigation.consumeWelcomeRoute() else { return false }
+        path = [route]
+        return true
+    }
+
+    /// Comes back to a run in progress if the window was closed and reopened.
+    private func restore() {
+        guard path.isEmpty, let session = coordinator.activeSession, session.document != nil else { return }
+        path = [.wizard(templateID: session.template.id)]
     }
 
     private var introduction: some View {
@@ -57,7 +136,7 @@ struct WelcomeWindowView: View {
 
             VStack(spacing: 10) {
                 Button {
-                    Task { await createFilm() }
+                    path = [.gallery]
                 } label: {
                     Label("New Film…", systemImage: "plus")
                         .frame(maxWidth: .infinity)
@@ -132,6 +211,7 @@ struct WelcomeWindowView: View {
         guard let url = await controller.presentNewPanel() else { return }
         do {
             try controller.createDocument(at: url)
+            path = []
             open(url)
         } catch {
             errorMessage = error.localizedDescription
@@ -220,4 +300,15 @@ private struct WelcomeRecentFilmRow: View {
             .disabled(!exists)
         }
     }
+}
+
+extension WelcomeRoute {
+    /// The wizard owns its own navigation, including cancelling, so a back
+    /// button would be a second way out that skips the discard prompt.
+    var hidesBackButton: Bool {
+        if case .wizard = self { return true }
+        return false
+    }
+
+    var hidesToolbar: Bool { hidesBackButton }
 }

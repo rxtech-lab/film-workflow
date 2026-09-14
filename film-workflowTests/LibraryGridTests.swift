@@ -25,8 +25,8 @@ struct LibraryGridTests {
         hostedAccessibilityDescendants(value)
     }
 
-    @Test("Filmstrips wrap with panel width, display posters and durations, select, and collapse with their folder")
-    func layoutAndSelection() async throws {
+    @Test("Library and version cards share rows, wrap with panel width, and display their footage", arguments: [false, true])
+    func layoutAndSelection(versions: Bool) async throws {
         NSApp.accessibilitySetValue(true, forAttribute: .init(rawValue: "AXEnhancedUserInterface"))
         let posterURL = FileManager.default.temporaryDirectory.appendingPathComponent("LibraryPoster-\(UUID()).png")
         defer { try? FileManager.default.removeItem(at: posterURL) }
@@ -46,7 +46,7 @@ struct LibraryGridTests {
         let cells = Dictionary(uniqueKeysWithValues: rows.enumerated().map { index, row in
             (row.id, FootageCell(id: row.id.id, title: row.name, subtitle: row.subtitle,
                                 footage: Footage(clipSource: .init(id: row.id.id.uuidString, kind: .video, displayName: row.name),
-                                                 thumbnailURL: posterURL, storedDuration: [25, 45, 12][index])))
+                                                 thumbnailURL: posterURL, storedDuration: [12, 18, 70][index])))
         })
         let selection = Selection()
         let grid = LibraryGrid(rows: rows, groups: [group],
@@ -57,7 +57,11 @@ struct LibraryGridTests {
                                currentVersion: { cells[$0]?.id }, onSelectVersion: { _, _ in },
                                dragPayload: { row in cells[row.id].map { FootageDragPayload(item: $0.drag, thumbnailURL: $0.thumbnailURL) } },
                                footage: { cells[$0] })
-        let host = NSHostingView(rootView: grid)
+        let browser = FootageBrowserView(libraryItem: rows[0].id, title: "Versions",
+                                        cells: rows.compactMap { cells[$0.id] }, selectedID: nil,
+                                        onSelect: { _ in }, onDeselect: {})
+        let host = NSHostingView(rootView: versions ? AnyView(browser) : AnyView(grid))
+        let screenshotName = versions ? "versions-flow" : "library-grid"
         host.wantsLayer = true
         host.layer?.backgroundColor = NSColor.windowBackgroundColor.cgColor
         let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 240, height: 560),
@@ -67,29 +71,46 @@ struct LibraryGridTests {
         window.orderBack(nil)
         defer { window.close() }
 
-        for width in [240, 420] {
+        for width in [240, 420, 960, 240] {
             window.setContentSize(NSSize(width: width, height: 560))
             host.layoutSubtreeIfNeeded()
             try await Task.sleep(for: .milliseconds(400))
             let elements = descendants(host)
             let dump = elements.map { "\($0.accessibilityIdentifier() ?? "-") | \($0.accessibilityLabel() ?? "-") | \($0.accessibilityFrame())" }.joined(separator: "\n")
-            try dump.write(toFile: "/tmp/film-library-grid-accessibility.txt", atomically: true, encoding: .utf8)
+            try dump.write(toFile: "/tmp/film-\(screenshotName)-accessibility.txt", atomically: true, encoding: .utf8)
             let preview = try #require(host.bitmapImageRepForCachingDisplay(in: host.bounds))
             host.cacheDisplay(in: host.bounds, to: preview)
             try #require(preview.representation(using: .png, properties: [:]))
-                .write(to: URL(fileURLWithPath: "/tmp/film-library-grid-\(width).png"))
+                .write(to: URL(fileURLWithPath: "/tmp/film-\(screenshotName)-\(width).png"))
             let cards = try rows.map { row in
-                try #require(elements.first { $0.accessibilityIdentifier() == "library.item.\(row.id.id.uuidString)" })
+                let prefix = versions ? "footage.cell" : "library.item"
+                return try #require(elements.first { $0.accessibilityIdentifier() == "\(prefix).\(row.id.id.uuidString)" })
             }
             let first = cards[0].accessibilityFrame()
             let second = cards[1].accessibilityFrame()
             let third = cards[2].accessibilityFrame()
-            #expect(first.width >= 200 && abs(second.minX - first.minX) < 1)
-            #expect(second.minY < first.minY && third.minY < second.minY)
-            #expect(width == 240 ? second.height > first.height + 60 : abs(second.height - first.height) < 1)
-            #expect(cards[0].accessibilityLabel()?.contains("0:25") == true)
-            #expect(cards[0].accessibilityPerformPress())
-            #expect(selection.item == rows[0].id)
+            #expect(first.width < second.width && second.width < third.width)
+            #expect(cards.allSatisfy { $0.accessibilityFrame().maxX <= window.frame.maxX })
+            if width == 240 {
+                #expect(abs(second.minX - first.minX) < 1)
+                #expect(second.maxY < first.minY && third.maxY < second.minY)
+            } else {
+                #expect(second.minX > first.maxX && abs(second.maxY - first.maxY) < 1,
+                        "Short footage should share a row when there is space")
+                if width == 420 {
+                    #expect(abs(third.minX - first.minX) < 1 && third.maxY < first.minY,
+                            "Footage that does not fit should move to the next row")
+                } else {
+                    #expect(third.minX > second.maxX && abs(third.maxY - first.maxY) < 1)
+                }
+            }
+            #expect(width < 960 ? third.height > first.height + 60 : abs(third.height - first.height) < 1,
+                    "Footage wider than the panel must continue on additional lines")
+            if !versions {
+                #expect(cards[0].accessibilityLabel()?.contains("0:12") == true)
+                #expect(cards[0].accessibilityPerformPress())
+                #expect(selection.item == rows[0].id)
+            }
 
             let bitmap = try #require(host.bitmapImageRepForCachingDisplay(in: host.bounds))
             host.cacheDisplay(in: host.bounds, to: bitmap)
@@ -102,9 +123,10 @@ struct LibraryGridTests {
             }
             #expect(redPixels > 2_000, "The cards must render decoded poster images")
             try #require(bitmap.representation(using: .png, properties: [:]))
-                .write(to: URL(fileURLWithPath: "/tmp/film-library-grid-\(width).png"))
+                .write(to: URL(fileURLWithPath: "/tmp/film-\(screenshotName)-\(width).png"))
         }
 
+        guard !versions else { return }
         let folder = try #require(descendants(host).first { $0.accessibilityIdentifier() == "library.folder.\(group.id.uuidString)" })
         #expect(folder.accessibilityPerformPress())
         try await Task.sleep(for: .milliseconds(300))

@@ -182,6 +182,9 @@ public struct Clip: Codable, Sendable, Hashable, Identifiable {
     public var opacity: Float
     public var transform: ClipTransform
     public var text: TextStyle?
+    /// Caption clips only: which languages this clip draws and whether it
+    /// drops punctuation. Ignored by every other kind of source.
+    public var captions: CaptionOptions
     public var effects: [EffectInstance]
 
     public init(
@@ -197,6 +200,7 @@ public struct Clip: Codable, Sendable, Hashable, Identifiable {
         opacity: Float = 1,
         transform: ClipTransform = .identity,
         text: TextStyle? = nil,
+        captions: CaptionOptions = .transcript,
         effects: [EffectInstance] = []
     ) {
         self.id = id
@@ -211,11 +215,12 @@ public struct Clip: Codable, Sendable, Hashable, Identifiable {
         self.opacity = opacity
         self.transform = transform
         self.text = text
+        self.captions = captions
         self.effects = effects
     }
 
     private enum CodingKeys: String, CodingKey {
-        case id, source, start, duration, inPoint, playbackRate, isReversed, sourceDuration, volume, opacity, transform, text, effects
+        case id, source, start, duration, inPoint, playbackRate, isReversed, sourceDuration, volume, opacity, transform, text, captions, effects
     }
 
     /// Tolerant of fields added later: anything missing takes its default.
@@ -236,6 +241,7 @@ public struct Clip: Codable, Sendable, Hashable, Identifiable {
         opacity = try c.decodeIfPresent(Float.self, forKey: .opacity) ?? 1
         transform = try c.decodeIfPresent(ClipTransform.self, forKey: .transform) ?? .identity
         text = try c.decodeIfPresent(TextStyle.self, forKey: .text)
+        captions = try c.decodeIfPresent(CaptionOptions.self, forKey: .captions) ?? .transcript
         effects = try c.decodeIfPresent([EffectInstance].self, forKey: .effects) ?? []
     }
 
@@ -253,6 +259,7 @@ public struct Clip: Codable, Sendable, Hashable, Identifiable {
         try c.encode(opacity, forKey: .opacity)
         try c.encode(transform, forKey: .transform)
         try c.encodeIfPresent(text, forKey: .text)
+        if captions != .transcript { try c.encode(captions, forKey: .captions) }
         try c.encode(effects, forKey: .effects)
     }
 
@@ -276,14 +283,26 @@ public enum TrackKind: String, Codable, Sendable, CaseIterable {
     case video
     case audio
     case overlay
+    /// A lane for captions alone. A sequence may hold several — one per
+    /// language, per speaker, or per section of the film — and they draw over
+    /// the picture the way overlay lanes do. Captions still sit on an overlay
+    /// track when that is where the user put them.
+    case caption
 
     public func accepts(_ kind: SourceKind) -> Bool {
         switch self {
         case .video: return kind == .video || kind == .image || kind == .remotion
         case .audio: return kind == .audio || kind == .video || kind == .remotion
         case .overlay: return kind == .captions || kind == .image
+        case .caption: return kind == .captions
         }
     }
+
+    /// Lanes drawn over the picture rather than supplying it.
+    public var drawsOverPicture: Bool { self == .overlay || self == .caption }
+
+    /// Lanes whose clips can be heard, and so can be muted.
+    public var carriesAudio: Bool { self == .video || self == .audio }
 }
 
 public struct Track: Codable, Sendable, Hashable, Identifiable {
@@ -311,10 +330,12 @@ public struct Track: Codable, Sendable, Hashable, Identifiable {
     }
 }
 
-/// A sequence: frame size, rate and its tracks. Track order is bottom to top
-/// for the picture (later video tracks draw over earlier ones, overlays last).
+/// A sequence: frame size, rate and its tracks, ordered top to bottom as shown
+/// in the editor. Higher picture tracks draw over lower picture tracks.
 public struct Timeline: Codable, Sendable, Hashable {
-    public static let formatVersion = 1
+    /// 2 added caption lanes; see `TimelineCodec.decode`, which moves a film
+    /// written before that onto them.
+    public static let formatVersion = 2
 
     public var id: UUID
     public var width: Int
@@ -323,6 +344,11 @@ public struct Timeline: Codable, Sendable, Hashable {
     public var tracks: [Track]
     public var backgroundHex: String
     public var transitions: [TransitionInstance]
+
+    /// The compositor and live preview paint from the bottom picture track up.
+    public var pictureTracksBackToFront: [Track] {
+        tracks.filter { $0.kind != .audio }.reversed()
+    }
 
     public init(
         id: UUID = UUID(),
@@ -345,11 +371,32 @@ public struct Timeline: Codable, Sendable, Hashable {
     /// The FCP-like starting layout: captions over one video lane, two audio lanes.
     public static func defaultTracks() -> [Track] {
         [
-            Track(kind: .overlay, name: "T1"),
+            Track(kind: .caption, name: "C1"),
             Track(kind: .video, name: "V1"),
             Track(kind: .audio, name: "A1"),
             Track(kind: .audio, name: "A2"),
         ]
+    }
+
+    /// Caption lanes arrived after overlay lanes, which took both captions and
+    /// stills, so a film written before that keeps its cues on a `T` lane. One
+    /// carrying no pictures is a caption lane in all but name and opens as
+    /// one, which is why such a film shows the layout a new film gets.
+    ///
+    /// Only timelines older than the caption lane go through this, so an
+    /// overlay track added since — empty or not — stays the lane it was asked
+    /// for. An overlay holding a still is left alone either way.
+    static func migratedTracks(_ tracks: [Track]) -> [Track] {
+        var number = tracks.filter { $0.kind == .caption }.count
+        return tracks.map { track in
+            guard track.kind == .overlay, track.clips.allSatisfy({ $0.source.kind == .captions }) else { return track }
+            var migrated = track
+            migrated.kind = .caption
+            number += 1
+            // Only the names the editor gave itself are renumbered.
+            if migrated.name.hasPrefix("T") { migrated.name = "C\(number)" }
+            return migrated
+        }
     }
 
     private enum CodingKeys: String, CodingKey {

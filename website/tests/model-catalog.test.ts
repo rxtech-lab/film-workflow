@@ -2,6 +2,21 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
 
+/**
+ * `modelCatalog()` reads the admin's curated rows, so anything exercising the
+ * *discovered* list stands the table up empty and asks `discoveredCatalog()`
+ * directly. `tests/model-curation.test.ts` covers the curated path.
+ */
+let curated: { modelId: string; capability: string; displayNameOverride?: string | null; isDefault?: boolean; sortOrder?: number }[] = [];
+function curate(rows: typeof curated) { curated = rows; }
+vi.mock("@/lib/models/repository", () => ({
+  enabledCatalogModels: async () => curated.map((row) => ({ displayNameOverride: null, isDefault: false, sortOrder: 0, ...row })),
+}));
+
+async function forCapability<T extends { capability: string }>(load: () => Promise<T[]>, capability: string) {
+  return (await load()).filter((model) => model.capability === capability);
+}
+
 /** Trimmed rows in the exact shape the gateway's `/v1/models` returns. */
 const GATEWAY_MODELS = [
   { id: "openai/gpt-5.4-mini", name: "GPT-5.4 mini", type: "language", tags: ["tool-use"], pricing: { input: "0.00000025", output: "0.000002", input_cache_read: "0.000000025" } },
@@ -26,6 +41,7 @@ function stubGatewayFetch(models: unknown[] = GATEWAY_MODELS) {
 }
 
 beforeEach(() => {
+  curated = [];
   vi.resetModules();
   process.env.AI_GATEWAY_API_KEY = "test-key";
 });
@@ -78,14 +94,14 @@ describe("gateway model classification", () => {
 describe("model catalog", () => {
   it("builds chat and image entries from the live gateway list", async () => {
     stubGatewayFetch();
-    const { catalogForCapability } = await import("@/lib/ai/catalog");
+    const { discoveredCatalog } = await import("@/lib/ai/catalog");
 
-    const chat = await catalogForCapability("chat");
+    const chat = await forCapability(discoveredCatalog, "chat");
     expect(chat.map((model) => model.id)).toEqual(["alibaba/qwen-3-14b", "openai/gpt-5.4-mini"]);
     // Chat is settled from reported tokens, so it quotes no per-unit estimate.
     expect(chat.every((model) => model.estimate === undefined)).toBe(true);
 
-    const image = await catalogForCapability("image");
+    const image = await forCapability(discoveredCatalog, "image");
     expect(image).toContainEqual({ id: "bfl/flux-pro-1.1", provider: "gateway", displayName: "FLUX 1.1 [pro]", capability: "image", estimate: { unit: "images", pointsPerUnit: 40 } });
     // gpt-image-1 is token-priced upstream, so it keeps the hand-maintained rate.
     expect(image).toContainEqual(expect.objectContaining({ id: "openai/gpt-image-1", estimate: { unit: "images", pointsPerUnit: 42 } }));
@@ -93,17 +109,17 @@ describe("model catalog", () => {
     // a priced model does not inherit its wildcard rate.
     expect(image.map((model) => model.id)).not.toContain("bfl/flux-2-flex");
     expect(image.map((model) => model.id)).not.toContain("openai/gpt-image-1-mini");
-    expect(await catalogForCapability("speech")).toEqual([expect.objectContaining({ id: "azure-neural-tts" }), expect.objectContaining({ id: "gemini-3.1-flash-tts-preview" })]);
-    expect((await catalogForCapability("transcription")).map((model) => model.id)).toEqual(["azure-fast-transcription", "gemini-2.5-flash", "whisper-1"]);
+    expect(await forCapability(discoveredCatalog, "speech")).toEqual([expect.objectContaining({ id: "azure-neural-tts" }), expect.objectContaining({ id: "gemini-3.1-flash-tts-preview" })]);
+    expect((await forCapability(discoveredCatalog, "transcription")).map((model) => model.id)).toEqual(["azure-fast-transcription", "gemini-2.5-flash", "whisper-1"]);
     // Veo comes from Google's own list, never the gateway: the gateway prices
     // video by a shape this app does not call.
-    expect((await catalogForCapability("video")).map((model) => model.id)).not.toContain("google/veo-3.1-generate-001");
+    expect((await forCapability(discoveredCatalog, "video")).map((model) => model.id)).not.toContain("google/veo-3.1-generate-001");
   });
 
   it("keeps the direct Imagen entries instead of their gateway duplicates", async () => {
     stubGatewayFetch();
-    const { catalogForCapability } = await import("@/lib/ai/catalog");
-    const ids = (await catalogForCapability("image")).map((model) => model.id);
+    const { discoveredCatalog } = await import("@/lib/ai/catalog");
+    const ids = (await forCapability(discoveredCatalog, "image")).map((model) => model.id);
     expect(ids).toContain("imagen-4.0-generate-001");
     expect(ids).not.toContain("google/imagen-4.0-generate-001");
   });
@@ -120,6 +136,7 @@ describe("model catalog", () => {
 
   it("only accepts models the catalog offers for that capability", async () => {
     stubGatewayFetch();
+    curate([{ modelId: "openai/gpt-5.4-mini", capability: "chat" }]);
     const { requireCatalogModel } = await import("@/lib/ai/catalog");
     await expect(requireCatalogModel("openai/gpt-5.4-mini", "chat")).resolves.toMatchObject({ provider: "gateway" });
     await expect(requireCatalogModel("openai/gpt-5.4-mini", "image")).rejects.toThrow(/MODEL_NOT_ALLOWED/);
@@ -129,9 +146,9 @@ describe("model catalog", () => {
   it("falls back to the static gateway list when the gateway is unreachable", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => new Response("nope", { status: 500 })));
     vi.spyOn(console, "error").mockImplementation(() => {});
-    const { catalogForCapability } = await import("@/lib/ai/catalog");
-    expect((await catalogForCapability("chat")).map((model) => model.id)).toEqual(["google/gemini-3-flash", "openai/gpt-5.4-mini"]);
-    expect((await catalogForCapability("image")).map((model) => model.id)).toContain("openai/gpt-image-1");
+    const { discoveredCatalog } = await import("@/lib/ai/catalog");
+    expect((await forCapability(discoveredCatalog, "chat")).map((model) => model.id)).toEqual(["google/gemini-3-flash", "openai/gpt-5.4-mini"]);
+    expect((await forCapability(discoveredCatalog, "image")).map((model) => model.id)).toContain("openai/gpt-image-1");
   });
 });
 

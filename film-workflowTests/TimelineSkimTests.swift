@@ -70,6 +70,26 @@ struct TimelineSkimTests {
         #expect(state.viewerSelection?.kind == .sequence)
     }
 
+    @Test("Choosing an item or a version ends a skim that never reported its end")
+    func selectionOutranksSkim() {
+        let state = EditorWindowState(defaults: defaults())
+        let video = LibraryItemID(kind: .video, id: UUID())
+        let still = LibraryItemID(kind: .image, id: UUID())
+        // The pointer left over the take with the app, so no hover ended: the
+        // skim is still standing in for the selection when the user comes back.
+        state.skimFootage(video, cellID: UUID(), fraction: 0.5)
+        #expect(state.footageSkim != nil)
+        state.select(still)
+        #expect(state.footageSkim == nil, "A still has no frames to skim and must not keep previewing the take")
+        #expect(state.viewerSelection == still)
+
+        let take = UUID()
+        state.skimFootage(video, cellID: UUID(), fraction: 0.5)
+        state.setCurrentVersion(take, for: still)
+        #expect(state.footageSkim == nil)
+        #expect(state.currentVersion(for: still) == take)
+    }
+
     @Test("Footage skimming ignores the timeline Skim switch and skips items with their own viewer")
     func footageSkimGates() {
         let state = EditorWindowState(defaults: defaults())

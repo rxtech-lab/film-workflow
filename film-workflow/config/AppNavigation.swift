@@ -44,6 +44,26 @@ final class AppNavigation {
     /// so switching tabs can't retarget a turn that is already running.
     var currentTarget: AgentTarget = .none
     var pendingAgentThreadID: UUID?
+    /// Where the Welcome window should open, when something outside it asks —
+    /// the New Film menu item, or the Simple mode What's New card.
+    ///
+    /// Carries a counter rather than being a plain optional: the window may not
+    /// exist yet, in which case its first render already sees the route and no
+    /// change fires. The count makes every request distinct, so asking twice
+    /// works whether the window was open or not.
+    private(set) var pendingWelcomeRoute: WelcomeRoute?
+    private(set) var welcomeRouteRequestCount = 0
+
+    func requestWelcomeRoute(_ route: WelcomeRoute) {
+        pendingWelcomeRoute = route
+        welcomeRouteRequestCount += 1
+    }
+
+    /// Takes the route, if one is waiting.
+    func consumeWelcomeRoute() -> WelcomeRoute? {
+        defer { pendingWelcomeRoute = nil }
+        return pendingWelcomeRoute
+    }
 
     /// Consumed by the settings view once it has scrolled to the target, so
     /// reopening Settings later doesn't jump around unprompted.

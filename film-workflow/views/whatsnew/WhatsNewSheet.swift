@@ -5,7 +5,7 @@ struct WhatsNewSheet: View {
     let features: [WhatsNewFeature]
     let onSeen: (WhatsNewFeature) -> Void
     let onDismiss: () -> Void
-    let onExploreMarketplace: () -> Void
+    let onCallToAction: (WhatsNewFeature.CallToAction) -> Void
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -169,8 +169,9 @@ struct WhatsNewSheet: View {
                         .buttonStyle(.glass)
                         .accessibilityIdentifier("whats-new.dismiss")
 
-                    Button(action: onExploreMarketplace) {
-                        Label("Explore Marketplace", systemImage: "storefront")
+                    let action = features[selectedIndex].callToAction
+                    Button { onCallToAction(action) } label: {
+                        Label(action.label, systemImage: action.systemImage)
                     }
                     .buttonStyle(.glassProminent)
                     .keyboardShortcut(.defaultAction)
@@ -185,5 +186,5 @@ struct WhatsNewSheet: View {
 }
 
 #Preview {
-    WhatsNewSheet(features: WhatsNewFeature.all, onSeen: { _ in }, onDismiss: {}, onExploreMarketplace: {})
+    WhatsNewSheet(features: WhatsNewFeature.all, onSeen: { _ in }, onDismiss: {}, onCallToAction: { _ in })
 }

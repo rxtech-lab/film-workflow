@@ -19,6 +19,26 @@ nonisolated public struct ClipAlignment: Hashable, Sendable {
     }
 }
 
+/// A context-menu item the host adds to one clip, above the destructive ones.
+/// The host decides which clips carry which items and what they do; the
+/// timeline only draws them.
+public struct ClipMenuItem: Identifiable {
+    public var id: String
+    public var title: String
+    public var systemImage: String?
+    /// Shown greyed out when false, so the offer stays visible.
+    public var isEnabled: Bool
+    public var action: () -> Void
+
+    public init(id: String, title: String, systemImage: String? = nil, isEnabled: Bool = true, action: @escaping () -> Void) {
+        self.id = id
+        self.title = title
+        self.systemImage = systemImage
+        self.isEnabled = isEnabled
+        self.action = action
+    }
+}
+
 /// The timeline panel: ruler, track lanes, clips, playhead, zoom, drag and
 /// drop, move and trim. All edits go through `TimelineEditor` so the
 /// timeline stays valid.
@@ -45,6 +65,9 @@ public struct SequenceTimelineView: View {
     let onDeselect: (() -> Void)?
     /// Offers "Align with …" on clips derived from another clip. Nil hides the item.
     let alignment: ((Clip, Timeline) -> ClipAlignment?)?
+    /// Host-supplied context-menu items for a clip. Nil, or an empty result,
+    /// adds nothing.
+    let clipMenuItems: ((Clip, Timeline) -> [ClipMenuItem])?
 
     @Binding private var pixelsPerSecond: Double
     /// Whether moving the pointer across the lanes previews the frame under
@@ -80,6 +103,14 @@ public struct SequenceTimelineView: View {
     @State private var pinchBaseZoom: Double?
     /// The selection rectangle being swept across the lanes, if any.
     @State private var marquee: MarqueeSelection?
+    @GestureState private var trackDrag: TrackHeaderDrag?
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    private struct TrackHeaderDrag {
+        let trackID: UUID
+        let insertionIndex: Int?
+        let translationY: CGFloat
+    }
 
     private static let zoomRange: ClosedRange<Double> = 0.5...400
     private let headerWidth: CGFloat = 64
@@ -101,6 +132,7 @@ public struct SequenceTimelineView: View {
         onDeleteClips: ((Set<UUID>) -> Void)? = nil,
         onDeselect: (() -> Void)? = nil,
         alignment: ((Clip, Timeline) -> ClipAlignment?)? = nil,
+        clipMenuItems: ((Clip, Timeline) -> [ClipMenuItem])? = nil,
         selectedTransitionID: UUID? = nil,
         onInspectEffects: ((UUID) -> Void)? = nil,
         onInspectTransition: ((UUID) -> Void)? = nil
@@ -117,6 +149,7 @@ public struct SequenceTimelineView: View {
         self.onDeleteClips = onDeleteClips
         self.onDeselect = onDeselect
         self.alignment = alignment
+        self.clipMenuItems = clipMenuItems
         self.selectedTransitionID = selectedTransitionID
         self.onInspectEffects = onInspectEffects
         self.onInspectTransition = onInspectTransition
@@ -149,9 +182,12 @@ public struct SequenceTimelineView: View {
                                 VStack(spacing: 0) {
                                     ruler
                                     ForEach(timeline.tracks) { track in
-                                        lane(track, width: canvasWidth)
-                                        Divider()
+                                        animatedTrackRow(track.id) {
+                                            lane(track, width: canvasWidth)
+                                            Divider()
+                                        }
                                     }
+                                    .animation(insertionAnimation, value: Set(timeline.tracks.map(\.id)))
                                     Spacer(minLength: 0)
                                         .frame(maxWidth: .infinity)
                                         .contentShape(Rectangle())
@@ -186,6 +222,14 @@ public struct SequenceTimelineView: View {
                         .frame(maxWidth: .infinity)
                     }
                     .frame(height: canvasHeight, alignment: .top)
+                    .overlay(alignment: .topLeading) {
+                        if let index = trackDrag?.insertionIndex {
+                            Rectangle().fill(Color.accentColor)
+                                .frame(height: 3)
+                                .offset(y: rulerHeight + CGFloat(index) * (laneHeight + 1) - 1)
+                                .allowsHitTesting(false)
+                        }
+                    }
                     .contentShape(Rectangle())
                     .onTapGesture { deselect() }
                 }
@@ -299,12 +343,16 @@ public struct SequenceTimelineView: View {
             Button { TimelineEditor.addTrack(&timeline, kind: .audio) } label: {
                 Label("Audio Track", systemImage: "waveform")
             }
+            Button { TimelineEditor.addTrack(&timeline, kind: .caption) } label: {
+                Label("Caption Track", systemImage: "captions.bubble")
+            }
             Button { TimelineEditor.addTrack(&timeline, kind: .overlay) } label: {
                 Label("Overlay Track", systemImage: "square.3.layers.3d")
             }
         } label: { Label("Add Track", systemImage: "plus") }
         .fixedSize()
-        .help("Add a video, audio or overlay track")
+        .help("Add a video, audio, caption or overlay track")
+        .accessibilityIdentifier("timeline.add-track")
     }
 
     private var toolbarTimecode: some View {
@@ -399,30 +447,112 @@ public struct SequenceTimelineView: View {
     private var trackHeaders: some View {
         VStack(spacing: 0) {
             Color.clear.frame(height: rulerHeight)
-            ForEach($timeline.tracks) { $track in
-                HStack(spacing: 4) {
-                    Text(track.name)
-                        .font(.caption.weight(.semibold))
-                    Spacer()
-                    if track.kind != .overlay {
-                        Button {
-                            track.isMuted.toggle()
-                        } label: {
-                            Image(systemName: track.isMuted ? "speaker.slash.fill" : "speaker.wave.2.fill")
-                                .font(.caption2)
+            ForEach(timeline.tracks) { track in
+                animatedTrackRow(track.id) {
+                    HStack(spacing: 4) {
+                        HStack(spacing: 4) {
+                            Image(systemName: "line.3.horizontal")
+                                .font(.system(size: 9)).foregroundStyle(.secondary)
+                            Text(track.name).font(.caption.weight(.semibold))
+                            Spacer(minLength: 0)
                         }
-                        .buttonStyle(.borderless)
-                        .help(track.isMuted ? "Unmute" : "Mute")
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .contentShape(Rectangle())
+                        .gesture(trackReorderGesture(trackID: track.id))
+                        .help("Drag to reorder track")
+                        .accessibilityElement(children: .ignore)
+                        .accessibilityLabel("Reorder \(track.name)")
+                        .accessibilityIdentifier("timeline.track.drag.\(track.id.uuidString)")
+                        if track.kind.carriesAudio {
+                            Button {
+                                if let index = timeline.tracks.firstIndex(where: { $0.id == track.id }) {
+                                    timeline.tracks[index].isMuted.toggle()
+                                }
+                            } label: {
+                                Image(systemName: track.isMuted ? "speaker.slash.fill" : "speaker.wave.2.fill")
+                                    .font(.caption2)
+                            }
+                            .buttonStyle(.borderless)
+                            .accessibilityIdentifier("timeline.track.mute.\(track.id.uuidString)")
+                            .help(track.isMuted ? "Unmute" : "Mute")
+                        }
                     }
+                    .padding(.horizontal, 6)
+                    .frame(height: laneHeight)
+                    .background(trackDrag?.trackID == track.id ? Color.accentColor.opacity(0.15) : .clear)
+                    .background(.bar)
+                    Divider()
                 }
-                .padding(.horizontal, 8)
-                .frame(height: laneHeight)
-                Divider()
             }
+            .animation(insertionAnimation, value: Set(timeline.tracks.map(\.id)))
             Spacer(minLength: 0)
         }
         .frame(width: headerWidth)
         .background(.bar)
+        .coordinateSpace(name: "timelineTrackHeaders")
+    }
+
+    /// Only the row presentation moves during the gesture. Committing once on
+    /// release creates one undoable edit; cancellation leaves the timeline alone.
+    private func trackReorderGesture(trackID: UUID) -> some Gesture {
+        DragGesture(minimumDistance: 4, coordinateSpace: .named("timelineTrackHeaders"))
+            .updating($trackDrag) { value, state, _ in
+                state = TrackHeaderDrag(trackID: trackID, insertionIndex: trackInsertionIndex(at: value.location),
+                                        translationY: value.translation.height)
+            }
+            .onEnded { value in
+                guard let destination = trackInsertionIndex(at: value.location),
+                      let source = timeline.tracks.firstIndex(where: { $0.id == trackID }) else { return }
+                var ids = timeline.tracks.map(\.id)
+                ids.move(fromOffsets: IndexSet(integer: source), toOffset: destination)
+                guard ids != timeline.tracks.map(\.id) else { return }
+                performEdit {
+                    var reordered = timeline
+                    try TimelineEditor.reorderTracks(&reordered, trackIDs: ids)
+                    timeline = reordered
+                }
+            }
+    }
+
+    private func trackInsertionIndex(at point: CGPoint) -> Int? {
+        guard point.x >= 0, point.x <= headerWidth, point.y >= 0 else { return nil }
+        let rowHeight = laneHeight + 1
+        return min(timeline.tracks.count, max(0, Int(floor((point.y - rulerHeight + rowHeight / 2) / rowHeight))))
+    }
+
+    private var reorderAnimation: Animation? { reduceMotion ? nil : .snappy(duration: 0.2) }
+
+    private var insertionAnimation: Animation? { reduceMotion ? nil : .easeOut(duration: 0.24) }
+
+    private var insertionTransition: AnyTransition {
+        .asymmetric(
+            insertion: reduceMotion ? .identity : .opacity.combined(with: .offset(y: 6)),
+            removal: .identity
+        )
+    }
+
+    private func animatedTrackRow<Content: View>(_ id: UUID, @ViewBuilder content: () -> Content) -> some View {
+        let dragging = trackDrag?.trackID == id
+        let offset = trackRowOffset(id)
+        return VStack(spacing: 0, content: content)
+            .shadow(color: .black.opacity(dragging ? 0.25 : 0), radius: dragging ? 6 : 0, y: dragging ? 3 : 0)
+            .offset(y: offset)
+            .zIndex(dragging ? 1 : 0)
+            .animation(dragging ? nil : reorderAnimation, value: offset)
+            .animation(reorderAnimation, value: timeline.tracks.map(\.id))
+            .transition(insertionTransition)
+    }
+
+    private func trackRowOffset(_ id: UUID) -> CGFloat {
+        guard let drag = trackDrag else { return 0 }
+        if drag.trackID == id { return drag.translationY }
+        guard let source = timeline.tracks.firstIndex(where: { $0.id == drag.trackID }),
+              let index = timeline.tracks.firstIndex(where: { $0.id == id }),
+              let insertion = drag.insertionIndex else { return 0 }
+        let destination = insertion > source ? insertion - 1 : insertion
+        if index > source, index <= destination { return -(laneHeight + 1) }
+        if index >= destination, index < source { return laneHeight + 1 }
+        return 0
     }
 
     // MARK: - Ruler
@@ -467,7 +597,10 @@ public struct SequenceTimelineView: View {
                 .gesture(marqueeGesture(scrubs: true))
             ForEach(track.clips) { clip in
                 clipView(clip, on: track)
+                    .transition(insertionTransition)
             }
+            // Global membership stays unchanged when clips move between lanes.
+            .animation(insertionAnimation, value: Set(timeline.allClips.map(\.id)))
             TimelineModifierRegions(timeline: $timeline, track: track, pixelsPerSecond: pixelsPerSecond, laneHeight: laneHeight,
                                     selectedTransitionID: selectedTransitionID,
                                     onInspectEffects: { timelineFocused = true; onInspectEffects?($0) }, onInspectTransition: { timelineFocused = true; onInspectTransition?($0) },
@@ -644,6 +777,7 @@ public struct SequenceTimelineView: View {
         case .video: return Color(nsColor: .controlBackgroundColor)
         case .audio: return Color(nsColor: .controlBackgroundColor).opacity(0.7)
         case .overlay: return Color(nsColor: .controlBackgroundColor).opacity(0.5)
+        case .caption: return Color(nsColor: .controlBackgroundColor).opacity(0.4)
         }
     }
 
@@ -722,6 +856,10 @@ public struct SequenceTimelineView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .frame(height: clipTitleHeight, alignment: .top)
                     .background(.black.opacity(0.35))
+                    // The clip's own box is offset inside its lane and reports
+                    // the lane's bounds to accessibility; the title is the one
+                    // element over the clip a test can address and click.
+                    .accessibilityIdentifier("timeline.clip.name.\(clip.id.uuidString)")
                 Spacer(minLength: 0)
             }
             .clipShape(RoundedRectangle(cornerRadius: 5))
@@ -810,6 +948,21 @@ public struct SequenceTimelineView: View {
                 }
                 .disabled(alignment.targetClipID == nil)
             }
+            let hostItems = clipMenuItems?(clip, timeline) ?? []
+            if !hostItems.isEmpty {
+                Divider()
+                ForEach(hostItems) { item in
+                    Button(action: item.action) {
+                        if let symbol = item.systemImage {
+                            Label(item.title, systemImage: symbol)
+                        } else {
+                            Text(item.title)
+                        }
+                    }
+                    .disabled(!item.isEnabled)
+                }
+                Divider()
+            }
             Button(targets.count > 1 ? "Delete \(targets.count) Clips" : "Delete", role: .destructive) { delete(targets) }
             Button(targets.count > 1 ? "Ripple Delete \(targets.count) Clips" : "Ripple Delete", role: .destructive) {
                 performEdit { try TimelineEditor.rippleDelete(&timeline, clipIDs: targets) }
@@ -887,6 +1040,7 @@ public struct SequenceTimelineView: View {
             case .video: return "video"
             case .audio: return "audio"
             case .overlay: return "overlay"
+            case .caption: return "caption"
             }
         }
         return "Drop on \(names.joined(separator: " or ")) track"

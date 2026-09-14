@@ -16,7 +16,7 @@ struct TimelineCodecTests {
             text: nil
         )
         try TimelineEditor.insert(&t, clip: clip, on: v)
-        let o = t.tracks.first { $0.kind == .overlay }!.id
+        let o = t.tracks.first { $0.kind == .caption }!.id
         try TimelineEditor.insert(&t, clip: Clip(source: ClipSource(id: "caption:1", kind: .captions, displayName: "Cap"), start: 0, duration: 4, text: TextStyle(fontSize: 0.07)), on: o)
 
         let data = try TimelineCodec.encode(t)

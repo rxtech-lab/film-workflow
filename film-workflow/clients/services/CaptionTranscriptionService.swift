@@ -223,18 +223,21 @@ enum CaptionTranscriptionService {
         return cues.count
     }
 
-    /// Finds or creates the caption project for a narration, then aligns it.
+    /// Finds or creates the caption project for a narration and points it at
+    /// the narration's audio and script. **Nothing is transcribed.**
     ///
     /// Reuses an existing project when one is already linked, so re-generating
     /// captions doesn't leave orphans piling up in the Caption tab.
+    ///
+    /// Split out of ``captionProject(for:narrative:context:config:onProgress:)``
+    /// so the editor can hand the user captions that are ready to transcribe
+    /// without starting a provider run on their behalf.
     @discardableResult
-    static func captionProject(
+    static func prepareNarrativeProject(
         for generated: GeneratedNarrative,
         narrative: NarrativeProject,
-        context: ModelContext,
-        config: AppConfig,
-        onProgress: (@MainActor @Sendable (CaptionProgress) -> Void)? = nil
-    ) async throws -> CaptionProject {
+        context: ModelContext
+    ) throws -> CaptionProject {
         let project: CaptionProject
         if let existingID = generated.captionProjectID,
            let existing = try? context.fetch(
@@ -254,7 +257,10 @@ enum CaptionTranscriptionService {
         project.sourceKindEnum = .generatedNarrative
         project.sourceNarrativeID = generated.captionSourceID
         project.sourceNarrativeName = narrative.name
-        project.audioDurationMs = 0
+        // The narration measured this file when it was generated; the same
+        // number saves the transcriber a probe, and lets the library show a
+        // length before there is a single cue.
+        project.audioDurationMs = generated.durationSeconds > 0 ? Int((generated.durationSeconds * 1000).rounded()) : 0
         project.diarizationEnabled = false
         project.languageHint = CaptionSettings.shared.defaultLanguageHint
 
@@ -272,6 +278,20 @@ enum CaptionTranscriptionService {
             )
         }
 
+        project.updatedAt = Date()
+        return project
+    }
+
+    /// Finds or creates the caption project for a narration, then aligns it.
+    @discardableResult
+    static func captionProject(
+        for generated: GeneratedNarrative,
+        narrative: NarrativeProject,
+        context: ModelContext,
+        config: AppConfig,
+        onProgress: (@MainActor @Sendable (CaptionProgress) -> Void)? = nil
+    ) async throws -> CaptionProject {
+        let project = try prepareNarrativeProject(for: generated, narrative: narrative, context: context)
         try await alignNarrative(
             project: project,
             context: context,

@@ -21,6 +21,7 @@ final class SequenceProject: GroupableProject {
     var timelinePixelsPerSecond: Double = 40
 
     @Transient private var cachedTimeline: Timeline?
+    @Transient private var cachedTimelineData: Data?
 
     init(name: String) {
         self.name = name
@@ -31,6 +32,7 @@ final class SequenceProject: GroupableProject {
         timeline.id = id
         self.timelineData = (try? TimelineCodec.encode(timeline)) ?? Data()
         self.cachedTimeline = timeline
+        self.cachedTimelineData = self.timelineData
     }
 
     var timeline: Timeline {
@@ -38,9 +40,12 @@ final class SequenceProject: GroupableProject {
             // Register the stored data dependency even on a cache hit so inspector
             // controls and thumbnails refresh after an atomic timeline edit.
             let data = timelineData
-            if let cachedTimeline { return cachedTimeline }
+            // A save from another context refreshes timelineData directly.
+            // The decoded cache is valid only for those exact stored bytes.
+            if let cachedTimeline, cachedTimelineData == data { return cachedTimeline }
             let decoded = (try? TimelineCodec.decode(data)) ?? Timeline(width: width, height: height, fps: fps)
             cachedTimeline = decoded
+            cachedTimelineData = data
             return decoded
         }
         set {
@@ -52,6 +57,7 @@ final class SequenceProject: GroupableProject {
                 timelineData = data
                 updatedAt = Date()
             }
+            cachedTimelineData = timelineData
         }
     }
 

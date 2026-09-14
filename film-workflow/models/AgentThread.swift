@@ -30,6 +30,14 @@ final class AgentThread {
     var documentID: UUID?
     var documentPath: String?
 
+    /// Empty for an ordinary conversation; `simple:<templateID>` for a thread
+    /// driving the Simple mode wizard. See ``AgentThreadMode``.
+    ///
+    /// Stored as a string with a default so existing threads migrate without a
+    /// schema version, and so a thread that was mid-wizard when the app quit
+    /// still knows what it was.
+    var modeRaw: String = ""
+
     // MARK: - Backend
 
     /// Empty means "follow `AgentSettings.shared.defaultBackend`". Stored rather
@@ -114,6 +122,11 @@ final class AgentThread {
             targetKind = newValue.kind.rawValue
             targetUUID = newValue.projectUUID
         }
+    }
+
+    var mode: AgentThreadMode {
+        get { AgentThreadMode(raw: modeRaw) }
+        set { modeRaw = newValue.raw }
     }
 
     /// The thread's backend override, or nil to follow the app default.

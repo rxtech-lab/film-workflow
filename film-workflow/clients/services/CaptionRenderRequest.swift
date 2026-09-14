@@ -40,6 +40,14 @@ nonisolated struct CaptionRenderRequest: Codable, Equatable, Sendable {
         return burnInBilingual ? .bilingual(burnInLanguage) : .translation(burnInLanguage)
     }
 
+    /// The same choice as a caption clip states it: the languages drawn on one
+    /// caption, transcript first. `[""]` means "whatever each clip already
+    /// says", since asking for the transcript is also the clip default.
+    var burnInLanguages: [String] {
+        if burnInLanguage.isEmpty { return [""] }
+        return burnInBilingual ? ["", burnInLanguage] : [burnInLanguage]
+    }
+
     /// The same request without languages the sequence cannot supply. Always
     /// keeps at least the original, so a render never ends up with no track.
     func narrowed(to available: [String]) -> CaptionRenderRequest {

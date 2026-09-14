@@ -1,20 +1,39 @@
 import SwiftUI
 import VideoEditorCore
 
-/// Edits one clip: timing, fit, opacity, volume, text style.
+/// A language a caption clip can draw, named the way the host app names it.
+/// The empty code is the transcript itself.
+public struct CaptionLanguageChoice: Identifiable, Hashable, Sendable {
+    public let code: String
+    public let name: String
+
+    public init(code: String, name: String) {
+        self.code = code
+        self.name = name
+    }
+
+    public var id: String { code }
+}
+
+/// Edits one clip: timing, fit, opacity, volume, caption languages, text style.
 public struct ClipInspectorView: View {
     @Binding var timeline: Timeline
     let clipID: UUID
     /// Shown for Remotion clips whose media is stale or missing.
     let renderStatus: String?
     let onRender: (() -> Void)?
+    /// What a caption clip can be drawn in, transcript first. Empty when the
+    /// host has nothing to offer, which hides the language rows.
+    let captionLanguages: [CaptionLanguageChoice]
     @State private var showSpeed = false
     @State private var editError: String?
 
-    public init(timeline: Binding<Timeline>, clipID: UUID, renderStatus: String? = nil, onRender: (() -> Void)? = nil) {
+    public init(timeline: Binding<Timeline>, clipID: UUID, renderStatus: String? = nil,
+                captionLanguages: [CaptionLanguageChoice] = [], onRender: (() -> Void)? = nil) {
         _timeline = timeline
         self.clipID = clipID
         self.renderStatus = renderStatus
+        self.captionLanguages = captionLanguages
         self.onRender = onRender
     }
 
@@ -82,6 +101,25 @@ public struct ClipInspectorView: View {
                     }
                 }
                 if clip.source.kind == .captions {
+                    Section("Captions") {
+                        if captionLanguages.count > 1 {
+                            ForEach(captionLanguages) { language in
+                                Toggle(language.name, isOn: languageBinding(language.code, clip: clip))
+                                    // Something has to be drawn, so the last
+                                    // language on cannot be turned off.
+                                    .disabled(clip.captions.languages == [language.code])
+                            }
+                            if clip.captions.languages.count > 1 {
+                                Text("Drawn on one caption, transcript first.")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                        Toggle("Strip Punctuation", isOn: Binding(
+                            get: { clip.captions.stripsPunctuation },
+                            set: { on in update { $0.captions.stripsPunctuation = on } }
+                        ))
+                    }
                     Section("Text") {
                         TextStyleEditor(style: Binding(get: { clip.text ?? .caption }, set: { v in update { $0.text = v } }))
                     }
@@ -95,6 +133,21 @@ public struct ClipInspectorView: View {
         } else {
             ContentUnavailableView("No Clip Selected", systemImage: "rectangle.dashed")
         }
+    }
+
+    /// Turning a language on adds it in the order the host listed them, so a
+    /// bilingual caption always reads transcript first rather than in the
+    /// order the toggles happened to be clicked.
+    private func languageBinding(_ code: String, clip: Clip) -> Binding<Bool> {
+        Binding(
+            get: { clip.captions.languages.contains(code) },
+            set: { on in
+                var chosen = Set(clip.captions.languages)
+                if on { chosen.insert(code) } else { chosen.remove(code) }
+                let ordered = captionLanguages.map(\.code).filter { chosen.contains($0) }
+                update { $0.captions = CaptionOptions(languages: ordered, stripsPunctuation: $0.captions.stripsPunctuation) }
+            }
+        )
     }
 
     private func performEdit(_ edit: () throws -> Void) {

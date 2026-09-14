@@ -1,4 +1,5 @@
 import AppKit
+import AVFoundation
 import Foundation
 import RxRemotion
 import SwiftData
@@ -94,6 +95,79 @@ struct LibPreviewableTests {
         #expect(player.currentTime == 0.5)
         player.endSkim()
         #expect(player.currentTime == 1.5)
+        player.unload()
+        await document.close()
+    }
+
+    @Test("Saved Remotion renders show changing frames and support library playback", arguments: [false, true])
+    func renderedRemotion(preserveAlpha: Bool) async throws {
+        NSApp.accessibilitySetValue(true, forAttribute: .init(rawValue: "AXEnhancedUserInterface"))
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("RenderedLibraryPreview-\(UUID()).rxfilmstudio")
+        defer { try? FileManager.default.removeItem(at: url) }
+        let document = try ProjectDocument.create(at: url)
+        let project = RemotionProject(name: "Rendered animation")
+        project.durationSeconds = 2
+        project.compositionWidth = 320; project.compositionHeight = 180; project.compositionFps = 10
+        document.container.mainContext.insert(project)
+        let code = """
+        import React from 'react'; import {AbsoluteFill,useCurrentFrame} from 'remotion';
+        export const COMPOSITION_WIDTH=320,COMPOSITION_HEIGHT=180,COMPOSITION_FPS=10,COMPOSITION_DURATION_IN_FRAMES=20;
+        export function MyComposition(){return <AbsoluteFill style={{backgroundColor:useCurrentFrame()<10?'red':'blue'}}/>}
+        """
+        project.compositionSource = code
+        try RemotionCodeBuilder.writeComposition(project: project, source: code)
+        let render = try await RemotionRenderService.ensureRender(project: project, width: 320, height: 180, fps: 10,
+            context: document.container.mainContext, preserveAlpha: preserveAlpha) { _ in }
+        // Change the live source after rendering. Selecting a saved version must
+        // still decode that version's red/blue movie, not the current composition.
+        project.compositionSource = code.replacingOccurrences(of: "'red':'blue'", with: "'green':'green'")
+        try RemotionCodeBuilder.writeComposition(project: project, source: project.compositionSource)
+        let index = LibraryIndex(remotions: [project], remotionRenders: [render])
+        let cell = try #require(index.footage(for: .init(kind: .remotion, id: project.id)).first)
+        let source = try #require(cell.previewSource)
+        #expect(source.isTemporal && source.canScrub && source.duration == 2)
+        let red = try #require(await source.thumbnail(at: 0, maximumSize: CGSize(width: 160, height: 90)))
+        let blue = try #require(await source.thumbnail(at: 1.5, maximumSize: CGSize(width: 160, height: 90)))
+        let r = NSBitmapImageRep(cgImage: red).colorAt(x: 40, y: 40)?.usingColorSpace(.deviceRGB)
+        let b = NSBitmapImageRep(cgImage: blue).colorAt(x: 40, y: 40)?.usingColorSpace(.deviceRGB)
+        #expect((r?.redComponent ?? 0) > 0.8 && (r?.blueComponent ?? 1) < 0.2)
+        #expect((b?.blueComponent ?? 0) > 0.8 && (b?.redComponent ?? 1) < 0.2)
+
+        let player = FootagePlayer()
+        let host = NSHostingView(rootView: VStack {
+            FootageFilmstrip(cell: cell, duration: cell.duration, isSelected: true, player: player,
+                             onSkim: { if let fraction = $0 { player.skim(toFraction: fraction) } else { player.endSkim() } },
+                             onSeek: { player.commitPosition(fraction: $0, cellID: cell.id) })
+            FootageViewer(cell: cell, name: project.name, versions: [cell], onSelectVersion: { _ in },
+                          player: player, document: document)
+        })
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 640, height: 480),
+                              styleMask: [.borderless], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false; window.contentView = host; window.orderBack(nil)
+        defer { window.close(); player.unload() }
+        for _ in 0..<100 {
+            if player.player.currentItem?.status == .readyToPlay, player.duration > 0 { break }
+            try await Task.sleep(for: .milliseconds(50))
+        }
+        #expect(!player.usesGeneratedPreview)
+        #expect((player.player.currentItem?.asset as? AVURLAsset)?.url == render.videoURL)
+        let elements = hostedAccessibilityDescendants(host)
+        let play = try #require(elements.first { $0.accessibilityIdentifier() == "viewer.play" })
+        #expect(!elements.contains { $0.accessibilityValue() as? String == "Still" || $0.accessibilityLabel() == "Still" })
+        #expect(play.accessibilityPerformPress())
+        for _ in 0..<60 where player.currentTime < 0.2 { try await Task.sleep(for: .milliseconds(50)) }
+        #expect(player.isPlaying && player.currentTime >= 0.2)
+        #expect(play.accessibilityPerformPress())
+        #expect(!player.isPlaying)
+        player.seek(to: 0)
+        player.skim(toFraction: 0.75)
+        #expect(abs(player.currentTime - 1.5) < 0.01)
+        player.endSkim()
+        #expect(player.currentTime == 0)
+        player.commitPosition(fraction: 0.75, cellID: cell.id)
+        player.endSkim()
+        #expect(abs(player.currentTime - 1.5) < 0.01)
+        #expect(try document.container.mainContext.fetchCount(FetchDescriptor<RemotionRender>()) == 1)
         player.unload()
         await document.close()
     }
