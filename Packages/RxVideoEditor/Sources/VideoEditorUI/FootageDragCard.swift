@@ -77,6 +77,7 @@ public extension SourceKind {
         case .image: return "photo"
         case .captions: return "captions.bubble"
         case .remotion: return "atom"
+        case .zoom: return "plus.magnifyingglass"
         }
     }
 
@@ -88,6 +89,7 @@ public extension SourceKind {
         case .image: return Color(red: 0.35, green: 0.62, blue: 0.55)
         case .audio: return Color(red: 0.25, green: 0.60, blue: 0.35)
         case .captions: return Color(red: 0.80, green: 0.55, blue: 0.20)
+        case .zoom: return Color(red: 0.72, green: 0.38, blue: 0.42)
         }
     }
 }

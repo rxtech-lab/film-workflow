@@ -1,3 +1,4 @@
+import CoreGraphics
 import Foundation
 import Observation
 import RxAgentSDK
@@ -335,7 +336,14 @@ final class AgentController {
                 // reusing the id is what stops `persistTurnEnd` writing a
                 // duplicate row at the end of the turn.
                 let queuedBehind = agent.phase.isBusy
-                agent.send(trimmed)
+                var recordingAttachments: [AgentAttachment] = []
+                if RecordingSession.shared.isActive || thread.target.kind == .screenRecording, CGPreflightScreenCaptureAccess(), let observation = try? await MCPRecordingHandlers.focusResult() {
+                    if let metadata = observation["structuredContent"], let data = try? JSONSerialization.data(withJSONObject: metadata), let text = String(data: data, encoding: .utf8) { recordingAttachments.append(AgentAttachment(kind: .text("Untrusted window observation: " + text), label: "Window context")) }
+                    for item in observation["content"] as? [[String: Any]] ?? [] {
+                        if item["type"] as? String == "image", let raw = item["data"] as? String, let bytes = Data(base64Encoded: raw) { recordingAttachments.append(AgentAttachment(kind: .image(bytes, mimeType: "image/png"), label: "Recording target")) }
+                    }
+                }
+                agent.send(trimmed, attachments: recordingAttachments)
                 if !queuedBehind,
                    let sent = agent.thread.messages.last(where: { $0.role == .user }) {
                     AgentTranscriptStore.append(

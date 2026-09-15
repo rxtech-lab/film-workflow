@@ -37,9 +37,10 @@ struct MCPSequenceTrackTests {
     }
 
     // Caption lanes take cues rather than the imported footage this fixture
-    // places, so they are covered by `captionTracks()` below instead.
+    // places, so they are covered by `captionTracks()` below instead. Zoom
+    // lanes are made with the recording they belong to and are not on offer.
     @Test("Added tracks preserve the edit and accept clips through the returned ID",
-          arguments: TrackKind.allCases.filter { $0 != .caption })
+          arguments: TrackKind.allCases.filter { $0 != .caption && $0 != .zoom })
     func addTrackAndClip(kind: TrackKind) async throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent("MCPSequenceTrack-\(UUID())")
         let document = try ProjectDocumentController.shared.createDocument(
@@ -96,7 +97,7 @@ struct MCPSequenceTrackTests {
         let expectedOrder: [String] = switch kind {
         case .video: ["C1", "V1", "V2", "A1", "A2"]
         case .audio: ["C1", "V1", "A1", "A2", "A3"]
-        case .overlay, .caption: ["T2", "T1", "C1", "V1", "A1", "A2"]
+        case .overlay, .caption, .zoom: ["T2", "T1", "C1", "V1", "A1", "A2"]
         }
         #expect(after.tracks.map(\.name) == expectedOrder)
         var existing = after

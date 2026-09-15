@@ -20,6 +20,7 @@ enum MCPToolRegistry {
         tools.append(contentsOf: MCPMarketplaceHandlers.descriptors.filter { !MCPMarketplaceHandlers.adminNames.contains($0.name) || MarketplaceAuthoringService.shared.canAuthor })
         tools.append(contentsOf: MCPLibraryHandlers.descriptors)
         tools.append(contentsOf: MCPSequenceHandlers.descriptors)
+        tools.append(contentsOf: MCPRecordingHandlers.descriptors)
         tools.append(contentsOf: MCPGenerateHandlers.descriptors)
         tools.append(contentsOf: MCPCaptionHandlers.descriptors)
         #if os(macOS)
@@ -164,6 +165,9 @@ enum MCPToolRegistry {
 
         if MCPLibraryHandlers.canHandle(name) {
             return try await MCPLibraryHandlers.handle(name: name, arguments: arguments, context: context)
+        }
+        if MCPRecordingHandlers.canHandle(name) {
+            return try await MCPRecordingHandlers.handle(name: name, arguments: arguments, context: context)
         }
         if MCPSequenceHandlers.canHandle(name) {
             return try await MCPSequenceHandlers.handle(name: name, arguments: arguments, context: context)

@@ -81,6 +81,9 @@
         }
       }
     },
+    "“%@” leaves the library. Clips already on a timeline keep working, and Undo brings the take back." : {
+
+    },
     "“%@” was added to %@." : {
       "localizations" : {
         "zh-Hans" : {
@@ -148,6 +151,29 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "#%lld"
+          }
+        }
+      }
+    },
+    "%.1fs" : {
+
+    },
+    "%.1fs · %lld tracks" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$.1fs · %2$lld tracks"
+          }
+        }
+      }
+    },
+    "%.1fs · %lld tracks%@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$.1fs · %2$lld tracks%3$@"
           }
         }
       }
@@ -229,6 +255,16 @@
         }
       }
     },
+    "%@ · %.1fs" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ · %2$.1fs"
+          }
+        }
+      }
+    },
     "%@ · %@" : {
       "localizations" : {
         "en" : {
@@ -245,6 +281,16 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "%1$@ · %2$@s\n%3$@"
+          }
+        }
+      }
+    },
+    "%@ · %lld" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ · %2$lld"
           }
         }
       }
@@ -281,6 +327,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%@ 为全局安装，无需添加到影片。"
+          }
+        }
+      }
+    },
+    "%@ at %lfs" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ at %2$lfs"
           }
         }
       }
@@ -662,6 +718,9 @@
         }
       }
     },
+    "%lld seconds" : {
+
+    },
     "%lld selected" : {
       "localizations" : {
         "zh-Hans" : {
@@ -733,6 +792,9 @@
           }
         }
       }
+    },
+    "%lld windows selected" : {
+
     },
     "%lld word timings" : {
       "localizations" : {
@@ -863,7 +925,16 @@
       },
       "shouldTranslate" : false
     },
+    "⌘⇧Esc to stop" : {
+
+    },
     "4K (3840 × 2160)" : {
+
+    },
+    "30 fps" : {
+
+    },
+    "60 fps" : {
 
     },
     "480p (854 × 480)" : {
@@ -981,6 +1052,12 @@
         }
       }
     },
+    "Access granted" : {
+
+    },
+    "Accessible target" : {
+
+    },
     "Account" : {
       "localizations" : {
         "zh-Hans" : {
@@ -1021,6 +1098,9 @@
         }
       }
     },
+    "Action" : {
+
+    },
     "Active" : {
       "localizations" : {
         "zh-Hans" : {
@@ -1060,6 +1140,9 @@
           }
         }
       }
+    },
+    "Add Action" : {
+
     },
     "Add an endpoint, API key, and model to use this engine." : {
       "localizations" : {
@@ -1332,6 +1415,9 @@
         }
       }
     },
+    "Add to Timeline" : {
+
+    },
     "Add Track" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -1591,6 +1677,9 @@
         }
       }
     },
+    "All Apps" : {
+
+    },
     "All Categories" : {
       "localizations" : {
         "zh-Hans" : {
@@ -1630,6 +1719,12 @@
           }
         }
       }
+    },
+    "Allow %@" : {
+
+    },
+    "Allow Access" : {
+
     },
     "Allow all" : {
       "localizations" : {
@@ -1720,6 +1815,21 @@
           }
         }
       }
+    },
+    "App" : {
+
+    },
+    "App Audio" : {
+
+    },
+    "App bundle ID" : {
+
+    },
+    "App Sound" : {
+
+    },
+    "Appium URL" : {
+
     },
     "Apple Intelligence" : {
       "localizations" : {
@@ -1876,6 +1986,9 @@
           }
         }
       }
+    },
+    "Apply Changes" : {
+
     },
     "Apply immediately" : {
       "localizations" : {
@@ -2175,6 +2288,9 @@
           }
         }
       }
+    },
+    "Back to Recording" : {
+
     },
     "Back to template selection" : {
       "localizations" : {
@@ -2654,6 +2770,12 @@
         }
       }
     },
+    "Cancel recording setup" : {
+
+    },
+    "Cancel Recording Setup" : {
+
+    },
     "Cancel rendering?" : {
       "localizations" : {
         "zh-Hans" : {
@@ -2836,6 +2958,9 @@
         }
       }
     },
+    "Capture Every Window of an App" : {
+
+    },
     "Casual" : {
       "localizations" : {
         "zh-Hans" : {
@@ -2937,6 +3062,9 @@
         }
       }
     },
+    "Change Sources…" : {
+
+    },
     "chat" : {
 
     },
@@ -2949,6 +3077,9 @@
           }
         }
       }
+    },
+    "Check Again" : {
+
     },
     "Check for Updates..." : {
       "localizations" : {
@@ -3035,6 +3166,9 @@
         }
       }
     },
+    "Choose a device" : {
+
+    },
     "Choose a language and translation engine. Translations belong to the current transcript version; Update fills missing or outdated lines." : {
 
     },
@@ -3120,6 +3254,12 @@
           }
         }
       }
+    },
+    "Choose a source" : {
+
+    },
+    "Choose an app" : {
+
     },
     "Choose an audio file or a narration first" : {
       "localizations" : {
@@ -3478,6 +3618,9 @@
     "Click a clip to pause and jump to its start. The highlighted shot follows the agent's latest edit as your film is built." : {
 
     },
+    "Click Record below to choose what to capture. Your takes will appear here." : {
+
+    },
     "Click to preview, drag onto the timeline or into a library group" : {
       "localizations" : {
         "zh-Hans" : {
@@ -3641,6 +3784,9 @@
     "Complete the purchase in the browser window that just opened. Your balance updates here once it clears." : {
 
     },
+    "Complete these steps to use the recorder. Your selection will be kept while you update permissions." : {
+
+    },
     "Composing music…" : {
       "localizations" : {
         "zh-Hans" : {
@@ -3735,6 +3881,9 @@
           }
         }
       }
+    },
+    "Connect a configured Appium device to control and record its actions." : {
+
     },
     "Connect an OpenAI-compatible provider." : {
       "localizations" : {
@@ -3991,6 +4140,9 @@
     "Couldn’t Remove Lyrics" : {
 
     },
+    "Couldn’t Remove Take" : {
+
+    },
     "Couldn’t Save Lyrics" : {
 
     },
@@ -4011,6 +4163,9 @@
       }
     },
     "Couldn’t verify your subscription. You can keep working." : {
+
+    },
+    "Countdown" : {
 
     },
     "Country" : {
@@ -4812,6 +4967,9 @@
         }
       }
     },
+    "Delete Version…" : {
+
+    },
     "Delete Video" : {
       "localizations" : {
         "zh-Hans" : {
@@ -4898,6 +5056,9 @@
         }
       }
     },
+    "Deselect %@" : {
+
+    },
     "Detect speakers" : {
       "localizations" : {
         "zh-Hans" : {
@@ -4907,6 +5068,21 @@
           }
         }
       }
+    },
+    "Device" : {
+
+    },
+    "Device Automation" : {
+
+    },
+    "Device Preview" : {
+
+    },
+    "Device screen" : {
+
+    },
+    "Device UDID" : {
+
     },
     "Discard" : {
       "localizations" : {
@@ -4929,6 +5105,9 @@
       }
     },
     "Dismiss" : {
+
+    },
+    "Display" : {
 
     },
     "Displayed Translation" : {
@@ -5127,6 +5306,9 @@
         }
       }
     },
+    "Drag to select the recording area" : {
+
+    },
     "Dreamy" : {
       "localizations" : {
         "zh-Hans" : {
@@ -5158,7 +5340,6 @@
       }
     },
     "Duplicate" : {
-      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -5187,6 +5368,9 @@
           }
         }
       }
+    },
+    "Duration / timeout" : {
+
     },
     "E Major" : {
       "localizations" : {
@@ -5338,6 +5522,9 @@
     "Edit Lyrics & Timing…" : {
 
     },
+    "Edit Recording Movement" : {
+
+    },
     "Edit shortcode parameters" : {
       "localizations" : {
         "zh-Hans" : {
@@ -5367,6 +5554,9 @@
           }
         }
       }
+    },
+    "Edit timing and targets, then replay to see the result." : {
+
     },
     "Edit…" : {
       "localizations" : {
@@ -5564,6 +5754,12 @@
           }
         }
       }
+    },
+    "End X" : {
+
+    },
+    "End Y" : {
+
     },
     "Endpoint (e.g. https://api.openai.com/v1)" : {
       "localizations" : {
@@ -7036,6 +7232,9 @@
         }
       }
     },
+    "Horizontal" : {
+
+    },
     "How many times the agent may call tools before it has to answer. Raise it for long jobs; lower it to cut a looping model short sooner." : {
       "localizations" : {
         "zh-Hans" : {
@@ -7073,6 +7272,9 @@
 
     },
     "I’ve Completed the Purchase" : {
+
+    },
+    "If macOS asks you to quit and reopen RxFilmStudio, save your film and reopen the app. Access may not take effect until then." : {
 
     },
     "If the configured port is in use, the next free port (up to base+9) will be used instead. The actual port is shown below." : {
@@ -7308,6 +7510,9 @@
         }
       }
     },
+    "In System Settings → Privacy & Security → %@, enable RxFilmStudio." : {
+
+    },
     "In This Film" : {
       "localizations" : {
         "zh-Hans" : {
@@ -7327,6 +7532,9 @@
           }
         }
       }
+    },
+    "Include Cursor" : {
+
     },
     "Include timestamps" : {
       "localizations" : {
@@ -7656,6 +7864,9 @@
           }
         }
       }
+    },
+    "Key code" : {
+
     },
     "Kind" : {
       "localizations" : {
@@ -8195,6 +8406,9 @@
         }
       }
     },
+    "Manage Recording Permissions" : {
+
+    },
     "Manage Subscription" : {
 
     },
@@ -8485,6 +8699,9 @@
         }
       }
     },
+    "Modifier flags" : {
+
+    },
     "Mood" : {
       "localizations" : {
         "zh-Hans" : {
@@ -8504,6 +8721,9 @@
           }
         }
       }
+    },
+    "Motion" : {
+
     },
     "move" : {
       "localizations" : {
@@ -9014,7 +9234,13 @@
         }
       }
     },
+    "No %@" : {
+
+    },
     "No active plan" : {
+
+    },
+    "No App Audio" : {
 
     },
     "No audio preview available" : {
@@ -9401,6 +9627,9 @@
         }
       }
     },
+    "No windows available" : {
+
+    },
     "No Word Timings" : {
       "localizations" : {
         "zh-Hans" : {
@@ -9605,6 +9834,9 @@
         }
       }
     },
+    "Nothing to Play" : {
+
+    },
     "Nothing to preview yet" : {
       "localizations" : {
         "zh-Hans" : {
@@ -9718,6 +9950,9 @@
         }
       }
     },
+    "Open %@ Settings" : {
+
+    },
     "Open a film first." : {
       "localizations" : {
         "zh-Hans" : {
@@ -9780,6 +10015,9 @@
       }
     },
     "Open Credits Page" : {
+
+    },
+    "Open Device Control" : {
 
     },
     "Open Film…" : {
@@ -10228,6 +10466,12 @@
     "Pause preview" : {
 
     },
+    "Pause Recording" : {
+
+    },
+    "Paused" : {
+
+    },
     "People" : {
       "localizations" : {
         "zh-Hans" : {
@@ -10513,6 +10757,9 @@
         }
       }
     },
+    "Pointer coordinates are relative to the target window (0–1). Window positioning uses screen points. Changes take effect on the next replay." : {
+
+    },
     "Pop" : {
       "localizations" : {
         "zh-Hans" : {
@@ -10585,6 +10832,9 @@
           }
         }
       }
+    },
+    "Presentation Defaults" : {
+
     },
     "Preview" : {
       "localizations" : {
@@ -10858,6 +11108,9 @@
         }
       }
     },
+    "Quick Recording…" : {
+
+    },
     "R&B" : {
       "localizations" : {
         "zh-Hans" : {
@@ -11019,6 +11272,30 @@
         }
       }
     },
+    "Record" : {
+
+    },
+    "Record Actions" : {
+
+    },
+    "Record actions from the Record menu, then edit and replay them." : {
+
+    },
+    "Record Content" : {
+
+    },
+    "Record Screen" : {
+
+    },
+    "Recording" : {
+
+    },
+    "Recording Actions" : {
+
+    },
+    "Recording Mode" : {
+
+    },
     "Recording narration…" : {
       "localizations" : {
         "zh-Hans" : {
@@ -11028,6 +11305,12 @@
           }
         }
       }
+    },
+    "Recording Permissions" : {
+
+    },
+    "Recording settings" : {
+
     },
     "Recover a running generation" : {
 
@@ -11082,6 +11365,9 @@
         }
       }
     },
+    "Refresh Device" : {
+
+    },
     "Refresh list" : {
       "localizations" : {
         "zh-Hans" : {
@@ -11111,6 +11397,9 @@
           }
         }
       }
+    },
+    "Refresh Sources" : {
+
     },
     "Regenerate Captions…" : {
       "localizations" : {
@@ -11269,6 +11558,12 @@
     "Remove “%@” from this music? The captions will stay in the library, and the music’s audio will be kept." : {
 
     },
+    "Remove %@" : {
+
+    },
+    "Remove Camera" : {
+
+    },
     "Remove effect" : {
       "localizations" : {
         "zh-Hans" : {
@@ -11288,6 +11583,9 @@
     "Remove Lyrics…" : {
 
     },
+    "Remove Microphone" : {
+
+    },
     "Remove punctuation" : {
       "localizations" : {
         "zh-Hans" : {
@@ -11297,6 +11595,21 @@
           }
         }
       }
+    },
+    "Remove Recording Take" : {
+
+    },
+    "Remove Take" : {
+
+    },
+    "Remove Take…" : {
+
+    },
+    "Remove this take from the library. Existing timeline clips keep working." : {
+
+    },
+    "Remove this take?" : {
+
     },
     "Remove this translation?" : {
       "localizations" : {
@@ -11627,6 +11940,9 @@
         }
       }
     },
+    "Replay and Record" : {
+
+    },
     "Required" : {
       "localizations" : {
         "zh-Hans" : {
@@ -11751,6 +12067,9 @@
           }
         }
       }
+    },
+    "Resume Recording" : {
+
     },
     "Retime Captions" : {
       "localizations" : {
@@ -11908,6 +12227,9 @@
           }
         }
       }
+    },
+    "Review and grant access for all recording features." : {
+
     },
     "Review before applying" : {
       "localizations" : {
@@ -12247,6 +12569,9 @@
         }
       }
     },
+    "Saving take…" : {
+
+    },
     "Saving…" : {
       "localizations" : {
         "zh-Hans" : {
@@ -12296,6 +12621,15 @@
           }
         }
       }
+    },
+    "Screen Recording" : {
+
+    },
+    "Screen Recordings" : {
+
+    },
+    "Screenshots" : {
+
     },
     "Script match" : {
       "localizations" : {
@@ -12402,6 +12736,9 @@
         }
       }
     },
+    "Secure input was omitted. Enter it manually during replay, then disable this step to continue." : {
+
+    },
     "Seed" : {
       "localizations" : {
         "zh-Hans" : {
@@ -12506,6 +12843,9 @@
         }
       }
     },
+    "Select an Action" : {
+
+    },
     "Select an item" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -12516,6 +12856,9 @@
           }
         }
       }
+    },
+    "Select Area…" : {
+
     },
     "Select footage to adjust its settings." : {
       "localizations" : {
@@ -12557,6 +12900,9 @@
         }
       }
     },
+    "Selected Apps" : {
+
+    },
     "Selected captions only (%lld)" : {
       "localizations" : {
         "zh-Hans" : {
@@ -12588,7 +12934,6 @@
       }
     },
     "Send" : {
-      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -12597,6 +12942,9 @@
           }
         }
       }
+    },
+    "Send text" : {
+
     },
     "Senior Female" : {
       "localizations" : {
@@ -12744,6 +13092,9 @@
         }
       }
     },
+    "Set Up Recording" : {
+
+    },
     "Set your AI provider once" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -12819,6 +13170,9 @@
         }
       }
     },
+    "Shortcut Subtitle Style" : {
+
+    },
     "Shot direction and framing" : {
       "localizations" : {
         "zh-Hans" : {
@@ -12889,6 +13243,9 @@
         }
       }
     },
+    "Show Film" : {
+
+    },
     "Show full details…" : {
       "localizations" : {
         "zh-Hans" : {
@@ -12948,6 +13305,12 @@
           }
         }
       }
+    },
+    "Show Recording Pet" : {
+
+    },
+    "Show Recording Setup" : {
+
     },
     "Show Transcript" : {
       "localizations" : {
@@ -13462,6 +13825,9 @@
         }
       }
     },
+    "Start (seconds)" : {
+
+    },
     "Start a Film" : {
       "localizations" : {
         "zh-Hans" : {
@@ -13534,6 +13900,9 @@
           }
         }
       }
+    },
+    "Start Recording" : {
+
     },
     "Start seconds" : {
       "localizations" : {
@@ -13697,6 +14066,9 @@
           }
         }
       }
+    },
+    "Stop Recording" : {
+
     },
     "Stop Rendering" : {
       "localizations" : {
@@ -13901,6 +14273,15 @@
           }
         }
       }
+    },
+    "Take Screenshot" : {
+
+    },
+    "Takes" : {
+
+    },
+    "Target" : {
+
     },
     "Target the whole film or a specific library item. Each conversation remembers its own target." : {
 
@@ -15956,6 +16337,9 @@
         }
       }
     },
+    "Vertical" : {
+
+    },
     "Video" : {
       "localizations" : {
         "zh-Hans" : {
@@ -16300,6 +16684,12 @@
         }
       }
     },
+    "Window ID" : {
+
+    },
+    "Window title" : {
+
+    },
     "With AI" : {
       "localizations" : {
         "zh-Hans" : {
@@ -16504,6 +16894,12 @@
           }
         }
       }
+    },
+    "X" : {
+
+    },
+    "Y" : {
+
     },
     "You can switch engines later from the Agent window. Claude Code and Codex run the command-line tools installed on this Mac." : {
       "localizations" : {

@@ -14,13 +14,14 @@ public indirect enum LayerSpec: @unchecked Sendable {
     /// A clip whose media does not exist yet (an unrendered Remotion clip).
     case placeholder(String)
     case processed(LayerSpec, [EffectInstance])
+    case recording(LayerSpec, clip: Clip)
     case heldEdges(LayerSpec, playable: Range<Double>, first: CGImage?, last: CGImage?, transform: ClipTransform, opacity: Float)
     case transition(from: LayerSpec?, to: LayerSpec?, instance: TransitionInstance, range: Range<Double>)
 
     func sourceTrackIDs(at time: Double) -> [CMPersistentTrackID] {
         switch self {
         case .sourceTrack(let id, _, _, _, _): return [id]
-        case .processed(let layer, _): return layer.sourceTrackIDs(at: time)
+        case .processed(let layer, _), .recording(let layer, _): return layer.sourceTrackIDs(at: time)
         case .heldEdges(let layer, let range, _, _, _, _): return range.contains(time) ? layer.sourceTrackIDs(at: time) : []
         case .transition(let from, let to, _, _): return (from?.sourceTrackIDs(at: time) ?? []) + (to?.sourceTrackIDs(at: time) ?? [])
         default: return []

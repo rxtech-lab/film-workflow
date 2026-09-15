@@ -28,6 +28,9 @@ struct InspectorContext {
         if let clipID = state.selectedClipID, let clip = sequence?.timeline.clip(id: clipID),
            let (prefix, id) = DocumentMediaResolver.parse(clip.source.id),
            let kind = FootageKind(rawValue: prefix.rawValue) {
+            if prefix == .screenRecording {
+                return try? RecordingTimelineService.resolve(id: id, context: document.container.mainContext).0.project
+            }
             if prefix == .music {
                 return index.music.first { $0.generatedFiles.contains { $0.id == id } }
             }

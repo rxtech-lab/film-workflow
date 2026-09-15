@@ -30,6 +30,7 @@ struct LibraryVersion: Identifiable, Hashable {
 /// Everything the library needs from the store, refetched by SwiftUI queries
 /// in `EditorWindowView` and passed down as plain values.
 struct LibraryIndex {
+    var recordings: [ScreenRecordingProject] = []
     var music: [MusicProject] = []
     var narrations: [NarrativeProject] = []
     var captions: [CaptionProject] = []
@@ -80,9 +81,14 @@ struct LibraryIndex {
             LibraryRow(id: LibraryItemID(kind: .imported, id: a.id), name: a.name, subtitle: a.dimensionsLabel, updatedAt: a.updatedAt, groupID: a.groupID,
                        dragItem: a.dragItem, versions: [], isFromMarketplace: a.marketplaceItemId != nil)
         }
+        rows += recordings.map { p in
+            let newest = p.visibleTakes.max { $0.createdAt < $1.createdAt }
+            return LibraryRow(id: .init(kind: .screenRecording, id: p.id), name: p.name, subtitle: newest.map { "\(Int($0.duration))s · \(p.visibleTakes.count) takes" } ?? "Ready to record", updatedAt: p.updatedAt, groupID: p.groupID, dragItem: newest?.dragItem, versions: versions(for: .init(kind: .screenRecording, id: p.id)))
+        }
         return rows.sorted { $0.updatedAt > $1.updatedAt }
     }
 
+    func recording(_ id: UUID) -> ScreenRecordingProject? { recordings.first { $0.id == id } }
     func sequence(_ id: UUID) -> SequenceProject? { sequences.first { $0.id == id } }
     func music(_ id: UUID) -> MusicProject? { music.first { $0.id == id } }
     func narration(_ id: UUID) -> NarrativeProject? { narrations.first { $0.id == id } }
@@ -94,6 +100,7 @@ struct LibraryIndex {
 
     func name(of item: LibraryItemID) -> String? {
         switch item.kind {
+        case .screenRecording: recording(item.id)?.name
         case .sequence: sequence(item.id)?.name
         case .music: music(item.id)?.name
         case .narration: narration(item.id)?.name
@@ -111,7 +118,7 @@ struct LibraryIndex {
         switch item.kind {
         case .imported: return imported(item.id)?.marketplaceItemId != nil
         case .remotion: return remotion(item.id)?.marketplaceItemId != nil
-        case .sequence, .music, .narration, .caption, .image, .video: return false
+        case .screenRecording, .sequence, .music, .narration, .caption, .image, .video: return false
         }
     }
 
@@ -119,6 +126,7 @@ struct LibraryIndex {
     /// The one place the inspector resolves a kind to a concrete type.
     func model(for item: LibraryItemID) -> (any FootageProtocol)? {
         switch item.kind {
+        case .screenRecording: return recording(item.id)
         case .sequence: return sequence(item.id)
         case .music: return music(item.id)
         case .narration: return narration(item.id)
@@ -135,6 +143,10 @@ struct LibraryIndex {
     /// The versions of one item, newest first. Empty for imported files.
     func versions(for item: LibraryItemID) -> [LibraryVersion] {
         switch item.kind {
+        case .screenRecording:
+            guard let project = recording(item.id) else { return [] }
+            let visible = Set(project.visibleTakes.map(\.id))
+            return generatedVersions(project.takes, id: \.id, createdAt: \.createdAt, detail: { durationLabel($0.duration) }).filter { visible.contains($0.id) }
         case .sequence: return sequence(item.id).map(sequenceVersions) ?? []
         case .music: return music(item.id).map { generatedVersions($0.generatedFiles, id: \.id, createdAt: \.createdAt, detail: { durationLabel($0.durationSeconds) }) } ?? []
         case .narration: return narration(item.id).map { generatedVersions($0.generatedFiles, id: \.id, createdAt: \.createdAt, detail: { durationLabel($0.durationSeconds) }) } ?? []
@@ -195,6 +207,12 @@ struct LibraryIndex {
     func footage(for item: LibraryItemID) -> [FootageCell] {
         let date: (Date) -> String = { $0.formatted(date: .abbreviated, time: .shortened) }
         switch item.kind {
+        case .screenRecording:
+            guard let p = recording(item.id) else { return [] }
+            return p.takes.sorted { $0.createdAt > $1.createdAt }.enumerated().compactMap { i, f in
+                guard !f.isRemovedFromLibrary else { return nil }
+                return FootageCell(id: f.id, title: "v\(p.takes.count - i)", subtitle: "\(Int(f.duration))s", footage: f)
+            }
         case .music:
             guard let p = music(item.id) else { return [] }
             return p.generatedFiles.sorted { $0.createdAt > $1.createdAt }.enumerated().map { i, f in

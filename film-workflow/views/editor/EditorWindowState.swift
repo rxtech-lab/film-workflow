@@ -14,6 +14,7 @@ enum FootageKind: String, CaseIterable, Codable, Identifiable {
     case video
     case remotion
     case imported
+    case screenRecording
 
     var id: String { rawValue }
 
@@ -26,6 +27,7 @@ enum FootageKind: String, CaseIterable, Codable, Identifiable {
         case .image: return "Images"
         case .video: return "Video"
         case .remotion: return "Remotion"
+        case .screenRecording: return "Screen Recording"
         case .imported: return "Imported"
         }
     }
@@ -39,6 +41,7 @@ enum FootageKind: String, CaseIterable, Codable, Identifiable {
         case .image: return "photo.on.rectangle.angled"
         case .video: return "video.badge.waveform"
         case .remotion: return "atom"
+        case .screenRecording: return "record.circle"
         case .imported: return "paperclip"
         }
     }
@@ -50,7 +53,7 @@ enum FootageKind: String, CaseIterable, Codable, Identifiable {
     }
 
     /// Kinds offered by the New menu.
-    static var creatable: [FootageKind] { [.sequence, .music, .narration, .caption, .image, .video, .remotion] }
+    static var creatable: [FootageKind] { [.sequence, .music, .narration, .caption, .image, .video, .screenRecording, .remotion] }
 }
 
 struct LibraryItemID: Hashable, Codable {
@@ -92,13 +95,25 @@ final class EditorWindowState {
     /// The clips selected on the timeline; they move and delete together.
     /// Selecting shows the sequence viewer but leaves the inspector tab alone.
     var selectedClipIDs: Set<UUID> = [] {
-        didSet { modifierSelection = nil; if !selectedClipIDs.isEmpty { showSequenceViewer() } }
+        didSet {
+            modifierSelection = nil
+            if let primary = primaryClipID, !selectedClipIDs.contains(primary) { primaryClipID = nil }
+            if !selectedClipIDs.isEmpty { showSequenceViewer() }
+        }
     }
-    /// The single selected clip, for the inspector and single-clip edits.
-    /// Nil while several clips are selected.
+    /// The clip the user clicked, when clicking it also selected the clips
+    /// linked to it — a recording's screen, microphone and shortcut lanes move
+    /// as one, but only one of them is being inspected.
+    var primaryClipID: UUID?
+    /// The single selected clip, for the inspector and single-clip edits. Nil
+    /// while several clips are selected, unless they are one clip's link
+    /// group, in which case the clicked clip stands for the selection.
     var selectedClipID: UUID? {
-        get { selectedClipIDs.count == 1 ? selectedClipIDs.first : nil }
-        set { selectedClipIDs = newValue.map { [$0] } ?? [] }
+        get {
+            if selectedClipIDs.count == 1 { return selectedClipIDs.first }
+            return primaryClipID.flatMap { selectedClipIDs.contains($0) ? $0 : nil }
+        }
+        set { primaryClipID = nil; selectedClipIDs = newValue.map { [$0] } ?? [] }
     }
     /// The inspector tab the user last picked, by `InspectorTabDescriptor.id`.
     /// Remembered across selections and launches; a selection that does not
@@ -178,7 +193,7 @@ final class EditorWindowState {
     func skimFootage(_ item: LibraryItemID, cellID: UUID, fraction: Double) {
         guard !player.isPlaying, !footagePlayer.isPlaying, fraction.isFinite else { return }
         switch item.kind {
-        case .image, .video, .music, .narration, .imported, .caption, .remotion: break
+        case .screenRecording, .image, .video, .music, .narration, .imported, .caption, .remotion: break
         case .sequence: return
         }
         footageSkim = FootageSkim(item: item, cellID: cellID, fraction: min(max(0, fraction), 1))

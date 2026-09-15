@@ -32,6 +32,7 @@ final class ImportedAsset: GroupableProject {
     /// Set when referenced in place.
     var bookmarkData: Data?
     var bookmarkIsSecurityScoped: Bool = false
+    var captureMetadata: Data?
     var originalPath: String = ""
 
     var durationSeconds: Double = 0

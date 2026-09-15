@@ -21,6 +21,9 @@ enum ProjectLifecycleService {
         case .image:
             let p = ImageGenProject(name: "Untitled Images"); p.groupID = groupID
             context.insert(p); return LibraryItemID(kind: .image, id: p.id)
+        case .screenRecording:
+            let p = ScreenRecordingProject(name: "Untitled Screen Recording"); p.groupID = groupID
+            context.insert(p); return LibraryItemID(kind: .screenRecording, id: p.id)
         case .video:
             let p = VideoGenProject(name: "Untitled Video"); p.groupID = groupID
             context.insert(p); return LibraryItemID(kind: .video, id: p.id)
@@ -57,6 +60,11 @@ enum ProjectLifecycleService {
             guard let p = try? context.fetch(FetchDescriptor<ImageGenProject>(predicate: #Predicate { $0.id == id })).first else { return }
             for f in p.generatedFiles { storage.deleteFile(at: f.imageFilePath) }
             context.delete(p)
+        case .screenRecording:
+            guard let p = try? context.fetch(FetchDescriptor<ScreenRecordingProject>(predicate: #Predicate { $0.id == id })).first else { return }
+            guard RecordingSession.shared.project?.id != p.id || !RecordingSession.shared.isActive else { return }
+            for take in p.takes { for component in take.components { if !component.filePath.isEmpty { storage.deleteFile(at: component.filePath) } } }
+            context.delete(p)
         case .video:
             guard let p = try? context.fetch(FetchDescriptor<VideoGenProject>(predicate: #Predicate { $0.id == id })).first else { return }
             for f in p.generatedFiles {
@@ -89,6 +97,7 @@ enum ProjectLifecycleService {
         case .narration: return "\"\(name)\" and its generated audio will be permanently deleted."
         case .caption: return "\"\(name)\", its transcript versions, and any audio it owns will be permanently deleted."
         case .image: return "\"\(name)\" and its generated images will be permanently deleted."
+        case .screenRecording: return "This recording and all its takes will be permanently deleted."
         case .video: return "\"\(name)\" and its generated videos will be permanently deleted."
         case .remotion: return "\"\(name)\", its Remotion source, assets and renders will be permanently deleted."
         case .sequence: return "\"\(name)\" and its renders will be permanently deleted. Footage stays in the library."

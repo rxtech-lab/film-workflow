@@ -16,6 +16,11 @@
 -->
 <plist version="1.0">
 <dict>
+    <key>NSCameraUsageDescription</key><string>Record presenter cameras and connected device screens for your film.</string>
+    <key>NSMicrophoneUsageDescription</key><string>Record selected microphones as separate audio tracks.</string>
+    <key>NSAudioCaptureUsageDescription</key><string>Record selected application and system audio for your film.</string>
+    <key>NSCameraUseContinuityCameraDeviceType</key><true/>
+
 	<key>SUFeedURL</key>
 	<string>https://update.filmstudio.rxlab.app/appcast.xml</string>
 	<key>SUPublicEDKey</key>

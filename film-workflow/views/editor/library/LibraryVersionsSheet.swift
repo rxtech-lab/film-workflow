@@ -35,6 +35,10 @@ struct LibraryVersionsSheet: View {
     @ViewBuilder
     private var content: some View {
         switch target.item.kind {
+        case .screenRecording:
+            if let project = index.recording(target.item.id) {
+                RecordingTakeListView(project: project)
+            } else { missing }
         case .music:
             if let p = index.music(target.item.id) {
                 GeneratedMusicListView(files: p.generatedFiles, initialSelectionID: target.versionID)
@@ -83,11 +87,35 @@ struct LibraryVersionsSheet: View {
     }
 }
 
+/// Takes of one screen recording. Right-click removes a take, the same command
+/// the trailing button runs and behind the same confirmation.
+private struct RecordingTakeListView: View {
+    let project: ScreenRecordingProject
+    @State private var pendingRemoval: RecordingTake?
+
+    var body: some View {
+        List(project.visibleTakes.sorted { $0.createdAt > $1.createdAt }) { take in
+            HStack {
+                VStack(alignment: .leading) { Text(take.name).font(.headline); Text("\(take.duration, specifier: "%.1f")s · \(take.components.count) tracks") }
+                Spacer()
+                RecordingTakeRemoveButton(take: take, selection: $pendingRemoval).buttonStyle(.borderless)
+            }
+            .contextMenu {
+                Button("Remove Take…", systemImage: "trash", role: .destructive) { pendingRemoval = take }
+            }
+        }
+        .modifier(RecordingTakeRemovalConfirmation(take: $pendingRemoval))
+    }
+}
+
 /// Transcription runs of a caption project. Choosing one makes it the take the
 /// editor, exports and translations all point at.
 private struct CaptionVersionsListView: View {
     let project: CaptionProject
     let highlightedID: UUID?
+
+    @Environment(\.modelContext) private var modelContext
+    @State private var pendingDeletion: CaptionTranscriptVersion?
 
     var body: some View {
         if project.orderedVersions.isEmpty {
@@ -116,8 +144,29 @@ private struct CaptionVersionsListView: View {
                 }
                 .padding(.vertical, 2)
                 .listRowBackground(version.id == highlightedID ? Color.accentColor.opacity(0.12) : nil)
+                .contextMenu { menu(for: version) }
             }
             .listStyle(.inset)
+            .modifier(CaptionVersionDeleteConfirmation(
+                version: $pendingDeletion,
+                onDelete: { version in
+                    CaptionTranscriptionService.deleteVersion(version.id, from: project, context: modelContext)
+                }
+            ))
+        }
+    }
+
+    /// Delete is hidden on the last version rather than disabled: the service
+    /// refuses it outright, since a project with captions and no version reads
+    /// as pre-versioning and shows every take at once.
+    @ViewBuilder
+    private func menu(for version: CaptionTranscriptVersion) -> some View {
+        if version.id != project.activeVersionID {
+            Button("Use This Version") { _ = CaptionTranscriptionService.activateVersion(version.id, in: project) }
+        }
+        if project.versions.count > 1 {
+            Divider()
+            Button("Delete Version…", systemImage: "trash", role: .destructive) { pendingDeletion = version }
         }
     }
 

@@ -82,3 +82,11 @@ extension SequenceProject: InspectorProtocol {
         AnyView(SequenceInspector(sequence: self, document: context.document, onRender: context.onRender))
     }
 }
+
+
+extension ScreenRecordingProject: InspectorProtocol {
+    var libraryItemID: LibraryItemID { .init(kind: .screenRecording, id: id) }
+    var footageName: String { name }
+    func makeSettingsTab(_ context: InspectorContext) -> AnyView { AnyView(ScreenRecordingInspector(project: self, context: context)) }
+    func makeInspectorFooter(_ context: InspectorContext) -> AnyView? { AnyView(RecordingInspectorFooter(project: self, context: context)) }
+}
