@@ -150,6 +150,7 @@ struct MarketplaceItemDetail: View {
             .padding(.top, 14)
             .accessibilityElement(children: .contain)
             .accessibilityIdentifier("marketplace-detail-preview")
+            .filmTip(.marketplacePreview, when: !isBusy)
     }
 
     private var heading: some View {
@@ -218,25 +219,36 @@ struct MarketplaceItemDetail: View {
                 Button(item.isFree ? LocalizedStringKey("Sign In to Install") : LocalizedStringKey("Sign In to Buy")) { navigation.requestSignIn() }
                     .buttonStyle(.borderedProminent)
                     .accessibilityIdentifier("marketplace-sign-in")
+                    .filmTip(.marketplaceSignIn)
             } else if !item.isEntitled {
-                Button { Task { await store.purchase(item) } } label: {
+                Button {
+                    Task {
+                        if await store.purchase(item) { FilmFeatureTip.marketplaceBuy.didPerform() }
+                    }
+                } label: {
                     if isBusy { ProgressView().controlSize(.small) }
                     else { Text("Buy for \(item.pricePoints.formatted()) credits") }
                 }
                 .buttonStyle(.borderedProminent)
                 .disabled(isBusy)
                 .accessibilityIdentifier("marketplace-buy")
+                .filmTip(.marketplaceBuy, when: !isBusy)
             } else if let progress {
                 ProgressView(value: progress) { Text("Downloading — \(Int(progress * 100))%") }
                     .frame(width: 200)
             } else if !isInstalled {
-                Button { Task { await store.install(item) } } label: {
+                Button {
+                    Task {
+                        if await store.install(item) { FilmFeatureTip.marketplaceInstall.didPerform() }
+                    }
+                } label: {
                     if isBusy { ProgressView().controlSize(.small) }
                     else { Label("Install", systemImage: "arrow.down") }
                 }
                 .buttonStyle(.borderedProminent)
                 .disabled(isBusy)
                 .accessibilityIdentifier("marketplace-install")
+                .filmTip(.marketplaceInstall, when: !isBusy)
             } else {
                 Menu {
                     Button("Reveal in Finder") { store.revealInFinder(item.id) }
@@ -246,21 +258,28 @@ struct MarketplaceItemDetail: View {
                 }
                 .fixedSize()
                 .accessibilityIdentifier("marketplace-installed")
+                .filmTip(.marketplaceInstalled)
                 if item.kind == .projectTemplate {
                     Button("Use in Current Film") {
+                        FilmFeatureTip.marketplaceTemplate.didPerform()
                         MarketplaceAgentLauncher.start(item: item, instruction: "Use project template \(item.id) in my current film. Inspect my footage, show the template, collect missing footage, and create a new sequence.")
                         openWindow(id: AgentWindowID.value)
                     }
                     .buttonStyle(.borderedProminent)
                     .disabled(!hasActiveFilm)
                     .accessibilityIdentifier("marketplace-use-template")
+                    .filmTip(.marketplaceTemplate, when: hasActiveFilm)
                 }
                 if item.kind.addsToFilm {
-                    Button("Add to Film", systemImage: "plus", action: onAddToFilm)
-                        .buttonStyle(.borderedProminent)
-                        .disabled(!hasActiveFilm)
-                        .help(hasActiveFilm ? "Add this item to the film in front" : "Open a film to add this item")
-                        .accessibilityIdentifier("marketplace-add-to-film")
+                    Button("Add to Film", systemImage: "plus") {
+                        FilmFeatureTip.marketplaceAdd.didPerform()
+                        onAddToFilm()
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(!hasActiveFilm)
+                    .help(hasActiveFilm ? "Add this item to the film in front" : "Open a film to add this item")
+                    .accessibilityIdentifier("marketplace-add-to-film")
+                    .filmTip(.marketplaceAdd, when: hasActiveFilm)
                 }
             }
         }

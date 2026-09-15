@@ -21,7 +21,7 @@ struct NarrationInspectorFooter: View {
     }
 
     var body: some View {
-        GenerateButton(title: "Generate", isBusy: isGenerating, isEnabled: canGenerate) { showPromptSheet = true }
+        GenerateButton(title: "Generate", isBusy: isGenerating, isEnabled: canGenerate, tip: FilmFeatureTip.generateNarration) { showPromptSheet = true }
             .padding(10)
             .alert("Error", isPresented: $showError) { Button("OK") {} } message: { Text(errorMessage ?? "An unknown error occurred.") }
             .insufficientCreditsAlert($insufficientCredits)

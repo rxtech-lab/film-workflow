@@ -62,8 +62,8 @@ struct InspectorTabResolutionTests {
         func ids(_ footage: (any FootageProtocol)?, clip: Bool = false, sequenceSelected: Bool = false) -> [String] {
             InspectorTabResolver.tabs(footage: footage, hasClip: clip, sequenceSelected: sequenceSelected, context: inspector).map(\.id)
         }
-        #expect(ids(caption) == ["settings", "captions", "style"])
-        #expect(ids(caption, clip: true, sequenceSelected: true) == ["settings", "captions", "style", "clip", "sequence"])
+        #expect(ids(caption) == ["settings", "captions", "style", "translation"])
+        #expect(ids(caption, clip: true, sequenceSelected: true) == ["settings", "captions", "style", "translation", "clip", "sequence"])
         #expect(ids(music) == ["settings", "composition"])
         #expect(ids(sequence, sequenceSelected: true) == ["sequence"])
         #expect(ids(nil, clip: true) == ["clip"])

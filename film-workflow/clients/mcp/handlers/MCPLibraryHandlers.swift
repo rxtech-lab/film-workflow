@@ -50,7 +50,7 @@ enum MCPLibraryHandlers {
         ),
         MCPToolDescriptor(
             name: "footage_update",
-            description: "Change an item's parameters — the fields the inspector shows. `fields` is an object; keys that don't belong to the item's kind are ignored. Every kind: name. Narration: provider (Gemini|Azure), sceneDescription, notes, context, speakers (array of {displayName, voice, geminiVoice, azureVoice, azurePitch, azureRate, azureVolume, azureRole, azureStyleDegree}), paragraphs (array of {speakerId, emotion, content}), azureOutputFormat (mp3|wav). Music: inputMode (editor|prompt), promptText, generalPrompt, genre, instruments (array), bpm, keyScale, mood, musicLength, generationType (withLyrics|noLyrics), lyricsLanguage, outputFormat (mp3|wav), songStructureEntries (array of {type, startTime, endTime, intensity, description}), lyricEntries (array of {timestamp, content}). Image: provider (openai|google), prompt, googleModel, googleAspectRatio, googleResolution, openAIModel, openAISize, openAICustomWidth, openAICustomHeight, openAIQuality, openAIFormat, openAICompression, openAIBackground, openAITransparent. Video: prompt, negativePrompt, googleModel, googleAspectRatio (16:9|9:16), googleResolution (720p|1080p|4k), googleDuration (4|5|6|8), googlePersonGeneration (allow_all|allow_adult|dont_allow), googleNumberOfVideos, googleGenerateAudio, useSeed, seed. Remotion: text, durationSeconds, themeColorHex (#RRGGBB), prompt, compositionWidth, compositionHeight, compositionFps, compositionSource (the TSX of src/Composition.tsx). Captions: provider (WhisperKit|OpenAI|Azure|Gemini, or \"\" for the app default), language, maxSpeakers, diarizationEnabled, wordTimestampsEnabled — the captions themselves are edited with the caption_* tools. Sequence: width, height, fps. Changing parameters never touches existing takes; run the kind's generate tool for a new one.",
+            description: "Change an item's parameters — the fields the inspector shows. `fields` is an object; keys that don't belong to the item's kind are ignored. Every kind: name. Narration: provider (Gemini|Azure), sceneDescription, notes, context, speakers (array of {displayName, voice, geminiVoice, azureVoice, azurePitch, azureRate, azureVolume, azureRole, azureStyleDegree}), paragraphs (array of {speakerId, emotion, content}), azureOutputFormat (mp3|wav). Music: inputMode (editor|prompt), promptText, generalPrompt, genre, instruments (array), bpm, keyScale, mood, musicLength, generationType (withLyrics|noLyrics), lyricsLanguage, outputFormat (mp3|wav), songStructureEntries (array of {type, startTime, endTime, intensity, description}), lyricEntries (array of {timestamp, content}). Image: prompt, subscriptionModel (the model that generates it — an id from models_list with capability image; leave empty for the account default), googleAspectRatio, googleResolution, openAISize, openAICustomWidth, openAICustomHeight, openAIQuality, openAIFormat, openAICompression, openAIBackground, openAITransparent. Which of those apply depends on the model's provider: Google models take googleAspectRatio and googleResolution, the rest take the openAI* controls. (provider, googleModel and openAIModel are legacy fields kept for older documents; they no longer choose anything.) Video: prompt, negativePrompt, googleModel, googleAspectRatio (16:9|9:16), googleResolution (720p|1080p|4k), googleDuration (4|5|6|8), googlePersonGeneration (allow_all|allow_adult|dont_allow), googleNumberOfVideos, googleGenerateAudio, useSeed, seed. Remotion: text, durationSeconds, themeColorHex (#RRGGBB), prompt, compositionWidth, compositionHeight, compositionFps, compositionSource (the TSX of src/Composition.tsx). Captions: provider (WhisperKit|OpenAI|Azure|Gemini, or \"\" for the app default), language, maxSpeakers, diarizationEnabled, wordTimestampsEnabled — the captions themselves are edited with the caption_* tools. Sequence: width, height, fps. Changing parameters never touches existing takes; run the kind's generate tool for a new one.",
             inputSchema: [
                 "type": "object",
                 "properties": [
@@ -622,6 +622,7 @@ enum MCPLibraryHandlers {
             copy.groupID = src.groupID
             copy.provider = src.provider
             copy.prompt = src.prompt
+            copy.subscriptionModel = src.subscriptionModel
             copy.googleModel = src.googleModel
             copy.googleAspectRatio = src.googleAspectRatio
             copy.googleResolution = src.googleResolution
@@ -1056,6 +1057,10 @@ enum MCPLibraryHandlers {
         [
             "provider": p.provider,
             "prompt": p.prompt,
+            // The model the generation is actually billed against. Empty means
+            // "whatever Settings holds", and an id the curated catalog no
+            // longer offers is substituted at generation time.
+            "subscriptionModel": p.subscriptionModel,
             "googleModel": p.googleModel,
             "googleAspectRatio": p.googleAspectRatio,
             "googleResolution": p.googleResolution,
@@ -1216,6 +1221,7 @@ enum MCPLibraryHandlers {
         if let s = fields["name"] as? String { p.name = s }
         if let s = fields["provider"] as? String, ImageProvider(rawValue: s) != nil { p.provider = s }
         if let s = fields["prompt"] as? String { p.prompt = s }
+        if let s = fields["subscriptionModel"] as? String { p.subscriptionModel = s }
         if let s = fields["googleModel"] as? String { p.googleModel = s }
         if let s = fields["googleAspectRatio"] as? String, ImageAspectRatio(rawValue: s) != nil { p.googleAspectRatio = s }
         if let s = fields["googleResolution"] as? String, ImageResolution(rawValue: s) != nil { p.googleResolution = s }

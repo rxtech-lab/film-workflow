@@ -11,20 +11,31 @@ enum MusicLyrics {
         let title: String
     }
 
+    /// The film's recordings, named by `CaptionAudioSource` so the lyrics menu
+    /// and the caption menus never disagree about what is on offer.
     static func targets(music: [GeneratedMusic], imported: [ImportedAsset]) -> [Target] {
-        let takes = music.sorted { $0.createdAt < $1.createdAt }
-        return takes.map { take in
-            let siblings = takes.filter { $0.project?.id == take.project?.id }
-            let version = (siblings.firstIndex { $0.id == take.id } ?? 0) + 1
-            return Target(id: DocumentMediaResolver.sourceID(.music, take.id),
-                          title: "\(take.project?.name ?? String(localized: "Music")) · v\(version)")
-        } + imported.filter { $0.kind == ImportedAssetKind.audio.rawValue }.map {
-            Target(id: DocumentMediaResolver.sourceID(.imported, $0.id), title: $0.name)
+        CaptionAudioSource.entries(music: music, imported: imported).map {
+            Target(id: $0.id, title: $0.title)
         }
     }
 
     static func project(for sourceID: String, context: ModelContext) throws -> CaptionProject? {
         try context.fetch(FetchDescriptor<CaptionProject>(predicate: #Predicate { $0.lyricsSourceID == sourceID })).first
+    }
+
+    /// Detach the lyrics without breaking caption clips or deleting their
+    /// text, versions, translations, or the recording's audio file.
+    static func remove(from sourceID: String, context: ModelContext) throws {
+        guard let lyrics = try project(for: sourceID, context: context) else { return }
+        let updatedAt = lyrics.updatedAt
+        lyrics.lyricsSourceID = nil
+        lyrics.updatedAt = Date()
+        do { try context.save() }
+        catch {
+            lyrics.lyricsSourceID = sourceID
+            lyrics.updatedAt = updatedAt
+            throw error
+        }
     }
 
     static func suggestedText(for sourceID: String, context: ModelContext) -> String {
@@ -38,46 +49,22 @@ enum MusicLyrics {
 
     static func prepare(for sourceID: String, context: ModelContext) async throws -> CaptionProject {
         if let existing = try project(for: sourceID, context: context) { return existing }
-        guard let (prefix, id) = DocumentMediaResolver.parse(sourceID) else { throw LyricsError.missingAudio }
-        let url: URL
-        let title: String
-        let knownDuration: Double
-        let groupID: UUID?
-        switch prefix {
-        case .music:
-            guard let take = try context.fetch(FetchDescriptor<GeneratedMusic>(predicate: #Predicate { $0.id == id })).first
-            else { throw LyricsError.missingAudio }
-            url = take.audioURL
-            let siblings = take.project?.generatedFiles.sorted { $0.createdAt < $1.createdAt } ?? [take]
-            let version = (siblings.firstIndex { $0.id == take.id } ?? 0) + 1
-            title = "\(take.project?.name ?? String(localized: "Music")) · v\(version)"
-            knownDuration = take.durationSeconds
-            groupID = take.project?.groupID
-        case .imported:
-            guard let asset = try context.fetch(FetchDescriptor<ImportedAsset>(predicate: #Predicate { $0.id == id })).first,
-                  asset.kind == ImportedAssetKind.audio.rawValue, let resolved = asset.resolveURL()
-            else { throw LyricsError.missingAudio }
-            url = resolved
-            title = asset.name
-            knownDuration = asset.durationSeconds
-            groupID = asset.groupID
-        default:
-            throw LyricsError.missingAudio
-        }
+        guard let audio = CaptionAudioSource.resolve(sourceID, context: context) else { throw LyricsError.missingAudio }
+        let url = audio.url
         guard FileManager.default.fileExists(atPath: url.path) else { throw LyricsError.missingAudio }
-        let duration = knownDuration > 0 ? knownDuration : (await MediaDurationCache.duration(of: url) ?? 0)
+        let duration = audio.knownDuration > 0 ? audio.knownDuration : (await MediaDurationCache.duration(of: url) ?? 0)
         guard duration.isFinite, duration > 0, duration < Double(Int.max / 1000) else { throw LyricsError.duration }
         // Awaiting media metadata can let a second menu action finish first.
         if let existing = try project(for: sourceID, context: context) { return existing }
         let storage = ProjectStorage.forContainer(context.container)
         let relative = storage.relativePath(for: url)
         let path = try relative ?? storage.importAudio(from: url)
-        let lyrics = CaptionProject(name: String(localized: "\(title) — Lyrics"))
+        let lyrics = CaptionProject(name: String(localized: "\(audio.title) — Lyrics"))
         lyrics.lyricsSourceID = sourceID
         lyrics.audioFilePath = path
         lyrics.ownsAudioFile = relative == nil
         lyrics.audioDurationMs = Int((duration * 1000).rounded())
-        lyrics.groupID = groupID
+        lyrics.groupID = audio.groupID
         context.insert(lyrics)
         try context.save()
         return lyrics

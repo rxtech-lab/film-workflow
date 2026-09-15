@@ -1,13 +1,13 @@
 {
-  "originHash" : "0db34683b2863e1c56c20a17903347643e6c16080b54beff75ed9390aceed80a",
+  "originHash" : "9149a14b03109dbe99b09db8a3f848036523a3049342299d7d422858d29dd702",
   "pins" : [
     {
       "identity" : "rxagentsdk",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/rxtech-lab/RxAgentSDK",
       "state" : {
-        "revision" : "d16ec8cda48cab4c60d2061c2d58b345ead0cfb9",
-        "version" : "1.0.2"
+        "revision" : "0c3eb909362d54061a79330c46ab12a7904f2af6",
+        "version" : "1.0.3"
       }
     },
     {
@@ -17,6 +17,15 @@
       "state" : {
         "revision" : "832fc7f55f42db86bf03841531440b47c2bc760c",
         "version" : "1.2.2"
+      }
+    },
+    {
+      "identity" : "rxsubscriptionios",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/rxtech-lab/RxSubscriptionIOS",
+      "state" : {
+        "revision" : "b9cdc2c54269f429135bfe5ddee2f6cf2d899984",
+        "version" : "1.1.1"
       }
     },
     {

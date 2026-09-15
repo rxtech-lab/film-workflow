@@ -53,9 +53,11 @@ public struct TimelineCompositionBuilder {
             throw CompositionBuildError.missingBaseClip
         }
 
-        // Resolve every source once.
+        // Resolve every source once. Disabled clips and lanes are skipped
+        // throughout, so their media is never needed — an unrendered clip
+        // that is turned off no longer holds up an export.
         var resolved: [String: Result<ResolvedMedia, Error>] = [:]
-        for clip in timeline.allClips where resolved[clip.source.id] == nil {
+        for clip in timeline.renderedClips where resolved[clip.source.id] == nil {
             do {
                 resolved[clip.source.id] = .success(try await resolver.resolve(clip.source))
             } catch {
@@ -73,7 +75,7 @@ public struct TimelineCompositionBuilder {
         let audioTracks = timeline.tracks.filter { $0.kind == .audio }
 
         for track in videoTracks {
-            for clip in track.sortedClips {
+            for clip in track.renderedClips {
                 if audioOnly {
                     if clip.source.kind.hasAudio, case .success(.file(let url, _, _))? = resolved[clip.source.id] {
                         try await insertAudio(asset: AVURLAsset(url: url), clip: clip, into: composition,
@@ -129,7 +131,7 @@ public struct TimelineCompositionBuilder {
         }
 
         for track in overlayTracks where !audioOnly {
-            for clip in track.sortedClips {
+            for clip in track.renderedClips {
                 switch resolved[clip.source.id] {
                 case .success(.captions(let cues))?:
                     guard includeCaptions else { continue }
@@ -145,7 +147,7 @@ public struct TimelineCompositionBuilder {
         }
 
         for track in audioTracks where includeSilentAudio || !track.isMuted {
-            for clip in track.sortedClips where includeSilentAudio || clip.volume > 0 {
+            for clip in track.renderedClips where includeSilentAudio || clip.volume > 0 {
                 if case .success(.file(let url, _, _))? = resolved[clip.source.id] {
                     try await insertAudio(asset: AVURLAsset(url: url), clip: clip, into: composition, parameters: &audioParameters, trackIDs: &audioTrackIDs, volume: track.isMuted ? 0 : clip.volume)
                 } else if !audioOnly, case .failure(MediaResolverError.unrendered)? = resolved[clip.source.id] {
@@ -160,13 +162,13 @@ public struct TimelineCompositionBuilder {
             throw CompositionBuildError.unrenderedClips(placeholders)
         }
 
-        for clip in timeline.allClips where !clip.effects.isEmpty {
+        for clip in timeline.renderedClips where !clip.effects.isEmpty {
             if let layer = clipLayers[clip.id] { clipLayers[clip.id] = .processed(layer, clip.effects) }
         }
 
         // Segment at clip and transition edges, including held-frame boundaries.
 
-        let pictureClips = pictureTracks.flatMap(\.clips).filter { includeCaptions || $0.source.kind != .captions }
+        let pictureClips = pictureTracks.flatMap(\.renderedClips).filter { includeCaptions || $0.source.kind != .captions }
         var edges: Set<TimeInterval> = [0, duration]
         for clip in pictureClips {
             edges.insert(min(max(0, clip.start), duration))
@@ -185,7 +187,7 @@ public struct TimelineCompositionBuilder {
             var trackIDs: [CMPersistentTrackID] = [baseTrackID]
             for track in pictureTracks {
                 let active = timeline.transitions.first { transition in
-                    transition.isEnabled && transition.attachment.clipIDs.contains(where: { id in track.clips.contains { $0.id == id } })
+                    transition.isEnabled && transition.attachment.clipIDs.contains(where: { id in track.renderedClips.contains { $0.id == id } })
                         && transition.range(in: timeline)?.contains(mid) == true
                 }
                 let layer: LayerSpec?
@@ -195,7 +197,7 @@ public struct TimelineCompositionBuilder {
                     case .end(let id): layer = .transition(from: clipLayers[id], to: nil, instance: active, range: range)
                     case .between(let a, let b): layer = .transition(from: clipLayers[a], to: clipLayers[b], instance: active, range: range)
                     }
-                } else { layer = track.clip(at: mid).flatMap { clipLayers[$0.id] } }
+                } else { layer = track.renderedClips.first { $0.range.contains(mid) }.flatMap { clipLayers[$0.id] } }
                 if let layer { layers.append(layer); trackIDs.append(contentsOf: layer.sourceTrackIDs(at: mid)) }
             }
             let range = CMTimeRange(

@@ -57,6 +57,45 @@ nonisolated enum BackendConfig {
             && URL(string: redirectURI)?.scheme != nil
     }
 
+    // MARK: - RxSubscription
+
+    /// The rx-subscription service the paywall, plan catalog and top-ups come
+    /// from. Unlike the app backend this has no localhost equivalent, so DEBUG
+    /// and release builds both point at production.
+    static var subscriptionURL: URL {
+        URL(string: value("AppSubscriptionURL", fallback: "https://subscription.rxlab.app"))!
+    }
+
+    /// The publishable key minted for this app in the RxSubscription console.
+    ///
+    /// Publishable keys are meant to ship inside the binary: on their own they
+    /// authenticate nothing, and every request also carries the signed-in
+    /// user's access token, whose OAuth client must be on the key's allow-list.
+    static var subscriptionPublishableKey: String {
+        #if DEBUG
+        // Lets a developer point a debug run at their own key from the scheme
+        // without editing (and accidentally committing) Base.xcconfig.
+        if let override = ProcessInfo.processInfo.environment["APP_SUBSCRIPTION_PUBLISHABLE_KEY"],
+           !override.isEmpty {
+            return override
+        }
+        #endif
+        return value("AppSubscriptionPublishableKey", fallback: "")
+    }
+
+    /// Whether the subscription service can be called at all. When false the
+    /// app degrades to its pre-subscription behaviour rather than failing: the
+    /// gate stays open and credits are bought on the web as before.
+    static var hasSubscriptionConfiguration: Bool {
+        hasSubscriptionConfiguration(key: subscriptionPublishableKey, url: subscriptionURL)
+    }
+
+    /// Split from the property so tests can exercise the rule without a bundle.
+    static func hasSubscriptionConfiguration(key: String, url: URL?) -> Bool {
+        let trimmed = key.trimmingCharacters(in: .whitespacesAndNewlines)
+        return !trimmed.isEmpty && !trimmed.contains("$(") && url?.scheme != nil
+    }
+
     /// The `Accept-Language` every request to our backend carries.
     ///
     /// The languages are the bundle's, not the system's: they are what the app
@@ -80,6 +119,9 @@ nonisolated enum BackendConfig {
     }
 
     static var diagnostics: String {
-        "issuer=\(oidcIssuer), client=\(clientID), redirect=\(redirectURI), api=\(apiBaseURL.absoluteString)"
+        // The key itself is never logged — only whether one is present.
+        "issuer=\(oidcIssuer), client=\(clientID), redirect=\(redirectURI), "
+            + "api=\(apiBaseURL.absoluteString), "
+            + "subscription=\(subscriptionURL.host ?? "-") key=\(hasSubscriptionConfiguration ? "set" : "missing")"
     }
 }

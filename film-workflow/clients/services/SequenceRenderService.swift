@@ -83,7 +83,7 @@ enum SequenceRenderService {
 
     static func remotionProjects(in sequence: SequenceProject, context: ModelContext) -> [RemotionProject] {
         var ids: [UUID] = []
-        for clip in sequence.timeline.allClips where clip.source.kind == .remotion {
+        for clip in sequence.timeline.renderedClips where clip.source.kind == .remotion {
             if let (prefix, uuid) = DocumentMediaResolver.parse(clip.source.id), prefix == .remotion, !ids.contains(uuid) {
                 ids.append(uuid)
             }

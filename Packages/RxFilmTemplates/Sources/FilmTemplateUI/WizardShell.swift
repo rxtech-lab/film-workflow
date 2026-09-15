@@ -101,7 +101,10 @@ public struct WizardShell<Content: View, Footer: View>: View {
     /// preview: a wizard that sits on a spinner should still be able to show
     /// its work.
     private func activityButton(_ activity: @escaping () -> AnyView) -> some View {
-        Button { showingAgentActivity.toggle() } label: {
+        Button {
+            FilmTemplateTip.activity.didPerform()
+            showingAgentActivity.toggle()
+        } label: {
             Label("Agent Activity", systemImage: "bubble.left.and.bubble.right")
                 .labelStyle(.iconOnly)
                 .font(.system(size: 13))
@@ -111,6 +114,7 @@ public struct WizardShell<Content: View, Footer: View>: View {
         .help("Agent Activity")
         .accessibilityLabel("Agent Activity")
         .accessibilityIdentifier("wizard.activity")
+        .templateTip(.activity, when: !showingAgentActivity)
         .popover(isPresented: $showingAgentActivity, arrowEdge: .bottom) {
             activity()
                 .frame(width: 520, height: 480)

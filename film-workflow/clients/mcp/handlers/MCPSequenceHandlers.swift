@@ -228,7 +228,7 @@ enum MCPSequenceHandlers {
         }
         // Re-insert every clip through the editor so the invariants hold.
         var rebuilt = Timeline(id: timeline.id, width: timeline.width, height: timeline.height, fps: timeline.fps,
-                               tracks: timeline.tracks.map { Track(id: $0.id, kind: $0.kind, name: $0.name, clips: [], isMuted: $0.isMuted) },
+                               tracks: timeline.tracks.map { Track(id: $0.id, kind: $0.kind, name: $0.name, clips: [], isMuted: $0.isMuted, isEnabled: $0.isEnabled) },
                                backgroundHex: timeline.backgroundHex)
         for track in timeline.tracks {
             for clip in track.sortedClips {

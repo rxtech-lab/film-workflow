@@ -13,6 +13,7 @@ struct VideoInspectorFooter: View {
     @State private var showResumeChoice = false
     @State private var errorMessage: String?
     @State private var showError = false
+    @State private var unavailableModel: UnavailableModelNotice?
 
     private var isGenerating: Bool { generateTask != nil }
 
@@ -28,15 +29,21 @@ struct VideoInspectorFooter: View {
                     Label("A generation is still running at the provider.", systemImage: "clock.arrow.2.circlepath")
                         .font(.caption)
                     Spacer()
-                    Button("Resume") { startResume() }.controlSize(.small)
+                    Button("Resume") {
+                        FilmFeatureTip.resumeVideo.didPerform()
+                        startResume()
+                    }
+                    .controlSize(.small)
+                    .filmTip(.resumeVideo, when: !isGenerating)
                 }
                 .padding(8)
                 .background(.yellow.opacity(0.15))
             }
-            GenerateButton(title: "Generate", isBusy: isGenerating, isEnabled: canGenerate) { startGenerate() }
+            GenerateButton(title: "Generate", isBusy: isGenerating, isEnabled: canGenerate, tip: FilmFeatureTip.generateVideo) { startGenerate() }
                 .padding(10)
         }
         .alert("Error", isPresented: $showError) { Button("OK") {} } message: { Text(errorMessage ?? "An unknown error occurred.") }
+        .unavailableModelAlert($unavailableModel)
         .confirmationDialog("This project already has a generation running.", isPresented: $showResumeChoice, titleVisibility: .visible) {
             Button("Resume It") { startResume() }
             Button("Start a New One") {
@@ -77,6 +84,8 @@ struct VideoInspectorFooter: View {
                 _ = try await work(config) { update in progress = update }
             } catch is CancellationError {
             } catch {
+                // A stale saved model needs the picker, not a retry.
+                if let notice = UnavailableModelNotice(error) { unavailableModel = notice; return }
                 errorMessage = error.localizedDescription
                 showError = true
             }

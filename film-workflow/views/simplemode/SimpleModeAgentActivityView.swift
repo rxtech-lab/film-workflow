@@ -1,5 +1,6 @@
 import RxAgentSDK
 import SwiftUI
+import TipKit
 
 /// Observes the wizard's existing agent without starting or interrupting a turn.
 struct SimpleModeAgentActivityView: View {
@@ -41,6 +42,9 @@ struct SimpleModeAgentActivityView: View {
 
             Divider()
 
+            TipView(FilmFeatureTip.liveActivity)
+                .padding(.horizontal, 16)
+
             if items.isEmpty {
                 ContentUnavailableView(
                     "Waiting for the agent",
@@ -76,6 +80,14 @@ struct SimpleModeAgentActivityView: View {
             }
         }
         .agentTheme(.filmStudio)
+        // A wizard run has no composer to retry from, so a stale model stops it
+        // dead. The line above explains; this is the way out of it.
+        .unavailableModelAlert(
+            Binding(
+                get: { controller.run(for: thread.id).unavailableModel },
+                set: { controller.setUnavailableModel($0, for: thread.id) }
+            )
+        )
         .onAppear { controller.markSeen(thread.id) }
         .onChange(of: isStreaming) { _, streaming in
             if !streaming { controller.markSeen(thread.id) }

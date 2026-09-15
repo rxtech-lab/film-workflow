@@ -131,6 +131,10 @@ actor BackendClient {
         }
         guard (200..<300).contains(http.statusCode) else {
             let payload = try? decoder.decode(ErrorPayload.self, from: data)
+            // Neither field is filled in here: this layer never sees the
+            // request. The client that sent it names them — see
+            // `BackendError.namingModel(_:capability:)`.
+            if payload?.code == "model_not_allowed" { throw BackendError.modelUnavailable(model: "", capability: nil) }
             if payload?.code == "price_not_found" { throw BackendError.priceUnavailable(payload?.error ?? "model") }
             if (400..<500).contains(http.statusCode) { throw BackendError.badRequest(payload?.error ?? "The request was rejected.") }
             throw BackendError.server(http.statusCode, payload?.error)
@@ -196,6 +200,9 @@ actor BackendClient {
         }
         guard (200..<300).contains(http.statusCode) else {
             let payload = try? decoder.decode(ErrorPayload.self, from: data)
+            if payload?.code == "model_not_allowed" {
+                throw BackendError.modelUnavailable(model: "", capability: nil)
+            }
             if payload?.code == "price_not_found" {
                 throw BackendError.priceUnavailable(payload?.error ?? "model")
             }

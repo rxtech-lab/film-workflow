@@ -14,11 +14,24 @@ struct film_workflowApp: App {
 
     init() {
         FileStorage.ensureDirectories()
-        try? Tips.configure([
+        var tipOptions: [Tips.ConfigurationOption] = [
             .displayFrequency(.immediate),
             .datastoreLocation(.applicationDefault),
-        ])
-        if ProcessInfo.processInfo.arguments.contains("-uiTesting") {
+        ]
+        var previewTips = false
+        #if DEBUG
+        // A fresh, isolated history makes tips reviewable without resetting
+        // the user's onboarding progress. Normal UI tests still hide tips.
+        previewTips = ProcessInfo.processInfo.arguments.contains("-previewTips")
+        if previewTips {
+            let directory = FileManager.default.temporaryDirectory
+                .appendingPathComponent("RxFilm-Tips-\(UUID().uuidString)", isDirectory: true)
+            try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+            tipOptions = [.displayFrequency(.immediate), .datastoreLocation(.url(directory))]
+        }
+        #endif
+        try? Tips.configure(tipOptions)
+        if ProcessInfo.processInfo.arguments.contains("-uiTesting") && !previewTips {
             Tips.hideAllTipsForTesting()
         }
         // Audio chunks and multipart bodies staged during transcription can be
@@ -63,7 +76,9 @@ struct film_workflowApp: App {
         // restoration reopens the same packages.
         WindowGroup(id: EditorWindowID.value, for: URL.self) { $url in
             EditorWindowRoot(documentURL: url)
+                .subscriptionGate()
                 .signInSheetPresenter()
+                .topUpSheetPresenter()
                 .whatsNewSheetPresenter(automatically: url != nil)
                 .task { await Self.bootstrapServices() }
         }
@@ -141,7 +156,9 @@ struct film_workflowApp: App {
 
         Window("Welcome to RxFilmStudio", id: WelcomeWindowID.value) {
             WelcomeWindowView()
+                .subscriptionGate()
                 .signInSheetPresenter()
+                .topUpSheetPresenter()
                 .whatsNewSheetPresenter(automatically: true)
                 .task { await Self.bootstrapServices() }
         }
@@ -156,7 +173,9 @@ struct film_workflowApp: App {
         Window("Agent", id: AgentWindowID.value) {
             AgentWindowView()
                 .environment(AgentController.shared)
+                .subscriptionGate()
                 .signInSheetPresenter()
+                .topUpSheetPresenter()
                 .whatsNewSheetPresenter()
                 // Nothing inside the agent window paints a ground of its own,
                 // so the window supplies one: a material rather than a solid
@@ -171,7 +190,9 @@ struct film_workflowApp: App {
         // Installed items are global; "Add to Film" targets the key film.
         Window("Marketplace", id: MarketplaceWindowID.value) {
             MarketplaceWindowView()
+                .subscriptionGate()
                 .signInSheetPresenter()
+                .topUpSheetPresenter()
                 .whatsNewSheetPresenter()
         }
         .defaultSize(width: 1160, height: 720)
@@ -179,6 +200,7 @@ struct film_workflowApp: App {
         Settings {
             SettingsView()
                 .signInSheetPresenter()
+                .topUpSheetPresenter()
                 .whatsNewSheetPresenter()
         }
     }

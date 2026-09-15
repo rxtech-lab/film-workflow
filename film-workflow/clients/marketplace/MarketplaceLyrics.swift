@@ -5,7 +5,20 @@ nonisolated struct MarketplaceLyricTrack: Codable, Hashable, Sendable, Identifia
     var language: String
     var cues: [Cue]
     var id: String { language.lowercased() }
-    var displayName: String { Locale.current.localizedString(forIdentifier: language) ?? language }
+    var displayName: String {
+        if language.isEmpty || language.lowercased() == "und" { return String(localized: "Original") }
+        return Locale.current.localizedString(forIdentifier: language) ?? language
+    }
+
+    static func setLanguage(_ language: String, for trackID: String, in tracks: inout [Self]) throws {
+        let code = try CaptionLanguage.normalized(language)
+        let stored = code.isEmpty ? "und" : code
+        guard let index = tracks.firstIndex(where: { $0.id == trackID }) else { return }
+        guard !tracks.enumerated().contains(where: { $0.offset != index && $0.element.id == stored.lowercased() }) else {
+            throw MarketplaceAuthoringError.invalid("A lyrics track already uses this language. Choose a different language.")
+        }
+        tracks[index].language = stored
+    }
 
     struct Cue: Codable, Hashable, Sendable {
         var start: Double

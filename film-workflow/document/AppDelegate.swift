@@ -7,13 +7,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         Task { @MainActor in await RemotionFootageUITestFixture.openIfRequested() }
         TimelineTrackUITestFixture.openIfRequested()
         NarrativeCaptionUITestFixture.openIfRequested()
+        CaptionPerformanceUITestFixture.openIfRequested()
         StillPreviewUITestFixture.openIfRequested()
+        LibrarySelectionUITestFixture.openIfRequested()
     }
     #endif
 
     func application(_ application: NSApplication, open urls: [URL]) {
         for url in urls {
-            ProjectDocumentController.shared.requestOpen(url)
+            if AuthSessionBridge.handles(url) {
+                AuthSessionBridge.handle(url)
+            } else {
+                ProjectDocumentController.shared.requestOpen(url)
+            }
         }
     }
 

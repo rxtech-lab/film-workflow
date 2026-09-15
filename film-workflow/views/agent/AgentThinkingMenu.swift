@@ -30,6 +30,7 @@ struct AgentThinkingMenu: View {
             defaultRowTitle: defaultRowTitle,
             style: .chip(icon: "brain")
         )
+        .filmTip(.chatThinking, when: !levels.isEmpty && !controller.isRunning(thread.id))
     }
 
     private var backend: AgentBackend {
@@ -45,6 +46,7 @@ struct AgentThinkingMenu: View {
         return Binding(
             get: { thread.effortOverride(for: backend) },
             set: { level in
+                FilmFeatureTip.chatThinking.didPerform()
                 thread.setEffortOverride(level, for: backend)
                 AgentSettings.shared.rememberPick(from: thread)
             }

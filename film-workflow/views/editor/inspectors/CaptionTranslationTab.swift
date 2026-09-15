@@ -72,8 +72,12 @@ struct CaptionTranslationTab: View {
                     languageRow(code)
                 }
             }
-            Button("Translate…") { showTranslateSheet = true }
+            Button("Translate…") {
+                FilmFeatureTip.captionTranslate.didPerform()
+                showTranslateSheet = true
+            }
                 .disabled(translator.isRunning)
+                .filmTip(.captionTranslate, when: !translator.isRunning && !showTranslateSheet)
         } header: {
             Text("Languages")
         } footer: {

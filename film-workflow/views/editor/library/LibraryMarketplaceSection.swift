@@ -111,26 +111,31 @@ struct LibraryMarketplaceGrid: View {
     @State private var collapsed: Set<MarketplaceKind> = []
 
     var body: some View {
-        ScrollView {
-            LazyVStack(spacing: 12, pinnedViews: [.sectionHeaders]) {
-                if rows.isEmpty {
-                    empty
-                } else {
-                    ForEach(LibraryMarketplaceRow.sectionKinds) { kind in
-                        let kindRows = rows.filter { $0.kind == kind }
-                        if !kindRows.isEmpty { section(kind: kind, rows: kindRows) }
+        // Stretched to the viewport so the space past the last card takes the
+        // click that clears the preview, the way the Library tab's grid does.
+        GeometryReader { proxy in
+            ScrollView {
+                LazyVStack(spacing: 12, pinnedViews: [.sectionHeaders]) {
+                    if rows.isEmpty {
+                        empty
+                    } else {
+                        ForEach(LibraryMarketplaceRow.sectionKinds) { kind in
+                            let kindRows = rows.filter { $0.kind == kind }
+                            if !kindRows.isEmpty { section(kind: kind, rows: kindRows) }
+                        }
                     }
+                }
+                .accessibilityElement(children: .contain)
+                .padding(8)
+                .frame(maxWidth: .infinity, minHeight: proxy.size.height, alignment: .top)
+                .contentShape(Rectangle())
+                .onTapGesture(perform: onDeselect)
+                .contextMenu {
+                    Button(action: onOpenMarketplace) { Label("Open Marketplace…", systemImage: "storefront") }
                 }
             }
             .accessibilityElement(children: .contain)
-            .padding(8)
-        }
-        .contentShape(Rectangle())
-        .onTapGesture(perform: onDeselect)
-        .accessibilityElement(children: .contain)
-        .accessibilityIdentifier("library.marketplace.grid")
-        .contextMenu {
-            Button(action: onOpenMarketplace) { Label("Open Marketplace…", systemImage: "storefront") }
+            .accessibilityIdentifier("library.marketplace.grid")
         }
     }
 

@@ -13,11 +13,19 @@ extension ImportedAsset: LibPreviewableProtocol {}
 
 extension CaptionProject: LibPreviewableProtocol {
     func makeLibPreviewSource() -> LibPreviewSource {
+        CaptionLibraryPreviewCache.shared.preview(for: self).source
+    }
+
+    var libraryPreviewCaptionCount: Int {
+        CaptionLibraryPreviewCache.shared.preview(for: self).captionCount
+    }
+
+    func buildLibraryCaptionPreview() -> CaptionLibraryPreviewCache.Preview {
         let cues = DocumentMediaResolver.cues(for: self, text: .original)
         let style = captionStyle
         let duration = max(storedDuration ?? 0, cues.map(\.end).max() ?? 0)
-        let revision = "\(activeVersionID?.uuidString ?? "legacy"):\(cues.hashValue):\(style.hashValue)"
-        return LibPreviewSource(id: clipSource.id, revision: revision, duration: duration,
+        let revision = "\(activeVersionID?.uuidString ?? "legacy"):\(cues.hashValue):\(style.hashValue):\(duration)"
+        let source = LibPreviewSource(id: clipSource.id, revision: revision, duration: duration,
                                 isTemporal: true, canScrub: duration > 0) { time, size in
             let text = cues.filter { $0.start <= time && time < $0.end }.map(\.text).joined(separator: "\n")
             let context = CGContext(data: nil, width: max(1, Int(size.width)), height: max(1, Int(size.height)),
@@ -31,6 +39,7 @@ extension CaptionProject: LibPreviewableProtocol {
             }
             return context?.makeImage()
         }
+        return .init(source: source, captionCount: activeSegmentCount)
     }
 }
 

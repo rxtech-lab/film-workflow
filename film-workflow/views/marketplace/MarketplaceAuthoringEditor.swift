@@ -438,10 +438,11 @@ struct MarketplaceAuthoringEditor: View {
                 }
                 MarketplacePreviewImage(url: draft?.item.previewImageUrl, kind: input.kind, contentMode: .fit)
                     .frame(height: 180)
+                    .overlay { operationProgress(for: "preview-image", overPreview: true) }
                     .clipShape(RoundedRectangle(cornerRadius: 8))
+                    .accessibilityElement(children: .contain)
                     .accessibilityLabel("Cover preview")
                     .accessibilityIdentifier("marketplace-author-cover-preview")
-                operationProgress(for: "preview-image")
                 actionRow {
                     Button("Choose Cover…", systemImage: "photo") { selectFile(role: "preview-image") }
                     if layout.generators.contains(.image) {
@@ -510,7 +511,7 @@ struct MarketplaceAuthoringEditor: View {
     /// Work is shown beside the asset it changes, including the save before
     /// an upload or generator has created its persistent job.
     @ViewBuilder
-    private func operationProgress(for role: String) -> some View {
+    private func operationProgress(for role: String, overPreview: Bool = false) -> some View {
         let jobs = running.filter { job in
             job.role == role || (job.operation == "preview" && role.hasPrefix("preview-"))
         }
@@ -536,6 +537,11 @@ struct MarketplaceAuthoringEditor: View {
                 }
             }
             .font(.callout)
+            .padding(overPreview ? 16 : 0)
+            .frame(maxWidth: overPreview ? .infinity : nil, maxHeight: overPreview ? .infinity : nil)
+            .background {
+                if overPreview { Rectangle().fill(.regularMaterial) }
+            }
             .accessibilityIdentifier("marketplace-author-progress-\(role)")
         }
     }

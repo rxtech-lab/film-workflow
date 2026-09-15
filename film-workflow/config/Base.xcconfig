@@ -7,3 +7,12 @@ APP_AUTH_REDIRECT_URI = $(APP_AUTH_URL_SCHEME):/$()/callback
 // granting it to this client in the rxauth admin console.
 APP_AUTH_SCOPES = openid
 APP_AUTH_CLIENT_ID = client_87eb0fcb4e8b41f49336255bdeefa5ad
+
+// rx-subscription owns plans, the paywall, balances and top-ups. The `/$()/ `
+// escape is what stops xcconfig reading `//` as the start of a comment.
+APP_SUBSCRIPTION_URL = https:/$()/subscription.rxlab.app
+// Publishable key from the RxSubscription console (rxs_pk_…). Safe to ship: it
+// authenticates nothing on its own, and the app's OAuth client must be on the
+// key's allow-list. Left empty here — while it is empty the subscription gate
+// stays open and credits are bought on the web, exactly as before.
+APP_SUBSCRIPTION_PUBLISHABLE_KEY =

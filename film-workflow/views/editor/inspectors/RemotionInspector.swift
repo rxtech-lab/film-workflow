@@ -30,9 +30,13 @@ struct RemotionInspectorFooter: View {
 
     var body: some View {
         HStack(spacing: 8) {
-            Button { showSourceSheet = true } label: { Label("Source", systemImage: "doc.text") }
+            Button {
+                FilmFeatureTip.remotionSource.didPerform()
+                showSourceSheet = true
+            } label: { Label("Source", systemImage: "doc.text") }
                 .disabled(project.compositionSource.isEmpty)
-            GenerateButton(title: "Render", isBusy: showProgressSheet, isEnabled: !project.compositionSource.isEmpty) {
+                .filmTip(.remotionSource, when: !project.compositionSource.isEmpty && !showSourceSheet && !showProgressSheet)
+            GenerateButton(title: "Render", isBusy: showProgressSheet, isEnabled: !project.compositionSource.isEmpty, tip: FilmFeatureTip.remotionRender) {
                 beginRender()
             }
         }

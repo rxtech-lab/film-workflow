@@ -71,11 +71,30 @@ enum BackendMusicClient {
                     mimeType: job.resultMeta?.mimeType ?? responseMimeType ?? "audio/wav"
                 )
             case "failed", "cancelled":
-                throw BackendError.badRequest(job.error?.message ?? "Music generation failed.")
+                throw BackendError.jobFailed(failureText(job.error))
             default:
                 try await Task.sleep(for: .seconds(2))
             }
         }
         throw BackendError.server(408, "Music generation timed out. The job may still finish in your account.")
+    }
+
+    /// What a failed job says, with its code.
+    ///
+    /// The server stores one sentence for every music failure — "Music
+    /// generation could not be completed." — and keeps the reason in `code`
+    /// (`PROVIDER_400:…`, `GOOGLE_AI_NOT_CONFIGURED`,
+    /// `INVALID_PROVIDER_RESPONSE`). Reporting only the sentence leaves the
+    /// caller nothing to act on and no way to tell a misconfigured account
+    /// from a prompt the provider refused, so the code travels with it.
+    private static func failureText(_ failure: Job.Failure?) -> String {
+        let message = failure?.message?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let code = failure?.code?.trimmingCharacters(in: .whitespacesAndNewlines)
+        switch (message?.isEmpty == false ? message : nil, code?.isEmpty == false ? code : nil) {
+        case let (message?, code?): return "\(message) (\(code))"
+        case let (message?, nil): return message
+        case let (nil, code?): return "Music generation failed: \(code)"
+        case (nil, nil): return "Music generation failed."
+        }
     }
 }

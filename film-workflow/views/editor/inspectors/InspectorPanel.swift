@@ -6,8 +6,8 @@ import VideoEditorUI
 
 /// Right column. The tab row comes from the protocols the selected footage
 /// conforms to (`InspectorTabResolver`), plus Clip and Sequence tabs when a
-/// clip or a sequence is selected. Selecting never changes the tab: the last
-/// tab the user picked is remembered and returns whenever it is offered.
+/// clip or a sequence is selected. Linked lyrics open when their recording is
+/// selected; otherwise the last tab the user picked returns when offered.
 struct InspectorPanel: View {
     let index: LibraryIndex
     @Bindable var state: EditorWindowState
@@ -17,7 +17,8 @@ struct InspectorPanel: View {
 
     var body: some View {
         let context = InspectorContext(document: document, state: state, index: index, sequence: sequence, onRender: onRender)
-        let footage = footageItem.flatMap { index.model(for: $0) }
+        let footage = context.footage
+        let lyricsID = context.lyricsProject?.projectUUID
         let footageTabs = InspectorTabResolver.tabs(
             footage: footage,
             hasClip: sequence != nil && !state.selectedClipIDs.isEmpty,
@@ -31,16 +32,19 @@ struct InspectorPanel: View {
             StudioPanelHeader(title: "Inspector", symbol: "slider.horizontal.3") {
                 if !tabs.isEmpty {
                     Picker("Inspector", selection: Binding(get: { current ?? "" }, set: { id in
+                        FilmFeatureTip.inspectorTabs.didPerform()
                         if id == "effects", let clipID = state.selectedClipID { state.inspectEffects(clipID) }
                         else if id != "transition" { state.modifierSelection = nil; state.inspectorTabID = id }
                     })) {
                         ForEach(tabs) { tab in
                             Text(tab.title).tag(tab.id)
+                                .accessibilityIdentifier("inspector.tab.\(tab.id)")
                         }
                     }
                     .pickerStyle(.segmented)
                     .labelsHidden()
                     .fixedSize()
+                    .filmTip(.inspectorTabs, when: tabs.count > 1)
                 }
             }
             Group {
@@ -59,6 +63,9 @@ struct InspectorPanel: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .onChange(of: lyricsID, initial: true) { _, id in
+            if id != nil { state.inspectorTabID = InspectorTabResolver.lyricsTabID }
+        }
     }
 
     private func modifierTabs(_ footageTabs: [InspectorTabDescriptor]) -> [InspectorTabDescriptor] {
@@ -76,17 +83,6 @@ struct InspectorPanel: View {
         return tabs
     }
 
-    /// What the footage tabs show: the source of the clip selected on the
-    /// timeline, or else the library selection. Selecting in the library
-    /// clears the clip selection, so the latest choice wins.
-    private var footageItem: LibraryItemID? {
-        if let sequence, let clipID = state.selectedClipID, let clip = sequence.timeline.clip(id: clipID),
-           let (prefix, id) = DocumentMediaResolver.parse(clip.source.id),
-           let kind = FootageKind(rawValue: prefix.rawValue) {
-            return LibraryItemID(kind: kind, id: id)
-        }
-        return state.selection
-    }
 }
 
 /// The primary action every footage inspector shares.
@@ -98,7 +94,10 @@ struct GenerateButton<Tip: TipKitTip>: View {
     let action: () -> Void
 
     var body: some View {
-        Button(action: action) {
+        Button {
+            tip?.invalidate(reason: .actionPerformed)
+            action()
+        } label: {
             HStack {
                 if isBusy { ProgressView().controlSize(.small) } else { Image(systemName: "wand.and.stars") }
                 Text(isBusy ? "Generating…" : title)
@@ -108,23 +107,12 @@ struct GenerateButton<Tip: TipKitTip>: View {
         .buttonStyle(.borderedProminent)
         .controlSize(.large)
         .disabled(isBusy || !isEnabled)
-        .modifier(OptionalTip(tip: tip))
+        .popoverTip(isBusy || !isEnabled ? nil : tip, arrowEdge: .top)
     }
 }
 
 /// `Tip` is a TipKit protocol; the alias keeps the generic readable.
 typealias TipKitTip = TipKit.Tip
-
-private struct OptionalTip<T: TipKitTip>: ViewModifier {
-    let tip: T?
-    func body(content: Content) -> some View {
-        if let tip {
-            content.popoverTip(tip, arrowEdge: .top)
-        } else {
-            content
-        }
-    }
-}
 
 extension GenerateButton where Tip == FilmWorkflowTips.GenerateMusicTip {
     init(title: LocalizedStringKey, isBusy: Bool, isEnabled: Bool, action: @escaping () -> Void) {

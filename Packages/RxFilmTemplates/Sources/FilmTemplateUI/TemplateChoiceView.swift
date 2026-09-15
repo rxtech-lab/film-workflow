@@ -53,12 +53,14 @@ public struct TemplateChoiceView: View {
         } footer: {
             Button("Use This Template") {
                 guard let chosen = candidates.first(where: { $0.id == selection }) else { return }
+                FilmTemplateTip.templateChoice.didPerform()
                 onChoose(chosen)
             }
             .buttonStyle(.glassProminent)
             .keyboardShortcut(.defaultAction)
             .disabled(selection == nil)
             .accessibilityIdentifier("wizard.templates.confirm")
+            .templateTip(.templateChoice, when: selection != nil)
         }
         .onAppear {
             // The agent ranked them, so the first is its recommendation.

@@ -175,7 +175,7 @@ public final class TimelinePreviewController {
             do {
                 try Task.checkCancellation()
                 var resolved: [String: TimelinePreviewSource] = [:]
-                for clip in timeline.allClips where resolved[clip.source.id] == nil {
+                for clip in timeline.renderedClips where resolved[clip.source.id] == nil {
                     try Task.checkCancellation()
                     resolved[clip.source.id] = try await resolver.preview(clip.source)
                     try Task.checkCancellation()
@@ -187,7 +187,9 @@ public final class TimelinePreviewController {
                     + timeline.tracks.filter { $0.kind == .audio }
                 var next: [TimelinePreviewLayer] = []
                 for track in ordered {
-                    for clip in track.sortedClips {
+                    // A disabled lane or clip gets no surface at all, which is
+                    // what keeps it out of the picture and the live audio.
+                    for clip in track.renderedClips {
                         guard let source = resolved[clip.source.id] else { continue }
                         let layer: TimelinePreviewLayer
                         if let prior = old[clip.id], case .live(let descriptor) = source,

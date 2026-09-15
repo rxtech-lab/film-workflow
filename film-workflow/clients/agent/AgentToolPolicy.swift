@@ -61,12 +61,30 @@ enum AgentToolPolicy {
     ///
     /// Narrower than a conversation on purpose. The wizard drives a fixed
     /// sequence of phases, and a tool outside that arc — rendering, podcasts,
-    /// editing a Remotion composition by hand — is a way for a run to wander
-    /// off instead of producing the first cut the user asked for.
+    /// publishing to the marketplace — is a way for a run to wander off instead
+    /// of producing the first cut the user asked for.
+    ///
+    /// Narrower is not the same as crippled, though. A run has no transcript to
+    /// fall back on: whatever the wizard cannot do, nobody does. So everything
+    /// on the path from a brief to a first cut belongs here, including the
+    /// three that a run needs and a conversation can improvise around —
+    /// reading the model catalog, taking a marketplace asset into the film, and
+    /// authoring the Remotion cards the shot plan asks for.
     static let simpleModeTools: Set<String> = ([
         WebTool.read,
         "film_list",
-        "marketplace_list", "marketplace_get", "marketplace_show", "marketplace_install",
+        // `models_list` first: an item's model id is curated per account, so
+        // without it the only way to name one is to guess, and every guess
+        // comes back as "this model is not available for the selected
+        // capability".
+        "models_list",
+        // `show_marketplace_item` is the only tool that draws a card, and the
+        // card is the only thing carrying a Buy button — without it a paid
+        // asset can never be bought, so the run reports it as un-owned and
+        // moves on. `marketplace_add_to_film` is what actually lands an asset
+        // in the library; `marketplace_install` only downloads it.
+        "marketplace_list", "marketplace_get", "show_marketplace_item",
+        "marketplace_install", "marketplace_add_to_film",
         "project_template_apply",
         "footage_list", "footage_get", "footage_create", "footage_update", "footage_import",
         "folder_list", "folder_create",
@@ -74,7 +92,23 @@ enum AgentToolPolicy {
         "sequence_list", "sequence_get", "sequence_create",
         "sequence_add_track", "sequence_reorder_tracks", "sequence_add_clip", "sequence_remove_clip", "sequence_set_timeline",
         "caption_create",
-    ] as Set<String>).union(wizardOnly)
+    ] as Set<String>).union(wizardOnly).union(remotionAuthoringTools)
+
+    /// Composing and checking a Remotion card.
+    ///
+    /// Title cards, lower thirds and end cards are Remotion compositions, and a
+    /// wizard run that can create one but cannot write its source, add an asset
+    /// to it or look at the result is left placing a card it has never seen.
+    /// Screenshots matter most: they are the run's only way to catch a shot
+    /// that renders wrong, since the user does not see the cut until the
+    /// preview at the end.
+    #if os(macOS)
+        static let remotionAuthoringTools: Set<String> = Set(
+            RemotionMCPHandlers.descriptors.map(\.name)
+        )
+    #else
+        static let remotionAuthoringTools: Set<String> = []
+    #endif
 
     /// The descriptors a thread may call.
     static func descriptors(

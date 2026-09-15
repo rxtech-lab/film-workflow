@@ -1,6 +1,7 @@
 import RxAgentSDK
 import SwiftData
 import SwiftUI
+import TipKit
 
 /// One thread's transcript and composer.
 ///
@@ -33,6 +34,10 @@ struct AgentThreadView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .safeAreaInset(edge: .top, spacing: 0) {
+            if !controller.isRunning(threadID) {
+                TipView(FilmWorkflowTips.AgentComposerTip())
+                    .padding(.horizontal, 16)
+            }
             if let error = run.errorMessage {
                 errorBar(error)
             }
@@ -52,6 +57,16 @@ struct AgentThreadView: View {
         .sheet(item: $reviewingRow) { row in
             reviewSheet(row)
         }
+        // The error bar already carries the same sentence, so this is not
+        // about telling the user twice: the bar cannot open Settings, and a
+        // thread pointed at a model the account can't use fails every turn
+        // until someone does.
+        .unavailableModelAlert(
+            Binding(
+                get: { controller.run(for: threadID).unavailableModel },
+                set: { controller.setUnavailableModel($0, for: threadID) }
+            )
+        )
         .task { await controller.prepare(thread: thread, context: modelContext) }
         // The SDK composer hands the draft straight to the agent, so nothing
         // re-runs `configure` at send time. An engine or model pick has to be

@@ -91,7 +91,10 @@ struct AgentWindowView: View {
 
             ToolbarItemGroup {
                 threadsMenu
-                targetMenu
+                    .filmTip(.chatThreads, when: threads.count > 1)
+                // hide target menu for now
+//                targetMenu
+//                    .filmTip(.chatTarget, when: selectedThread != nil && !targetOptions.isEmpty)
             }
 
             ToolbarSpacer(.fixed)
@@ -103,6 +106,7 @@ struct AgentWindowView: View {
             ToolbarItemGroup {
                 let isPinned = selectedThread?.isPinned == true
                 Button {
+                    FilmFeatureTip.chatPin.didPerform()
                     selectedThread?.isPinned.toggle()
                 } label: {
                     Label(
@@ -112,11 +116,16 @@ struct AgentWindowView: View {
                 }
                 .disabled(selectedThread == nil)
                 .help(isPinned ? "Unpin this thread" : "Pin this thread")
-                Button(action: newThread) {
+                .filmTip(.chatPin, when: selectedThread != nil && !isPinned)
+                Button {
+                    FilmFeatureTip.chatNewThread.didPerform()
+                    newThread()
+                } label: {
                     Label("New Thread", systemImage: "square.and.pencil")
                 }
                 .keyboardShortcut("n", modifiers: [.command, .shift])
                 .help("New thread")
+                .filmTip(.chatNewThread)
             }
         }
         .task {
@@ -174,6 +183,7 @@ struct AgentWindowView: View {
         Menu {
             ForEach(orderedThreads) { thread in
                 Button {
+                    FilmFeatureTip.chatThreads.didPerform()
                     selectedThreadID = thread.id
                 } label: {
                     Label {
@@ -224,6 +234,7 @@ struct AgentWindowView: View {
     private var targetMenu: some View {
         Menu {
             Button {
+                FilmFeatureTip.chatTarget.didPerform()
                 selectedThread?.target = .none
             } label: {
                 Text("Whole film")
@@ -234,6 +245,7 @@ struct AgentWindowView: View {
                     Section(kind.displayName) {
                         ForEach(options) { option in
                             Button {
+                                FilmFeatureTip.chatTarget.didPerform()
                                 selectedThread?.target = AgentTarget(
                                     kind: option.kind,
                                     projectUUID: option.projectUUID

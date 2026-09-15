@@ -44,6 +44,7 @@ struct SequenceInspector: View {
                             Button(isRenderingRemotion ? "Rendering…" : "Render Remotion Clips") { renderRemotion() }
                                 .disabled(staleCount == 0 || isRenderingRemotion)
                                 .controlSize(.small)
+                                .filmTip(.sequenceRemotion, when: staleCount > 0 && !isRenderingRemotion)
                         }
                         if let remotionProgress, isRenderingRemotion {
                             ProgressView(value: remotionProgress.fraction ?? 0) { Text(remotionProgress.label).font(.caption) }
@@ -56,17 +57,22 @@ struct SequenceInspector: View {
             }
             .formStyle(.grouped)
             Divider()
-            Button(action: onRender) {
+            Button {
+                FilmFeatureTip.sequenceRender.didPerform()
+                onRender()
+            } label: {
                 HStack { Image(systemName: "film.stack"); Text("Render") }.frame(maxWidth: .infinity)
             }
             .buttonStyle(.borderedProminent)
             .controlSize(.large)
             .disabled(sequence.timeline.isEmpty)
+            .filmTip(.sequenceRender, when: !sequence.timeline.isEmpty)
             .padding(10)
         }
     }
 
     private func renderRemotion() {
+        FilmFeatureTip.sequenceRemotion.didPerform()
         isRenderingRemotion = true
         remotionError = nil
         remotionTask = Task { @MainActor in

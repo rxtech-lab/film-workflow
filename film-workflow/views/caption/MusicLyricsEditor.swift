@@ -3,7 +3,7 @@ import SwiftUI
 import VideoEditorCore
 
 struct MusicLyricsRequest: Identifiable, Equatable {
-    enum Action: Equatable { case edit, retime, merge(UUID), chooseCaptions, chooseMusic }
+    enum Action: Equatable { case edit, retime, merge(UUID), chooseCaptions, chooseMusic, remove }
     let id = UUID()
     let sourceID: String
     var action: Action = .edit
@@ -37,6 +37,9 @@ struct MusicLyricsContextMenu: View {
                 }
             }
             .disabled(!captions.contains { $0.lyricsSourceID != sourceID && !$0.activeSegments.isEmpty })
+            if lyrics != nil {
+                Button("Remove Lyrics…", role: .destructive) { onRequest(.init(sourceID: sourceID, action: .remove)) }
+            }
             Divider()
         } else if let sourceID, let (prefix, id) = DocumentMediaResolver.parse(sourceID), prefix == .caption,
                   let caption = captions.first(where: { $0.projectUUID == id }) {
@@ -60,6 +63,8 @@ private struct MusicLyricsHost: ViewModifier {
     @Binding var request: MusicLyricsRequest?
     @Environment(\.modelContext) private var context
     @State private var presentation: Presentation?
+    @State private var mergePresentation: MergePresentation?
+    @State private var removingLyrics: CaptionProject?
     @State private var error: String?
     @State private var preparing = false
 
@@ -70,6 +75,12 @@ private struct MusicLyricsHost: ViewModifier {
         let suggestedText: String
     }
 
+    struct MergePresentation: Identifiable {
+        let id = UUID()
+        let captions: CaptionProject?
+        let sourceID: String?
+    }
+
     func body(content: Content) -> some View {
         content
             .task(id: request) { await open() }
@@ -77,16 +88,16 @@ private struct MusicLyricsHost: ViewModifier {
             .sheet(item: $presentation, onDismiss: {
                 do { try context.save() } catch { self.error = error.localizedDescription }
             }) { value in
-                if value.action == .chooseMusic {
-                    MusicLyricsTargetPicker(captions: value.project)
-                } else if value.action == .chooseCaptions {
-                    MusicLyricsCaptionPicker(project: value.project)
-                } else if value.action == .retime, !value.project.activeSegments.isEmpty {
+                if value.action == .retime, !value.project.activeSegments.isEmpty {
                     CaptionRetimeSheet(project: value.project)
                 } else {
                     MusicLyricsEditor(project: value.project, suggestedText: value.suggestedText)
                 }
             }
+            .sheet(item: $mergePresentation) { value in
+                MusicLyricsMergePicker(captions: value.captions, sourceID: value.sourceID)
+            }
+            .modifier(MusicLyricsRemovalConfirmation(project: $removingLyrics))
             .alert("Couldn’t Open Lyrics", isPresented: Binding(get: { error != nil }, set: { if !$0 { error = nil } })) {
                 Button("OK") { error = nil }
             } message: { Text(error ?? "") }
@@ -97,22 +108,29 @@ private struct MusicLyricsHost: ViewModifier {
         preparing = true
         defer { preparing = false; self.request = nil }
         do {
+            if request.action == .remove {
+                removingLyrics = try MusicLyrics.project(for: request.sourceID, context: context)
+                return
+            }
+            if request.action == .chooseCaptions {
+                mergePresentation = .init(captions: nil, sourceID: request.sourceID)
+                return
+            }
             if request.action == .chooseMusic {
                 guard let (prefix, id) = DocumentMediaResolver.parse(request.sourceID), prefix == .caption,
                       let captions = try context.fetch(FetchDescriptor<CaptionProject>(predicate: #Predicate { $0.projectUUID == id })).first
                 else { throw MusicLyrics.LyricsError.emptyCaptions }
-                presentation = .init(project: captions, action: .chooseMusic, suggestedText: "")
+                mergePresentation = .init(captions: captions, sourceID: nil)
                 return
             }
-            let caption: CaptionProject?
             if case .merge(let id) = request.action {
                 guard let value = try context.fetch(FetchDescriptor<CaptionProject>(predicate: #Predicate { $0.projectUUID == id })).first,
                       !value.activeSegments.isEmpty else { throw MusicLyrics.LyricsError.emptyCaptions }
-                caption = value
-            } else { caption = nil }
+                mergePresentation = .init(captions: value, sourceID: request.sourceID)
+                return
+            }
             let project = try await MusicLyrics.prepare(for: request.sourceID, context: context)
             try Task.checkCancellation()
-            if let caption { try MusicLyrics.merge(caption, into: project, context: context) }
             presentation = .init(project: project, action: request.action,
                                  suggestedText: MusicLyrics.suggestedText(for: request.sourceID, context: context))
         } catch is CancellationError { } catch { self.error = error.localizedDescription }
@@ -142,6 +160,7 @@ struct MusicLyricsEditor: View {
             HStack {
                 Label(project.name, systemImage: "music.note.list").font(.headline)
                 Spacer()
+                MusicLyricsRemoveButton(project: project, onRemoved: { dismiss() })
                 Button("Done") {
                     do { try context.save(); dismiss() } catch { self.error = error.localizedDescription }
                 }
@@ -180,72 +199,174 @@ struct MusicLyricsEditor: View {
     }
 }
 
-private struct MusicLyricsTargetPicker: View {
-    let captions: CaptionProject
+/// Both merge directions share selection, confirmation, and preparation.
+private struct MusicLyricsMergePicker: View {
+    let captions: CaptionProject?
+    let sourceID: String?
     @Query private var music: [GeneratedMusic]
     @Query private var imported: [ImportedAsset]
+    @Query private var captionProjects: [CaptionProject]
     @Environment(\.modelContext) private var context
     @Environment(\.dismiss) private var dismiss
+    @State private var selectedTargetID: String?
+    @State private var selectedCaptionID: UUID?
+    @State private var pendingMerge: MergeSelection?
     @State private var lyrics: CaptionProject?
     @State private var error: String?
     @State private var preparing = false
 
+    private struct MergeSelection {
+        let captions: CaptionProject
+        let target: MusicLyrics.Target
+    }
+
+    private var targets: [MusicLyrics.Target] {
+        MusicLyrics.targets(music: music, imported: imported).filter { $0.id != captions?.lyricsSourceID }
+    }
+
+    private var selectedTarget: MusicLyrics.Target? {
+        let wanted = selectedTargetID ?? sourceID
+        if captions == nil { return targets.first { $0.id == sourceID } }
+        return targets.first { $0.id == wanted } ?? targets.first
+    }
+
+    private var availableCaptions: [CaptionProject] {
+        captionProjects.filter { $0.activeSegmentCount > 0 && $0.lyricsSourceID != selectedTarget?.id }
+            .sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+    }
+
+    private var selectedCaptions: CaptionProject? {
+        captions ?? availableCaptions.first { $0.projectUUID == selectedCaptionID } ?? availableCaptions.first
+    }
+
     var body: some View {
-        if let lyrics {
-            MusicLyricsEditor(project: lyrics)
-        } else {
-            VStack(alignment: .leading, spacing: 12) {
-                Text("Merge as Lyrics into Music").font(.headline)
-                Text("Choose the music take for these captions.").foregroundStyle(.secondary)
-                List(MusicLyrics.targets(music: music, imported: imported).filter { $0.id != captions.lyricsSourceID }) { target in
-                    Button(target.title) {
-                        preparing = true
-                        Task { @MainActor in
-                            defer { preparing = false }
-                            do {
-                                let lyrics = try await MusicLyrics.prepare(for: target.id, context: context)
-                                try MusicLyrics.merge(captions, into: lyrics, context: context)
-                                self.lyrics = lyrics
-                            } catch { self.error = error.localizedDescription }
+        Group {
+            if let lyrics {
+                MusicLyricsEditor(project: lyrics)
+            } else if preparing {
+                ProgressView("Opening lyrics…")
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .frame(width: 600, height: 260)
+            } else {
+                VStack(alignment: .leading, spacing: 16) {
+                    Text(captions == nil ? "Merge Captions as Lyrics" : "Merge as Lyrics into Music").font(.headline)
+                    if let captions {
+                        Text("Choose the music take for these captions.").foregroundStyle(.secondary)
+                        LabeledContent("Captions", value: captions.name)
+                        Picker("Music", selection: Binding(get: { selectedTarget?.id }, set: { selectedTargetID = $0 })) {
+                            if targets.isEmpty { Text("No music available").tag(String?.none) }
+                            ForEach(targets) { target in Text(target.title).tag(Optional(target.id)) }
                         }
-                    }.disabled(preparing)
+                        .pickerStyle(.menu)
+                        .accessibilityIdentifier("music-lyrics-target-picker")
+                    } else {
+                        Text("Choose captions to copy into this music. Timings and translations are included.")
+                            .foregroundStyle(.secondary)
+                        LabeledContent("Music", value: selectedTarget?.title ?? String(localized: "Unavailable"))
+                        Picker("Captions", selection: Binding(get: { selectedCaptions?.projectUUID }, set: { selectedCaptionID = $0 })) {
+                            if availableCaptions.isEmpty { Text("No captions available").tag(UUID?.none) }
+                            ForEach(availableCaptions, id: \.projectUUID) { caption in Text(caption.name).tag(Optional(caption.projectUUID)) }
+                        }
+                        .pickerStyle(.menu)
+                        .accessibilityIdentifier("music-lyrics-caption-picker")
+                    }
+                    if let error { Text(error).foregroundStyle(.red) }
+                    Spacer(minLength: 0)
+                    HStack {
+                        Button("Cancel") { dismiss() }.keyboardShortcut(.cancelAction)
+                        Spacer()
+                        Button("Merge") {
+                            if let captions = selectedCaptions, let target = selectedTarget {
+                                pendingMerge = .init(captions: captions, target: target)
+                            }
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .keyboardShortcut(.defaultAction)
+                        .disabled(selectedTarget == nil || (selectedCaptions?.activeSegmentCount ?? 0) == 0)
+                        .accessibilityIdentifier("music-lyrics-merge")
+                    }
                 }
-                if preparing { ProgressView("Opening lyrics…") }
-                if let error { Text(error).foregroundStyle(.red) }
-                Button("Cancel") { dismiss() }.disabled(preparing)
-            }.padding().frame(width: 600, height: 420)
+                .padding(20)
+                .frame(width: 600, height: 260)
+            }
+        }
+        .alert("Merge Captions as Lyrics?", isPresented: Binding(get: { pendingMerge != nil }, set: { if !$0 { pendingMerge = nil } }), presenting: pendingMerge) { selection in
+            Button("Cancel", role: .cancel) { }
+            Button("Merge") { merge(selection) }
+        } message: { selection in
+            Text("Merge captions from “\(selection.captions.name)” into “\(selection.target.title)”? This adds a new lyrics version with the captions’ timings and translations.")
+        }
+    }
+
+    private func merge(_ selection: MergeSelection) {
+        preparing = true
+        error = nil
+        Task { @MainActor in
+            defer { preparing = false }
+            do {
+                guard captionProjects.contains(where: { $0.projectUUID == selection.captions.projectUUID }),
+                      selection.captions.activeSegmentCount > 0 else { throw MusicLyrics.LyricsError.emptyCaptions }
+                guard targets.contains(where: { $0.id == selection.target.id }) else { throw MusicLyrics.LyricsError.missingAudio }
+                let lyrics = try await MusicLyrics.prepare(for: selection.target.id, context: context)
+                try MusicLyrics.merge(selection.captions, into: lyrics, context: context)
+                self.lyrics = lyrics
+            } catch { self.error = error.localizedDescription }
         }
     }
 }
 
-/// Timeline menus contain flat actions, so their merge action chooses the
-/// caption project here before opening the same caption editor.
-private struct MusicLyricsCaptionPicker: View {
+struct MusicLyricsInspector: View {
     let project: CaptionProject
-    @Query private var captions: [CaptionProject]
-    @Environment(\.modelContext) private var context
-    @Environment(\.dismiss) private var dismiss
-    @State private var merged = false
-    @State private var error: String?
 
     var body: some View {
-        if merged {
-            MusicLyricsEditor(project: project)
-        } else {
-            VStack(alignment: .leading, spacing: 12) {
-                Text("Merge Captions as Lyrics").font(.headline)
-                Text("Choose captions to copy into this music. Timings and translations are included.")
-                    .foregroundStyle(.secondary)
-                List(captions.filter { $0 !== project && !$0.activeSegments.isEmpty }, id: \.projectUUID) { caption in
-                    Button(caption.name) {
-                        do { try MusicLyrics.merge(caption, into: project, context: context); merged = true }
-                        catch { self.error = error.localizedDescription }
-                    }
-                }
-                if let error { Text(error).foregroundStyle(.red) }
-                Button("Cancel") { dismiss() }
-            }.padding().frame(width: 600, height: 420)
+        VStack(spacing: 0) {
+            CaptionProjectViewer(project: project)
+            Divider()
+            HStack {
+                MusicLyricsRemoveButton(project: project)
+                Spacer()
+            }.padding(10)
         }
+    }
+}
+
+private struct MusicLyricsRemoveButton: View {
+    let project: CaptionProject
+    var onRemoved: () -> Void = { }
+    @State private var removingLyrics: CaptionProject?
+
+    var body: some View {
+        if project.lyricsSourceID != nil {
+            Button("Remove Lyrics…", role: .destructive) { removingLyrics = project }
+                .accessibilityIdentifier("music-lyrics-remove")
+                .modifier(MusicLyricsRemovalConfirmation(project: $removingLyrics, onRemoved: onRemoved))
+        }
+    }
+}
+
+private struct MusicLyricsRemovalConfirmation: ViewModifier {
+    @Binding var project: CaptionProject?
+    var onRemoved: () -> Void = { }
+    @Environment(\.modelContext) private var context
+    @State private var error: String?
+
+    func body(content: Content) -> some View {
+        content
+            .alert("Remove Lyrics from Music?", isPresented: Binding(get: { project != nil }, set: { if !$0 { project = nil } }), presenting: project) { lyrics in
+                Button("Cancel", role: .cancel) { }
+                Button("Remove Lyrics", role: .destructive) {
+                    guard let sourceID = lyrics.lyricsSourceID else { return }
+                    do {
+                        try MusicLyrics.remove(from: sourceID, context: context)
+                        onRemoved()
+                    } catch { self.error = error.localizedDescription }
+                }
+            } message: { lyrics in
+                Text("Remove “\(lyrics.name)” from this music? The captions will stay in the library, and the music’s audio will be kept.")
+            }
+            .alert("Couldn’t Remove Lyrics", isPresented: Binding(get: { error != nil }, set: { if !$0 { error = nil } })) {
+                Button("OK") { error = nil }
+            } message: { Text(error ?? "") }
     }
 }
 

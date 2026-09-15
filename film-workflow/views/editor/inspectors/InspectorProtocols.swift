@@ -10,6 +10,36 @@ struct InspectorContext {
     let index: LibraryIndex
     let sequence: SequenceProject?
     let onRender: () -> Void
+
+    /// Timeline sources identify a recording; library selections identify its
+    /// project and keep the chosen recording in the window's version selection.
+    var sourceID: String? {
+        if let clipID = state.selectedClipID, let clip = sequence?.timeline.clip(id: clipID) {
+            return clip.source.id
+        }
+        guard state.selectedClipIDs.isEmpty, let item = state.selection,
+              item.kind == .music || item.kind == .imported else { return nil }
+        let cells = index.footage(for: item)
+        let selected = state.currentVersion(for: item)
+        return (cells.first { $0.id == selected } ?? cells.first)?.drag.source.id
+    }
+
+    var footage: (any FootageProtocol)? {
+        if let clipID = state.selectedClipID, let clip = sequence?.timeline.clip(id: clipID),
+           let (prefix, id) = DocumentMediaResolver.parse(clip.source.id),
+           let kind = FootageKind(rawValue: prefix.rawValue) {
+            if prefix == .music {
+                return index.music.first { $0.generatedFiles.contains { $0.id == id } }
+            }
+            return index.model(for: LibraryItemID(kind: kind, id: id))
+        }
+        return state.selection.flatMap { index.model(for: $0) }
+    }
+
+    var lyricsProject: CaptionProject? {
+        guard let sourceID else { return nil }
+        return index.captions.first { $0.lyricsSourceID == sourceID && $0.activeSegmentCount > 0 }
+    }
 }
 
 /// Every item the library lists. Class-bound because conformers are SwiftData
@@ -85,6 +115,7 @@ enum InspectorTabResolver {
     static let sequenceTabID = "sequence"
     static let clipTabID = "clip"
     static let translationTabID = "translation"
+    static let lyricsTabID = "lyrics"
 
     /// Footage tabs in protocol order (settings, editor, style, translation),
     /// then Clip
@@ -103,6 +134,14 @@ enum InspectorTabResolver {
                 tabs.append(InspectorTabDescriptor(id: editable.editorTabID, title: editable.editorTabTitle,
                                                    systemImage: editable.editorTabSystemImage, showsFooter: true) {
                     editable.makeEditorTab(context)
+                })
+            }
+            if let lyrics = context.lyricsProject {
+                tabs.append(InspectorTabDescriptor(id: lyricsTabID, title: "Lyrics", systemImage: "music.note.list", showsFooter: false) {
+                    AnyView(MusicLyricsInspector(project: lyrics)
+                        .id(lyrics.projectUUID)
+                        .accessibilityElement(children: .contain)
+                        .accessibilityIdentifier("music-lyrics-inspector"))
                 })
             }
             if let styled = footage as? any CaptionStyleProviding {

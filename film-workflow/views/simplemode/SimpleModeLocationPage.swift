@@ -63,6 +63,7 @@ struct SimpleModeLocationPage: View {
                         .controlSize(.large)
                         .disabled(isChoosing)
                         .accessibilityIdentifier("wizard.location.choose")
+                        .filmTip(.simpleLocation, when: !isChoosing && session.destinationURL == nil)
                     }
                     .padding(22)
                     .background(.background.opacity(0.65), in: .rect(cornerRadius: 20))
@@ -91,6 +92,7 @@ struct SimpleModeLocationPage: View {
     }
 
     private func chooseLocation() {
+        FilmFeatureTip.simpleLocation.didPerform()
         isChoosing = true
         Task { @MainActor in
             defer { isChoosing = false }

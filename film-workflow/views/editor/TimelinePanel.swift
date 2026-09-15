@@ -54,6 +54,7 @@ struct TimelinePanel: View {
             HStack(spacing: 0) {
                 StudioPanelHeader(title: "Timeline", symbol: "timeline.selection")
                 Button {
+                    FilmFeatureTip.effectsBrowser.didPerform()
                     browserVisible.toggle()
                     document.setEffectsBrowserVisible(browserVisible)
                 } label: { Image(systemName: "sidebar.right") }
@@ -61,6 +62,7 @@ struct TimelinePanel: View {
                     .accessibilityLabel("Effects & Transitions")
                     .help(browserVisible ? "Hide effects and transitions" : "Show effects and transitions")
                     .accessibilityIdentifier("toggle-modifier-browser")
+                    .filmTip(.effectsBrowser, when: !browserVisible)
             }
             .background(.bar)
             timelineContent
@@ -162,6 +164,11 @@ struct TimelinePanel: View {
         items.append(ClipMenuItem(id: "music-lyrics-merge", title: String(localized: "Merge Captions as Lyrics…"), systemImage: "captions.bubble") {
             lyricsRequest = .init(sourceID: clip.source.id, action: .chooseCaptions)
         })
+        if project != nil {
+            items.append(ClipMenuItem(id: "music-lyrics-remove", title: String(localized: "Remove Lyrics…"), systemImage: "text.badge.minus") {
+                lyricsRequest = .init(sourceID: clip.source.id, action: .remove)
+            })
+        }
         return items
     }
 

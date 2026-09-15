@@ -230,7 +230,8 @@ final class CaptionProject: GroupableProject {
     /// falling back to the recognizer hint on a project that predates versioning.
     var sourceLanguageCode: String {
         let recorded = activeVersion?.languageCode ?? ""
-        return recorded.isEmpty ? languageHint : recorded
+        let language = recorded.isEmpty ? languageHint : recorded
+        return language.lowercased() == "und" ? "" : language
     }
 
     /// Target languages with at least one translated caption in the active

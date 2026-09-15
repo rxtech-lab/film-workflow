@@ -43,9 +43,9 @@ enum FilmWorkflowTips {
     }
 
     struct AgentComposerTip: Tip {
-        var title: Text { Text("Every thread targets one project") }
+        var title: Text { Text("Mention footage and use chat commands") }
         var message: Text? {
-            Text("Type @ in the composer to switch the project. The thread keeps that target, so several conversations can work on different projects.")
+            Text("Type @ to mention footage from your film. Type / for commands such as /new, /compact or /stop. Use the target menu above to choose what this conversation works on.")
         }
         var image: Image? { Image(systemName: "scope") }
         var options: [any TipOption] { Tips.MaxDisplayCount(1) }

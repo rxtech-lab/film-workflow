@@ -13,6 +13,11 @@ struct CaptionProjectParametersView: View {
         // Raises the Settings window; on iOS, switching tabs is enough.
         @Environment(\.openSettings) private var openSettings
     #endif
+    /// The film's own recordings, offered in the audio menu alongside a file
+    /// from disk. Music takes and imported audio only — a narration brings its
+    /// script as well, so it keeps the picker that shows what it says.
+    @Query private var musicTakes: [GeneratedMusic]
+    @Query private var importedAssets: [ImportedAsset]
     @State private var settings = CaptionSettings.shared
     @State private var modelStore = WhisperModelStore.shared
     @State private var showAudioImporter = false
@@ -98,10 +103,8 @@ struct CaptionProjectParametersView: View {
             if project.hasAudio {
                 LabeledContent("Source") {
                     HStack(spacing: 6) {
-                        Image(systemName: project.isNarrativeSourced ? "text.book.closed" : "waveform")
-                        Text(project.isNarrativeSourced
-                            ? project.sourceNarrativeName
-                            : project.audioURL.lastPathComponent)
+                        Image(systemName: sourceSymbol)
+                        Text(sourceLabel)
                             .lineLimit(1)
                             .truncationMode(.middle)
                     }
@@ -112,24 +115,13 @@ struct CaptionProjectParametersView: View {
                         : "Unknown")
                 }
             } else {
-                Text("Choose an audio file or a narration you've already generated.")
+                Text("Choose audio from this film, a file on disk, or a narration you've already generated.")
                     .font(.callout)
                     .foregroundStyle(.secondary)
             }
 
-            HStack {
-                Button {
-                    showAudioImporter = true
-                } label: {
-                    Label("Import Audio…", systemImage: "square.and.arrow.down")
-                }
-                Button {
-                    showNarrativePicker = true
-                } label: {
-                    Label("Use Narration…", systemImage: "text.book.closed")
-                }
-            }
-            .disabled(isTranscribing)
+            audioSourceMenu
+                .disabled(isTranscribing)
         } header: {
             Text("Audio source")
         } footer: {
@@ -142,6 +134,64 @@ struct CaptionProjectParametersView: View {
                 .foregroundStyle(.secondary)
             }
         }
+    }
+
+    /// One menu rather than a row of buttons: the film's own music and imported
+    /// audio are the common case, and they can't be listed as buttons without
+    /// the section growing with the library.
+    private var audioSourceMenu: some View {
+        Menu {
+            if !audioEntries.isEmpty {
+                Section("In This Film") {
+                    ForEach(audioEntries) { entry in
+                        Button {
+                            chooseProjectAudio(entry)
+                        } label: {
+                            Label(entry.title, systemImage: entry.systemImage)
+                        }
+                    }
+                }
+            }
+            Section {
+                Button {
+                    showAudioImporter = true
+                } label: {
+                    Label("Import Audio…", systemImage: "square.and.arrow.down")
+                }
+                Button {
+                    showNarrativePicker = true
+                } label: {
+                    Label("Use Narration…", systemImage: "text.book.closed")
+                }
+            }
+        } label: {
+            Label(project.hasAudio ? "Change Audio…" : "Use Audio…", systemImage: "waveform")
+        }
+        .accessibilityIdentifier("caption-audio-source-menu")
+    }
+
+    private var audioEntries: [CaptionAudioSource.Entry] {
+        CaptionAudioSource.entries(music: musicTakes, imported: importedAssets)
+    }
+
+    /// The recording this project plays, when it is one of the film's own.
+    /// Matched by id rather than by file: a referenced import lives outside the
+    /// package, and the project holds a copy.
+    private var projectAudioEntry: CaptionAudioSource.Entry? {
+        guard let sourceID = project.lyricsSourceID else { return nil }
+        return audioEntries.first { $0.id == sourceID }
+    }
+
+    private var sourceSymbol: String {
+        if project.isNarrativeSourced { return "text.book.closed" }
+        return projectAudioEntry?.systemImage ?? "waveform"
+    }
+
+    /// A file name is what the user chose for an import, but audio from the
+    /// film is stored under a UUID, so that is named the way the library does.
+    private var sourceLabel: String {
+        if project.isNarrativeSourced { return project.sourceNarrativeName }
+        return projectAudioEntry?.title ?? project.audioURL.lastPathComponent
     }
 
     private var providerSection: some View {
@@ -461,6 +511,19 @@ struct CaptionProjectParametersView: View {
 
     // MARK: - Actions
 
+    /// Points this project at one of the film's recordings. The file is
+    /// referenced in place where it already lives in the package, so choosing a
+    /// long music take costs nothing.
+    private func chooseProjectAudio(_ entry: CaptionAudioSource.Entry) {
+        Task {
+            do {
+                try await CaptionAudioSource.attach(entry.id, to: project, context: modelContext)
+            } catch {
+                importError = error.localizedDescription
+            }
+        }
+    }
+
     private func handleAudioImport(_ result: Result<[URL], Error>) {
         switch result {
         case .failure(let error):
@@ -483,6 +546,9 @@ struct CaptionProjectParametersView: View {
                 project.sourceKindEnum = .importedFile
                 project.sourceNarrativeID = nil
                 project.sourceNarrativeName = ""
+                // A file from disk is not one of the film's recordings, so the
+                // link the lyrics editor and the caption menus follow is dropped.
+                project.lyricsSourceID = nil
                 project.referenceUnits = []
                 project.alignmentQualityEnum = .none
                 project.audioDurationMs = 0

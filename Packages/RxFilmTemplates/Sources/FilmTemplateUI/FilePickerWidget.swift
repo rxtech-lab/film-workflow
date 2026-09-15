@@ -59,11 +59,13 @@ struct FilePickerField: View {
 
             HStack(spacing: 8) {
                 Button {
+                    FilmTemplateTip.uploads.didPerform()
                     chooseFiles()
                 } label: {
                     Label("Add Files…", systemImage: "plus")
                 }
                 .accessibilityIdentifier("intake.uploads.add")
+                .templateTip(.uploads, when: paths.isEmpty)
 
                 if !paths.isEmpty {
                     Button("Remove All", role: .destructive) { paths = [] }

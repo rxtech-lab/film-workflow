@@ -24,6 +24,10 @@
 	<string>$(APP_API_BASE_URL)</string>
 	<key>AppWebBaseURL</key>
 	<string>$(APP_WEB_BASE_URL)</string>
+	<key>AppSubscriptionURL</key>
+	<string>$(APP_SUBSCRIPTION_URL)</string>
+	<key>AppSubscriptionPublishableKey</key>
+	<string>$(APP_SUBSCRIPTION_PUBLISHABLE_KEY)</string>
 	<key>AppAuthIssuer</key>
 	<string>$(APP_AUTH_ISSUER)</string>
 	<key>AppAuthClientID</key>

@@ -12,6 +12,7 @@ final class AuthManager {
     let oauthManager: OAuthManager?
     private let sessionClient: AuthSessionClient?
     private let refreshCredits: () async -> Void
+    private let refreshSubscription: () async -> Void
     private let logger = Logger(subsystem: "rxlab.film-workflow", category: "Authentication")
 
     private(set) var isLoading = false
@@ -52,9 +53,11 @@ final class AuthManager {
 
     init(configuration: RxAuthConfiguration?, tokenStorage: any TokenStorageProtocol,
          session: URLSession? = nil,
-         refreshCredits: @escaping () async -> Void = { await CreditBalanceStore.shared.refresh() }) {
+         refreshCredits: @escaping () async -> Void = { await CreditBalanceStore.shared.refresh() },
+         refreshSubscription: @escaping () async -> Void = { await SubscriptionStore.shared.refresh() }) {
         self.tokenStorage = tokenStorage
         self.refreshCredits = refreshCredits
+        self.refreshSubscription = refreshSubscription
         restorationPending = configuration != nil
         oauthManager = configuration.map {
             OAuthManager(configuration: $0, tokenStorage: InteractiveAuthTokenStorage(storage: tokenStorage))
@@ -119,6 +122,7 @@ final class AuthManager {
             logger.info("Restored existing authentication session in \(String(describing: started.duration(to: .now)), privacy: .public)")
             isLoading = false
             await refreshCredits()
+            await refreshSubscription()
         }
     }
 
@@ -169,6 +173,7 @@ final class AuthManager {
         restoreError = nil
         error = nil
         await refreshCredits()
+        await refreshSubscription()
     }
 
     func refreshAccessToken() async throws {
@@ -198,6 +203,10 @@ final class AuthManager {
         defer { isLoading = false }
         await oauthManager?.logout()
         CreditBalanceStore.shared.clear()
+        SubscriptionStore.shared.clear()
+        // The cached client has the previous user's id baked in; without this
+        // the next account's requests would go out under the old id.
+        SubscriptionService.shared.invalidate()
         MarketplaceAuthoringService.shared.clearAccess()
     }
 }

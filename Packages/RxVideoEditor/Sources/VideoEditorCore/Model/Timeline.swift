@@ -186,6 +186,9 @@ public struct Clip: Codable, Sendable, Hashable, Identifiable {
     /// drops punctuation. Ignored by every other kind of source.
     public var captions: CaptionOptions
     public var effects: [EffectInstance]
+    /// Off keeps the clip where it is but out of the render: the preview, the
+    /// export and the caption deliveries all skip it, leaving a gap.
+    public var isEnabled: Bool
 
     public init(
         id: UUID = UUID(),
@@ -201,7 +204,8 @@ public struct Clip: Codable, Sendable, Hashable, Identifiable {
         transform: ClipTransform = .identity,
         text: TextStyle? = nil,
         captions: CaptionOptions = .transcript,
-        effects: [EffectInstance] = []
+        effects: [EffectInstance] = [],
+        isEnabled: Bool = true
     ) {
         self.id = id
         self.source = source
@@ -217,10 +221,11 @@ public struct Clip: Codable, Sendable, Hashable, Identifiable {
         self.text = text
         self.captions = captions
         self.effects = effects
+        self.isEnabled = isEnabled
     }
 
     private enum CodingKeys: String, CodingKey {
-        case id, source, start, duration, inPoint, playbackRate, isReversed, sourceDuration, volume, opacity, transform, text, captions, effects
+        case id, source, start, duration, inPoint, playbackRate, isReversed, sourceDuration, volume, opacity, transform, text, captions, effects, isEnabled
     }
 
     /// Tolerant of fields added later: anything missing takes its default.
@@ -243,6 +248,7 @@ public struct Clip: Codable, Sendable, Hashable, Identifiable {
         text = try c.decodeIfPresent(TextStyle.self, forKey: .text)
         captions = try c.decodeIfPresent(CaptionOptions.self, forKey: .captions) ?? .transcript
         effects = try c.decodeIfPresent([EffectInstance].self, forKey: .effects) ?? []
+        isEnabled = try c.decodeIfPresent(Bool.self, forKey: .isEnabled) ?? true
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -261,6 +267,7 @@ public struct Clip: Codable, Sendable, Hashable, Identifiable {
         try c.encodeIfPresent(text, forKey: .text)
         if captions != .transcript { try c.encode(captions, forKey: .captions) }
         try c.encode(effects, forKey: .effects)
+        try c.encode(isEnabled, forKey: .isEnabled)
     }
 
     public var sourceRangeDuration: TimeInterval { duration * playbackRate }
@@ -311,19 +318,40 @@ public struct Track: Codable, Sendable, Hashable, Identifiable {
     public var name: String
     public var clips: [Clip]
     public var isMuted: Bool
+    /// Off leaves the lane and its clips in place but out of the render, the
+    /// way disabling each of its clips would.
+    public var isEnabled: Bool
 
-    public init(id: UUID = UUID(), kind: TrackKind, name: String, clips: [Clip] = [], isMuted: Bool = false) {
+    public init(id: UUID = UUID(), kind: TrackKind, name: String, clips: [Clip] = [], isMuted: Bool = false, isEnabled: Bool = true) {
         self.id = id
         self.kind = kind
         self.name = name
         self.clips = clips
         self.isMuted = isMuted
+        self.isEnabled = isEnabled
+    }
+
+    private enum CodingKeys: String, CodingKey { case id, kind, name, clips, isMuted, isEnabled }
+
+    /// Tolerant of fields added later: anything missing takes its default.
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
+        kind = try c.decode(TrackKind.self, forKey: .kind)
+        name = try c.decode(String.self, forKey: .name)
+        clips = try c.decodeIfPresent([Clip].self, forKey: .clips) ?? []
+        isMuted = try c.decodeIfPresent(Bool.self, forKey: .isMuted) ?? false
+        isEnabled = try c.decodeIfPresent(Bool.self, forKey: .isEnabled) ?? true
     }
 
     public var end: TimeInterval { clips.map(\.end).max() ?? 0 }
 
     /// Clips ordered by start time.
     public var sortedClips: [Clip] { clips.sorted { $0.start < $1.start } }
+
+    /// The clips the renderer draws and hears, in start order: a disabled
+    /// lane offers none, and a disabled clip is left out of the lane's.
+    public var renderedClips: [Clip] { isEnabled ? sortedClips.filter(\.isEnabled) : [] }
 
     public func clip(at time: TimeInterval) -> Clip? {
         clips.first { $0.range.contains(time) }
@@ -431,6 +459,11 @@ public struct Timeline: Codable, Sendable, Hashable {
     public var isEmpty: Bool { tracks.allSatisfy { $0.clips.isEmpty } }
 
     public var allClips: [Clip] { tracks.flatMap(\.clips) }
+
+    /// Every clip the renderer reads, disabled lanes and clips dropped. The
+    /// timeline keeps its length either way, so a disabled clip renders as a
+    /// gap rather than pulling everything after it forward.
+    public var renderedClips: [Clip] { tracks.flatMap(\.renderedClips) }
 
     public func track(containing clipID: UUID) -> Track? {
         tracks.first { $0.clips.contains { $0.id == clipID } }

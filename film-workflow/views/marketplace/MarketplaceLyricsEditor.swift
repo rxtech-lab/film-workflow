@@ -14,7 +14,13 @@ struct MarketplaceLyricsEditor: View {
                 .font(.caption).foregroundStyle(.secondary)
             ForEach(tracks) { track in
                 HStack {
-                    Text(track.displayName)
+                    CaptionLanguagePicker(title: "Language", language: track.language) { code in
+                        var updated = tracks
+                        try MarketplaceLyricTrack.setLanguage(code, for: track.id, in: &updated)
+                        tracks = updated
+                    }
+                    .labelsHidden()
+                    .accessibilityIdentifier("marketplace-lyrics-track-language-\(track.id)")
                     Text("\(track.cues.count) captions").foregroundStyle(.secondary)
                     Spacer()
                     Button("Remove", systemImage: "minus.circle") { tracks.removeAll { $0.id == track.id } }

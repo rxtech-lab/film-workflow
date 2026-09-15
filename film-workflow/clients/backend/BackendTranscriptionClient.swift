@@ -34,27 +34,10 @@ nonisolated enum BackendTranscriptionClient {
         options: CaptionProviderOptions,
         onProgress: (@MainActor @Sendable (CaptionProgress) -> Void)?
     ) async throws -> CaptionTranscript {
-        switch provider {
-        case .openAI:
-            return try await transcribeOpenAI(
-                request: request,
-                config: config,
-                options: options,
-                onProgress: onProgress
-            )
-        case .gemini:
-            return try await transcribeGemini(
-                request: request,
-                config: config,
-                options: options,
-                onProgress: onProgress
-            )
-        case .azure:
-            return try await transcribeAzure(
-                request: request,
-                onProgress: onProgress
-            )
-        case .whisperLocal:
+        // Whisper reads the file off disk; every other provider uploads it, and
+        // the film's own audio is usually uncompressed, so it is re-encoded to
+        // speech-sized AAC first.
+        guard provider != .whisperLocal else {
             return try await WhisperCaptionClient.transcribe(
                 request: request,
                 config: config,
@@ -62,6 +45,47 @@ nonisolated enum BackendTranscriptionClient {
                 onProgress: onProgress
             )
         }
+        let limit = perRequestByteLimit(provider)
+        if CaptionAudioCompressor.willCompress(request, requiredBytes: limit) {
+            await report(onProgress, .preparing(detail: "Compressing audio"))
+        }
+        let prepared = try await CaptionAudioCompressor.compressForUpload(request, requiredBytes: limit)
+        defer {
+            if let temporary = prepared.temporaryURL {
+                try? FileManager.default.removeItem(at: temporary)
+            }
+        }
+
+        switch provider {
+        case .openAI:
+            return try await transcribeOpenAI(
+                request: prepared.request,
+                config: config,
+                options: options,
+                onProgress: onProgress
+            )
+        case .gemini:
+            return try await transcribeGemini(
+                request: prepared.request,
+                config: config,
+                options: options,
+                onProgress: onProgress
+            )
+        case .azure:
+            return try await transcribeAzure(
+                request: prepared.request,
+                onProgress: onProgress
+            )
+        case .whisperLocal:
+            // Handled above, before compression.
+            throw CaptionTranscriberError.unsupportedAudio("Whisper does not run on the server.")
+        }
+    }
+
+    /// The most one request may carry, for providers that cap it. Nil where the
+    /// audio is split into chunks instead and its size alone can't fail.
+    private static func perRequestByteLimit(_ provider: CaptionProvider) -> Int? {
+        provider == .azure ? AzureFastTranscriptionClient.maxBytes : nil
     }
 
     private static func transcribeOpenAI(
@@ -223,7 +247,11 @@ nonisolated enum BackendTranscriptionClient {
         onProgress: (@MainActor @Sendable (CaptionProgress) -> Void)?
     ) async throws -> CaptionTranscript {
         guard request.sizeBytes <= AzureFastTranscriptionClient.maxBytes else {
-            throw CaptionTranscriberError.unsupportedAudio("Azure fast transcription accepts up to 300 MB.")
+            let size = ByteCountFormatter.string(fromByteCount: Int64(request.sizeBytes), countStyle: .file)
+            throw CaptionTranscriberError.unsupportedAudio(
+                "Azure fast transcription accepts up to 300 MB, and this audio is \(size) even compressed. "
+                + "Transcribe it with OpenAI or Gemini, which split long audio into parts."
+            )
         }
         await report(onProgress, .preparing(detail: "Packaging audio"))
         let fields: [(name: String, value: String)] = [
@@ -247,6 +275,25 @@ nonisolated enum BackendTranscriptionClient {
     }
 
     private static func upload(
+        fields: [(name: String, value: String)],
+        fileName: String,
+        audioURL: URL,
+        mimeType: String
+    ) async throws -> Data {
+        do {
+            return try await send(fields: fields, fileName: fileName, audioURL: audioURL, mimeType: mimeType)
+        } catch let error as BackendError {
+            // The model travels as a form field rather than an argument, so it
+            // is read back out of `fields` — the server's refusal names it no
+            // more here than it does for images or video.
+            throw error.namingModel(
+                fields.first { $0.name == "model" }?.value ?? "",
+                capability: .transcription
+            )
+        }
+    }
+
+    private static func send(
         fields: [(name: String, value: String)],
         fileName: String,
         audioURL: URL,

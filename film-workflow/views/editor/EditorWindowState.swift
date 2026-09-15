@@ -284,6 +284,9 @@ final class EditorWindowState {
     func currentVersion(for item: LibraryItemID) -> UUID? { currentVersions[item] }
 
     func setCurrentVersion(_ versionID: UUID, for item: LibraryItemID) {
+        // A take clicked in the library takes over from a selected timeline
+        // clip, even when it is already the library's current version.
+        if selection != item || !selectedClipIDs.isEmpty { select(item) }
         guard currentVersions[item] != versionID else { return }
         // Picking a version is the same kind of decision as picking an item:
         // the viewer follows it rather than a take left over from a skim.
