@@ -112,7 +112,8 @@ enum AgentPrompts {
 
             if wizardTemplate == nil, has("show_marketplace_item") {
                 """
-                Marketplace workflow: Only \(tool("show_marketplace_item")) displays an interactive marketplace card. All other marketplace tools, including reads, creates, updates, uploads, installs, publishing and template application, return data without displaying this UI.
+                Marketplace workflow: Only \(tool("show_marketplace_item")) displays an interactive marketplace card. All other marketplace tools, including reads, creates, updates, uploads, installs, publishing and template application, return data without displaying this UI. The card is also the only place a paid item can be bought — no tool purchases on the user's behalf.
+                Getting an asset into a film is \(tool("marketplace_add_to_film")), which installs it if needed and returns the `sourceId` a clip takes. \(tool("marketplace_install")) only downloads it onto this Mac; an item installed and never added belongs to no film. Fonts, effects and transitions are the exception: they are global once installed and have nothing to add.
                 Finish the requested creation or revision work, including any requested preview jobs, then call \(tool("show_marketplace_item")) once per item to present the finished result. Do not show duplicate cards after intermediate saves, reads or job polling. Show an existing item when the user asks to see it or needs its purchase/use controls; show it again only for a meaningful completed revision or a new user request.
                 Publishing is a separate action, only after an explicit request. Templates contain an adaptable shot plan, project prompt, visual style, footage instructions and marketplace references.
                 Use existing generators for content and covers. Templates always preview with mock images; never upload source-film media as a template or template preview.

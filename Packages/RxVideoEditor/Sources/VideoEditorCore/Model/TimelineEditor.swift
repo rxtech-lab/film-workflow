@@ -371,6 +371,27 @@ public enum TimelineEditor {
         return right.id
     }
 
+    /// Turns clips on or off. A disabled clip keeps its place, its trims and
+    /// its effects; it is simply left out of the preview and the render, so
+    /// nothing else on the timeline moves.
+    public static func setEnabled(_ timeline: inout Timeline, clipIDs: Set<UUID>, isEnabled: Bool) throws {
+        let known = Set(timeline.allClips.map(\.id))
+        if let missing = clipIDs.subtracting(known).first { throw TimelineEditError.unknownClip(missing) }
+        for i in timeline.tracks.indices {
+            for j in timeline.tracks[i].clips.indices where clipIDs.contains(timeline.tracks[i].clips[j].id) {
+                timeline.tracks[i].clips[j].isEnabled = isEnabled
+            }
+        }
+    }
+
+    /// Turns a whole lane on or off, the way disabling each of its clips would.
+    public static func setTrackEnabled(_ timeline: inout Timeline, trackID: UUID, isEnabled: Bool) throws {
+        guard let index = timeline.tracks.firstIndex(where: { $0.id == trackID }) else {
+            throw TimelineEditError.unknownTrack(trackID)
+        }
+        timeline.tracks[index].isEnabled = isEnabled
+    }
+
     public static func remove(_ timeline: inout Timeline, clipID: UUID) {
         remove(&timeline, clipIDs: [clipID])
     }

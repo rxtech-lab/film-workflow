@@ -79,6 +79,9 @@ struct AgentEngineMenu: View {
         }
         .menuStyle(.borderlessButton)
         .fixedSize()
+        .filmTip(.chatEngine, when: !controller.isRunning(thread.id))
+        .onChange(of: thread.backendRaw) { FilmFeatureTip.chatEngine.didPerform() }
+        .onChange(of: thread.modelOverridesJSON) { FilmFeatureTip.chatEngine.didPerform() }
     }
 
     /// One row in an engine's model submenu. `model: nil` is the row that clears

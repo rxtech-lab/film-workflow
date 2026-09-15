@@ -215,6 +215,23 @@ struct SequenceCaptionExportTests {
         }
     }
 
+    @Test("A disabled caption clip leaves the subtitle tracks and the sidecar transcript")
+    func disabledCaptionClip() async throws {
+        let film = try makeFilm()
+        defer { Task { await close(film) } }
+        var timeline = film.sequence.timeline
+        let clip = try #require(timeline.allClips.first { $0.source.kind == .captions })
+        try TimelineEditor.setEnabled(&timeline, clipIDs: [clip.id], isEnabled: false)
+        film.sequence.timeline = timeline
+        try film.context.save()
+
+        #expect(!SequenceCaptionSources.hasCaptions(in: film.sequence))
+        #expect(SequenceCaptionSources.availableLanguages(in: film.sequence, context: film.context) == [""])
+        let tracks = try await SequenceCaptionSources.captionTracks(in: film.sequence, document: film.document, languages: [""])
+        #expect(tracks.allSatisfy { $0.cues.isEmpty })
+        #expect(SequenceCaptionSources.sidecarSnapshot(in: film.sequence, context: film.context) == nil)
+    }
+
     @Test("Caption requests decode with defaults and narrow to what a film offers")
     func requestCodec() throws {
         let legacy = try JSONDecoder().decode(CaptionRenderRequest.self, from: Data("{}".utf8))

@@ -26,6 +26,7 @@ struct CaptionStyleTab: View {
                 let count = clipIDs.count
                 Button(count == 1 ? "Apply to the Clip on the Timeline" : "Apply to \(count) Clips on the Timeline") { apply() }
                     .disabled(count == 0)
+                    .filmTip(.captionStyle, when: count > 0)
             } footer: {
                 Text("Clips dropped from these captions start with this style. Applying it replaces the style of every clip of these captions in the current sequence.")
                     .font(.caption)
@@ -37,6 +38,7 @@ struct CaptionStyleTab: View {
 
     private func apply() {
         guard let sequence = context.sequence else { return }
+        FilmFeatureTip.captionStyle.didPerform()
         var timeline = sequence.timeline
         let style = project.captionStyle
         for id in clipIDs {

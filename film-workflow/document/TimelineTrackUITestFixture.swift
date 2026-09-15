@@ -29,7 +29,8 @@ enum TimelineTrackUITestFixture {
                     let source = ClipSource(id: DocumentMediaResolver.sourceID(.imported, asset.id), kind: .image, displayName: asset.name)
                     tracks.append(Track(id: UUID(uuidString: String(format: "00000000-0000-0000-0000-%012d", index + 1))!,
                                         kind: index == 0 ? .overlay : .video, name: index == 0 ? "T1" : "V1",
-                                        clips: [Clip(source: source, start: 0, duration: 5)]))
+                                        clips: [Clip(id: UUID(uuidString: String(format: "00000000-0000-0000-0000-%012d", index + 11))!,
+                                                     source: source, start: 0, duration: 5)]))
                 }
                 tracks.append(Track(id: UUID(uuidString: "00000000-0000-0000-0000-000000000003")!, kind: .audio, name: "A1"))
                 tracks.append(Track(id: UUID(uuidString: "00000000-0000-0000-0000-000000000004")!, kind: .audio, name: "A2"))

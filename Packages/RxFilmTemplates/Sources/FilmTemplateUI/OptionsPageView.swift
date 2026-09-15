@@ -42,10 +42,14 @@ public struct OptionsPageView: View {
             }
             .accessibilityIdentifier("wizard.options")
         } footer: {
-            Button("Build My Film", action: onConfirm)
+            Button("Build My Film") {
+                FilmTemplateTip.options.didPerform()
+                onConfirm()
+            }
                 .buttonStyle(.glassProminent)
                 .keyboardShortcut(.defaultAction)
                 .accessibilityIdentifier("wizard.options.confirm")
+                .templateTip(.options)
         }
     }
 }

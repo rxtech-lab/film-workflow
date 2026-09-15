@@ -285,13 +285,20 @@ struct OpenAIClient {
         }
         for (key, value) in extraBody { body[key] = value }
         let requestData = try JSONSerialization.data(withJSONObject: body)
-        let data = try await BackendClient.shared.data(
-            "api/v1/ai/chat",
-            method: "POST",
-            body: requestData,
-            contentType: "application/json",
-            idempotencyKey: "chat:\(UUID().uuidString)"
-        )
+        let data: Data
+        do {
+            data = try await BackendClient.shared.data(
+                "api/v1/ai/chat",
+                method: "POST",
+                body: requestData,
+                contentType: "application/json",
+                idempotencyKey: "chat:\(UUID().uuidString)"
+            )
+        } catch let error as BackendError {
+            // The server's refusal names neither the model nor the capability;
+            // this is the only layer that knows both.
+            throw error.namingModel(trimmedModel, capability: .chat)
+        }
         if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
            let usage = json["rxlab_usage"] as? [String: Any],
            let available = usage["availablePoints"] as? Int {

@@ -69,11 +69,35 @@ struct SimpleModeToolTests {
         #expect(wizard.contains("project_template_apply"))
         #expect(wizard.contains("sequence_add_clip"))
 
+        // A run has no transcript to fall back on, so the whole path from a
+        // brief to a first cut has to be on the list: the model catalog an
+        // item's model id comes from, the card that carries a Buy button, the
+        // tool that lands a marketplace asset in the library, and the Remotion
+        // tools that write and check a title or end card.
+        #expect(wizard.contains("models_list"))
+        #expect(wizard.contains("show_marketplace_item"))
+        #expect(wizard.contains("marketplace_add_to_film"))
+        #expect(wizard.contains("image_generate"))
+        #expect(wizard.contains("music_generate"))
+        #expect(wizard.contains("remotion_write_file"))
+        #expect(wizard.contains("remotion_take_screenshot"))
+
         // The wizard's surface is narrower, and never includes a destructive
         // tool no policy exposes.
         #expect(!wizard.contains("footage_delete"))
         #expect(!wizard.contains("sequence_render"))
         #expect(wizard.count < conversation.count)
+    }
+
+    @Test("Every name on the Simple mode list is a tool that exists")
+    func allowlistNamesRealTools() {
+        // An allowlist is a set of strings, so a misspelled entry withholds a
+        // tool instead of failing: `marketplace_show` silently kept the only
+        // card with a Buy button out of every wizard run.
+        let published = Set(MCPToolRegistry.allDescriptors().map(\.name))
+        for name in AgentToolPolicy.simpleModeTools {
+            #expect(published.contains(name), "\(name) is allowed in Simple mode but no tool publishes it")
+        }
     }
 
     @Test("The permission hook answers for the thread's own allowlist")

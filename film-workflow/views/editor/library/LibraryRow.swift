@@ -58,8 +58,9 @@ struct LibraryIndex {
                               dragItem: newest?.dragItem, versions: generatedVersions(p.generatedFiles, id: \.id, createdAt: \.createdAt, detail: { durationLabel($0.durationSeconds) }))
         }
         rows += captions.map { p in
-            LibraryRow(id: LibraryItemID(kind: .caption, id: p.projectUUID), name: p.name, subtitle: p.activeSegmentCount == 0 ? "No captions" : "\(p.activeSegmentCount) captions", updatedAt: p.updatedAt, groupID: p.groupID,
-                       dragItem: p.activeSegmentCount > 0 ? p.dragItem : nil, versions: captionVersions(p))
+            let count = p.activeSegmentCount
+            return LibraryRow(id: LibraryItemID(kind: .caption, id: p.projectUUID), name: p.name, subtitle: count == 0 ? "No captions" : "\(count) captions", updatedAt: p.updatedAt, groupID: p.groupID,
+                       dragItem: count > 0 ? p.dragItem : nil, versions: captionVersions(p))
         }
         rows += images.map { p in
             let newest = p.generatedFiles.max { $0.createdAt < $1.createdAt }
@@ -92,7 +93,16 @@ struct LibraryIndex {
     func imported(_ id: UUID) -> ImportedAsset? { imported.first { $0.id == id } }
 
     func name(of item: LibraryItemID) -> String? {
-        rows().first { $0.id == item }?.name
+        switch item.kind {
+        case .sequence: sequence(item.id)?.name
+        case .music: music(item.id)?.name
+        case .narration: narration(item.id)?.name
+        case .caption: caption(item.id)?.name
+        case .image: image(item.id)?.name
+        case .video: video(item.id)?.name
+        case .remotion: remotion(item.id)?.name
+        case .imported: imported(item.id)?.name
+        }
     }
 
     /// Whether this item was added from the marketplace. Only the kinds
@@ -196,8 +206,10 @@ struct LibraryIndex {
                 FootageCell(id: f.id, title: "v\(p.generatedFiles.count - i)", subtitle: durationLabel(f.durationSeconds) ?? date(f.createdAt), footage: f)
             }
         case .caption:
-            guard let p = caption(item.id), p.activeSegmentCount > 0 else { return [] }
-            return [FootageCell(id: p.activeVersionID ?? p.projectUUID, title: p.activeVersion.map { "v\($0.number)" } ?? "Captions", subtitle: "\(p.activeSegmentCount) captions", footage: p)]
+            guard let p = caption(item.id) else { return [] }
+            let count = p.libraryPreviewCaptionCount
+            guard count > 0 else { return [] }
+            return [FootageCell(id: p.activeVersionID ?? p.projectUUID, title: p.activeVersion.map { "v\($0.number)" } ?? "Captions", subtitle: "\(count) captions", footage: p)]
         case .image:
             guard let p = image(item.id) else { return [] }
             return p.generatedFiles.sorted { $0.createdAt > $1.createdAt }.enumerated().map { i, f in

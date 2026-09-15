@@ -27,6 +27,11 @@ struct FootageBrowserView: View {
     /// Whether this item came from the marketplace, which is where its takes
     /// stop being something to publish.
     var isFromMarketplace = false
+    /// Creates the captions for one take of audio, named by its source id.
+    var onGenerateCaptions: (String) -> Void = { _ in }
+    /// Whether that take already has captions, which decides whether the item
+    /// offers to make them or to open the ones that exist.
+    var hasCaptions: (String) -> Bool = { _ in false }
 
     /// Authoring is admin-only. `LibraryPanel` refreshes the flag; observing
     /// it here rebuilds the menus once it lands.
@@ -44,21 +49,29 @@ struct FootageBrowserView: View {
                 StudioEmptyState(title: "No footage yet", symbol: "rectangle.stack",
                                  message: "Import media or generate footage, then drag it to the timeline.")
             } else {
-                ScrollView {
-                    FootageFlowLayout {
-                        ForEach(cells) { cell in
-                            FootageCellView(cell: cell, libraryItem: libraryItem, isSelected: cell.id == selectedID,
-                                            onSelect: { onSelect(cell) }, onSkim: { onSkim(cell, $0) },
-                                            player: player, onSeek: { onSeek(cell, $0) },
-                                            onCreateMarketplaceItem: request(for: cell).map { request in { seedRequest = request } },
-                                            onLyricsRequest: { player?.pause(); lyricsRequest = $0 })
+                // Stretched to the viewport so the space past the last take
+                // takes the click that clears the selection, the way the
+                // library's grid does.
+                GeometryReader { proxy in
+                    ScrollView {
+                        FootageFlowLayout {
+                            ForEach(cells) { cell in
+                                FootageCellView(cell: cell, libraryItem: libraryItem, isSelected: cell.id == selectedID,
+                                                onSelect: { onSelect(cell) }, onSkim: { onSkim(cell, $0) },
+                                                player: player, onSeek: { onSeek(cell, $0) },
+                                                onCreateMarketplaceItem: request(for: cell).map { request in { seedRequest = request } },
+                                                onLyricsRequest: { player?.pause(); lyricsRequest = $0 },
+                                                onGenerateCaptions: onGenerateCaptions,
+                                                hasCaptions: hasCaptions)
+                            }
                         }
+                        .padding(4)
+                        .frame(maxWidth: .infinity, minHeight: proxy.size.height, alignment: .top)
+                        .contentShape(Rectangle())
+                        .onTapGesture(perform: onDeselect)
                     }
-                    .padding(4)
+                    .accessibilityIdentifier("footage.versions")
                 }
-                .contentShape(Rectangle())
-                .onTapGesture(perform: onDeselect)
-                .accessibilityIdentifier("footage.versions")
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -116,6 +129,8 @@ struct FootageCellView: View {
     /// Nil hides the marketplace action, which is all that gates it.
     var onCreateMarketplaceItem: (() -> Void)?
     var onLyricsRequest: (MusicLyricsRequest) -> Void = { _ in }
+    var onGenerateCaptions: (String) -> Void = { _ in }
+    var hasCaptions: (String) -> Bool = { _ in false }
 
     @State private var loadedDuration: TimeInterval?
     private var duration: TimeInterval? { cell.duration ?? loadedDuration }
@@ -144,6 +159,12 @@ struct FootageCellView: View {
             .accessibilityIdentifier("footage.cell.\(cell.id.uuidString)")
             .contextMenu {
                 MusicLyricsContextMenu(sourceID: cell.drag.source.id, onRequest: onLyricsRequest)
+                if let audio = captionableAudio {
+                    Button { onGenerateCaptions(audio) } label: {
+                        Label(hasCaptions(audio) ? "Open Captions" : "Generate Captions…", systemImage: "captions.bubble")
+                    }
+                    .help("Add captions for this take to the timeline, ready to transcribe")
+                }
                 if let onCreateMarketplaceItem {
                     Button(action: onCreateMarketplaceItem) {
                         Label("Create Marketplace Item…", systemImage: "storefront")
@@ -151,6 +172,17 @@ struct FootageCellView: View {
                     .help("Start a marketplace draft from this take, with its file attached")
                 }
             }
+    }
+
+    /// This take's source id when it is audio the caption tools can take on:
+    /// a music take or an imported file. A narration take is excluded — its
+    /// captions come from the library row, which brings the script too.
+    private var captionableAudio: String? {
+        guard cell.kind == .audio,
+              let (prefix, _) = DocumentMediaResolver.parse(cell.drag.source.id),
+              prefix == .music || prefix == .imported
+        else { return nil }
+        return cell.drag.source.id
     }
 
     private var content: some View {

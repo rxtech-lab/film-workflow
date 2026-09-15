@@ -80,6 +80,7 @@ struct ModifierInspector: View {
                             }
                         }
                     }
+                    .filmTip(.effectOrder, when: index == 0 && clip.effects.count > 1)
                 }
             }
         } else { Text("Select a clip to inspect its effects.").foregroundStyle(.secondary) }
@@ -99,8 +100,10 @@ struct ModifierInspector: View {
                     Text("\(instance.definitionID) is unavailable. Disable or remove it before exporting.").foregroundStyle(.orange)
                 }
                 TransitionDurationField(duration: instance.duration, fps: sequence.fps) { duration in
+                    FilmFeatureTip.transitionDuration.didPerform()
                     editTransition(id) { $0.duration = duration }
                 }
+                .filmTip(.transitionDuration)
                 Toggle("Enabled", isOn: Binding(get: { sequence.timeline.transitions.first { $0.id == id }?.isEnabled ?? false },
                                                 set: { value in editTransition(id) { $0.isEnabled = value } }))
                 if instance.attachment.isPair { Text("These clips move together. Remove the transition to unlink them.").font(.caption).foregroundStyle(.secondary) }
@@ -126,6 +129,7 @@ struct ModifierInspector: View {
         edit("Edit Transition") { try TimelineEditor.updateTransition(&$0, id: id, change) }
     }
     private func reorder(_ clipID: UUID, _ from: Int, _ to: Int) {
+        FilmFeatureTip.effectOrder.didPerform()
         edit("Reorder Effects") { timeline in
             try TimelineEditor.update(&timeline, clipID: clipID) { clip in
                 guard clip.effects.indices.contains(from), clip.effects.indices.contains(to) else { return }

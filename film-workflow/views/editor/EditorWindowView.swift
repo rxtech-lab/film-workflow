@@ -86,7 +86,8 @@ struct EditorWindowView: View {
                                  onRename: beginRenaming, onDelete: { pendingDeletion = $0 },
                                  onExport: { exportingRemotion = index.remotion($0.id.id) },
                                  onShowVersions: { versionsTarget = LibraryVersionsTarget(item: $0.id, versionID: $1) },
-                                 onCreateCaptions: createCaptions)
+                                 onCreateCaptions: createCaptions,
+                                 onGenerateCaptions: generateCaptions)
                         .frame(minWidth: 240, idealWidth: geometry.size.width / 3, maxWidth: .infinity, maxHeight: .infinity)
                         .background(.regularMaterial)
                     ViewerPanel(index: index, state: state, document: document, sequence: currentSequence, onRetryModifierPreview: reloadPlayer)
@@ -123,7 +124,7 @@ struct EditorWindowView: View {
             reloadPlayer()
         }
         .onChange(of: remotions.map { "\($0.id):\($0.durationSeconds):\($0.compositionFps):\($0.compositionWidth):\($0.compositionHeight):\($0.compositionSource.isEmpty)" }) { _, _ in
-            if currentSequence?.timeline.allClips.contains(where: { $0.source.kind == .remotion }) == true { reloadPlayer() }
+            if currentSequence?.timeline.renderedClips.contains(where: { $0.source.kind == .remotion }) == true { reloadPlayer() }
         }
         .task(id: document.pendingTimelineFocus) {
             defer { isFirstFocus = false }
@@ -140,7 +141,7 @@ struct EditorWindowView: View {
         .onReceive(NotificationCenter.default.publisher(for: .remotionPreviewChanged)) { notification in
             guard let directory = notification.userInfo?["directory"] as? URL,
                   directory.path.hasPrefix(document.packageURL.path + "/"),
-                  currentSequence?.timeline.allClips.contains(where: { $0.source.kind == .remotion }) == true else { return }
+                  currentSequence?.timeline.renderedClips.contains(where: { $0.source.kind == .remotion }) == true else { return }
             reloadPlayer()
         }
         .sheet(isPresented: $state.showImportSheet) {
@@ -216,24 +217,28 @@ struct EditorWindowView: View {
         ToolbarItemGroup(placement: .navigation) {
             Menu {
                 ForEach(FootageKind.creatable) { kind in
-                    Button { create(kind, nil) } label: { Label(kind.displayName, systemImage: kind.systemImage) }
+                    Button { FilmFeatureTip.newFootage.didPerform(); create(kind, nil) } label: { Label(kind.displayName, systemImage: kind.systemImage) }
                 }
                 Divider()
                 Button { beginCreatingGroup() } label: { Label("New Folder…", systemImage: "folder.badge.plus") }
             } label: {
                 Label("New", systemImage: "plus")
             }
+            .filmTip(.newFootage)
             Button {
+                FilmFeatureTip.importMedia.didPerform()
                 chooseFilesToImport()
             } label: {
                 Label("Import…", systemImage: "square.and.arrow.down")
             }
+            .filmTip(.importMedia)
             .help("Import video, audio or images from disk")
             AccountControl(placement: .toolbar)
         }
         ToolbarSpacer(.flexible, placement: .automatic)
         ToolbarItemGroup(placement: .automatic) {
             Button {
+                FilmFeatureTip.sequenceRender.didPerform()
                 beginRender()
             } label: {
                 if state.renderProgress != nil {
@@ -244,6 +249,7 @@ struct EditorWindowView: View {
             }
             .disabled(currentSequence == nil || currentSequence?.timeline.isEmpty == true || state.renderProgress != nil)
             .help("Render the current sequence as a new version")
+            .filmTip(.sequenceRender, when: currentSequence != nil && currentSequence?.timeline.isEmpty == false && state.renderProgress == nil)
             Button {
                 openWindow(id: MarketplaceWindowID.value)
             } label: {
@@ -360,6 +366,48 @@ struct EditorWindowView: View {
         }
     }
 
+    /// Captions for one of the film's own recordings — a music take or an
+    /// imported audio file. Like the narration action, the project is created
+    /// and laid over the audio on the timeline but nothing is transcribed:
+    /// starting that stays the user's call in the inspector, which the new
+    /// clip's selection opens onto.
+    private func generateCaptions(forAudio sourceID: String) {
+        Task {
+            do {
+                let project = try await CaptionAudioSource.prepareProject(for: sourceID, context: modelContext)
+                let seconds = Double(project.audioDurationMs) / 1000
+                guard let sequence = currentSequence else {
+                    state.select(LibraryItemID(kind: .caption, id: project.projectUUID))
+                    return
+                }
+                var timeline = sequence.timeline
+                // Captions already on the timeline are shown rather than laid
+                // down again, so repeating the action leaves no empty undo step.
+                if let existing = NarrativeCaptionClip.clip(playing: project.dragItem.source.id, in: timeline) {
+                    state.selectedClipID = existing.id
+                    return
+                }
+                guard let placement = NarrativeCaptionClip.placement(
+                    playing: sourceID, in: timeline, audioDuration: seconds, fallbackStart: state.playhead
+                ) else {
+                    state.select(LibraryItemID(kind: .caption, id: project.projectUUID))
+                    return
+                }
+                let clipID = try NarrativeCaptionClip.insert(
+                    source: project.dragItem.source,
+                    style: project.captionStyle,
+                    placement: placement,
+                    sourceDuration: seconds > 0 ? seconds : nil,
+                    into: &timeline
+                )
+                sequence.editTimeline(timeline, undoManager: undoManager, actionName: String(localized: "Add Captions"))
+                state.selectedClipID = clipID
+            } catch {
+                captionError = error.localizedDescription
+            }
+        }
+    }
+
     private func delete(_ row: LibraryRow) {
         if row.id.kind == .sequence, let sequence = index.sequence(row.id.id) {
             undoManager?.removeAllActions(withTarget: sequence)
@@ -446,9 +494,9 @@ struct EditorWindowView: View {
             state.player.unload()
             return
         }
-        if sequence.timeline.hasActiveModifiers && sequence.timeline.allClips.contains(where: { $0.source.kind == .remotion }) {
+        if sequence.timeline.hasActiveModifiers && sequence.timeline.renderedClips.contains(where: { $0.source.kind == .remotion }) {
             loadRenderedModifierPreview(sequence)
-        } else if sequence.timeline.allClips.contains(where: { $0.source.kind == .remotion }) {
+        } else if sequence.timeline.renderedClips.contains(where: { $0.source.kind == .remotion }) {
             state.preview.load(sequence.timeline, resolver: DocumentPreviewMediaResolver(document: document, width: sequence.width, height: sequence.height, fps: sequence.fps))
         } else {
             state.preview.unload()
@@ -469,7 +517,7 @@ struct EditorWindowView: View {
             defer { resolver.release() }
             do {
                 var files: [String: ResolvedMedia] = [:]
-                for clip in timeline.allClips where clip.source.kind == .remotion && files[clip.source.id] == nil {
+                for clip in timeline.renderedClips where clip.source.kind == .remotion && files[clip.source.id] == nil {
                     files[clip.source.id] = try await resolver.renderedPreview(clip.source) { label in
                         if state.modifierPreviewGeneration == generation { state.modifierPreviewProgress = label }
                     }

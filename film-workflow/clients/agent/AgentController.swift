@@ -32,6 +32,14 @@ final class AgentController {
     struct Run {
         var input: String = ""
         var errorMessage: String?
+        /// Set when the gateway refuses the model this thread is pointed at.
+        ///
+        /// Separate from `errorMessage` because it is the one failure with a
+        /// fix: the message explains, this raises the alert that opens the
+        /// picker. The SDK flattens a thrown error into a string before it
+        /// reaches `record(_:thread:)`, so the typed rejection is captured in
+        /// the transport instead — see `AgentClientFactory.makeClients`.
+        var unavailableModel: UnavailableModelNotice?
         /// Set when a turn finishes on a thread the user isn't looking at, so
         /// the thread menu can show a "done" dot.
         var hasUnseenCompletion: Bool = false
@@ -87,6 +95,10 @@ final class AgentController {
 
     func setError(_ message: String?, for threadID: UUID) {
         mutate(threadID) { $0.errorMessage = message }
+    }
+
+    func setUnavailableModel(_ notice: UnavailableModelNotice?, for threadID: UUID) {
+        mutate(threadID) { $0.unavailableModel = notice }
     }
 
     func markSeen(_ threadID: UUID) {
@@ -305,6 +317,7 @@ final class AgentController {
         mutate(threadID) {
             $0.input = ""
             $0.errorMessage = nil
+            $0.unavailableModel = nil
             $0.hasUnseenCompletion = false
         }
 
@@ -388,7 +401,10 @@ final class AgentController {
         config: AppConfig?,
         container: ModelContainer?
     ) async throws -> Agent {
-        let clients = AgentClientFactory.makeClients(config: config)
+        let threadID = thread.id
+        let clients = AgentClientFactory.makeClients(config: config) { [weak self] error in
+            self?.setUnavailableModel(UnavailableModelNotice(error), for: threadID)
+        }
         guard !clients.isEmpty else { throw CaptionAIError.noBackendAvailable }
 
         // Catalog and authoring tools also work without an open film.
@@ -580,6 +596,7 @@ final class AgentController {
         case .turnStarted:
             mutate(threadID) {
                 $0.errorMessage = nil
+                $0.unavailableModel = nil
                 $0.hasUnseenCompletion = false
             }
             persistTranscript(thread: thread, context: context)

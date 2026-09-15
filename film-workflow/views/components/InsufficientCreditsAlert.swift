@@ -24,7 +24,7 @@ extension View {
                 title: Text("Not enough credits"),
                 message: Text("You need \(value.required.formatted()) credits; \(value.available.formatted()) are available."),
                 primaryButton: .default(Text("Top Up")) {
-                    CreditBalanceStore.shared.openTopUp()
+                    SubscriptionCheckout.presentTopUp()
                 },
                 secondaryButton: .cancel()
             )

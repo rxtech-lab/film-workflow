@@ -107,11 +107,18 @@ enum BackendVideoClient {
                 : nil
         )
 
-        let started: Started = try await BackendClient.shared.post(
-            "api/v1/ai/videos",
-            body: request,
-            idempotencyKey: idempotencyKey
-        )
+        let started: Started
+        do {
+            started = try await BackendClient.shared.post(
+                "api/v1/ai/videos",
+                body: request,
+                idempotencyKey: idempotencyKey
+            )
+        } catch let error as BackendError {
+            // The server's refusal names neither the model nor the capability;
+            // this is the only layer that knows both.
+            throw error.namingModel(trimmedModel, capability: .video)
+        }
         guard !started.jobId.isEmpty else { throw VideoGenError.invalidResponse }
         return VideoGenJob(id: started.jobId, provider: .google)
     }

@@ -212,16 +212,13 @@ struct CaptionSettingsView: View {
         if settings.defaultProvider != .whisperLocal {
             Section {
                 HStack {
-                    Picker("Transcription model", selection: $subscriptionTranscriptionModel) {
-                        Text("Provider default").tag("")
-                        if !subscriptionTranscriptionModel.isEmpty,
-                           !providerModels.contains(where: { $0.id == subscriptionTranscriptionModel }) {
-                            Text(subscriptionTranscriptionModel).tag(subscriptionTranscriptionModel)
-                        }
-                        ForEach(providerModels) { model in
-                            Text(model.pickerLabel).tag(model.id)
-                        }
-                    }
+                    SubscriptionModelPicker(
+                        title: "Transcription model",
+                        emptyLabel: "Provider default",
+                        models: providerModels,
+                        isCatalogLoaded: isTranscriptionCatalogLoaded,
+                        selection: $subscriptionTranscriptionModel
+                    )
 
                     Button {
                         Task { await loadTranscriptionModels(forceRefresh: true) }
@@ -234,6 +231,17 @@ struct CaptionSettingsView: View {
                     }
                     .disabled(isLoadingModels)
                     .help("Refresh model list")
+                }
+
+                if SubscriptionModelPicker.isUnavailable(
+                    subscriptionTranscriptionModel,
+                    in: providerModels,
+                    isCatalogLoaded: isTranscriptionCatalogLoaded
+                ) {
+                    UnavailableModelWarning(
+                        model: subscriptionTranscriptionModel,
+                        capability: .transcription
+                    )
                 }
 
                 if let modelsError {
@@ -577,6 +585,14 @@ struct CaptionSettingsView: View {
         case .whisperLocal: return []
         }
         return transcriptionModels.filter { $0.provider == provider }
+    }
+
+    /// Whether `transcriptionModels` is a catalog the server actually answered
+    /// with — the only list a saved id can be judged stale against. `models`
+    /// being empty *for the selected provider* is itself a stale state, so the
+    /// check is on the whole catalog rather than on `providerModels`.
+    private var isTranscriptionCatalogLoaded: Bool {
+        !isLoadingModels && modelsError == nil && !transcriptionModels.isEmpty
     }
 
     /// The picker needs a non-optional selection, and "" means "no fallback".

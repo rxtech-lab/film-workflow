@@ -23,7 +23,7 @@ final class SimpleModePlayback {
             return
         }
         let timeline = sequence.timeline
-        let hasRemotion = timeline.allClips.contains { $0.source.kind == .remotion }
+        let hasRemotion = timeline.renderedClips.contains { $0.source.kind == .remotion }
         usesLivePreview = hasRemotion && !timeline.hasActiveModifiers
         if usesLivePreview {
             preview.load(timeline, resolver: DocumentPreviewMediaResolver(
@@ -46,7 +46,7 @@ final class SimpleModePlayback {
                 defer { resolver.release() }
                 do {
                     var files: [String: ResolvedMedia] = [:]
-                    for clip in timeline.allClips where clip.source.kind == .remotion && files[clip.source.id] == nil {
+                    for clip in timeline.renderedClips where clip.source.kind == .remotion && files[clip.source.id] == nil {
                         files[clip.source.id] = try await resolver.renderedPreview(clip.source) { [weak self] message in
                             if self?.generation == requested { self?.preparation = message }
                         }

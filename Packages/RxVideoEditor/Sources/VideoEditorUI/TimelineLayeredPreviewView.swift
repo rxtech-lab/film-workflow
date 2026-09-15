@@ -97,14 +97,25 @@ private struct CaptionPreviewLayer: View {
     let cues: [TextCue]
     let clip: Clip
     let controller: TimelinePreviewController
-    private static let context = CIContext()
-
     var body: some View {
         // The clip's own language and punctuation choices, on the timeline
         // clock, exactly as the compositor burns them in.
         let text = clip.captionText(at: controller.transport.currentTime, in: cues)
-        let size = controller.timeline.size
-        if !text.isEmpty, let raster = TextRenderer.shared.image(for: text, style: clip.text ?? .caption, frameSize: size),
+        CaptionPreviewRaster(text: text, style: clip.text ?? .caption, size: controller.timeline.size)
+            .equatable()
+    }
+}
+
+/// Most clock/skim updates remain within the same caption. Keep the full-frame
+/// Core Image conversion out of those updates; only rasterize changed text.
+private struct CaptionPreviewRaster: View, Equatable {
+    let text: String
+    let style: TextStyle
+    let size: CGSize
+    private static let context = CIContext()
+
+    var body: some View {
+        if !text.isEmpty, let raster = TextRenderer.shared.image(for: text, style: style, frameSize: size),
            let image = Self.context.createCGImage(raster, from: CGRect(origin: .zero, size: size)) {
             Image(decorative: image, scale: 1).resizable().frame(width: size.width, height: size.height)
         }

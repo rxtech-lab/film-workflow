@@ -158,7 +158,12 @@ enum RemotionTools {
         filenameHint: String
     ) async throws -> GeneratedImageOutput {
         let imageConfig = (try? AppConfig.loadFromKeychain())
-        let model = imageConfig?.subscriptionImageModel.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        // Settings is optional here: a composition built inside a Simple mode
+        // run has no one to visit it, so an unset choice falls through to the
+        // catalog's own default rather than refusing to generate.
+        let model = await BackendImageClient.resolvedModel(
+            preferred: imageConfig?.subscriptionImageModel ?? ""
+        )
         guard !model.isEmpty else {
             throw RemotionToolsError.imageGenNotConfigured
         }

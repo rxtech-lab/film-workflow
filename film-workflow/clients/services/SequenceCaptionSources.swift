@@ -14,7 +14,7 @@ enum SequenceCaptionSources {
         var projects: [UUID: CaptionProject] = [:]
         var result: [(clip: Clip, project: CaptionProject)] = []
         for track in sequence.timeline.tracks where track.kind.drawsOverPicture {
-            for clip in track.sortedClips where clip.source.kind == .captions {
+            for clip in track.renderedClips where clip.source.kind == .captions {
                 guard let (prefix, id) = DocumentMediaResolver.parse(clip.source.id), prefix == .caption else { continue }
                 if projects[id] == nil {
                     projects[id] = try? context.fetch(FetchDescriptor<CaptionProject>(predicate: #Predicate { $0.projectUUID == id })).first
@@ -26,7 +26,7 @@ enum SequenceCaptionSources {
     }
 
     static func hasCaptions(in sequence: SequenceProject) -> Bool {
-        sequence.timeline.allClips.contains { $0.source.kind == .captions }
+        sequence.timeline.renderedClips.contains { $0.source.kind == .captions }
     }
 
     /// The original first, then every translated language across the caption
@@ -48,7 +48,7 @@ enum SequenceCaptionSources {
     /// first caption clip's, since every caption clip usually shares one.
     static func effectiveStyle(in sequence: SequenceProject) -> TextStyle {
         for track in sequence.timeline.tracks where track.kind.drawsOverPicture {
-            if let clip = track.sortedClips.first(where: { $0.source.kind == .captions }) { return clip.text ?? .caption }
+            if let clip = track.renderedClips.first(where: { $0.source.kind == .captions }) { return clip.text ?? .caption }
         }
         return .caption
     }
@@ -56,7 +56,7 @@ enum SequenceCaptionSources {
     /// The languages the caption clips are set to draw, when they agree; nil
     /// when they differ, which the render sheet's single picker cannot show.
     static func effectiveBurnInLanguages(in sequence: SequenceProject) -> [String]? {
-        let clips = sequence.timeline.allClips.filter { $0.source.kind == .captions }
+        let clips = sequence.timeline.renderedClips.filter { $0.source.kind == .captions }
         guard let first = clips.first else { return nil }
         return clips.allSatisfy { $0.captions.languages == first.captions.languages } ? first.captions.languages : nil
     }

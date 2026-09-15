@@ -22,6 +22,7 @@ public struct TemplateGalleryView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 26) {
                 header
+                    .templateTip(.gallery)
 
                 ForEach(groups, id: \.group) { entry in
                     VStack(alignment: .leading, spacing: 10) {
@@ -38,7 +39,10 @@ public struct TemplateGalleryView: View {
                             spacing: 12
                         ) {
                             ForEach(entry.templates) { template in
-                                TemplateGalleryCard(template: template) { onPick(template) }
+                                TemplateGalleryCard(template: template) {
+                                    FilmTemplateTip.gallery.didPerform()
+                                    onPick(template)
+                                }
                             }
                         }
                     }

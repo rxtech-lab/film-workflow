@@ -21,7 +21,7 @@ struct AccountControl: View {
                 }
                 Button("Account…") { navigation.showAccountSettings(); openSettings() }
                 #if os(macOS)
-                Button("Add Credits…") { balance.openTopUp() }
+                Button("Add Credits…") { SubscriptionCheckout.presentTopUp() }
                 #endif
                 Divider()
                 Button("Sign Out", role: .destructive) {
@@ -98,7 +98,7 @@ struct AccountCommands: Commands {
                 Divider()
                 Button("Account…") { navigation.showAccountSettings(); openSettings() }
                     .keyboardShortcut("a", modifiers: [.command, .shift])
-                Button("Add Credits…") { balance.openTopUp() }
+                Button("Add Credits…") { SubscriptionCheckout.presentTopUp() }
                 Divider()
                 Button("Sign Out") { Task { await auth.signOut() } }
             } else if auth.isRestoring {

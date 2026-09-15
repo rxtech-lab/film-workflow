@@ -1,3 +1,4 @@
+import RxSubscriptionIOS
 import SwiftUI
 import TipKit
 
@@ -29,8 +30,38 @@ struct AIProviderSettingsView: View {
     @State private var showError = false
 
     @State private var modelCatalog = AgentModelCatalog.shared
+    @State private var navigation = AppNavigation.shared
+
+    /// Scroll target for the deep link an "unavailable model" alert follows.
+    private enum Anchor: Hashable {
+        case subscriptionModels
+    }
 
     var body: some View {
+        ScrollViewReader { proxy in
+            form
+                // Runs on first appearance too, which is the case that matters:
+                // the request is made before this view exists, so `onChange`
+                // never fires.
+                .task(id: navigation.pendingSettingsFocus) {
+                    guard navigation.pendingSettingsFocus == .subscriptionModels else { return }
+                    // The catalog is what decides whether a saved id is stale,
+                    // so a deep link arriving here forces it fresh rather than
+                    // flagging a model against an hour-old list.
+                    await loadSubscriptionModels(forceRefresh: true)
+                    withAnimation { proxy.scrollTo(Anchor.subscriptionModels, anchor: .top) }
+                    navigation.pendingSettingsFocus = nil
+                }
+        }
+    }
+
+    private var subscriptionSummary: String {
+        let credits = String(localized: "\(CreditBalanceStore.shared.availablePoints) credits")
+        guard let plan = SubscriptionStore.shared.activePlan else { return credits }
+        return "\(plan.planName) · \(credits)"
+    }
+
+    private var form: some View {
         Form {
             Section {
                 HStack {
@@ -41,7 +72,10 @@ struct AIProviderSettingsView: View {
                         : "Sign in on the Account tab before generating")
                     Spacer()
                     if AuthManager.shared.isAuthenticated {
-                        Text("\(CreditBalanceStore.shared.availablePoints) credits")
+                        // This pane decides which models are reachable, and
+                        // that depends on the plan, so name it next to the
+                        // balance rather than in a section of its own.
+                        Text(subscriptionSummary)
                             .foregroundStyle(.secondary)
                     }
                 }
@@ -52,6 +86,19 @@ struct AIProviderSettingsView: View {
             }
 
             Section {
+                // Said once at the top as well as beside each picker: a pane
+                // reached from a failed generation has to answer "what do I fix"
+                // before the user scrolls, and a stale id is easy to scroll past.
+                if !unavailableCapabilities.isEmpty {
+                    Label {
+                        Text("No longer offered on your plan: \(unavailableSummary). Pick a replacement in each highlighted row below.")
+                    } icon: {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                    }
+                    .font(.caption)
+                    .foregroundStyle(.orange)
+                }
+
                 subscriptionPicker("Chat model", capability: .chat, selection: $subscriptionChatModel)
                 subscriptionPicker("Image model", capability: .image, selection: $subscriptionImageModel)
                 subscriptionPicker("Transcription model", capability: .transcription, selection: $subscriptionTranscriptionModel)
@@ -77,6 +124,7 @@ struct AIProviderSettingsView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
+            .id(Anchor.subscriptionModels)
 
             Section {
                 TextField("Endpoint (e.g. https://api.openai.com/v1)", text: $openAIEndpoint)
@@ -306,24 +354,69 @@ struct AIProviderSettingsView: View {
         }
     }
 
+    /// Whether `subscriptionModels` holds a catalog the server actually
+    /// answered with, which is the only list a saved id can be judged against.
+    private var isCatalogLoaded: Bool {
+        !isLoadingSubscriptionModels && subscriptionModelsError == nil && !subscriptionModels.isEmpty
+    }
+
+    /// Every capability whose saved model the catalog no longer offers.
+    ///
+    /// Read for the section header as well as the rows: an id going stale is
+    /// the one thing in this pane the user did not do and has to undo, so it is
+    /// said once at the top and again beside the picker that holds it.
+    private var unavailableCapabilities: [AICapability] {
+        subscriptionSelections.compactMap { capability, selection in
+            SubscriptionModelPicker.isUnavailable(
+                selection.wrappedValue,
+                in: models(for: capability),
+                isCatalogLoaded: isCatalogLoaded
+            ) ? capability : nil
+        }
+    }
+
+    /// The stale rows, named the way the pickers below name them.
+    private var unavailableSummary: String {
+        unavailableCapabilities.map(\.settingsRowLabel).formatted(.list(type: .and))
+    }
+
+    /// The four pickers this pane owns, in the order they are shown.
+    private var subscriptionSelections: [(AICapability, Binding<String>)] {
+        [
+            (.chat, $subscriptionChatModel),
+            (.image, $subscriptionImageModel),
+            (.transcription, $subscriptionTranscriptionModel),
+            (.video, $subscriptionVideoModel),
+        ]
+    }
+
+    private func models(for capability: AICapability) -> [PickableModel] {
+        subscriptionModels.filter { $0.capability == capability.rawValue }
+    }
+
     @ViewBuilder
     private func subscriptionPicker(
-        _ title: String,
+        _ title: LocalizedStringKey,
         capability: AICapability,
         selection: Binding<String>
     ) -> some View {
-        let models = subscriptionModels.filter { $0.capability == capability.rawValue }
-        Picker(title, selection: selection) {
-            Text("Select a model").tag("")
-            // The catalog tracks the live gateway list, so a saved model can
-            // vanish from it. Keep its row rather than showing a blank picker.
-            if !selection.wrappedValue.isEmpty,
-               !models.contains(where: { $0.id == selection.wrappedValue }) {
-                Text(selection.wrappedValue).tag(selection.wrappedValue)
-            }
-            ForEach(models) { model in
-                Text(model.pickerLabel).tag(model.id)
-            }
+        let models = models(for: capability)
+        // The catalog tracks the live gateway list, so a saved model can vanish
+        // from it. The picker keeps its row rather than showing a blank, and
+        // flags it rather than letting it pass for a working choice.
+        SubscriptionModelPicker(
+            title: title,
+            emptyLabel: "Select a model",
+            models: models,
+            isCatalogLoaded: isCatalogLoaded,
+            selection: selection
+        )
+        if SubscriptionModelPicker.isUnavailable(
+            selection.wrappedValue,
+            in: models,
+            isCatalogLoaded: isCatalogLoaded
+        ) {
+            UnavailableModelWarning(model: selection.wrappedValue, capability: capability)
         }
     }
 

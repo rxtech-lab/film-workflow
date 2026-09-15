@@ -1,4 +1,5 @@
 import RxAuthSwift
+import RxSubscriptionIOS
 import SwiftUI
 
 struct AccountSheet: View {
@@ -25,6 +26,7 @@ struct AccountDetailContent: View {
     @State private var auth = AuthManager.shared
     @State private var balance = CreditBalanceStore.shared
     @State private var usage = UsageHistoryStore.shared
+    @State private var subscription = SubscriptionStore.shared
     @State private var navigation = AppNavigation.shared
     @State private var confirmSignOut = false
     @State private var refreshError: String?
@@ -34,6 +36,7 @@ struct AccountDetailContent: View {
             if auth.isAuthenticated {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 22) {
+                        planCard
                         balanceCard
                         usageSummary
                         recentUsage
@@ -72,6 +75,59 @@ struct AccountDetailContent: View {
         }
     }
 
+    /// Omitted entirely when no publishable key is configured — there is no
+    /// plan to report, and an empty card would only raise questions.
+    @ViewBuilder
+    private var planCard: some View {
+        if subscription.availability != .unconfigured {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Subscription").foregroundStyle(.secondary)
+                if let plan = subscription.activePlan {
+                    HStack(alignment: .firstTextBaseline, spacing: 8) {
+                        Text(plan.planName).font(.title2.weight(.semibold))
+                        if plan.status == "trialing" {
+                            Text("Trial")
+                                .font(.caption.weight(.semibold))
+                                .padding(.horizontal, 7).padding(.vertical, 2)
+                                .background(.tint.opacity(0.18), in: Capsule())
+                        }
+                    }
+                    if let renewal = plan.currentPeriodEnd {
+                        Text(plan.cancelAtPeriodEnd
+                             ? "Ends \(renewal.formatted(date: .abbreviated, time: .omitted))"
+                             : "Renews \(renewal.formatted(date: .abbreviated, time: .omitted))")
+                            .font(.caption)
+                            .foregroundStyle(plan.cancelAtPeriodEnd ? .orange : .secondary)
+                    }
+                    Button("Manage Subscription") { Task { await openBillingPortal() } }
+                        .buttonStyle(.bordered)
+                        .padding(.top, 4)
+                } else if subscription.availability == .notEntitled {
+                    Text("No active plan").font(.title3.weight(.medium))
+                    Text("A subscription is required to use AI features.")
+                        .font(.caption).foregroundStyle(.secondary)
+                } else {
+                    // `.unknown` — the question has not been answered yet, so
+                    // say so rather than implying the user has no plan.
+                    Text("Checking subscription…")
+                        .font(.subheadline).foregroundStyle(.secondary)
+                }
+            }
+            .padding(18)
+            .background(.quaternary, in: RoundedRectangle(cornerRadius: 16))
+        }
+    }
+
+    private func openBillingPortal() async {
+        guard let client = SubscriptionService.shared.client() else { return }
+        do {
+            let session = try await client.billingPortal(returnURL: BackendConfig.webBaseURL)
+            SubscriptionCheckout.open(session.url)
+        } catch {
+            refreshError = error.localizedDescription
+        }
+    }
+
     private var balanceCard: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
@@ -91,7 +147,7 @@ struct AccountDetailContent: View {
                     .font(.caption).foregroundStyle(.secondary)
             }
             #if os(macOS)
-                Button("Add Credits") { balance.openTopUp() }
+                Button("Add Credits") { SubscriptionCheckout.presentTopUp() }
                     .buttonStyle(.borderedProminent)
                     .padding(.top, 4)
             #endif
@@ -154,7 +210,8 @@ struct AccountDetailContent: View {
     private func refresh() async {
         async let balanceRefresh: Void = balance.refresh()
         async let usageRefresh: Void = usage.refresh()
-        _ = await (balanceRefresh, usageRefresh)
+        async let subscriptionRefresh: Void = subscription.refresh()
+        _ = await (balanceRefresh, usageRefresh, subscriptionRefresh)
         refreshError = balance.error ?? usage.error
     }
 

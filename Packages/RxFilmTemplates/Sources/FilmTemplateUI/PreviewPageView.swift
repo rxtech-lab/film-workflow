@@ -55,11 +55,15 @@ public struct PreviewPageView<Player: View, Strip: View>: View {
                         .foregroundStyle(.secondary)
                     Spacer()
                     if let summary, !summary.isEmpty {
-                        Button { showingNotes = true } label: {
+                        Button {
+                            FilmTemplateTip.notes.didPerform()
+                            showingNotes = true
+                        } label: {
                             Label("Build Notes", systemImage: "text.alignleft")
                         }
                         .buttonStyle(.glass)
                         .accessibilityIdentifier("wizard.preview.notes")
+                        .templateTip(.notes, when: !isBusy && !showingNotes)
                         .popover(isPresented: $showingNotes, arrowEdge: .top) {
                             ScrollView {
                                 VStack(alignment: .leading, spacing: 14) {
@@ -89,11 +93,15 @@ public struct PreviewPageView<Player: View, Strip: View>: View {
             }
             .padding(.horizontal, 28)
         } footer: {
-            Button("Edit in Editor", action: onOpenEditor)
+            Button("Edit in Editor") {
+                FilmTemplateTip.editor.didPerform()
+                onOpenEditor()
+            }
                 .buttonStyle(.glassProminent)
                 .disabled(isBusy)
                 .keyboardShortcut(.defaultAction)
                 .accessibilityIdentifier("wizard.preview.edit")
+                .templateTip(.editor, when: !isBusy)
         }
     }
 
@@ -126,6 +134,7 @@ public struct PreviewPageView<Player: View, Strip: View>: View {
                 .lineLimit(1...3)
                 .onSubmit(send)
                 .accessibilityIdentifier("wizard.preview.refine")
+                .templateTip(.refinement, when: !isBusy && refinement.isEmpty)
             Button(action: send) {
                 Image(systemName: "arrow.up")
                     .font(.system(size: 13, weight: .semibold))
@@ -146,6 +155,7 @@ public struct PreviewPageView<Player: View, Strip: View>: View {
     private func send() {
         let text = refinement.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty, !isBusy else { return }
+        FilmTemplateTip.refinement.didPerform()
         refinement = ""
         onRefine(text)
     }

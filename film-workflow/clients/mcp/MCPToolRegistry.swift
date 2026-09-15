@@ -16,6 +16,7 @@ enum MCPToolRegistry {
         var tools: [MCPToolDescriptor] = []
         tools.append(showSignInDialogDescriptor)
         tools.append(filmListDescriptor)
+        tools.append(contentsOf: MCPModelHandlers.descriptors)
         tools.append(contentsOf: MCPMarketplaceHandlers.descriptors.filter { !MCPMarketplaceHandlers.adminNames.contains($0.name) || MarketplaceAuthoringService.shared.canAuthor })
         tools.append(contentsOf: MCPLibraryHandlers.descriptors)
         tools.append(contentsOf: MCPSequenceHandlers.descriptors)
@@ -34,9 +35,15 @@ enum MCPToolRegistry {
 
     static let filmArgument = "film"
 
+    /// Tools that answer for the account rather than for a film, and so carry
+    /// no `film` argument: offering one would promise a routing that does not
+    /// exist.
+    static var filmlessTools: Set<String> {
+        MCPModelHandlers.toolNames.union([filmListDescriptor.name, showSignInDialogDescriptor.name])
+    }
+
     private static func withFilmArgument(_ tool: MCPToolDescriptor) -> MCPToolDescriptor {
-        guard tool.name != filmListDescriptor.name,
-              tool.name != showSignInDialogDescriptor.name else { return tool }
+        guard !filmlessTools.contains(tool.name) else { return tool }
         var schema = tool.inputSchema
         var properties = (schema["properties"] as? [String: Any]) ?? [:]
         properties[filmArgument] = [
@@ -118,6 +125,13 @@ enum MCPToolRegistry {
         }
         if name == filmListDescriptor.name {
             return jsonResult(ProjectDocumentController.shared.openDocuments.map(filmSummary))
+        }
+        if MCPModelHandlers.canHandle(name) {
+            // The catalog belongs to the account, not to a film, and the
+            // wizard reads it before one is the active document.
+            var arguments = rawArguments
+            arguments.removeValue(forKey: filmArgument)
+            return try await MCPModelHandlers.handle(name: name, arguments: arguments)
         }
 
         var arguments = rawArguments
