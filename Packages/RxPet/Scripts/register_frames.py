@@ -4,7 +4,7 @@ import json
 from PIL import Image
 
 root = Path(__file__).resolve().parents[1] / 'Sources/RxPet/Resources'
-image = Image.open(root / 'camera-atlas.png').convert('RGBA')
+image = Image.open(root / 'camera-atlas.webp').convert('RGBA')
 w, h = image.size
 coverage = [sum(image.getpixel((x, y))[3] > 128 for x in range(w)) for y in range(h)]
 def runs(values, threshold):

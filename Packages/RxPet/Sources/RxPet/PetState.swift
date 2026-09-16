@@ -33,5 +33,5 @@ public struct PetCharacter: Hashable, Sendable {
     public init(atlasURL: URL, expressionsURL: URL? = nil, manifestURL: URL? = nil, columns: Int = 6, rows: Int = 8, framesPerSecond: Double = 4) {
         self.atlasURL = atlasURL; self.expressionsURL = expressionsURL; self.manifestURL = manifestURL; self.columns = max(1, columns); self.rows = max(1, rows); self.framesPerSecond = max(1, framesPerSecond)
     }
-    public static var cameraBuddy: Self { .init(atlasURL: Bundle.module.url(forResource: "camera-atlas", withExtension: "png")!, expressionsURL: Bundle.module.url(forResource: "camera-expressions", withExtension: "png"), manifestURL: Bundle.module.url(forResource: "camera-animation", withExtension: "json")) }
+    public static var cameraBuddy: Self { .init(atlasURL: Bundle.module.url(forResource: "camera-atlas", withExtension: "webp")!, expressionsURL: Bundle.module.url(forResource: "camera-expressions", withExtension: "webp"), manifestURL: Bundle.module.url(forResource: "camera-animation", withExtension: "json")) }
 }
