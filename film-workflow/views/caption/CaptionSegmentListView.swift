@@ -637,8 +637,9 @@ struct CaptionSegmentListView: View {
 
 /// Deleting a version is irreversible and takes its captions with it, so it
 /// asks first. A `ViewModifier` for the same reason its sibling below is one:
-/// the editor's body is already at the type-checker's limit.
-private struct CaptionVersionDeleteConfirmation: ViewModifier {
+/// the editor's body is already at the type-checker's limit. Caption Setup's
+/// version menu and the library's versions sheet both ask through it.
+struct CaptionVersionDeleteConfirmation: ViewModifier {
     @Binding var version: CaptionTranscriptVersion?
     let onDelete: (CaptionTranscriptVersion) -> Void
 

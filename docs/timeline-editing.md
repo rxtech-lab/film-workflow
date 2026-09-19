@@ -12,6 +12,12 @@ controls and editing operations both check that stored set.
 | Generated music, narration, imported audio | Yes | Yes | Yes | Yes | Yes |
 | Generated/imported video, Remotion | Yes | Yes | No | Yes | Yes |
 | Stills, captions | Yes | Yes | No | No | Yes |
+| Screen recording zooms | Yes | Yes | No | No | Yes |
+
+Lanes are video, audio, overlay, caption, or zoom. A zoom lane belongs to the
+screen recording that made it and takes nothing else: its clips supply no
+picture and no sound, only the zoom each one's range applies to its recording.
+Add Track does not offer one, and neither does `sequence_add_track`.
 
 The compact toolbar combines Add Track, Select (A), Cut (B), Skim (S), Speed,
 Reverse, timecode and zoom in one row. Narrow panels use icons with tooltips.
@@ -44,6 +50,19 @@ and changing lane only when every clip fits the new lane. Delete, Backspace, or
 the context menu remove the whole selection as one undo step; Ripple Delete
 closes each gap. Speed, Reverse, and the inspector need exactly one selected
 clip; the toolbar shows the count otherwise.
+
+## Track headers
+
+Drag a header to reorder the lanes; right-click one for the rest: its alias,
+whether it is pinned, and Delete Track. Deleting takes the lane's clips and
+the transitions on them with it, as one undo step, and the timeline always
+keeps a last lane.
+
+Pinning holds a lane on screen while the timeline scrolls. A pinned lane keeps
+its place in the order: it sits where it always did until the scroll would
+take it off the top, and from there it rides along under any lanes pinned
+above it, so the layout still reads top to bottom as it is. Its header shows a
+pin beside the name, and the pin is saved with the film.
 
 ## Disabling clips and tracks
 

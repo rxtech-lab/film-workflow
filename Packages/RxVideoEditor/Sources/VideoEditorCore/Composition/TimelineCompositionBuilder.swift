@@ -166,6 +166,10 @@ public struct TimelineCompositionBuilder {
             if let layer = clipLayers[clip.id] { clipLayers[clip.id] = .processed(layer, clip.effects) }
         }
 
+        for clip in timeline.renderedClips where clip.recording != nil {
+            if let layer = clipLayers[clip.id] { clipLayers[clip.id] = .recording(layer, clip: timeline.resolvedRecordingClip(clip)) }
+        }
+
         // Segment at clip and transition edges, including held-frame boundaries.
 
         let pictureClips = pictureTracks.flatMap(\.renderedClips).filter { includeCaptions || $0.source.kind != .captions }
@@ -243,7 +247,7 @@ public struct TimelineCompositionBuilder {
     private func addPlayableEdges(_ layer: LayerSpec, to edges: inout Set<Double>) {
         switch layer {
         case .heldEdges(_, let range, _, _, _, _): edges.insert(range.lowerBound); edges.insert(range.upperBound)
-        case .processed(let layer, _): addPlayableEdges(layer, to: &edges)
+        case .processed(let layer, _), .recording(let layer, _): addPlayableEdges(layer, to: &edges)
         default: break
         }
     }

@@ -147,54 +147,97 @@ enum AgentToolPolicy {
         policy: AgentWritePolicy,
         mode: AgentThreadMode = .conversation
     ) -> Bool {
+        // Decided first: a built-in is not in `MCPToolRegistry`, so the checks
+        // below would judge it against lists it was never a candidate for and
+        // allow or refuse it by accident.
+        if isBuiltIn(name) { return !mode.isSimpleMode }
         guard !withheldNames(policy: policy, mode: mode).contains(name) else { return false }
         if case .simpleMode = mode, !simpleModeTools.contains(name) { return false }
         return !MCPMarketplaceHandlers.adminNames.contains(name)
             || MarketplaceAuthoringService.shared.canAuthor
     }
 
-    // MARK: - Coding-agent tools
+    // MARK: - Built-in engine tools
 
-    /// A CLI agent's own built-in tools, all of which are withheld.
+    /// A CLI engine's own tools, offered alongside the app's MCP surface.
     ///
-    /// The agent window is not a coding agent: it works entirely through the
-    /// MCP tools above, and the system prompt says as much. But a prompt is a
-    /// request, not a guarantee — a model that decides to `Bash` its way to an
-    /// answer would be running shell commands against the user's machine on the
-    /// strength of a sentence asking it not to.
+    /// These belong to the `claude` and `codex` processes, not to us: they are
+    /// not in `MCPToolRegistry`, so every other rule in this file — the write
+    /// policy, the Simple mode allowlist, the admin check — is about names that
+    /// can never appear here. They are decided in one place, ``isBuiltIn``.
     ///
-    /// So the real guarantee is structural, in two layers: `--allowedTools`
-    /// names only our MCP surface, so nothing else is pre-approved, and these
-    /// names are additionally passed to `--disallowedTools` so an attempt is
-    /// refused outright rather than routed to an approval resolver that has no
-    /// UI to ask with.
-    static let codingAgentTools: [String] = [
+    /// The list has to be exhaustive rather than indicative. `--allowedTools`
+    /// is a complete enumeration of what is pre-approved, so a built-in left
+    /// off it is a tool the model can see and cannot use — which reads to the
+    /// user as the agent refusing to do its job.
+    static let builtInTools: [String] = [
         "Bash", "BashOutput", "KillShell",
         "Edit", "MultiEdit", "Write", "NotebookEdit",
         "Read", "Glob", "Grep", "LS",
         "WebFetch", "WebSearch",
         "Task", "Agent", "TaskOutput",
+        // Bookkeeping the CLI drives itself. Cheap to allow, and a refused
+        // `TodoWrite` costs a wasted turn for nothing.
+        "TodoRead", "TodoWrite", "ExitPlanMode", "AskUserQuestion",
     ]
 
-    /// Everything withheld from a turn: the policy's own withholdings plus the
-    /// agent's built-in tools.
+    private static let builtInToolNames: Set<String> = Set(builtInTools)
+
+    static func isBuiltIn(_ name: String) -> Bool {
+        builtInToolNames.contains(name)
+    }
+
+    /// The built-ins a thread in `mode` may use.
+    ///
+    /// Empty for Simple mode. A wizard run is unattended by design — it shows
+    /// one status line instead of a transcript, and `maxToolIterations` is
+    /// raised so it can work for a long time without the user in the loop.
+    /// A shell in that setting is a different proposition from a shell in a
+    /// conversation somebody is watching, and nothing on the path from a brief
+    /// to a first cut needs one: Remotion sources have
+    /// `remotion_write_file`/`remotion_edit_file`.
+    static func builtInTools(mode: AgentThreadMode) -> [String] {
+        mode.isSimpleMode ? [] : builtInTools
+    }
+
+    /// Everything a turn may call: the MCP tools the policy exposes, plus the
+    /// engine's own built-ins when it has any.
+    static func allowedToolNames(
+        policy: AgentWritePolicy,
+        mode: AgentThreadMode = .conversation,
+        includeBuiltIns: Bool
+    ) -> [String] {
+        toolNames(policy: policy, mode: mode)
+            + (includeBuiltIns ? builtInTools(mode: mode) : [])
+    }
+
+    /// The MCP tools withheld from a turn.
+    ///
+    /// Built-ins are no longer added here. They used to be, as the structural
+    /// half of a guarantee the prompt only asked for; the app now offers them
+    /// deliberately, so the withholding that remains is the write policy's.
     static func disallowedToolNames(
         policy: AgentWritePolicy,
         mode: AgentThreadMode = .conversation
     ) -> [String] {
-        Array(withheldNames(policy: policy, mode: mode)) + codingAgentTools
+        Array(withheldNames(policy: policy, mode: mode))
     }
 }
 
 /// Answers a CLI agent's approval hook the way the allowlist already did.
 ///
-/// Claude Code runs the `PreToolUse` hook for every `mcp__*` call *before* it
-/// consults `--allowedTools`, so a deny from the hook overrides the
-/// pre-approval and the model sees "the user declined this tool call" for a
-/// tool the user never got asked about. This resolver closes that gap: a tool
-/// the current write policy exposes is allowed without a prompt (the policy is
-/// the user's standing answer), and anything else is refused with a reason the
-/// model can act on rather than a silent no.
+/// Claude Code runs the `PreToolUse` hook for `Bash`, `Edit`, `Write`,
+/// `MultiEdit` and every `mcp__*` call *before* it consults `--allowedTools`,
+/// so a deny from the hook overrides the pre-approval and the model sees "the
+/// user declined this tool call" for a tool the user never got asked about.
+/// This resolver closes that gap: a tool the current write policy exposes is
+/// allowed without a prompt (the policy is the user's standing answer), and
+/// anything else is refused with a reason the model can act on rather than a
+/// silent no.
+///
+/// It is also the *only* gate on Codex, which ignores `allowedTools` and
+/// `disallowedTools` entirely and asks about a shell command or a file change
+/// as a synthesised `Bash` or `Edit` request.
 ///
 /// Reads the policy on every call rather than capturing it, so flipping
 /// Settings › Write policy mid-conversation applies to the next tool call.

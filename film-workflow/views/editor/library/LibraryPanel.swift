@@ -28,10 +28,12 @@ struct LibraryPanel: View {
     var marketplace: MarketplaceStore? = .shared
 
     @Environment(\.openWindow) private var openWindow
+    @Environment(\.undoManager) private var undoManager
     @State private var tab: LibraryTab = .library
     @State private var filter: FootageKind?
     @State private var searchText = ""
     @State private var marketplaceError: String?
+    @State private var takeRemovalError: String?
     @FocusState private var filterFocused: Bool
     /// Set once the user toggles the pane; until then the document's saved state applies.
     @State private var footageToggled: Bool?
@@ -166,6 +168,9 @@ struct LibraryPanel: View {
         } message: {
             Text(marketplaceError ?? "")
         }
+        .alert("Couldn’t Remove Take", isPresented: Binding(get: { takeRemovalError != nil }, set: { if !$0 { takeRemovalError = nil } })) {
+            Button("OK") { takeRemovalError = nil }
+        } message: { Text(takeRemovalError ?? "") }
     }
 
     /// Hands back the caret when the user clicks in the library.
@@ -243,7 +248,8 @@ struct LibraryPanel: View {
         onToggle: toggleFootage,
         isFromMarketplace: state.selection.map(index.isFromMarketplace) ?? false,
         onGenerateCaptions: onGenerateCaptions,
-        hasCaptions: hasCaptions
+        hasCaptions: hasCaptions,
+        onRemoveTake: recordingTakeRemovalAction
     )
     }
 
@@ -281,7 +287,23 @@ struct LibraryPanel: View {
     /// project's active transcript, else the newest.
     private func currentVersion(for item: LibraryItemID) -> UUID? {
         if item.kind == .caption { return index.caption(item.id)?.activeVersionID }
-        return state.currentVersion(for: item) ?? index.footage(for: item).first?.id
+        let cells = index.footage(for: item)
+        if let selected = state.currentVersion(for: item), cells.contains(where: { $0.id == selected }) { return selected }
+        return cells.first?.id
+    }
+
+    private func removeTake(_ cell: FootageCell) {
+        do {
+            let context = document.container.mainContext
+            let take = try RecordingTimelineService.take(id: cell.id, context: context)
+            try RecordingTakeLibrary.remove(take, context: context, undoManager: undoManager)
+            state.endFootageSkim()
+        } catch { takeRemovalError = error.localizedDescription }
+    }
+
+    private var recordingTakeRemovalAction: ((FootageCell) -> Void)? {
+        guard state.selection?.kind == .screenRecording else { return nil }
+        return { cell in removeTake(cell) }
     }
 
     /// Versions that are footage become the preview and drag payload; a
@@ -289,7 +311,7 @@ struct LibraryPanel: View {
     /// the footage strip does not list, open the sheet.
     private func selectVersion(_ row: LibraryRow, _ versionID: UUID) {
         switch row.id.kind {
-        case .music, .narration, .image, .video, .remotion:
+        case .music, .narration, .image, .video, .remotion, .screenRecording:
             state.setCurrentVersion(versionID, for: row.id)
         case .caption:
             if let p = index.caption(row.id.id) { _ = CaptionTranscriptionService.activateVersion(versionID, in: p) }

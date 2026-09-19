@@ -2,7 +2,7 @@ import Foundation
 import SwiftData
 
 struct DocumentMetadata: Codable, Sendable {
-    static let currentFormatVersion = 1
+    static let currentFormatVersion = 2
 
     var id: UUID
     var formatVersion: Int
@@ -59,6 +59,8 @@ final class ProjectDocument: Identifiable {
     /// Every model persisted inside a film. Agent threads live in the app-level
     /// store instead (`AppModelContainer`), because they span films.
     static let schema = Schema([
+        ScreenRecordingProject.self,
+        RecordingTake.self,
         MusicProject.self,
         GeneratedMusic.self,
         NarrativeProject.self,
@@ -126,11 +128,23 @@ final class ProjectDocument: Identifiable {
         }
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
-        let metadata = try decoder.decode(DocumentMetadata.self, from: data)
+        var metadata = try decoder.decode(DocumentMetadata.self, from: data)
         guard metadata.formatVersion <= DocumentMetadata.currentFormatVersion else {
             throw ProjectDocumentError.unsupportedFormat(metadata.formatVersion)
         }
-        return try ProjectDocument(packageURL: url, metadata: metadata)
+        let needsMigration = metadata.formatVersion < DocumentMetadata.currentFormatVersion
+        if needsMigration {
+            let backup = url.deletingLastPathComponent().appendingPathComponent(url.lastPathComponent + ".before-recording-migration-" + UUID().uuidString)
+            try fm.copyItem(at: url, to: backup)
+            metadata.formatVersion = DocumentMetadata.currentFormatVersion
+        }
+        let document = try ProjectDocument(packageURL: url, metadata: metadata)
+        if needsMigration {
+            let encoder = JSONEncoder(); encoder.dateEncodingStrategy = .iso8601
+            try encoder.encode(metadata).write(to: metadataURL, options: .atomic)
+        }
+        Task { await RecordingRecoveryService.recover(document) }
+        return document
     }
 
     func save() {
@@ -185,6 +199,7 @@ final class ProjectDocument: Identifiable {
     /// Flushes changes and releases per-document registrations. Stops the
     /// native Remotion preview if it is serving a project inside this package.
     func close() async {
+        if RecordingSession.shared.document?.id == id { await RecordingSession.shared.stop() }
         save()
         #if os(macOS)
         RemotionPreviewSessions.shared.stopAll(in: packageURL)

@@ -15,7 +15,7 @@ struct film_workflowApp: App {
     init() {
         FileStorage.ensureDirectories()
         var tipOptions: [Tips.ConfigurationOption] = [
-            .displayFrequency(.immediate),
+            .displayFrequency(.hourly),
             .datastoreLocation(.applicationDefault),
         ]
         var previewTips = false
@@ -72,6 +72,10 @@ struct film_workflowApp: App {
     }
 
     var body: some Scene {
+        MenuBarExtra("Recording", systemImage: RecordingSession.shared.phase == .paused ? "pause.circle.fill" : "record.circle") {
+            RecordingMenuBarControls()
+        }
+
         // One editor window per film. The URL is the scene value so state
         // restoration reopens the same packages.
         WindowGroup(id: EditorWindowID.value, for: URL.self) { $url in
