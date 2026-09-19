@@ -315,15 +315,56 @@ struct AgentSDKMigrationTests {
         }
     }
 
-    /// The agent window is not a coding agent. A prompt asking it not to run
-    /// shells is a request; the denylist is the guarantee.
-    @Test("A CLI agent's own filesystem and shell tools are withheld")
-    func codingAgentToolsAreWithheld() {
+    /// The engine's own tools are offered now. What must not follow is the
+    /// write policy leaking: `disallowedToolNames` still carries exactly the
+    /// MCP names the policy withholds, and nothing more.
+    @Test("A CLI agent's own filesystem and shell tools are offered")
+    func builtInToolsAreOffered() {
         let disallowed = AgentToolPolicy.disallowedToolNames(policy: .direct)
+        let allowed = AgentToolPolicy.allowedToolNames(policy: .direct, includeBuiltIns: true)
         for name in ["Bash", "Write", "Edit", "Read", "WebFetch", "Task"] {
-            #expect(disallowed.contains(name), "\(name) should be withheld")
+            #expect(!disallowed.contains(name), "\(name) should not be withheld")
+            #expect(allowed.contains(name), "\(name) should be offered")
+            #expect(AgentToolPolicy.allows(name, policy: .direct))
         }
         #expect(disallowed.contains("footage_delete"))
+    }
+
+    /// A wizard run is unattended and shows one status line instead of a
+    /// transcript, so it keeps the narrow MCP surface it always had.
+    @Test("Simple mode gets no built-in tools")
+    func simpleModeWithholdsBuiltIns() {
+        let mode = AgentThreadMode.simpleMode(templateID: "any")
+        #expect(AgentToolPolicy.builtInTools(mode: mode).isEmpty)
+        #expect(!AgentToolPolicy.allows("Bash", policy: .direct, mode: mode))
+        #expect(
+            !AgentToolPolicy
+                .allowedToolNames(policy: .direct, mode: mode, includeBuiltIns: true)
+                .contains("Bash")
+        )
+    }
+
+    /// The hook that actually decides a `Bash` call. On Codex it is the only
+    /// gate there is — `allowedTools` never reaches that client.
+    @Test("The permission resolver allows built-ins and still refuses withheld tools")
+    func resolverAllowsBuiltIns() async {
+        let resolver = AgentPolicyPermissions()
+        for name in ["Bash", "Edit", "Write", "MultiEdit"] {
+            let decision = await resolver.resolve(
+                PermissionRequest(id: name, toolName: name, toolInput: [:], mode: .default)
+            )
+            #expect(decision.isAllowed, "\(name) should be allowed")
+        }
+
+        let refused = await resolver.resolve(
+            PermissionRequest(
+                id: "delete",
+                toolName: "mcp__film_workflow__footage_delete",
+                toolInput: [:],
+                mode: .default
+            )
+        )
+        #expect(!refused.isAllowed)
     }
 
     @Test("Withheld tools are refused in both spellings")
@@ -344,7 +385,7 @@ struct AgentSDKMigrationTests {
         #expect(request.permitsTool(named: "caption_search_segments"))
         #expect(request.permitsTool(named: "mcp__film_workflow__caption_search_segments"))
 
-        for name in ["Bash", "caption_update_segment", "footage_delete"] {
+        for name in ["caption_update_segment", "footage_delete"] {
             #expect(!request.permitsTool(named: name))
             #expect(!request.permitsTool(named: "mcp__film_workflow__\(name)"))
         }

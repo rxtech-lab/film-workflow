@@ -3101,6 +3101,12 @@
         }
       }
     },
+    "Checking a command…" : {
+
+    },
+    "Checking a sub-task…" : {
+
+    },
     "Checking available models…" : {
 
     },
@@ -5569,6 +5575,9 @@
       }
     },
     "Editing a card…" : {
+
+    },
+    "Editing a file…" : {
 
     },
     "Editing guidance" : {
@@ -8330,6 +8339,9 @@
       }
     },
     "Looking for another way in…" : {
+
+    },
+    "Looking for files…" : {
 
     },
     "Lyrics" : {
@@ -11192,6 +11204,9 @@
         }
       }
     },
+    "Reading a file…" : {
+
+    },
     "Reading a template…" : {
       "localizations" : {
         "zh-Hans" : {
@@ -12324,6 +12339,12 @@
         }
       }
     },
+    "Running a command…" : {
+
+    },
+    "Running a sub-task…" : {
+
+    },
     "Running on port %lld" : {
       "localizations" : {
         "zh-Hans" : {
@@ -12705,6 +12726,9 @@
         }
       }
     },
+    "Searching files…" : {
+
+    },
     "Searching the marketplace…" : {
       "localizations" : {
         "zh-Hans" : {
@@ -12714,6 +12738,9 @@
           }
         }
       }
+    },
+    "Searching the web…" : {
+
     },
     "seconds" : {
       "localizations" : {
@@ -13310,6 +13337,9 @@
 
     },
     "Show Recording Setup" : {
+
+    },
+    "Show Recording Toolbar" : {
 
     },
     "Show Transcript" : {
@@ -14099,6 +14129,9 @@
           }
         }
       }
+    },
+    "Stopping a command…" : {
+
     },
     "Storage" : {
       "localizations" : {
@@ -16883,6 +16916,9 @@
       }
     },
     "Writing a card…" : {
+
+    },
+    "Writing a file…" : {
 
     },
     "Writing caption files" : {

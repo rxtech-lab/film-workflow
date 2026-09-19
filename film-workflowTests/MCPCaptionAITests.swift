@@ -582,16 +582,47 @@ struct MCPCaptionAITests {
         // Withheld under every policy.
         #expect(!request.permitsTool(named: "footage_delete"))
 
-        // And nothing outside the app's own surface is reachable at all.
+        // The MCP list on its own admits nothing else. A real turn adds the
+        // engine's built-ins alongside it (see `builtInsRideAlongsideTheMCPSurface`);
+        // this asserts they come from that addition and not from a gap here.
         #expect(!request.permitsTool(named: "Bash"))
         #expect(!request.permitsTool(named: "Write"))
+    }
+
+    /// What a real turn is built from: `AgentController.configure` hands the
+    /// SDK the MCP surface *plus* the engine's own tools. The write policy has
+    /// to keep governing the first while the second rides along untouched.
+    @Test("Built-in tools ride alongside the MCP surface without loosening it")
+    func builtInsRideAlongsideTheMCPSurface() {
+        let policy = AgentWritePolicy.review
+        let request = AgentSendRequest(
+            threadID: AgentThreadID(),
+            prompt: "x",
+            workingDirectory: URL(filePath: "/tmp"),
+            mcpServers: [.http(
+                name: AgentMCPBridge.serverKey,
+                url: URL(string: "http://127.0.0.1:1/mcp")!
+            )],
+            allowedTools: AgentToolPolicy.allowedToolNames(policy: policy, includeBuiltIns: true),
+            disallowedTools: AgentToolPolicy.disallowedToolNames(policy: policy)
+        )
+
+        #expect(request.permitsTool(named: "Bash"))
+        #expect(request.permitsTool(named: "Read"))
+        #expect(request.permitsTool(named: "WebSearch"))
+        #expect(request.permitsTool(named: "caption_export"))
+
+        // The write policy is untouched by the addition.
+        #expect(!request.permitsTool(named: "caption_update_segment"))
+        #expect(!request.permitsTool(named: "footage_delete"))
     }
 
     @Test("Command-line agents are given the same tools, MCP-prefixed")
     func cliToolNamesMatchThePolicy() {
         #if os(macOS)
             let policy = AgentWritePolicy.review
-            let allowed = AgentToolPolicy.toolNames(policy: policy)
+            let appTools = AgentToolPolicy.toolNames(policy: policy)
+            let allowed = AgentToolPolicy.allowedToolNames(policy: policy, includeBuiltIns: true)
             let request = AgentSendRequest(
                 threadID: AgentThreadID(),
                 prompt: "x",
@@ -607,12 +638,17 @@ struct MCPCaptionAITests {
             let argument = ClaudeCodeClient.allowedToolArgument(for: request, preapproved: [])
             let prefixed = argument.filter { $0.hasPrefix("mcp__film_workflow__") }
 
-            #expect(prefixed.count == allowed.count)
+            // Not `allowed.count`: `MCPToolName.spellings` also emits a
+            // namespaced spelling of each built-in, which matches nothing.
+            for name in appTools {
+                #expect(prefixed.contains("mcp__film_workflow__\(name)"))
+            }
             #expect(!prefixed.contains("mcp__film_workflow__caption_update_segment"))
             #expect(!argument.contains("mcp__film_workflow__footage_delete"))
-            // Claude's own filesystem tools are never pre-approved here.
-            #expect(!argument.contains("Read"))
-            #expect(!argument.contains("Bash"))
+            // The engine's own tools are pre-approved too, in their bare
+            // spelling — that is what makes them reachable at all.
+            #expect(argument.contains("Read"))
+            #expect(argument.contains("Bash"))
         #endif
     }
 }
