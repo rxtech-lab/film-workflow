@@ -57,7 +57,7 @@ enum MCPSequenceHandlers {
                 "type": "object",
                 "properties": [
                     "sequence_id": ["type": "string"] as [String: Any],
-                    "kind": ["type": "string", "enum": TrackKind.allCases.map(\.rawValue), "description": "video for pictures, audio for sound, caption for captions, overlay for captions or images."] as [String: Any],
+                    "kind": ["type": "string", "enum": TrackKind.allCases.filter { $0 != .zoom }.map(\.rawValue), "description": "video for pictures, audio for sound, caption for captions, overlay for captions or images. Zoom lanes belong to a screen recording and are made with it."] as [String: Any],
                 ],
                 "required": ["sequence_id", "kind"],
                 "additionalProperties": false,
@@ -248,7 +248,9 @@ enum MCPSequenceHandlers {
 
     private static func sequenceAddTrack(_ arguments: [String: Any], context: ModelContext) throws -> [String: Any] {
         let sequence = try fetchSequence(arguments, context: context)
-        guard let raw = arguments["kind"] as? String, let kind = TrackKind(rawValue: raw) else {
+        // A zoom lane belongs to the recording that made it, so it is not a
+        // lane an agent adds on its own.
+        guard let raw = arguments["kind"] as? String, let kind = TrackKind(rawValue: raw), kind != .zoom else {
             throw MCPToolError.invalidArguments("kind must be video, audio, caption or overlay")
         }
         var timeline = sequence.timeline
@@ -288,6 +290,9 @@ enum MCPSequenceHandlers {
         guard let document = ProjectDocumentController.shared.document(forContainer: context.container) ?? MarketplaceAuthoringService.shared.document(forContainer: context.container) else {
             throw MCPToolError.invalidArguments("the film is not open in a window")
         }
+        if prefix == .screenRecording, let take = try? RecordingTimelineService.take(id: uuid, context: document.container.mainContext) {
+            let ids = try RecordingTimelineService.insert(take: take, into: sequence, at: arguments["start"] as? Double ?? sequence.timeline.duration, undoManager: NSApp.keyWindow?.undoManager); try context.save(); return MCPToolRegistry.jsonResult(["clipIDs": ids.map(\.uuidString)])
+        }
         let resolver = DocumentMediaResolver(document: document, width: sequence.width, height: sequence.height, fps: sequence.fps)
         let kind: SourceKind
         var displayName = sourceID
@@ -295,8 +300,11 @@ enum MCPSequenceHandlers {
         case .music, .narration: kind = .audio
         case .image: kind = .image
         case .video: kind = .video
+        case .screenRecording: kind = try RecordingTimelineService.resolve(id: uuid, context: context).1.sourceKind
         case .remotion: kind = .remotion
         case .caption: kind = .captions
+        // Zoom clips come with their recording; there is nothing to add on its own.
+        case .recordingZoom: throw MCPToolError.notFound(sourceID)
         case .imported:
             let asset = try context.fetch(FetchDescriptor<ImportedAsset>(predicate: #Predicate { $0.id == uuid })).first
             guard let asset else { throw MCPToolError.notFound(sourceID) }
@@ -370,6 +378,7 @@ enum MCPSequenceHandlers {
         case .video, .image, .remotion: return .video
         case .audio: return .audio
         case .captions: return .caption
+        case .zoom: return .zoom
         }
     }
 
@@ -382,6 +391,8 @@ enum MCPSequenceHandlers {
         case .remotion: return try context.fetch(FetchDescriptor<RemotionProject>(predicate: #Predicate { $0.id == uuid })).first?.name ?? fallback
         case .caption: return try context.fetch(FetchDescriptor<CaptionProject>(predicate: #Predicate { $0.projectUUID == uuid })).first?.name ?? fallback
         case .imported: return fallback
+        case .screenRecording: return try RecordingTimelineService.resolve(id: uuid, context: context).1.name
+        case .recordingZoom: return "Zoom"
         }
     }
 

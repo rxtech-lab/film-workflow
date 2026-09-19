@@ -32,6 +32,7 @@ struct FootageBrowserView: View {
     /// Whether that take already has captions, which decides whether the item
     /// offers to make them or to open the ones that exist.
     var hasCaptions: (String) -> Bool = { _ in false }
+    var onRemoveTake: ((FootageCell) -> Void)?
 
     /// Authoring is admin-only. `LibraryPanel` refreshes the flag; observing
     /// it here rebuilds the menus once it lands.
@@ -62,7 +63,8 @@ struct FootageBrowserView: View {
                                                 onCreateMarketplaceItem: request(for: cell).map { request in { seedRequest = request } },
                                                 onLyricsRequest: { player?.pause(); lyricsRequest = $0 },
                                                 onGenerateCaptions: onGenerateCaptions,
-                                                hasCaptions: hasCaptions)
+                                                hasCaptions: hasCaptions,
+                                                onRemoveTake: onRemoveTake.map { remove in { remove(cell) } })
                             }
                         }
                         .padding(4)
@@ -131,6 +133,7 @@ struct FootageCellView: View {
     var onLyricsRequest: (MusicLyricsRequest) -> Void = { _ in }
     var onGenerateCaptions: (String) -> Void = { _ in }
     var hasCaptions: (String) -> Bool = { _ in false }
+    var onRemoveTake: (() -> Void)?
 
     @State private var loadedDuration: TimeInterval?
     private var duration: TimeInterval? { cell.duration ?? loadedDuration }
@@ -170,6 +173,9 @@ struct FootageCellView: View {
                         Label("Create Marketplace Item…", systemImage: "storefront")
                     }
                     .help("Start a marketplace draft from this take, with its file attached")
+                }
+                if let onRemoveTake {
+                    Button("Remove Take", systemImage: "trash", role: .destructive, action: onRemoveTake)
                 }
             }
     }

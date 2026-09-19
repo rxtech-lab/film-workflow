@@ -70,7 +70,10 @@ enum CaptionAudioSource {
             ).first, asset.kind == ImportedAssetKind.audio.rawValue, let url = asset.resolveURL()
             else { return nil }
             return Resolved(url: url, title: asset.name, knownDuration: asset.durationSeconds, groupID: asset.groupID)
-        case .narration, .image, .video, .remotion, .caption:
+        case .screenRecording:
+            guard let (take, component) = try? RecordingTimelineService.resolve(id: id, context: context), component.sourceKind == .audio else { return nil }
+            return Resolved(url: ProjectStorage.forContainer(context.container).absoluteURL(for: component.filePath), title: component.name, knownDuration: component.duration, groupID: take.project?.groupID)
+        case .narration, .image, .video, .remotion, .caption, .recordingZoom:
             return nil
         }
     }

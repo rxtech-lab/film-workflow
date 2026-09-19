@@ -3,16 +3,22 @@ import CoreGraphics
 import Foundation
 
 /// What kind of media a clip plays. `remotion` previews live and resolves to
-/// a rendered video for export; `captions` is a list of timed cues.
+/// a rendered video for export; `captions` is a list of timed cues; `zoom`
+/// carries no media at all, only a recording's zoom settings.
 public enum SourceKind: String, Codable, Sendable, CaseIterable {
     case video
     case audio
     case image
     case captions
     case remotion
+    case zoom
 
     public var hasVideo: Bool { self == .video || self == .remotion }
     public var hasAudio: Bool { self == .video || self == .remotion || self == .audio }
+
+    /// Kinds with no internal clock, whose clips are a span rather than a
+    /// window onto source media: trimming one does not walk an in point.
+    public var isTimeless: Bool { self == .image || self == .zoom }
 }
 
 /// Opaque reference to something the host app can resolve to media.
@@ -169,6 +175,14 @@ public struct TextStyle: Codable, Sendable, Hashable {
 /// lower bound of the source range, including during reverse playback.
 public struct Clip: Codable, Sendable, Hashable, Identifiable {
     public var id: UUID
+    /// Editing links are independent of the recording's presentation identity.
+    public var linkGroupID: UUID?
+    public var recordingInstanceID: UUID?
+    public var recording: RecordingClipPresentation?
+    public var recordingShortcuts: [TextCue]?
+    /// Zoom lane clips only: the zoom this clip's own range applies to the
+    /// recording it names. The interval lives in `start`/`duration`.
+    public var recordingZoom: RecordingZoomSettings?
     public var source: ClipSource
     public var start: TimeInterval
     public var duration: TimeInterval
@@ -205,9 +219,19 @@ public struct Clip: Codable, Sendable, Hashable, Identifiable {
         text: TextStyle? = nil,
         captions: CaptionOptions = .transcript,
         effects: [EffectInstance] = [],
-        isEnabled: Bool = true
+        isEnabled: Bool = true,
+        linkGroupID: UUID? = nil,
+        recordingInstanceID: UUID? = nil,
+        recording: RecordingClipPresentation? = nil,
+        recordingShortcuts: [TextCue]? = nil,
+        recordingZoom: RecordingZoomSettings? = nil
     ) {
         self.id = id
+        self.linkGroupID = linkGroupID
+        self.recordingInstanceID = recordingInstanceID
+        self.recording = recording
+        self.recordingShortcuts = recordingShortcuts
+        self.recordingZoom = recordingZoom
         self.source = source
         self.start = start
         self.duration = duration
@@ -225,6 +249,7 @@ public struct Clip: Codable, Sendable, Hashable, Identifiable {
     }
 
     private enum CodingKeys: String, CodingKey {
+        case linkGroupID, recordingInstanceID, recording, recordingShortcuts, recordingZoom
         case id, source, start, duration, inPoint, playbackRate, isReversed, sourceDuration, volume, opacity, transform, text, captions, effects, isEnabled
     }
 
@@ -232,6 +257,11 @@ public struct Clip: Codable, Sendable, Hashable, Identifiable {
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         id = try c.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
+        linkGroupID = try c.decodeIfPresent(UUID.self, forKey: .linkGroupID)
+        recordingInstanceID = try c.decodeIfPresent(UUID.self, forKey: .recordingInstanceID)
+        recording = try c.decodeIfPresent(RecordingClipPresentation.self, forKey: .recording)
+        recordingShortcuts = try c.decodeIfPresent([TextCue].self, forKey: .recordingShortcuts)
+        recordingZoom = try c.decodeIfPresent(RecordingZoomSettings.self, forKey: .recordingZoom)
         source = try c.decode(ClipSource.self, forKey: .source)
         start = try c.decodeIfPresent(TimeInterval.self, forKey: .start) ?? 0
         duration = try c.decodeIfPresent(TimeInterval.self, forKey: .duration) ?? 0
@@ -254,6 +284,11 @@ public struct Clip: Codable, Sendable, Hashable, Identifiable {
     public func encode(to encoder: Encoder) throws {
         var c = encoder.container(keyedBy: CodingKeys.self)
         try c.encode(id, forKey: .id)
+        try c.encodeIfPresent(linkGroupID, forKey: .linkGroupID)
+        try c.encodeIfPresent(recordingInstanceID, forKey: .recordingInstanceID)
+        try c.encodeIfPresent(recording, forKey: .recording)
+        try c.encodeIfPresent(recordingShortcuts, forKey: .recordingShortcuts)
+        try c.encodeIfPresent(recordingZoom, forKey: .recordingZoom)
         try c.encode(source, forKey: .source)
         try c.encode(start, forKey: .start)
         try c.encode(duration, forKey: .duration)
@@ -295,6 +330,10 @@ public enum TrackKind: String, Codable, Sendable, CaseIterable {
     /// the picture the way overlay lanes do. Captions still sit on an overlay
     /// track when that is where the user put them.
     case caption
+    /// A lane of screen-recording zoom intervals. Its clips supply no picture
+    /// and no sound; each one's range is a zoom window on the recording it
+    /// belongs to. Only `Timeline.resolvedRecordingClip` reads it.
+    case zoom
 
     public func accepts(_ kind: SourceKind) -> Bool {
         switch self {
@@ -302,6 +341,8 @@ public enum TrackKind: String, Codable, Sendable, CaseIterable {
         case .audio: return kind == .audio || kind == .video || kind == .remotion
         case .overlay: return kind == .captions || kind == .image
         case .caption: return kind == .captions
+        // Nothing else belongs on a zoom lane, and a zoom clip belongs nowhere else.
+        case .zoom: return kind == .zoom
         }
     }
 
@@ -316,22 +357,29 @@ public struct Track: Codable, Sendable, Hashable, Identifiable {
     public var id: UUID
     public var kind: TrackKind
     public var name: String
+    public var alias: String?
+    public var displayName: String { alias.flatMap { $0.isEmpty ? nil : $0 }.map { "\(name) · \($0)" } ?? name }
     public var clips: [Clip]
     public var isMuted: Bool
     /// Off leaves the lane and its clips in place but out of the render, the
     /// way disabling each of its clips would.
     public var isEnabled: Bool
+    /// Pinned lanes are held on screen as the editor scrolls past them. It is
+    /// purely how the lane is shown: the track keeps its place in the order.
+    public var isPinned: Bool
 
-    public init(id: UUID = UUID(), kind: TrackKind, name: String, clips: [Clip] = [], isMuted: Bool = false, isEnabled: Bool = true) {
+    public init(id: UUID = UUID(), kind: TrackKind, name: String, clips: [Clip] = [], isMuted: Bool = false, isEnabled: Bool = true, alias: String? = nil, isPinned: Bool = false) {
         self.id = id
         self.kind = kind
         self.name = name
+        self.alias = alias
         self.clips = clips
         self.isMuted = isMuted
         self.isEnabled = isEnabled
+        self.isPinned = isPinned
     }
 
-    private enum CodingKeys: String, CodingKey { case id, kind, name, clips, isMuted, isEnabled }
+    private enum CodingKeys: String, CodingKey { case id, kind, name, alias, clips, isMuted, isEnabled, isPinned }
 
     /// Tolerant of fields added later: anything missing takes its default.
     public init(from decoder: Decoder) throws {
@@ -339,9 +387,11 @@ public struct Track: Codable, Sendable, Hashable, Identifiable {
         id = try c.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
         kind = try c.decode(TrackKind.self, forKey: .kind)
         name = try c.decode(String.self, forKey: .name)
+        alias = try c.decodeIfPresent(String.self, forKey: .alias)
         clips = try c.decodeIfPresent([Clip].self, forKey: .clips) ?? []
         isMuted = try c.decodeIfPresent(Bool.self, forKey: .isMuted) ?? false
         isEnabled = try c.decodeIfPresent(Bool.self, forKey: .isEnabled) ?? true
+        isPinned = try c.decodeIfPresent(Bool.self, forKey: .isPinned) ?? false
     }
 
     public var end: TimeInterval { clips.map(\.end).max() ?? 0 }
@@ -362,8 +412,9 @@ public struct Track: Codable, Sendable, Hashable, Identifiable {
 /// in the editor. Higher picture tracks draw over lower picture tracks.
 public struct Timeline: Codable, Sendable, Hashable {
     /// 2 added caption lanes; see `TimelineCodec.decode`, which moves a film
-    /// written before that onto them.
-    public static let formatVersion = 2
+    /// written before that onto them. 3 added zoom lanes, which need no
+    /// migration but cannot be read by a build that has no such kind.
+    public static let formatVersion = 3
 
     public var id: UUID
     public var width: Int
@@ -375,7 +426,7 @@ public struct Timeline: Codable, Sendable, Hashable {
 
     /// The compositor and live preview paint from the bottom picture track up.
     public var pictureTracksBackToFront: [Track] {
-        tracks.filter { $0.kind != .audio }.reversed()
+        tracks.filter { $0.kind == .video || $0.kind.drawsOverPicture }.reversed()
     }
 
     public init(

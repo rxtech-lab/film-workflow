@@ -236,6 +236,7 @@ enum MCPLibraryHandlers {
         case remotion(RemotionProject)
         case sequence(SequenceProject)
         case imported(ImportedAsset)
+        case screenRecording(ScreenRecordingProject)
 
         var kind: FootageKind {
             switch self {
@@ -247,6 +248,7 @@ enum MCPLibraryHandlers {
             case .remotion: .remotion
             case .sequence: .sequence
             case .imported: .imported
+            case .screenRecording: .screenRecording
             }
         }
 
@@ -260,6 +262,7 @@ enum MCPLibraryHandlers {
             case .remotion(let p): p.id
             case .sequence(let p): p.id
             case .imported(let a): a.id
+            case .screenRecording(let p): p.id
             }
         }
 
@@ -275,6 +278,7 @@ enum MCPLibraryHandlers {
             case .remotion(let p): p.name
             case .sequence(let p): p.name
             case .imported(let a): a.name
+            case .screenRecording(let p): p.name
             }
         }
 
@@ -288,6 +292,7 @@ enum MCPLibraryHandlers {
             case .remotion(let p): p.groupID
             case .sequence(let p): p.groupID
             case .imported(let a): a.groupID
+            case .screenRecording(let p): p.groupID
             }
         }
 
@@ -301,6 +306,7 @@ enum MCPLibraryHandlers {
             case .remotion(let p): p.createdAt
             case .sequence(let p): p.createdAt
             case .imported(let a): a.createdAt
+            case .screenRecording(let p): p.createdAt
             }
         }
 
@@ -314,6 +320,7 @@ enum MCPLibraryHandlers {
             case .remotion(let p): p.updatedAt
             case .sequence(let p): p.updatedAt
             case .imported(let a): a.updatedAt
+            case .screenRecording(let p): p.updatedAt
             }
         }
 
@@ -328,8 +335,14 @@ enum MCPLibraryHandlers {
             case .remotion(let p): p
             case .sequence(let p): p
             case .imported(let a): a
+            case .screenRecording(let p): p
             }
         }
+    }
+
+    static func fetchRecording(id: String, context: ModelContext) throws -> ScreenRecordingProject {
+        let uid = try uuid(id)
+        guard let project = try context.fetch(FetchDescriptor<ScreenRecordingProject>(predicate: #Predicate { $0.id == uid })).first else { throw MCPToolError.notFound(id) }; return project
     }
 
     // MARK: Fetchers
@@ -404,6 +417,7 @@ enum MCPLibraryHandlers {
             case .video: found = (try? fetchVideo(id: id, context: context)).map(Item.video)
             case .remotion: found = (try? fetchRemotion(id: id, context: context)).map(Item.remotion)
             case .sequence: found = (try? fetchSequence(id: id, context: context)).map(Item.sequence)
+            case .screenRecording: found = (try? fetchRecording(id: id, context: context)).map(Item.screenRecording)
             case .imported: found = (try? fetchImported(id: id, context: context)).map(Item.imported)
             }
             if let found { return found }
@@ -451,6 +465,7 @@ enum MCPLibraryHandlers {
             case .video: items += try context.fetch(FetchDescriptor<VideoGenProject>()).map(Item.video)
             case .remotion: items += try context.fetch(FetchDescriptor<RemotionProject>()).map(Item.remotion)
             case .sequence: items += try context.fetch(FetchDescriptor<SequenceProject>()).map(Item.sequence)
+            case .screenRecording: items += try context.fetch(FetchDescriptor<ScreenRecordingProject>()).map(Item.screenRecording)
             case .imported: items += try context.fetch(FetchDescriptor<ImportedAsset>()).map(Item.imported)
             }
         }
@@ -551,6 +566,7 @@ enum MCPLibraryHandlers {
         case .remotion(let p): try ProjectGroupService.move(p, to: folderID, context: context)
         case .sequence(let p): try ProjectGroupService.move(p, to: folderID, context: context)
         case .imported(let a): try ProjectGroupService.move(a, to: folderID, context: context)
+        case .screenRecording(let p): try ProjectGroupService.move(p, to: folderID, context: context)
         }
     }
 
@@ -571,6 +587,8 @@ enum MCPLibraryHandlers {
             #endif
             p.updatedAt = Date()
         case .sequence(let p): applySequenceFields(p, fields: fields); p.updatedAt = Date()
+        case .screenRecording(let p):
+            if let name = fields["name"] as? String { p.name = name }; p.updatedAt = Date()
         case .imported(let a):
             if let s = fields["name"] as? String { a.name = s }
             a.updatedAt = Date()
@@ -583,6 +601,8 @@ enum MCPLibraryHandlers {
     private static func duplicate(_ item: Item, newName: String?, context: ModelContext) throws -> Item {
         let storage = ProjectStorage.forContainer(context.container)
         switch item {
+        case .screenRecording(let src):
+            let copy = ScreenRecordingProject(name: newName ?? src.name + " Copy"); copy.groupID = src.groupID; copy.settings = src.settings; copy.actions = src.actions; copy.presentation = src.presentation; copy.shortcutStyle = src.shortcutStyle; context.insert(copy); try context.save(); return .screenRecording(copy)
         case .narration(let src):
             let copy = NarrativeProject(name: newName ?? (src.name + " Copy"))
             copy.groupID = src.groupID
@@ -844,6 +864,7 @@ enum MCPLibraryHandlers {
     /// The `sourceId` the library drags for this item: its newest take.
     private static func newestSourceID(of item: Item) -> String? {
         switch item {
+        case .screenRecording(let p): return p.visibleTakes.max { $0.createdAt < $1.createdAt }.map { "screenRecording:\($0.id)" }
         case .music(let p):
             return p.generatedFiles.max { $0.createdAt < $1.createdAt }.map { DocumentMediaResolver.sourceID(.music, $0.id) }
         case .narration(let p):
@@ -867,6 +888,7 @@ enum MCPLibraryHandlers {
     /// labels them.
     static func versions(of item: Item, context: ModelContext) -> [[String: Any]] {
         switch item {
+        case .screenRecording(let p): return p.visibleTakes.sorted { $0.createdAt > $1.createdAt }.map { ["id": $0.id.uuidString, "label": $0.name, "sourceId": "screenRecording:\($0.id)", "durationSeconds": $0.duration] }
         case .music(let p):
             let files = p.generatedFiles.sorted { $0.createdAt > $1.createdAt }
             return files.enumerated().map { i, f in
@@ -975,6 +997,7 @@ enum MCPLibraryHandlers {
         case .caption(let p): out = MCPCaptionHandlers.summary(p)
         case .sequence(let s): out = MCPSequenceHandlers.timelineJSON(s, context: context)
         case .imported(let a): out = importedFields(a)
+        case .screenRecording(let p): out = ["settings": MCPRecordingHandlers.object(p.settings), "actions": MCPRecordingHandlers.object(p.actions), "presentation": MCPRecordingHandlers.object(p.presentation), "shortcutStyle": MCPRecordingHandlers.object(p.shortcutStyle)]
         }
         out.merge(summary(item, context: context)) { _, row in row }
         out["versions"] = versions(of: item, context: context)

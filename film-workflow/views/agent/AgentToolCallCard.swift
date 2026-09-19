@@ -114,6 +114,10 @@ struct AgentToolSummary {
     /// A glyph for the family of work the tool does, so a run of calls reads as
     /// a sequence of steps rather than a stack of identical rows.
     static func icon(for name: String) -> String {
+        // The engine's own tools, first: they are capitalised, so the
+        // lowercase `contains` checks below never match them and every one
+        // would fall through to the generic wrench.
+        if let builtIn = builtInIcons[name] { return builtIn }
         if name.hasPrefix("caption_") { return "captions.bubble" }
         if name.hasPrefix("remotion_") { return "film.stack" }
         if name.hasPrefix("sequence_") { return "rectangle.stack" }
@@ -129,6 +133,16 @@ struct AgentToolSummary {
         if name.contains("write") || name.contains("edit") { return "square.and.pencil" }
         return "wrench.and.screwdriver"
     }
+
+    private static let builtInIcons: [String: String] = [
+        "Bash": "terminal", "BashOutput": "terminal", "KillShell": "terminal",
+        "Read": "doc.text", "NotebookEdit": "doc.text",
+        "Glob": "magnifyingglass", "Grep": "magnifyingglass", "LS": "magnifyingglass",
+        "Write": "square.and.pencil", "Edit": "square.and.pencil", "MultiEdit": "square.and.pencil",
+        "WebFetch": "globe", "WebSearch": "globe",
+        "Task": "person.2", "Agent": "person.2", "TaskOutput": "person.2",
+        "TodoRead": "checklist", "TodoWrite": "checklist",
+    ]
 
     /// The family's colour, carried by the glyph alone. The row's own tint
     /// stays neutral, so a long run of calls doesn't turn into a rainbow.

@@ -22,8 +22,9 @@ public struct TimelineLayeredPreviewView: View {
                     Color(cgColor: PreviewGeometry.color(controller.timeline.backgroundHex))
                     ForEach(controller.layers) { layer in
                         if layer.mounted {
-                            PreviewPictureLayer(layer: layer, controller: controller, liveSurface: liveSurface)
-                                .opacity(layer.active ? 1 : 0)
+                            RecordingPreviewPresentation(clip: controller.timeline.resolvedRecordingClip(layer.clip), time: controller.transport.currentTime, size: canvas) {
+                                PreviewPictureLayer(layer: layer, controller: controller, liveSurface: liveSurface)
+                            }.opacity(layer.active ? 1 : 0)
                         }
                     }
                 }
@@ -41,7 +42,10 @@ public struct TimelineLayeredPreviewView: View {
     }
 
     @ViewBuilder private var status: some View {
-        let failure = controller.lastError ?? controller.layers.first(where: { $0.active && ($0.error != nil || $0.live?.error != nil) }).flatMap { $0.error ?? $0.live?.error }
+        // Mounted rather than active: a clip that starts later in the take is
+        // mounted but not yet active at t=0, and its failure would otherwise
+        // stay invisible behind a black canvas.
+        let failure = controller.lastError ?? controller.layers.first(where: { $0.mounted && ($0.error != nil || $0.live?.error != nil) }).flatMap { $0.error ?? $0.live?.error }
         if let failure {
             VStack(spacing: 8) {
                 Image(systemName: "exclamationmark.triangle")
@@ -134,4 +138,39 @@ private struct PreviewVideoSurface: NSViewRepresentable {
         return view
     }
     func updateNSView(_ view: PlayerHostView, context: Context) { view.playerLayer.player = player }
+}
+
+private enum RecordingPreviewImages { static let context = CIContext(options: [.cacheIntermediates: false]) }
+private struct RecordingPreviewPresentation<Content: View>: View {
+    var clip: Clip
+    var time: Double
+    var size: CGSize
+    @ViewBuilder var content: () -> Content
+    var body: some View {
+        if let settings = clip.recording {
+            let t = clip.sourceTime(at: time) + settings.timeOffset
+            let p = settings.evaluated(at: t)
+            let transform = RecordingRenderer.zoomTransform(p, time: t, size: size)
+            let follows = p.role != .camera || p.cameraFollowsZoom
+            Group {
+                if p.role == .cursor {
+                    if let raster = RecordingRenderer.cursor(p, time: t, size: size), let image = RecordingPreviewImages.context.createCGImage(raster, from: CGRect(origin: .zero, size: size)) {
+                        Image(decorative: image, scale: 1).resizable().frame(width: size.width, height: size.height).opacity(Double(clip.opacity))
+                    }
+                } else if p.role == .camera {
+                    let rect = RecordingRenderer.cameraRect(p, size: size)
+                    let camera = RecordingRenderer.cameraTransform(p, clip: clip, size: size)
+                    content().scaleEffect(camera.a, anchor: .topLeading)
+                        .offset(x: camera.tx, y: size.height * (1 - camera.d) - camera.ty)
+                        .mask {
+                            RoundedRectangle(cornerRadius: p.shape == .circle ? rect.width / 2 : p.shape == .roundedRectangle ? rect.width * 0.08 : 0)
+                                .frame(width: rect.width, height: rect.height).position(x: rect.midX, y: size.height - rect.midY)
+                        }
+                } else { content() }
+            }.frame(width: size.width, height: size.height)
+                .scaleEffect(follows ? transform.a : 1, anchor: .topLeading)
+                .offset(x: follows ? transform.tx : 0, y: follows ? size.height * (1 - transform.d) - transform.ty : 0)
+                .opacity(p.isVisible(at: t) ? 1 : 0)
+        } else { content() }
+    }
 }

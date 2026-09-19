@@ -37,6 +37,19 @@ public struct ClipInspectorView: View {
         self.onRender = onRender
     }
 
+    private func zoomBinding(_ key: WritableKeyPath<RecordingZoomSettings, Double>) -> Binding<Double> {
+        Binding(get: { clip?.recordingZoom?[keyPath: key] ?? 0 },
+                set: { value in performEdit { try TimelineEditor.update(&timeline, clipID: clipID) { $0.recordingZoom?[keyPath: key] = value } } })
+    }
+
+    /// The zoom lane's clips share the screen clip's source, so a zoom added
+    /// later resolves the same way the generated ones do.
+    private func generateZooms(_ clip: Clip) {
+        let source = ClipSource(id: "recordingZoom:\(clip.id.uuidString)", kind: .zoom, displayName: "Zoom", capabilities: [.drag, .duration, .cut])
+        performEdit { TimelineEditor.materializeAutoZoom(&timeline, screenClipID: clip.id, source: source) }
+    }
+
+    private func shortcutBinding(_ index: Int, _ key: WritableKeyPath<TextCue, Double>) -> Binding<Double> { Binding(get: { clip?.recordingShortcuts?[index][keyPath: key] ?? 0 }, set: { value in performEdit { try TimelineEditor.update(&timeline, clipID: clipID) { $0.recordingShortcuts?[index][keyPath: key] = value } } }) }
     private var clip: Clip? { timeline.clip(id: clipID) }
 
     public var body: some View {
@@ -58,6 +71,42 @@ public struct ClipInspectorView: View {
                             Spacer()
                             if let onRender {
                                 Button("Render Now", action: onRender)
+                            }
+                        }
+                    }
+                }
+                if clip.recording != nil {
+                    Section("Recording Presentation") {
+                        RecordingPresentationEditor(
+                            value: Binding(get: { self.clip?.recording ?? RecordingClipPresentation() },
+                                           set: { value in performEdit { try TimelineEditor.update(&timeline, clipID: clipID) { $0.recording = value } } }),
+                            onGenerateZooms: clip.recording?.role == .screen ? { generateZooms(clip) } : nil)
+                    }
+                }
+                if let zoom = clip.recordingZoom {
+                    Section("Zoom") {
+                        LabeledContent("Scale") {
+                            Slider(value: zoomBinding(\.scale), in: 1...8)
+                            Text("\(zoom.scale, specifier: "%.1f")×")
+                        }
+                        Toggle("Follow Pointer", isOn: Binding(get: { self.clip?.recordingZoom?.followsPointer ?? zoom.followsPointer },
+                                                               set: { value in performEdit { try TimelineEditor.update(&timeline, clipID: clipID) { $0.recordingZoom?.followsPointer = value } } }))
+                        if !zoom.followsPointer {
+                            LabeledContent("Focus X") { Slider(value: zoomBinding(\.x), in: 0...1) }
+                            LabeledContent("Focus Y") { Slider(value: zoomBinding(\.y), in: 0...1) }
+                        }
+                        Text("Drag or trim the clip on its lane to retime the zoom.")
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
+                }
+                if let shortcuts = clip.recordingShortcuts {
+                    Section("Shortcut Subtitles") {
+                        ForEach(Array(shortcuts.enumerated()), id: \.offset) { index, cue in
+                            TextField("Shortcut", text: Binding(get: { self.clip?.recordingShortcuts?[index].text ?? cue.text }, set: { text in performEdit { try TimelineEditor.update(&timeline, clipID: clipID) { $0.recordingShortcuts?[index].text = text } } }))
+                            HStack {
+                                TextField("Start", value: shortcutBinding(index, \.start), format: .number)
+                                TextField("End", value: shortcutBinding(index, \.end), format: .number)
+                                Button("Remove", systemImage: "trash") { performEdit { try TimelineEditor.update(&timeline, clipID: clipID) { $0.recordingShortcuts?.remove(at: index) } } }
                             }
                         }
                     }

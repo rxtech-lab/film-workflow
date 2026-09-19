@@ -2,6 +2,7 @@ import AVFoundation
 import AppKit
 import OSLog
 import SwiftUI
+import SwiftData
 import VideoEditorCore
 import VideoEditorUI
 
@@ -56,32 +57,43 @@ struct FootageViewer: View {
 
     @ViewBuilder
     private var stage: some View {
-        switch cell.kind {
-        case .remotion, .captions:
+        // One structural position for the layered preview across every kind.
+        // Two sibling branches sharing one controller let SwiftUI order a swap
+        // as appear-then-disappear, which used to leave the controller marked
+        // invisible and buffering forever.
+        if cell.kind == .remotion || cell.kind == .captions || (cell.kind == .video && player.usesGeneratedPreview) {
             TimelineLayeredPreviewView(controller: player.generatedPreview) { AnyView(RemotionPlayerWebView(playback: $0)) }
-        case .video:
-            FootagePlayerLayerView(player: player.player, fitsViewer: fitsViewer)
-        case .image:
-            if let url = cell.mediaURL, let image = NSImage(contentsOf: url) {
-                Image(nsImage: image).resizable().aspectRatio(contentMode: fitsViewer ? .fit : .fill).clipped()
-            } else {
-                unavailable("Image Unavailable", symbol: "photo")
-            }
-        case .audio:
-            VStack(spacing: 14) {
-                Image(systemName: "waveform")
-                    .font(.system(size: 64, weight: .light))
-                    .foregroundStyle(.white.opacity(player.isPlaying ? 0.9 : 0.5))
-                    .symbolEffect(.variableColor.iterative, isActive: player.isPlaying)
-                Text(name).font(.headline).foregroundStyle(.white)
-                Text(cell.title).font(.callout).foregroundStyle(.white.opacity(0.6))
-                if let url = cell.mediaURL {
-                    FootagePlaybackWaveform(url: url, player: player)
-                        .frame(height: 64)
-                        .padding(.horizontal, 24)
+        } else {
+            switch cell.kind {
+            case .remotion, .captions:
+                EmptyView()
+            case .video:
+                FootagePlayerLayerView(player: player.player, fitsViewer: fitsViewer)
+            case .image:
+                if let url = cell.mediaURL, let image = NSImage(contentsOf: url) {
+                    Image(nsImage: image).resizable().aspectRatio(contentMode: fitsViewer ? .fit : .fill).clipped()
+                } else {
+                    unavailable("Image Unavailable", symbol: "photo")
                 }
-                MusicLyricsPlayback(sourceID: cell.drag.source.id, player: player)
-                    .id(cell.drag.source.id)
+            case .audio:
+                VStack(spacing: 14) {
+                    Image(systemName: "waveform")
+                        .font(.system(size: 64, weight: .light))
+                        .foregroundStyle(.white.opacity(player.isPlaying ? 0.9 : 0.5))
+                        .symbolEffect(.variableColor.iterative, isActive: player.isPlaying)
+                    Text(name).font(.headline).foregroundStyle(.white)
+                    Text(cell.title).font(.callout).foregroundStyle(.white.opacity(0.6))
+                    if let url = cell.mediaURL {
+                        FootagePlaybackWaveform(url: url, player: player)
+                            .frame(height: 64)
+                            .padding(.horizontal, 24)
+                    }
+                    MusicLyricsPlayback(sourceID: cell.drag.source.id, player: player)
+                        .id(cell.drag.source.id)
+                }
+            // A zoom belongs to the recording it zooms; it is never library footage.
+            case .zoom:
+                unavailable("Nothing to Play", symbol: "plus.magnifyingglass")
             }
         }
     }
@@ -283,6 +295,12 @@ final class FootagePlayer {
         let generation = loadGeneration
         loadedCellID = cell.id
         nativeDuration = cell.duration ?? 0
+        if let document, let (prefix, id) = DocumentMediaResolver.parse(cell.drag.source.id), prefix == .screenRecording,
+           let take = try? RecordingTimelineService.take(id: id, context: document.container.mainContext), let timeline = try? RecordingTimelineService.previewTimeline(take) {
+            usesGeneratedPreview = true; frameRate = Double(timeline.fps)
+            generatedPreview.load(timeline, resolver: LibraryFootagePreviewResolver(document: document, width: timeline.width, height: timeline.height, fps: timeline.fps, captionAudio: nil))
+            applyRequestedPosition(for: cell.id); return
+        }
         if let document, cell.kind == .remotion || cell.kind == .captions {
             usesGeneratedPreview = true
             frameRate = Double(max(1, cell.previewFPS))

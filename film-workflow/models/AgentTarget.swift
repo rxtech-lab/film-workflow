@@ -20,6 +20,7 @@ nonisolated enum AgentTargetKind: String, Codable, CaseIterable, Identifiable, S
     case narrative
     case imageGen
     case videoGen
+    case screenRecording
     case sequence
 
     var id: String { rawValue }
@@ -32,6 +33,7 @@ nonisolated enum AgentTargetKind: String, Codable, CaseIterable, Identifiable, S
         case .music: return "Music"
         case .narrative: return "Narration"
         case .imageGen: return "Images"
+        case .screenRecording: return "Screen Recording"
         case .videoGen: return "Video"
         case .sequence: return "Sequence"
         }
@@ -45,6 +47,7 @@ nonisolated enum AgentTargetKind: String, Codable, CaseIterable, Identifiable, S
         case .music: return "music.note"
         case .narrative: return "text.book.closed"
         case .imageGen: return "photo.on.rectangle.angled"
+        case .screenRecording: return "record.circle"
         case .videoGen: return "video.badge.waveform"
         case .sequence: return "film.stack"
         }
@@ -60,6 +63,7 @@ nonisolated enum AgentTargetKind: String, Codable, CaseIterable, Identifiable, S
         case .music: return .music
         case .narrative: return .narration
         case .imageGen: return .image
+        case .screenRecording: return .screenRecording
         case .videoGen: return .video
         case .sequence: return .sequence
         }
@@ -72,6 +76,7 @@ nonisolated enum AgentTargetKind: String, Codable, CaseIterable, Identifiable, S
         case .music: self = .music
         case .narration: self = .narrative
         case .image: self = .imageGen
+        case .screenRecording: self = .screenRecording
         case .video: self = .videoGen
         case .sequence: self = .sequence
         case .imported: self = .none
@@ -87,6 +92,7 @@ nonisolated enum AgentTargetKind: String, Codable, CaseIterable, Identifiable, S
         case .music: return "music item"
         case .narrative: return "narration item"
         case .imageGen: return "image item"
+        case .screenRecording: return "screen recording item"
         case .videoGen: return "video item"
         case .sequence: return "sequence"
         }

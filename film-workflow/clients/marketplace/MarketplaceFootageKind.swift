@@ -19,7 +19,7 @@ extension MarketplaceKind {
         case .video: return ["mp4", "mov"].contains(ext) ? .footage : nil
         case .image: return ["png", "jpg", "jpeg", "webp"].contains(ext) ? .footage : nil
         case .audio: return ["mp3", "wav", "m4a", "aac", "mp4", "mov"].contains(ext) ? .audio : nil
-        case .captions: return nil
+        case .captions, .zoom: return nil
         }
     }
 
@@ -29,7 +29,7 @@ extension MarketplaceKind {
     static func canBeFootage(_ kind: SourceKind) -> Bool {
         switch kind {
         case .video, .audio, .image, .remotion: return true
-        case .captions: return false
+        case .captions, .zoom: return false
         }
     }
 

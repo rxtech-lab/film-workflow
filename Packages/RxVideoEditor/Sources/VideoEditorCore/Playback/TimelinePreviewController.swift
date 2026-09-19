@@ -142,6 +142,9 @@ public final class TimelinePreviewController {
     public private(set) var timeline = Timeline()
     public private(set) var layers: [TimelinePreviewLayer] = []
     public private(set) var isLoading = false
+    /// Everything the last load resolved, including sources that never became
+    /// layers. The audio graph is asked about those too.
+    @ObservationIgnored private var resolvedSources: [String: TimelinePreviewSource] = [:]
     public private(set) var lastError: String?
     public private(set) var enabled = false
     public private(set) var visible = false
@@ -161,7 +164,9 @@ public final class TimelinePreviewController {
         fallbackTasks.values.forEach { $0.cancel() }; fallbackTasks = [:]
         self.timeline = timeline
         enabled = true; isLoading = true; lastError = nil
-        transport.setBuffering(true)
+        // Buffering is cleared only by synchronize(), which is gated on
+        // `visible`. Claiming it while off screen would latch it on forever.
+        if visible { transport.setBuffering(true) }
         // A suspended master clock must also suspend already-mounted live/audio surfaces.
         for layer in layers {
             layer.player?.pause()
@@ -181,6 +186,7 @@ public final class TimelinePreviewController {
                     try Task.checkCancellation()
                 }
                 guard generation == revision else { return }
+                resolvedSources = resolved
                 let old = Dictionary(uniqueKeysWithValues: layers.map { ($0.id, $0) })
                 // Match the export compositor and the editor's visible track order.
                 let ordered = timeline.pictureTracksBackToFront
@@ -210,13 +216,13 @@ public final class TimelinePreviewController {
                 layers = next
                 isLoading = false
                 rebuildAudio()
-                if visible { startTicker() }
+                if visible { startTicker() } else { transport.setBuffering(false) }
                 synchronize()
             } catch {
                 guard generation == revision, !Task.isCancelled else { return }
                 isLoading = false; lastError = error.localizedDescription
                 layers.forEach { $0.stop() }; layers = []
-                transport.setBuffering(true)
+                transport.setBuffering(false)
             }
         }
     }
@@ -227,6 +233,9 @@ public final class TimelinePreviewController {
         else {
             ticker?.cancel(); ticker = nil
             transport.pause()
+            // An invisible preview has no business claiming to buffer, and
+            // synchronize() — the only other clear — cannot run while hidden.
+            transport.setBuffering(false)
             for layer in layers {
                 layer.releaseNative(); layer.mounted = false
                 layer.live?.update(time: layer.clip.inPoint, playing: false, rate: 1, volume: 0, muted: true, force: true)
@@ -239,6 +248,7 @@ public final class TimelinePreviewController {
         loadTask?.cancel(); ticker?.cancel()
         fallbackTasks.values.forEach { $0.cancel() }; fallbackTasks = [:]
         layers.forEach { $0.stop() }; layers = []
+        resolvedSources = [:]
         resolver?.release(); resolver = nil
         transport.onTransportChange = nil
         transport.setBuffering(false)
@@ -258,6 +268,13 @@ public final class TimelinePreviewController {
 
     private func rebuildAudio() {
         var files: [String: ResolvedMedia] = [:]
+        // Seeded from every resolved source rather than just the ones that
+        // became layers: a zoom clip is on a lane the compositor never walks,
+        // but the file resolver is still asked about it.
+        for (id, source) in resolvedSources {
+            if case .media(let media) = source { files[id] = media }
+        }
+        // A layer wins where it has one — it may carry a rendered fallback.
         for layer in layers {
             if case .media(let media) = layer.source { files[layer.clip.source.id] = media }
         }

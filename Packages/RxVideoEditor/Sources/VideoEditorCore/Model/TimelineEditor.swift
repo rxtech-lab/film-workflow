@@ -41,6 +41,7 @@ public enum TimelineEditor {
         var clip = clip
         clip.start = timeline.quantized(clip.start)
         if ripple {
+            guard !timeline.tracks[index].clips.contains(where: { $0.end > clip.start && $0.linkGroupID != nil }) else { throw TimelineEditError.unsupportedOperation }
             // A clip straddling the insert point is split there, then everything
             // from the point onwards moves right by the inserted length.
             if let straddling = timeline.tracks[index].clips.first(where: { $0.start < clip.start && clip.start < $0.end }) {
@@ -92,6 +93,7 @@ public enum TimelineEditor {
 
         guard let fromIndex = timeline.tracks.firstIndex(where: { $0.clips.contains { $0.id == clipID } }),
               let clip = timeline.clip(id: clipID) else { throw TimelineEditError.unknownClip(clipID) }
+        if clip.linkGroupID != nil, start < 0 { throw TimelineEditError.invalidDuration }
         let destinationID = trackID ?? timeline.tracks[fromIndex].id
         guard let toIndex = timeline.tracks.firstIndex(where: { $0.id == destinationID }) else { throw TimelineEditError.unknownTrack(destinationID) }
         try move(&timeline, clipIDs: [clipID], by: timeline.quantized(max(0, start)) - clip.start, laneOffset: toIndex - fromIndex)
@@ -148,6 +150,7 @@ public enum TimelineEditor {
         guard !placements.isEmpty else { return }
 
         let earliest = placements.map(\.clip.start).min() ?? 0
+        if placements.contains(where: { $0.clip.linkGroupID != nil }), delta < -earliest { throw TimelineEditError.invalidDuration }
         let shift = max(delta, -earliest)
         for i in placements.indices {
             placements[i].clip.start = max(0, placements[i].clip.start + shift)
@@ -180,6 +183,7 @@ public enum TimelineEditor {
     /// cues timed against the target's source play in step with it. The clip
     /// stays on its own track; it may not overlap anything else there.
     public static func align(_ timeline: inout Timeline, clipID: UUID, with targetClipID: UUID) throws {
+        guard timeline.editLinkedClipIDs([clipID]).count == 1 else { throw TimelineEditError.unsupportedOperation }
         let previousTimeline = timeline
         var committed = false
         defer { if !committed { timeline = previousTimeline } }
@@ -209,6 +213,10 @@ public enum TimelineEditor {
     /// Trims on the timeline clock while preserving the opposite source edge.
     /// `sourceDuration` lets older clips use a length resolved by the UI.
     public static func trimLeading(_ timeline: inout Timeline, clipID: UUID, by delta: TimeInterval, minimumDuration: TimeInterval? = nil, sourceDuration: TimeInterval? = nil) throws {
+        if timeline.editLinkedClipIDs([clipID]).count > 1 {
+            try editLinkedTrim(&timeline, clipID: clipID, leading: true, delta: delta, minimumDuration: minimumDuration, maximumDuration: nil, sourceDuration: sourceDuration)
+            return
+        }
         let previousTimeline = timeline
         var committed = false
         defer { if !committed { timeline = previousTimeline } }
@@ -220,7 +228,7 @@ public enum TimelineEditor {
         var delta = timeline.quantized(abs(delta)) * (delta < 0 ? -1 : 1)
         delta = min(delta, clip.duration - minimum)
         let natural = sourceDuration ?? clip.sourceDuration
-        if clip.source.kind != .image {
+        if !clip.source.kind.isTimeless {
             if clip.isReversed {
                 if let natural { delta = max(delta, -(max(0, natural - clip.sourceEnd) / clip.playbackRate)) }
             } else {
@@ -229,7 +237,7 @@ public enum TimelineEditor {
         }
         delta = max(delta, -clip.start)
         clip.start += delta
-        if !clip.isReversed && clip.source.kind != .image { clip.inPoint = max(0, clip.inPoint + delta * clip.playbackRate) }
+        if !clip.isReversed && !clip.source.kind.isTimeless { clip.inPoint = max(0, clip.inPoint + delta * clip.playbackRate) }
         clip.duration -= delta
         try replaceTiming(&timeline, clip: clip)
         try timeline.validateModifiers()
@@ -239,6 +247,10 @@ public enum TimelineEditor {
     /// Changes the end, limited by available source media and adjacent clips.
     /// `maximumDuration` is measured in timeline seconds.
     public static func trimTrailing(_ timeline: inout Timeline, clipID: UUID, by delta: TimeInterval, maximumDuration: TimeInterval? = nil, minimumDuration: TimeInterval? = nil, sourceDuration: TimeInterval? = nil) throws {
+        if timeline.editLinkedClipIDs([clipID]).count > 1 {
+            try editLinkedTrim(&timeline, clipID: clipID, leading: false, delta: delta, minimumDuration: minimumDuration, maximumDuration: maximumDuration, sourceDuration: sourceDuration)
+            return
+        }
         let previousTimeline = timeline
         var committed = false
         defer { if !committed { timeline = previousTimeline } }
@@ -252,7 +264,7 @@ public enum TimelineEditor {
         if clip.isReversed {
             duration = min(duration, clip.duration + clip.inPoint / clip.playbackRate)
             clip.inPoint = max(0, clip.inPoint + (clip.duration - duration) * clip.playbackRate)
-        } else if clip.source.kind != .image, let natural = sourceDuration ?? clip.sourceDuration {
+        } else if !clip.source.kind.isTimeless, let natural = sourceDuration ?? clip.sourceDuration {
             duration = min(duration, max(0, natural - clip.inPoint) / clip.playbackRate)
         }
         guard duration >= minimum - 0.0000001 else { throw TimelineEditError.invalidDuration }
@@ -264,6 +276,7 @@ public enum TimelineEditor {
 
     /// Positive multiplier (1.2 = 120%), retaining the same source range.
     public static func changeSpeed(_ timeline: inout Timeline, clipID: UUID, rate: Double) throws {
+        guard timeline.editLinkedClipIDs([clipID]).count == 1 else { throw TimelineEditError.unsupportedOperation }
         let previousTimeline = timeline
         var committed = false
         defer { if !committed { timeline = previousTimeline } }
@@ -281,6 +294,7 @@ public enum TimelineEditor {
     }
 
     public static func retime(_ timeline: inout Timeline, clipID: UUID, duration: TimeInterval, anchor: RetimeAnchor = .start) throws {
+        guard timeline.editLinkedClipIDs([clipID]).count == 1 else { throw TimelineEditError.unsupportedOperation }
         let previousTimeline = timeline
         var committed = false
         defer { if !committed { timeline = previousTimeline } }
@@ -303,6 +317,7 @@ public enum TimelineEditor {
     }
 
     public static func reverse(_ timeline: inout Timeline, clipID: UUID) throws {
+        guard timeline.editLinkedClipIDs([clipID]).count == 1 else { throw TimelineEditError.unsupportedOperation }
         let previousTimeline = timeline
         var committed = false
         defer { if !committed { timeline = previousTimeline } }
@@ -328,6 +343,9 @@ public enum TimelineEditor {
     /// Splits a clip at a timeline time. Returns the id of the new right half.
     @discardableResult
     public static func split(_ timeline: inout Timeline, clipID: UUID, at time: TimeInterval) throws -> UUID? {
+        if timeline.editLinkedClipIDs([clipID]).count > 1 {
+            return try splitLinked(&timeline, clipID: clipID, at: time)
+        }
         let previousTimeline = timeline
         var committed = false
         defer { if !committed { timeline = previousTimeline } }
@@ -354,7 +372,7 @@ public enum TimelineEditor {
         right.duration = clip.end - cut
         if clip.isReversed {
             left.inPoint = clip.inPoint + right.sourceRangeDuration
-        } else if clip.source.kind != .image {
+        } else if !clip.source.kind.isTimeless {
             right.inPoint = clip.inPoint + left.sourceRangeDuration
         }
         timeline.tracks[trackIndex].clips[clipIndex] = left
@@ -392,11 +410,33 @@ public enum TimelineEditor {
         timeline.tracks[index].isEnabled = isEnabled
     }
 
+    /// Pins or unpins a lane, so the editor keeps it on screen while the rest
+    /// of the timeline scrolls. The track keeps its place in the order.
+    public static func setTrackPinned(_ timeline: inout Timeline, trackID: UUID, isPinned: Bool) throws {
+        guard let index = timeline.tracks.firstIndex(where: { $0.id == trackID }) else {
+            throw TimelineEditError.unknownTrack(trackID)
+        }
+        timeline.tracks[index].isPinned = isPinned
+    }
+
+    /// Removes a whole lane, the clips on it and any transitions those clips
+    /// carried. The last remaining lane cannot be removed.
+    public static func removeTrack(_ timeline: inout Timeline, trackID: UUID) throws {
+        guard let index = timeline.tracks.firstIndex(where: { $0.id == trackID }) else {
+            throw TimelineEditError.unknownTrack(trackID)
+        }
+        guard timeline.tracks.count > 1 else { throw TimelineEditError.unsupportedOperation }
+        let clipIDs = Set(timeline.tracks[index].clips.map(\.id))
+        timeline.transitions.removeAll { !$0.attachment.clipIDs.isDisjoint(with: clipIDs) }
+        timeline.tracks.remove(at: index)
+    }
+
     public static func remove(_ timeline: inout Timeline, clipID: UUID) {
         remove(&timeline, clipIDs: [clipID])
     }
 
     public static func remove(_ timeline: inout Timeline, clipIDs: Set<UUID>) {
+        let clipIDs = timeline.editLinkedClipIDs(clipIDs)
         timeline.transitions.removeAll { !$0.attachment.clipIDs.isDisjoint(with: clipIDs) }
         for i in timeline.tracks.indices {
             timeline.tracks[i].clips.removeAll { clipIDs.contains($0.id) }
@@ -413,6 +453,7 @@ public enum TimelineEditor {
               let clip = timeline.clip(id: clipID) else {
             throw TimelineEditError.unknownClip(clipID)
         }
+        guard !timeline.tracks[trackIndex].clips.contains(where: { $0.end > clip.start && $0.linkGroupID != nil }) else { throw TimelineEditError.unsupportedOperation }
         remove(&timeline, clipID: clipID)
         for i in timeline.tracks[trackIndex].clips.indices where timeline.tracks[trackIndex].clips[i].start >= clip.end {
             timeline.tracks[trackIndex].clips[i].start -= clip.duration
@@ -457,7 +498,16 @@ public enum TimelineEditor {
               let clipIndex = timeline.tracks[trackIndex].clips.firstIndex(where: { $0.id == clipID }) else {
             throw TimelineEditError.unknownClip(clipID)
         }
+        let oldClip = timeline.tracks[trackIndex].clips[clipIndex]
         change(&timeline.tracks[trackIndex].clips[clipIndex])
+        let changed = timeline.tracks[trackIndex].clips[clipIndex]
+        if previousTimeline.editLinkedClipIDs([clipID]).count > 1,
+           (oldClip.start != changed.start || oldClip.duration != changed.duration || oldClip.inPoint != changed.inPoint || oldClip.playbackRate != changed.playbackRate || oldClip.isReversed != changed.isReversed) {
+            throw TimelineEditError.unsupportedOperation
+        }
+        guard changed.duration > 0, changed.duration.isFinite, changed.start >= 0, changed.start.isFinite,
+              changed.inPoint >= 0, changed.inPoint.isFinite, changed.playbackRate > 0, changed.playbackRate.isFinite else { throw TimelineEditError.invalidDuration }
+        guard !timeline.tracks[trackIndex].clips.contains(where: { $0.overlaps(changed) }) else { throw TimelineEditError.overlap }
         try timeline.validateModifiers()
         committed = true
     }
@@ -496,9 +546,49 @@ public enum TimelineEditor {
         timeline.tracks = trackIDs.compactMap { tracks[$0] }
     }
 
-    /// Adds a track of a kind at the end of the layout.
+    /// Turns a screen recording's clicks into zoom clips on their own lane, and
+    /// stops its presentation synthesising any more of them.
+    ///
+    /// Click zooms used to be invented at every render and appeared nowhere, so
+    /// there was nothing to retime or delete. Generating them once makes each
+    /// one an ordinary clip; running it again on a screen that already has a
+    /// lane adds nothing, because `autoZoom` is off by then.
     @discardableResult
-    public static func addTrack(_ timeline: inout Timeline, kind: TrackKind) -> UUID {
+    public static func materializeAutoZoom(_ timeline: inout Timeline, screenClipID: UUID, source: ClipSource) -> [UUID] {
+        guard let screen = timeline.allClips.first(where: { $0.id == screenClipID }),
+              let presentation = screen.recording, presentation.autoZoom,
+              let instance = screen.recordingInstanceID else { return [] }
+        let windows = presentation.autoZoomWindows()
+        guard !windows.isEmpty else { return [] }
+        // A second insertion reuses the lane rather than stacking another one,
+        // as long as nothing already sits over this screen's range.
+        let existing = timeline.tracks.first { track in
+            track.kind == .zoom && !track.clips.contains { $0.start < screen.end && screen.start < $0.end }
+        }
+        let trackID = existing?.id ?? addTrack(&timeline, kind: .zoom)
+        if existing == nil { try? setTrackAlias(&timeline, trackID: trackID, alias: "Zoom") }
+        let scale = min(8, max(1, presentation.zoomScale))
+        var ids: [UUID] = []
+        for window in windows {
+            let start = timeline.quantized(max(screen.start, screen.timelineTime(atSource: window.start - presentation.timeOffset)))
+            let end = timeline.quantized(min(screen.end, screen.timelineTime(atSource: window.end - presentation.timeOffset)))
+            guard end - start >= timeline.frameDuration else { continue }
+            let clip = Clip(source: source, start: start, duration: end - start, recordingInstanceID: instance,
+                            recordingZoom: .init(scale: scale, x: window.x, y: window.y))
+            // The windows are disjoint, but quantisation against a lane an
+            // earlier insertion left behind must not cost the whole take.
+            guard (try? insert(&timeline, clip: clip, on: trackID)) != nil else { continue }
+            ids.append(clip.id)
+        }
+        try? update(&timeline, clipID: screen.id) { $0.recording?.autoZoom = false }
+        return ids
+    }
+
+    /// Adds a track of a kind at the end of the layout, or at `index` when one
+    /// is given. The name always follows the lane's kind, so numbering stays in
+    /// one place even when the caller chooses the position.
+    @discardableResult
+    public static func addTrack(_ timeline: inout Timeline, kind: TrackKind, at index: Int? = nil) -> UUID {
         let count = timeline.tracks.filter { $0.kind == kind }.count + 1
         let prefix: String
         switch kind {
@@ -506,10 +596,15 @@ public enum TimelineEditor {
         case .audio: prefix = "A"
         case .overlay: prefix = "T"
         case .caption: prefix = "C"
+        case .zoom: prefix = "Z"
         }
         let track = Track(kind: kind, name: "\(prefix)\(count)")
+        if let index {
+            timeline.tracks.insert(track, at: max(0, min(timeline.tracks.count, index)))
+            return track.id
+        }
         switch kind {
-        case .overlay, .caption:
+        case .overlay, .caption, .zoom:
             timeline.tracks.insert(track, at: 0)
         case .video:
             let index = timeline.tracks.lastIndex { $0.kind == .video || $0.kind.drawsOverPicture }.map { $0 + 1 } ?? 0

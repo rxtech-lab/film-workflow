@@ -98,6 +98,8 @@ public final class TimelineVideoCompositor: NSObject, AVVideoCompositing, @unche
             guard !active.isEmpty else { return nil }
             return TextRenderer.shared.image(for: active, style: style, frameSize: frame.size)
         case .placeholder(let name): return Self.placeholder(named: name, in: frame)
+        case .recording(let base, let clip):
+            return RecordingRenderer.render(image(for: base, at: time, frame: frame, request: request, effects: effects), clip: clip, time: time, size: frame.size)
         case .processed(let base, let instances):
             return image(for: base, at: time, frame: frame, request: request, effects: instances)
         case .heldEdges(let base, let range, let first, let last, let transform, let opacity):

@@ -34,7 +34,7 @@ public struct TimelineEditingCapabilities: OptionSet, Codable, Sendable, Hashabl
         switch kind {
         case .audio: return [.duration, .cut, .reverse, .speed, .drag]
         case .video, .remotion: return [.duration, .cut, .speed, .drag]
-        case .image, .captions: return [.duration, .cut, .drag]
+        case .image, .captions, .zoom: return [.duration, .cut, .drag]
         }
     }
 }

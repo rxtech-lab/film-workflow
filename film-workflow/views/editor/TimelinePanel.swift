@@ -76,6 +76,7 @@ struct TimelinePanel: View {
                 timeline: Binding(get: { sequence.timeline }, set: { sequence.editTimeline($0, undoManager: undoManager) }),
                 playhead: Binding(get: { state.playhead }, set: { state.playhead = $0 }),
                 selectedClipIDs: $state.selectedClipIDs,
+                primaryClipID: $state.primaryClipID,
                 pixelsPerSecond: Binding(get: { sequence.timelinePixelsPerSecond }, set: { sequence.timelinePixelsPerSecond = $0 }),
                 skimming: $state.skimsTimeline,
                 onSkim: { time in
@@ -200,7 +201,7 @@ struct TimelinePanel: View {
             return (try? modelContext.fetch(FetchDescriptor<ImportedAsset>(predicate: #Predicate { $0.id == id })))?.first?.marketplaceItemId != nil
         case .remotion:
             return (try? modelContext.fetch(FetchDescriptor<RemotionProject>(predicate: #Predicate { $0.id == id })))?.first?.marketplaceItemId != nil
-        case .music, .narration, .image, .video, .caption:
+        case .music, .narration, .image, .video, .caption, .screenRecording, .recordingZoom:
             return false
         }
     }
@@ -269,6 +270,14 @@ struct TimelinePanel: View {
 
     /// Resolves the dropped footage to learn its natural length before placing it.
     private func insert(_ item: FootageDragItem, on trackID: UUID, at time: TimeInterval, into sequence: SequenceProject) async {
+        if let (prefix, id) = DocumentMediaResolver.parse(item.source.id), prefix == .screenRecording {
+            do {
+                let take = try RecordingTimelineService.take(id: id, context: modelContext)
+                let ids = try RecordingTimelineService.insert(take: take, into: sequence, at: time, undoManager: undoManager)
+                state.selectedClipID = ids.first
+            } catch { dropError = error.localizedDescription }
+            return
+        }
         var duration = item.duration ?? 0
         if duration <= 0, item.source.kind != .image {
             let resolver = DocumentMediaResolver(document: document, width: sequence.width, height: sequence.height, fps: sequence.fps)

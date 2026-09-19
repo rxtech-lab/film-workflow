@@ -75,6 +75,7 @@ public extension Timeline {
         var changed = true
         while changed {
             let old = result
+            result.formUnion(editLinkedClipIDs(result))
             for transition in transitions where transition.attachment.isPair && !result.isDisjoint(with: transition.attachment.clipIDs) {
                 result.formUnion(transition.attachment.clipIDs)
             }

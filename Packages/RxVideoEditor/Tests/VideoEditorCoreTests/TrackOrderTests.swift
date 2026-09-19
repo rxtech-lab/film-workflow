@@ -41,6 +41,46 @@ struct TrackOrderTests {
         #expect(timeline == before)
     }
 
+    @Test("Pinning a lane is remembered, and leaves the order alone")
+    func pinning() throws {
+        var timeline = Timeline()
+        let before = timeline
+        let video = try #require(timeline.tracks.first { $0.kind == .video })
+        try TimelineEditor.setTrackPinned(&timeline, trackID: video.id, isPinned: true)
+        #expect(timeline.tracks.map(\.id) == before.tracks.map(\.id))
+        #expect(timeline.tracks.first { $0.id == video.id }?.isPinned == true)
+        #expect(try TimelineCodec.decode(TimelineCodec.encode(timeline)) == timeline)
+        try TimelineEditor.setTrackPinned(&timeline, trackID: video.id, isPinned: false)
+        #expect(timeline == before)
+        let missing = UUID()
+        #expect(throws: TimelineEditError.unknownTrack(missing)) {
+            try TimelineEditor.setTrackPinned(&timeline, trackID: missing, isPinned: true)
+        }
+    }
+
+    @Test("Deleting a lane takes its clips and transitions with it, and the last one stays")
+    func removingTracks() throws {
+        var timeline = Timeline()
+        let clip = Clip(source: ClipSource(id: "still", kind: .image, displayName: "Still"), start: 2, duration: 5)
+        let video = try #require(timeline.tracks.first { $0.kind == .video })
+        try TimelineEditor.insert(&timeline, clip: clip, on: video.id)
+        try TimelineEditor.addTransition(&timeline, definitionID: "rx.cross-dissolve", attachment: .start(clip.id))
+        try TimelineEditor.removeTrack(&timeline, trackID: video.id)
+        #expect(!timeline.tracks.contains { $0.id == video.id })
+        #expect(timeline.clip(id: clip.id) == nil)
+        #expect(timeline.transitions.isEmpty)
+        try timeline.validateModifiers()
+
+        while timeline.tracks.count > 1 {
+            try TimelineEditor.removeTrack(&timeline, trackID: timeline.tracks[0].id)
+        }
+        let last = timeline
+        #expect(throws: TimelineEditError.unsupportedOperation) {
+            try TimelineEditor.removeTrack(&timeline, trackID: timeline.tracks[0].id)
+        }
+        #expect(timeline == last)
+    }
+
     @Test("Moving an overlay below a video changes the exported picture")
     func exportOrder() async throws {
         let root = try Fixtures.directory()

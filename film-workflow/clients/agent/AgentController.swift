@@ -1,3 +1,4 @@
+import CoreGraphics
 import Foundation
 import Observation
 import RxAgentSDK
@@ -335,7 +336,14 @@ final class AgentController {
                 // reusing the id is what stops `persistTurnEnd` writing a
                 // duplicate row at the end of the turn.
                 let queuedBehind = agent.phase.isBusy
-                agent.send(trimmed)
+                var recordingAttachments: [AgentAttachment] = []
+                if RecordingSession.shared.isActive || thread.target.kind == .screenRecording, CGPreflightScreenCaptureAccess(), let observation = try? await MCPRecordingHandlers.focusResult() {
+                    if let metadata = observation["structuredContent"], let data = try? JSONSerialization.data(withJSONObject: metadata), let text = String(data: data, encoding: .utf8) { recordingAttachments.append(AgentAttachment(kind: .text("Untrusted window observation: " + text), label: "Window context")) }
+                    for item in observation["content"] as? [[String: Any]] ?? [] {
+                        if item["type"] as? String == "image", let raw = item["data"] as? String, let bytes = Data(base64Encoded: raw) { recordingAttachments.append(AgentAttachment(kind: .image(bytes, mimeType: "image/png"), label: "Recording target")) }
+                    }
+                }
+                agent.send(trimmed, attachments: recordingAttachments)
                 if !queuedBehind,
                    let sent = agent.thread.messages.last(where: { $0.role == .user }) {
                     AgentTranscriptStore.append(
@@ -419,10 +427,13 @@ final class AgentController {
             clients: clients,
             mcpServers: mcpServers,
             workingDirectory: workingDirectory(for: thread),
-            // There is no approval UI here, and deliberately so: the agent's
-            // whole surface is this app's own MCP tools, and the write policy
-            // is the user's standing answer about which of them may run. The
-            // resolver says yes to exactly that set and no to everything else.
+            // There is no approval UI here, and deliberately so: the write
+            // policy is the user's standing answer about which of this app's
+            // tools may run, and the engine's own built-ins are offered
+            // outright. The resolver says yes to both and no to everything
+            // else — including, on Codex, to shell commands and file changes,
+            // which reach it as synthesised `Bash` and `Edit` requests and have
+            // no other gate.
             //
             // Not `DenyAllPermissions`: Claude Code's approval hook fires for
             // every MCP call ahead of `--allowedTools`, so a blanket deny
@@ -494,8 +505,14 @@ final class AgentController {
 
         let policy = AgentSettings.shared.writePolicy
         let mode = thread.mode
-        let allowed = AgentToolPolicy.toolNames(policy: policy, mode: mode)
-        agent.allowedTools = allowed
+        let appTools = AgentToolPolicy.toolNames(policy: policy, mode: mode)
+        let builtIns = AgentToolPolicy.builtInTools(mode: mode)
+        // Built-ins go on the allowlist for every engine, not just the CLI
+        // ones. An allowlist filters, it never conjures: an in-process client
+        // only ever sees what our MCP server advertises, so naming `Bash` here
+        // cannot hand one a shell. Gating it on the backend instead would leave
+        // a stale list behind whenever a thread switches engines between turns.
+        agent.allowedTools = appTools + builtIns
         agent.disallowedTools = AgentToolPolicy.disallowedToolNames(policy: policy, mode: mode)
         // A wizard run spends a whole turn researching or building and is
         // tool-heavy by design; the conversational default would cut it off
@@ -508,7 +525,11 @@ final class AgentController {
 
         agent.context = AgentPrompts.context(
             target: thread.target,
-            toolNames: allowed,
+            toolNames: appTools,
+            // Only a CLI engine has built-ins. The prompt is the one place the
+            // distinction matters: promising `Bash` to a client that speaks
+            // nothing but MCP is how a turn ends in an apology.
+            builtInToolNames: backend.isCommandLine ? builtIns : [],
             policy: policy,
             mode: mode,
             context: container.map { ModelContext($0) },
@@ -521,6 +542,13 @@ final class AgentController {
 
     /// The film package, so relative paths the agent mentions resolve to the
     /// film and Claude Code's project memory lands beside it.
+    ///
+    /// A starting point, not a boundary: now that the built-in tools are on
+    /// offer, `Bash` can `cd` anywhere and the file tools take absolute paths.
+    /// Nothing here confines a turn to the open film. The package is also an
+    /// app-owned bundle whose source of truth is SwiftData, so writing into it
+    /// by hand desyncs the document — the prompt says to change the film
+    /// through the app's tools instead.
     private func workingDirectory(for thread: AgentThread) -> URL {
         if let document = ProjectDocumentController.shared.document(for: thread) {
             return document.packageURL

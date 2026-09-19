@@ -64,7 +64,10 @@ struct DocumentMediaResolver: MediaResolver {
     }
 
     enum SourceKindPrefix: String {
-        case music, narration, image, video, remotion, imported, caption
+        case music, narration, image, video, remotion, imported, caption, screenRecording
+        /// A recording's zoom lane. Carries no media; the prefix exists only so
+        /// the preview loader has something to resolve for its clips.
+        case recordingZoom
     }
 
     static func sourceID(_ prefix: SourceKindPrefix, _ id: UUID) -> String {
@@ -86,6 +89,20 @@ struct DocumentMediaResolver: MediaResolver {
         guard let (prefix, uuid) = Self.parse(source.id) else { throw MediaResolverError.missing(source) }
         let context = ModelContext(container)
         switch prefix {
+        case .recordingZoom:
+            // Zoom clips supply data, not picture or sound. They are on no
+            // track the compositor reads, but the live preview resolves every
+            // clip in one throw-or-nothing pass, so this must succeed.
+            return .captions([])
+        case .screenRecording:
+            let (_, component) = try RecordingTimelineService.resolve(id: uuid, context: context)
+            if component.role == .shortcuts { return .captions(component.cues) }
+            let url = storage.absoluteURL(for: component.filePath)
+            // Every other kind checks this. Without it a vanished take resolves
+            // happily and only fails later, inside a layer, where the message
+            // may never reach the screen.
+            guard FileManager.default.fileExists(atPath: url.path) else { throw MediaResolverError.missing(source) }
+            return .file(url, naturalDuration: component.duration, naturalSize: CGSize(width: component.width, height: component.height))
         case .music:
             let rows = try context.fetch(FetchDescriptor<GeneratedMusic>(predicate: #Predicate { $0.id == uuid }))
             guard let row = rows.first else { throw MediaResolverError.missing(source) }
@@ -179,6 +196,13 @@ struct DocumentMediaResolver: MediaResolver {
         let context = container.mainContext
         let model: (any LibPreviewableProtocol)?
         switch prefix {
+        case .recordingZoom: return nil
+        case .screenRecording:
+            guard let (take, component) = try? RecordingTimelineService.resolve(id: uuid, context: context) else { return nil }
+            // The library row asks with the take's own id and wants the
+            // composite; a clip asks with its component's and wants only that.
+            if take.id == uuid { return take.makeLibPreviewSource() }
+            return component.makeLibPreviewSource(take: take, storage: storage)
         case .music: model = try? context.fetch(FetchDescriptor<GeneratedMusic>(predicate: #Predicate { $0.id == uuid })).first
         case .narration: model = try? context.fetch(FetchDescriptor<GeneratedNarrative>(predicate: #Predicate { $0.id == uuid })).first
         case .image: model = try? context.fetch(FetchDescriptor<GeneratedImage>(predicate: #Predicate { $0.id == uuid })).first

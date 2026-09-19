@@ -108,8 +108,24 @@ offered.
 `AgentToolPolicy` decides what is offered. Every thread sees every tool
 except `footage_delete` and `folder_delete`; under the **review** write policy
 `caption_update_segment` and `caption_transcribe` are withheld too, so caption
-changes go through `caption_propose_edits` and the review sheet. A CLI
-engine's own filesystem and shell tools are always disallowed.
+changes go through `caption_propose_edits` and the review sheet.
+
+A CLI engine also gets its own built-in tools — `Bash`, `Read`, `Write`,
+`Edit`, `Glob`, `Grep`, `WebFetch`, `WebSearch`, `Task` and the rest — on top
+of that surface (`AgentToolPolicy.builtInTools`). They are pre-approved
+outright: the app has no approval UI, so `AgentPolicyPermissions` answers the
+`PreToolUse` hook with "allow" and Codex runs on `danger-full-access`. A turn
+on Claude Code or Codex can therefore run shell commands and write files as the
+user, unsandboxed — the working directory is where it starts, not a boundary.
+The film package itself stays off limits by instruction rather than by
+enforcement: SwiftData is the document's source of truth, so the prompt tells
+the agent to change the film through the app's tools and never by writing into
+the bundle.
+
+Two exceptions. Simple mode wizard runs get no built-ins — a run is unattended
+and shows one status line instead of a transcript. And the in-process engines
+(Apple Intelligence, OpenAI-compatible, subscription) have none to give: they
+speak MCP and nothing else, so the prompt does not offer them any.
 
 ## Code map
 

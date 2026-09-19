@@ -12,7 +12,7 @@ enum ModifierDropTarget: Equatable {
 
 enum ModifierDropHitTesting {
     static func target(item: ModifierDragItem, point: CGPoint, track: Track, timeline: Timeline, pixelsPerSecond: Double) -> ModifierDropTarget? {
-        guard pixelsPerSecond > 0, track.kind != .audio else { return nil }
+        guard pixelsPerSecond > 0, track.kind == .video || track.kind.drawsOverPicture else { return nil }
         let time = point.x / pixelsPerSecond
         if item.kind == .transition {
             let clips = track.sortedClips

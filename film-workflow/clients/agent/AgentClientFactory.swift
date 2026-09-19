@@ -92,10 +92,13 @@ enum AgentClientFactory {
                     id: clientID(for: backend),
                     displayName: backend.engineLabel,
                     binaryPath: AgentBackendAvailability.shared.executablePath(for: backend),
-                    // The agent has no business touching the filesystem here, so
-                    // none of Claude's own tools are pre-approved. The turn's
-                    // allowlist (see `AgentToolPolicy`) is the whole surface.
-                    preapprovedTools: []
+                    // Inert while the turn supplies its own allowlist, which is
+                    // always: `allowedToolArgument` drops the pre-approved set
+                    // the moment `allowedTools` is non-nil. Kept in step with
+                    // the policy anyway, so a turn that ever leaves the
+                    // allowlist nil doesn't silently fall back to the SDK's
+                    // narrower `defaultSafeTools`.
+                    preapprovedTools: AgentToolPolicy.builtInTools
                 )
             #else
                 return nil
@@ -107,10 +110,17 @@ enum AgentClientFactory {
                     id: clientID(for: backend),
                     displayName: backend.engineLabel,
                     binaryPath: AgentBackendAvailability.shared.executablePath(for: backend),
-                    // App-server accepts non-git working directories. Keep the
-                    // film package read-only; tools reach the app through MCP.
+                    // App-server accepts non-git working directories.
+                    //
+                    // `approvalPolicy` is inert: the SDK derives the effective
+                    // policy from the turn's `permissionMode`, which is
+                    // `.default`, so Codex asks about every command and the
+                    // answer comes from `AgentPolicyPermissions`. `sandbox` is
+                    // the live one — under `.readOnly` a write fails inside
+                    // Codex before our resolver is ever consulted, which is
+                    // what used to keep its built-in tools out of reach.
                     approvalPolicy: .never,
-                    sandbox: .readOnly
+                    sandbox: .dangerFullAccess
                 )
             #else
                 return nil

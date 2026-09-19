@@ -52,5 +52,25 @@ nonisolated enum AgentToolLabels {
         "wizard_skip_templates": String(localized: "Looking for another way in…"),
         "wizard_present_options": String(localized: "Preparing your choices…"),
         "wizard_report_progress": String(localized: "Working…"),
+        // The engine's own tools. Capitalised, so the `_`-splitting fallback
+        // would leave them as bare "Bash…".
+        "Bash": String(localized: "Running a command…"),
+        "BashOutput": String(localized: "Checking a command…"),
+        "KillShell": String(localized: "Stopping a command…"),
+        "Read": String(localized: "Reading a file…"),
+        "Glob": String(localized: "Looking for files…"),
+        "Grep": String(localized: "Searching files…"),
+        "LS": String(localized: "Looking for files…"),
+        "Write": String(localized: "Writing a file…"),
+        "Edit": String(localized: "Editing a file…"),
+        "MultiEdit": String(localized: "Editing a file…"),
+        "NotebookEdit": String(localized: "Editing a file…"),
+        "WebFetch": String(localized: "Reading the website…"),
+        "WebSearch": String(localized: "Searching the web…"),
+        "Task": String(localized: "Running a sub-task…"),
+        "Agent": String(localized: "Running a sub-task…"),
+        "TaskOutput": String(localized: "Checking a sub-task…"),
+        "TodoRead": String(localized: "Working…"),
+        "TodoWrite": String(localized: "Working…"),
     ]
 }

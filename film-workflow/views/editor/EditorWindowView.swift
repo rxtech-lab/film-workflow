@@ -14,6 +14,7 @@ struct EditorWindowView: View {
     @Environment(\.undoManager) private var undoManager
     @Environment(AgentController.self) private var agentController
 
+    @Query(sort: \ScreenRecordingProject.updatedAt, order: .reverse) private var recordings: [ScreenRecordingProject]
     @Query(sort: \MusicProject.updatedAt, order: .reverse) private var music: [MusicProject]
     @Query(sort: \NarrativeProject.updatedAt, order: .reverse) private var narrations: [NarrativeProject]
     @Query(sort: \CaptionProject.updatedAt, order: .reverse) private var captions: [CaptionProject]
@@ -42,7 +43,7 @@ struct EditorWindowView: View {
     @State private var captionError: String?
 
     private var index: LibraryIndex {
-        LibraryIndex(music: music, narrations: narrations, captions: captions, images: images, videos: videos,
+        LibraryIndex(recordings: recordings, music: music, narrations: narrations, captions: captions, images: images, videos: videos,
                      remotions: remotions, imported: imported, sequences: sequences,
                      sequenceRenders: sequenceRenders, remotionRenders: remotionRenders)
     }
@@ -295,6 +296,7 @@ struct EditorWindowView: View {
             case .narration: if let p = index.narration(item.id) { try ProjectGroupService.move(p, to: groupID, context: modelContext) }
             case .caption: if let p = index.caption(item.id) { try ProjectGroupService.move(p, to: groupID, context: modelContext) }
             case .image: if let p = index.image(item.id) { try ProjectGroupService.move(p, to: groupID, context: modelContext) }
+            case .screenRecording: if let p = index.recording(item.id) { try ProjectGroupService.move(p, to: groupID, context: modelContext) }
             case .video: if let p = index.video(item.id) { try ProjectGroupService.move(p, to: groupID, context: modelContext) }
             case .remotion: if let p = index.remotion(item.id) { try ProjectGroupService.move(p, to: groupID, context: modelContext) }
             case .sequence: if let p = index.sequence(item.id) { try ProjectGroupService.move(p, to: groupID, context: modelContext) }
@@ -329,6 +331,7 @@ struct EditorWindowView: View {
         case .narration: index.narration(id).map { $0.name = trimmed; $0.updatedAt = Date() }
         case .caption: index.caption(id).map { $0.name = trimmed; $0.updatedAt = Date() }
         case .image: index.image(id).map { $0.name = trimmed; $0.updatedAt = Date() }
+        case .screenRecording: index.recording(id).map { $0.name = trimmed; $0.updatedAt = Date() }
         case .video: index.video(id).map { $0.name = trimmed; $0.updatedAt = Date() }
         case .remotion: index.remotion(id).map { $0.name = trimmed; $0.updatedAt = Date() }
         case .sequence: index.sequence(id).map { $0.name = trimmed; $0.updatedAt = Date() }

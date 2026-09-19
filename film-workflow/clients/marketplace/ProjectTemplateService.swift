@@ -132,6 +132,9 @@ nonisolated struct ProjectTemplateApplication: Codable, Identifiable, Sendable {
         case .caption: kind = .captions
         case .remotion: kind = .remotion
         case .video: kind = .video
+        // A recording's zoom lane is made with the recording, not bound to a template.
+        case .recordingZoom: throw MarketplaceAuthoringError.invalid("Use a sourceId from footage_list for each footage binding.")
+        case .screenRecording: kind = try RecordingTimelineService.resolve(id: id, context: document.container.mainContext).1.sourceKind
         case .imported:
             let asset = try MCPLibraryHandlers.fetchImported(id: id.uuidString, context: document.container.mainContext)
             kind = asset.kindEnum == .audio ? .audio : asset.kindEnum == .image ? .image : .video
