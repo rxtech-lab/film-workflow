@@ -103,6 +103,23 @@ Rotating the Sparkle key means updating `SPARKLE_KEY` **and** `SUPublicEDKey`
 together — apps already in the wild trust the old public key, so a mismatched
 pair silently stops updates from installing.
 
+## License
+
+Except where noted otherwise, the original source code in this repository is
+licensed under the [Mozilla Public License 2.0](LICENSE).
+
+MPL-2.0 uses file-level copyleft. If you distribute a modified MPL-covered
+file, you must make the source for that file available under MPL-2.0. You can
+still combine the covered code with new proprietary files and commercial
+services. That balance is intentional: film-workflow is both a complete app
+and a foundation for effects, templates, integrations and other extensions.
+Commercial work around it is welcome, while improvements to the existing open
+source files stay open.
+
+The license does not grant rights to RxLab names, logos or other trademarks.
+Third-party code and assets keep their own license terms, and access to RxLab
+hosted services or marketplace content is governed separately.
+
 ## Notes
 
 - The **Narrative** tab is currently a placeholder (`Coming soon`).
