@@ -29,6 +29,7 @@ struct RemotionExportToDiskModifier: ViewModifier {
                         sourceFps: project.compositionFps,
                         options: $options,
                         savesToDisk: true,
+                        preservesAlpha: project.transparentBackground,
                         onCancel: { self.project = nil },
                         onExport: {
                             guard let destination = chooseDestination(for: project) else { return }
@@ -59,10 +60,12 @@ struct RemotionExportToDiskModifier: ViewModifier {
 
     private func chooseDestination(for project: RemotionProject) -> URL? {
         let panel = NSSavePanel()
-        panel.allowedContentTypes = [.mpeg4Movie]
+        // Transparent compositions keep their alpha, which MP4/H.264 cannot carry.
+        let alpha = project.transparentBackground
+        panel.allowedContentTypes = [alpha ? .quickTimeMovie : .mpeg4Movie]
         panel.canCreateDirectories = true
         panel.title = "Export Remotion Footage"
-        panel.nameFieldStringValue = "\(project.name)-\(options.resolution.shortLabel).mp4"
+        panel.nameFieldStringValue = "\(project.name)-\(options.resolution.shortLabel).\(alpha ? "mov" : "mp4")"
         panel.directoryURL = FileManager.default.urls(for: .moviesDirectory, in: .userDomainMask).first
         guard panel.runModal() == .OK else { return nil }
         return panel.url
@@ -81,7 +84,8 @@ struct RemotionExportToDiskModifier: ViewModifier {
         renderTask = Task { @MainActor in
             defer { showProgress = false; renderTask = nil }
             do {
-                let render = try await RemotionRenderService.ensureRender(project: project, width: width, height: height, fps: fps, context: modelContext) { p in
+                let render = try await RemotionRenderService.ensureRender(project: project, width: width, height: height, fps: fps, context: modelContext,
+                                                                             preserveAlpha: project.transparentBackground) { p in
                     progress = p
                 }
                 try RemotionRenderService.export(render, to: destination)

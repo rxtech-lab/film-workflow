@@ -18,6 +18,7 @@ enum RemotionProjectService {
         copy.text = source.text
         copy.durationSeconds = source.durationSeconds
         copy.themeColorHex = source.themeColorHex
+        copy.transparentBackground = source.transparentBackground
         copy.prompt = source.prompt
         copy.compositionWidth = source.compositionWidth
         copy.compositionHeight = source.compositionHeight

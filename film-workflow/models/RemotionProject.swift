@@ -24,6 +24,12 @@ final class RemotionProject: GroupableProject {
 
     var compositionSource: String
 
+    /// True when the composition leaves its background clear so it can be
+    /// layered over other footage. Renders used on the timeline keep alpha
+    /// either way; this drives the seed template, the agent guidance and
+    /// standalone export (ProRes 4444 instead of MP4).
+    var transparentBackground: Bool = false
+
     /// True when the composition was created through the MCP `footage_create`
     /// tool, which seeds a default composition and starts the preview
     /// immediately. Such items never show the "Generate Initial Composition"
@@ -53,5 +59,6 @@ final class RemotionProject: GroupableProject {
         self.compositionFps = 30
         self.compositionSource = ""
         self.createdViaMCP = false
+        self.transparentBackground = false
     }
 }

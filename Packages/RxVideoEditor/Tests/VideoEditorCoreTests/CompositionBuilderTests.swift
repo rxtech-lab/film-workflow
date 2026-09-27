@@ -209,6 +209,54 @@ struct CompositionBuilderTests {
         #expect(captioned.r > blue.r + 0.05 && captioned.g > blue.g + 0.05)
     }
 
+    @Test("A Remotion clip on an overlay lane draws over the video below it")
+    func remotionOnOverlay() async throws {
+        let dir = try Fixtures.directory()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let footage = dir.appendingPathComponent("blue.mp4")
+        try Fixtures.video(color: .blue, seconds: 2, at: footage)
+        let graphic = dir.appendingPathComponent("green.mp4")
+        try Fixtures.video(color: .green, seconds: 1, at: graphic)
+
+        var t = Timeline(width: 320, height: 180, fps: 30)
+        let v = t.tracks.first { $0.kind == .video }!.id
+        let o = TimelineEditor.addTrack(&t, kind: .overlay)
+        try TimelineEditor.insert(&t, clip: Clip(source: ClipSource(id: "video:b", kind: .video, displayName: "B"), start: 0, duration: 2), on: v)
+        try TimelineEditor.insert(&t, clip: Clip(source: ClipSource(id: "remotion:g", kind: .remotion, displayName: "G"), start: 1, duration: 1), on: o)
+
+        let resolver = FixtureResolver(files: [
+            "video:b": .file(footage, naturalDuration: 2, naturalSize: CGSize(width: 320, height: 180)),
+            "remotion:g": .file(graphic, naturalDuration: 1, naturalSize: CGSize(width: 320, height: 180)),
+        ])
+        let built = try await TimelineCompositionBuilder(resolver: resolver).build(t, allowPlaceholders: false)
+        let instructions = built.videoComposition.instructions.compactMap { $0 as? TimelineCompositionInstruction }
+        let overlapped = try #require(instructions.first { CMTimeGetSeconds($0.timeRange.start) >= 1 })
+        #expect(overlapped.layers.count == 2)
+        #expect(overlapped.layers.allSatisfy { if case .sourceTrack = $0 { true } else { false } })
+
+        let output = dir.appendingPathComponent("out.mp4")
+        try await TimelineExporter.export(t, resolver: resolver, to: output, preset: .h264) { _ in }
+        let below = try await Fixtures.averageColor(of: output, at: 0.5)
+        #expect(below.b > 0.6 && below.g < 0.3)
+        let above = try await Fixtures.averageColor(of: output, at: 1.5)
+        #expect(above.g > 0.6 && above.b < 0.3)
+    }
+
+    @Test("An unrendered Remotion clip on an overlay lane is a slate, and blocks export")
+    func unrenderedRemotionOnOverlay() async throws {
+        var t = Timeline(width: 320, height: 180, fps: 30)
+        let o = TimelineEditor.addTrack(&t, kind: .overlay)
+        let remotion = ClipSource(id: "remotion:1", kind: .remotion, displayName: "Title")
+        try TimelineEditor.insert(&t, clip: Clip(source: remotion, start: 0, duration: 2), on: o)
+        let resolver = FixtureResolver(files: [:], unrendered: ["remotion:1"])
+
+        let preview = try await TimelineCompositionBuilder(resolver: resolver).build(t, allowPlaceholders: true)
+        #expect(preview.placeholders == [remotion])
+        await #expect(throws: CompositionBuildError.self) {
+            _ = try await TimelineCompositionBuilder(resolver: resolver).build(t, allowPlaceholders: false)
+        }
+    }
+
     @Test("Leaving captions out of the picture drops their layers and edges")
     func excludesCaptions() async throws {
         var t = Timeline(width: 320, height: 180, fps: 30)

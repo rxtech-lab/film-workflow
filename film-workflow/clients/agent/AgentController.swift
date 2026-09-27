@@ -59,6 +59,10 @@ final class AgentController {
     /// down. The server is refcounted, so overlapping threads share one.
     @ObservationIgnored private var mcpHolds: Set<UUID> = []
 
+    /// Bumped by `cancel(threadID:)`, so a send still awaiting its setup when
+    /// the user hits Stop knows not to start the turn it was about to start.
+    @ObservationIgnored private var sendGenerations: [UUID: Int] = [:]
+
     /// Caption proposals waiting for review, keyed by the captions item they
     /// apply to.
     ///
@@ -144,6 +148,7 @@ final class AgentController {
     }
 
     func cancel(threadID: UUID) {
+        sendGenerations[threadID, default: 0] += 1
         agents[threadID]?.stop()
     }
 
@@ -322,6 +327,7 @@ final class AgentController {
             $0.hasUnseenCompletion = false
         }
 
+        let generation = sendGenerations[threadID, default: 0]
         Task { @MainActor in
             do {
                 _ = await MarketplaceAuthoringService.shared.refreshAccess()
@@ -343,6 +349,8 @@ final class AgentController {
                         if item["type"] as? String == "image", let raw = item["data"] as? String, let bytes = Data(base64Encoded: raw) { recordingAttachments.append(AgentAttachment(kind: .image(bytes, mimeType: "image/png"), label: "Recording target")) }
                     }
                 }
+                // Stop was pressed while this send was still getting ready.
+                guard sendGenerations[threadID, default: 0] == generation else { return }
                 agent.send(trimmed, attachments: recordingAttachments)
                 if !queuedBehind,
                    let sent = agent.thread.messages.last(where: { $0.role == .user }) {

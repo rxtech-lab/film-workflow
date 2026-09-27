@@ -72,6 +72,9 @@ struct RemotionCodeBuilder {
             .replacingOccurrences(of: "\\", with: "\\\\")
             .replacingOccurrences(of: "\"", with: "\\\"")
         let theme = project.themeColorHex.isEmpty ? "#1E1E1E" : project.themeColorHex
+        // A transparent composition paints no fill, so footage below shows through.
+        let background = project.transparentBackground ? "" : "backgroundColor: \"\(theme)\", "
+        let titleShadow = project.transparentBackground ? ", textShadow: \"0 2px 12px rgba(0,0,0,0.6)\"" : ""
         return """
         import { AbsoluteFill, useCurrentFrame, interpolate } from "remotion";
 
@@ -84,8 +87,8 @@ struct RemotionCodeBuilder {
           const frame = useCurrentFrame();
           const opacity = interpolate(frame, [0, 30], [0, 1], { extrapolateRight: "clamp" });
           return (
-            <AbsoluteFill style={{ backgroundColor: "\(theme)", justifyContent: "center", alignItems: "center" }}>
-              <h1 style={{ color: "white", fontFamily: "Helvetica, Arial, sans-serif", opacity }}>\(safeName)</h1>
+            <AbsoluteFill style={{ \(background)justifyContent: "center", alignItems: "center" }}>
+              <h1 style={{ color: "white", fontFamily: "Helvetica, Arial, sans-serif", opacity\(titleShadow) }}>\(safeName)</h1>
             </AbsoluteFill>
           );
         };

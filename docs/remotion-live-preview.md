@@ -31,6 +31,12 @@ composition's frame rate, followed by the sequence compositor's output sampling.
 Changing the sequence frame rate therefore does not change composition duration.
 Ordinary footage-only sequences continue using the existing native compositor.
 
+A composition with **Transparent Background** on paints no background fill:
+the seed template leaves the root `AbsoluteFill` clear and the agent is told
+not to add full-frame fills. Timeline renders keep alpha either way. Export to
+Disk writes such a composition as a ProRes 4444 `.mov` with alpha instead of an
+MP4, so it can be layered in other editors.
+
 New cache fingerprints include the engine/dependency manifest, map configuration, source/assets and render settings. Existing render history remains intact, but old-runtime renders are not reused as current results. The old runtime installation is no longer packaged, started, signed or refreshed. Existing files left by older app builds are not deleted from user storage.
 
 See [package compatibility](../Packages/RxRemotion/Compatibility.md) and [validation](../Packages/RxRemotion/Validation.md) for capture boundaries and release checks.

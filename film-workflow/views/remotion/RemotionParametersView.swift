@@ -128,7 +128,13 @@ struct RemotionParametersView: View {
                 in: 1...60
             )
 
+            Toggle("Transparent Background", isOn: $project.transparentBackground)
+            Text("Leaves the background clear so the composition can sit on a track above other video.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
             ColorPicker("Theme Color", selection: themeColorBinding, supportsOpacity: false)
+                .disabled(project.transparentBackground)
 
             HStack {
                 Text("Resolution")
