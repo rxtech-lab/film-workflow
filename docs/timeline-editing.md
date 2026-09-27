@@ -19,6 +19,13 @@ screen recording that made it and takes nothing else: its clips supply no
 picture and no sound, only the zoom each one's range applies to its recording.
 Add Track does not offer one, and neither does `sequence_add_track`.
 
+Overlay lanes take captions, stills and Remotion compositions. To lay a
+Remotion graphic over footage, turn on **Transparent Background** in the
+composition's parameters and put it on an overlay lane (or a second video lane)
+above the footage. The live preview and exports draw it with its alpha, so the
+footage shows through. A Remotion clip on an overlay lane plays its audio at
+the clip's volume; overlay lanes have no mute toggle.
+
 The compact toolbar combines Add Track, Select (A), Cut (B), Skim (S), Speed,
 Reverse, timecode and zoom in one row. Narrow panels use icons with tooltips.
 Escape returns to Select. With Skim on, moving the pointer across the lanes

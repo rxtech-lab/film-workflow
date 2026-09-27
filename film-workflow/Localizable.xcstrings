@@ -8105,6 +8105,9 @@
         }
       }
     },
+    "Leaves the background clear so the composition can sit on a track above other video." : {
+
+    },
     "Length" : {
       "localizations" : {
         "zh-Hans" : {
@@ -15664,6 +15667,9 @@
           }
         }
       }
+    },
+    "Transparent Background" : {
+
     },
     "Transparent background requires PNG or WebP output." : {
       "localizations" : {

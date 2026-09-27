@@ -288,11 +288,13 @@ struct TimelineEditorTests {
         #expect(TimelineEditor.snapped(2.5, to: points, tolerance: 0.2) == 2.5)
     }
 
-    @Test("Audio tracks take audio and video sources; overlays take captions and stills")
+    @Test("Audio tracks take audio and video sources; overlays take captions, stills and Remotion")
     func trackKinds() {
         #expect(TrackKind.audio.accepts(.audio) && TrackKind.audio.accepts(.video) && !TrackKind.audio.accepts(.image))
         #expect(TrackKind.overlay.accepts(.captions) && TrackKind.overlay.accepts(.image) && !TrackKind.overlay.accepts(.video))
         #expect(TrackKind.video.accepts(.remotion) && !TrackKind.video.accepts(.audio))
+        // A transparent Remotion graphic can sit on an overlay lane over the footage.
+        #expect(TrackKind.overlay.accepts(.remotion) && !TrackKind.caption.accepts(.remotion))
         // A caption lane is for cues alone, and is drawn over the picture
         // without being part of the mix.
         #expect(TrackKind.caption.accepts(.captions))
