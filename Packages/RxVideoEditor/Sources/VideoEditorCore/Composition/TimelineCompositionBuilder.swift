@@ -70,12 +70,14 @@ public struct TimelineCompositionBuilder {
         var videoTrackIDs: [UUID: CMPersistentTrackID] = [:]   // timeline track → composition track
 
         let pictureTracks = timeline.pictureTracksBackToFront
-        let videoTracks = pictureTracks.filter { $0.kind == .video }
+        // Overlay lanes can hold Remotion clips, whose alpha renders are movie
+        // files; they go through the same per-lane video path as V1, V2….
+        let videoTracks = pictureTracks.filter { $0.kind == .video || $0.kind == .overlay }
         let overlayTracks = pictureTracks.filter { $0.kind.drawsOverPicture }
         let audioTracks = timeline.tracks.filter { $0.kind == .audio }
 
         for track in videoTracks {
-            for clip in track.renderedClips {
+            for clip in track.renderedClips where track.kind == .video || clip.source.kind == .remotion {
                 if audioOnly {
                     if clip.source.kind.hasAudio, case .success(.file(let url, _, _))? = resolved[clip.source.id] {
                         try await insertAudio(asset: AVURLAsset(url: url), clip: clip, into: composition,
@@ -131,7 +133,7 @@ public struct TimelineCompositionBuilder {
         }
 
         for track in overlayTracks where !audioOnly {
-            for clip in track.renderedClips {
+            for clip in track.renderedClips where clip.source.kind != .remotion {
                 switch resolved[clip.source.id] {
                 case .success(.captions(let cues))?:
                     guard includeCaptions else { continue }

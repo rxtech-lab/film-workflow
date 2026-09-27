@@ -61,6 +61,8 @@ struct RemotionExportSheet: View {
     @Binding var options: RemotionExportOptions
     /// True when the result goes to a file the user picks instead of into the film.
     var savesToDisk = false
+    /// Saves ProRes 4444 with alpha instead of MP4 (transparent compositions).
+    var preservesAlpha = false
     var onCancel: () -> Void
     var onExport: () -> Void
 
@@ -135,7 +137,9 @@ struct RemotionExportSheet: View {
     private var summary: some View {
         let (w, h) = options.resolution.size
         let location = savesToDisk
-            ? "saved as an MP4 file you choose. A matching render already in the film is reused."
+            ? (preservesAlpha
+                ? "saved as a ProRes 4444 movie with a transparent background. A matching render already in the film is reused."
+                : "saved as an MP4 file you choose. A matching render already in the film is reused.")
             : "saved into the film as a new version."
         return Text("Composition is \(sourceWidth) × \(sourceHeight) @ \(sourceFps)fps. Output will be \(w) × \(h) @ \(options.frameRate.rawValue)fps, \(location)")
             .font(.caption)

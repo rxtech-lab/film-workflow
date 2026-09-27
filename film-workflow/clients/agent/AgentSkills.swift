@@ -46,6 +46,10 @@ extension Skill {
                 \(tool("sequence_get")), edit it, and write it back with \
                 \(tool("sequence_set_timeline")). Use \(tool("sequence_remove_clip")) \
                 with `ripple` to close the gap a removed clip leaves.
+                - To lay a Remotion graphic (title, lower third) over footage, set \
+                the item's `transparentBackground` with \(tool("footage_update")) and \
+                keep its root background clear, then place it on an overlay track (or a \
+                second video track) above the footage with the same `start`.
                 - A Remotion composition needs no render before it goes on the \
                 timeline; \(tool("sequence_render")) renders changed compositions first. \
                 Rendering takes minutes on a long cut, so say what you are about to \

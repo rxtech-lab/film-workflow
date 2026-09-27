@@ -33,7 +33,10 @@ enum RemotionMCPHandlers {
         are bundled; three/addons/*, three/examples/jsm/* and other unlisted subpath imports are unavailable. \
         WebGPU, worker-owned OffscreenCanvas and CSS 3D/perspective exports are unsupported. \
         Mapbox needs a valid access token. OpenStreetMap needs an export-permitted provider in Settings > Maps. \
-        Server frameworks, Node APIs and npm installation are unavailable.
+        Server frameworks, Node APIs and npm installation are unavailable. \
+        When the item's transparentBackground is true, the composition overlays other footage: give the root \
+        AbsoluteFill no background and paint no full-frame fills, so only the graphics are opaque and the \
+        video below shows through the transparent pixels.
         """
 
     static let descriptors: [MCPToolDescriptor] = [

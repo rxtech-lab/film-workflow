@@ -339,7 +339,7 @@ public enum TrackKind: String, Codable, Sendable, CaseIterable {
         switch self {
         case .video: return kind == .video || kind == .image || kind == .remotion
         case .audio: return kind == .audio || kind == .video || kind == .remotion
-        case .overlay: return kind == .captions || kind == .image
+        case .overlay: return kind == .captions || kind == .image || kind == .remotion
         case .caption: return kind == .captions
         // Nothing else belongs on a zoom lane, and a zoom clip belongs nowhere else.
         case .zoom: return kind == .zoom

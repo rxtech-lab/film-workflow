@@ -6,8 +6,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/rxtech-lab/RxAgentSDK",
       "state" : {
-        "revision" : "63971d4980dcdffe9633604ad7fec5c7ab97e55d",
-        "version" : "1.0.4"
+        "revision" : "3d8882c020eb2b19379ea0aa6ac9facc28863c27",
+        "version" : "1.0.7"
       }
     },
     {
@@ -15,8 +15,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/rxtech-lab/RxAuthSwift",
       "state" : {
-        "revision" : "832fc7f55f42db86bf03841531440b47c2bc760c",
-        "version" : "1.2.2"
+        "revision" : "c917e47df83292b9f4d6d03a80218d33da8f4886",
+        "version" : "1.3.1"
       }
     },
     {
