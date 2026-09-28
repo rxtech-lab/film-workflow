@@ -134,8 +134,9 @@ enum SequenceRenderService {
     ///
     /// `captions` says which languages the caption clips deliver in the way
     /// `options.captions` asks: burned in, as subtitle tracks muxed after the
-    /// export, or as files beside the movie. Without caption clips on the
-    /// timeline nothing caption-related happens.
+    /// export, or as files beside the movie — files can also accompany a
+    /// burned-in or embedded render. Without caption clips on the timeline
+    /// nothing caption-related happens.
     @discardableResult
     static func render(
         sequence: SequenceProject,
@@ -193,15 +194,14 @@ enum SequenceRenderService {
                 }
             }
             isExporting = false
-            switch options.captions {
-            case .embedded:
+            if options.captions == .embedded {
                 onProgress(.embeddingCaptions)
                 try await embedCaptions(from: exportURL, to: outputURL, sequence: sequence, document: document, options: options, captions: captions)
-            case .sidecar:
+            }
+            if captions.writesFiles(for: options.captions) {
                 onProgress(.writingCaptions)
-                captionFiles = try await writeCaptionFiles(beside: outputURL, sequence: sequence, context: context, captions: captions)
-            case .burnIn, .none:
-                break
+                captionFiles = try await writeCaptionFiles(beside: outputURL, sequence: sequence, context: context, captions: captions,
+                                                           languages: captions.fileLanguages(for: options.captions))
             }
         } catch {
             isExporting = false
@@ -269,13 +269,13 @@ enum SequenceRenderService {
     /// the movie's stem. A language with no translation is skipped rather
     /// than failing the render.
     private static func writeCaptionFiles(
-        beside movie: URL, sequence: SequenceProject, context: ModelContext, captions: CaptionRenderRequest
+        beside movie: URL, sequence: SequenceProject, context: ModelContext, captions: CaptionRenderRequest, languages: [String]
     ) async throws -> [URL] {
         guard let snapshot = SequenceCaptionSources.sidecarSnapshot(in: sequence, context: context) else { return [] }
         let stem = movie.deletingPathExtension().lastPathComponent
         let folder = movie.deletingLastPathComponent()
         var written: [URL] = []
-        for language in captions.trackLanguages {
+        for language in languages {
             let options = CaptionExportOptions(
                 format: captions.sidecarFormat, granularity: .sentence, speakerStyle: .none,
                 translationMode: language.isEmpty ? .originalOnly : .translationOnly, translationLanguage: language

@@ -2,8 +2,9 @@ import SwiftUI
 import VideoEditorCore
 import VideoEditorUI
 
-/// The render sheet's caption rows: how the caption clips are delivered,
-/// which languages, the sidecar file type, and the burn-in style.
+/// The render sheet's Captions tab: how the caption clips reach the movie,
+/// which languages, the burn-in style, and whether caption files (with their
+/// translations) are also saved beside it.
 struct CaptionRenderSection: View {
     @Binding var options: TimelineExporter.Options
     @Binding var captions: CaptionRenderRequest
@@ -14,77 +15,98 @@ struct CaptionRenderSection: View {
 
     private var isEnabled: Bool { hasCaptions && !options.isAudioOnly }
 
+    /// Files have their own section, so the movie picker leaves them out.
+    private static let movieDeliveries: [TimelineExporter.CaptionDelivery] = [.burnIn, .embedded, .none]
+
     var body: some View {
-        row("Captions") {
+        if !hasCaptions {
+            note("Place a caption project on the timeline to export captions.")
+        }
+        row("In Movie") {
             Picker("", selection: $options.captions) {
-                ForEach(TimelineExporter.CaptionDelivery.allCases, id: \.self) { delivery in
+                ForEach(Self.movieDeliveries, id: \.self) { delivery in
                     Text(delivery.displayName).tag(delivery)
                 }
             }
+            .labelsHidden()
             .disabled(!isEnabled)
         }
-        if !hasCaptions {
-            note("Place a caption project on the timeline to export captions.")
-        } else if options.isAudioOnly {
-            note("An audio file carries no captions.")
-        } else {
-            switch options.captions {
-            case .burnIn:
-                row("Language") {
-                    Picker("", selection: $captions.burnInLanguage) {
-                        ForEach(available, id: \.self) { code in
-                            Text(name(code)).tag(code)
+        if hasCaptions {
+            if options.isAudioOnly {
+                note("An audio file carries no captions. Caption files can still be saved beside it.")
+            } else {
+                switch options.captions {
+                case .burnIn:
+                    row("Language") {
+                        Picker("", selection: $captions.burnInLanguage) {
+                            ForEach(available, id: \.self) { code in
+                                Text(name(code)).tag(code)
+                            }
                         }
+                        .labelsHidden()
                     }
-                }
-                if !captions.burnInLanguage.isEmpty {
-                    row("") { Toggle("Bilingual (original + translation)", isOn: $captions.burnInBilingual) }
-                }
-                DisclosureGroup("Caption Style") {
-                    Form {
-                        TextStyleEditor(style: $style)
+                    if !captions.burnInLanguage.isEmpty {
+                        row("") { Toggle("Bilingual (original + translation)", isOn: $captions.burnInBilingual) }
                     }
-                    .formStyle(.grouped)
-                    .frame(height: 420)
-                }
-                .font(.callout)
-                note("The style is applied to the caption clips as you change it, so the viewer shows what will be rendered.")
-            case .embedded:
-                languageToggles
-                note("Players offer the tracks in their Subtitles menu. Font, size, weight, colours, alignment and position carry over; outlines do not.")
-            case .sidecar:
-                languageToggles
-                row("File Type") {
-                    Picker("", selection: $captions.sidecarFormat) {
-                        ForEach(CaptionExportFormat.sidecarChoices) { format in
-                            Text("\(format.displayName) (.\(format.fileExtension))").tag(format)
+                    DisclosureGroup("Caption Style") {
+                        Form {
+                            TextStyleEditor(style: $style)
                         }
+                        .formStyle(.grouped)
+                        .frame(height: 420)
                     }
+                    .font(.callout)
+                    note("The style is applied to the caption clips as you change it, so the viewer shows what will be rendered.")
+                case .embedded:
+                    languageToggles($captions.trackLanguages)
+                    note("Players offer the tracks in their Subtitles menu. Font, size, weight, colours, alignment and position carry over; outlines do not.")
+                case .sidecar, .none:
+                    EmptyView()
                 }
-                note("One file per language, named after the movie, written beside it.")
-            case .none:
-                EmptyView()
             }
+        }
+        Divider().padding(.vertical, 4)
+        Toggle(isOn: $captions.savesFiles) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Save Caption Files")
+                Text("Also write SRT or VTT files beside the movie, one per language.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .toggleStyle(.switch)
+        .disabled(!hasCaptions)
+        if hasCaptions && captions.savesFiles {
+            languageToggles($captions.fileLanguages)
+            row("File Type") {
+                Picker("", selection: $captions.sidecarFormat) {
+                    ForEach(CaptionExportFormat.sidecarChoices) { format in
+                        Text("\(format.displayName) (.\(format.fileExtension))").tag(format)
+                    }
+                }
+                .labelsHidden()
+            }
+            note("Files are named after the movie. Translations without text are skipped.")
         }
     }
 
-    private var languageToggles: some View {
+    private func languageToggles(_ selection: Binding<[String]>) -> some View {
         row("Languages") {
             VStack(alignment: .leading, spacing: 4) {
                 ForEach(available, id: \.self) { code in
                     Toggle(name(code), isOn: Binding(
-                        get: { captions.trackLanguages.contains(code) },
+                        get: { selection.wrappedValue.contains(code) },
                         set: { on in
                             if on {
-                                if !captions.trackLanguages.contains(code) {
-                                    captions.trackLanguages = available.filter { captions.trackLanguages.contains($0) || $0 == code }
+                                if !selection.wrappedValue.contains(code) {
+                                    selection.wrappedValue = available.filter { selection.wrappedValue.contains($0) || $0 == code }
                                 }
-                            } else if captions.trackLanguages.count > 1 {
-                                captions.trackLanguages.removeAll { $0 == code }
+                            } else if selection.wrappedValue.count > 1 {
+                                selection.wrappedValue.removeAll { $0 == code }
                             }
                         }
                     ))
-                    .disabled(captions.trackLanguages == [code])
+                    .disabled(selection.wrappedValue == [code])
                 }
             }
         }
@@ -107,7 +129,6 @@ struct CaptionRenderSection: View {
                 .frame(width: 90, alignment: .leading)
                 .foregroundStyle(.secondary)
             content()
-                .labelsHidden()
                 .pickerStyle(.menu)
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
@@ -116,19 +137,24 @@ struct CaptionRenderSection: View {
 
 extension CaptionRenderRequest {
     /// "Captions burned in (Original + 中文)", "2 subtitle tracks (English, 中文)",
-    /// "2 caption files (.srt)"; nil when nothing caption-related happens.
+    /// "2 caption files (.srt)", joined when files accompany the movie; nil
+    /// when nothing caption-related happens.
     func summary(for delivery: TimelineExporter.CaptionDelivery) -> String? {
         func name(_ code: String) -> String { code.isEmpty ? String(localized: "Original") : CaptionTranslationAvailability.displayName(code) }
+        var parts: [String] = []
         switch delivery {
         case .burnIn:
             let languages = burnInLanguage.isEmpty ? name("") : (burnInBilingual ? "\(name("")) + \(name(burnInLanguage))" : name(burnInLanguage))
-            return "Captions burned in (\(languages))"
+            parts.append("Captions burned in (\(languages))")
         case .embedded:
-            return "\(trackLanguages.count) subtitle track\(trackLanguages.count == 1 ? "" : "s") (\(trackLanguages.map(name).joined(separator: ", ")))"
-        case .sidecar:
-            return "\(trackLanguages.count) caption file\(trackLanguages.count == 1 ? "" : "s") (.\(sidecarFormat.fileExtension))"
-        case .none:
-            return nil
+            parts.append("\(trackLanguages.count) subtitle track\(trackLanguages.count == 1 ? "" : "s") (\(trackLanguages.map(name).joined(separator: ", ")))")
+        case .sidecar, .none:
+            break
         }
+        if writesFiles(for: delivery) {
+            let languages = fileLanguages(for: delivery)
+            parts.append("\(languages.count) caption file\(languages.count == 1 ? "" : "s") (\(languages.map(name).joined(separator: ", ")), .\(sidecarFormat.fileExtension))")
+        }
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
     }
 }

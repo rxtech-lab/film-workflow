@@ -181,10 +181,7 @@ struct DocumentMediaResolver: MediaResolver {
         case .image:
             return NSImage(contentsOf: url)?.cgImage(forProposedRect: nil, context: nil, hints: nil)
         case .video, .remotion:
-            let generator = AVAssetImageGenerator(asset: AVURLAsset(url: url))
-            generator.appliesPreferredTrackTransform = true
-            generator.maximumSize = CGSize(width: 240, height: 240)
-            return try? await generator.image(at: CMTime(seconds: time, preferredTimescale: 600)).image
+            return await VideoFrameThumbnails.image(url: url, time: time, maximumSize: CGSize(width: 240, height: 240))
         default:
             return nil
         }

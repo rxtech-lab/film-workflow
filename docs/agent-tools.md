@@ -33,7 +33,7 @@ Kinds are the library's own names: `music`, `narration`, `caption`, `image`,
 | Templates | `project_template_from_film` (admin), `project_template_apply` |
 | Library | `footage_list`, `footage_get`, `footage_create`, `footage_update`, `footage_duplicate`, `footage_move`, `footage_import`, `footage_delete` |
 | Folders | `folder_list`, `folder_create`, `folder_rename`, `folder_delete` |
-| Sequences | `sequence_list`, `sequence_create`, `sequence_get`, `sequence_set_timeline`, `sequence_add_track`, `sequence_reorder_tracks`, `sequence_add_clip`, `sequence_remove_clip`, `sequence_render`, `sequence_renders` |
+| Sequences | `sequence_list`, `sequence_create`, `sequence_get`, `sequence_set_timeline`, `sequence_add_track`, `sequence_reorder_tracks`, `sequence_add_clip`, `sequence_remove_clip`, `sequence_find_gaps`, `sequence_close_gap`, `sequence_render`, `sequence_renders` |
 | Generators | `music_generate`, `narration_generate`, `image_generate`, `video_generate`, `video_job_status`, `video_resume` |
 | Captions | `caption_create`, `caption_transcribe`, `caption_versions`, `caption_translate`, `caption_list_segments`, `caption_search_segments`, `caption_update_segment`, `caption_propose_edits`, `caption_set_speakers`, `caption_export` |
 | Remotion | `remotion_list_files`, `remotion_read_file`, `remotion_write_file`, `remotion_edit_file`, `remotion_take_screenshot`, `remotion_take_screenshots`, `remotion_generate_image`, `remotion_add_image`, `remotion_remove_image`, `remotion_add_audio`, `remotion_remove_audio` |
@@ -57,7 +57,8 @@ the kind's generator adds a new one.
 
 A typical build: `footage_list` → `footage_create`/`footage_update` →
 `<kind>_generate` → `sequence_create` → `sequence_add_clip` (one call per
-take) → `sequence_render`.
+take) → `sequence_find_gaps` → `sequence_close_gap` (per faulty gap) →
+`sequence_render`.
 
 `sequence_add_track` takes `sequence_id` and `kind` (`video`, `audio`,
 `caption` or `overlay`), and returns `sequence_id`, `track_id`, `track` (name)
@@ -75,6 +76,34 @@ returns the updated sequence and timeline. Clips, track names, mute settings
 and transitions stay with their tracks. Higher video, caption and overlay
 tracks draw over lower picture tracks in preview and export; audio track order affects
 layout only. The tool is available in conversations and Simple mode.
+
+`sequence_find_gaps` takes `sequence_id`, plus optional `min_duration`
+(seconds) and `issues_only`. For each enabled track holding clips it lists the
+empty stretches — `leading` (before the first clip), `between` and `trailing`
+(up to the sequence end) — with `start`, `end`, `duration`, `frames`, the clip
+on either side, `covered_by` (other lanes of the same role playing in the gap)
+and `uncovered` (where nothing of that role plays). Disabled clips count as
+empty. `issues` judges each gap:
+
+| Issue | Meaning |
+|---|---|
+| `blank_screen` | A video-lane gap no other video lane covers: the background shows. |
+| `flash` | A video or audio gap of three frames or fewer between clips. |
+| `breaks_transition` | The gap separates two clips a `between` transition joins, so the transition is dropped. |
+| `silence` | An audio gap between clips with nothing else audible. |
+
+Caption, overlay and zoom lanes report gaps with no issues. The result also
+carries `blank_picture`, every stretch of the sequence with no picture at all.
+The analysis lives in `TimelineGapAnalyzer` (VideoEditorCore).
+
+`sequence_close_gap` takes `sequence_id`, `track`, `at` (a time inside the gap)
+and `fill`: `ripple` moves every later clip on the track left (linked clips
+follow, other tracks do not), `extend_previous` lengthens the clip before the
+gap and `extend_next` starts the clip after it earlier, each within its
+media. It returns the closed gap and the track's remaining gaps. Both tools are
+available in conversations and Simple mode; the agent runs them before
+rendering or finishing a cut and fixes `blank_screen`, `flash` and
+`breaks_transition` gaps.
 
 In the timeline UI, drag a track's grip or name in the left header column.
 The row follows the pointer with a raised shadow, neighboring rows slide aside,

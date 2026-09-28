@@ -1838,7 +1838,7 @@ private struct MarqueeSelection {
     }
 }
 
-private struct Triangle: Shape {
+nonisolated private struct Triangle: Shape {
     func path(in rect: CGRect) -> Path {
         var p = Path()
         p.move(to: CGPoint(x: rect.minX, y: rect.minY))

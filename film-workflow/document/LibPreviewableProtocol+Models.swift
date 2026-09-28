@@ -51,14 +51,14 @@ extension RemotionProject: LibPreviewableProtocol {
         let directory = projectDir
         let source = compositionSource
         let width = compositionWidth, height = compositionHeight, fps = max(1, compositionFps)
-        let duration = durationSeconds
+        let duration = durationSeconds, name = name
         let modified = try? directory.appendingPathComponent("src/Composition.tsx").resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate
         let revision = "\(updatedAt.timeIntervalSinceReferenceDate):\(source.hashValue):\(modified?.timeIntervalSinceReferenceDate ?? 0):\(width):\(height):\(fps)"
         let exists = !source.isEmpty || FileManager.default.fileExists(atPath: directory.appendingPathComponent("src/Composition.tsx").path)
         return LibPreviewSource(id: clipSource.id, revision: revision, duration: duration,
                                 isTemporal: true, canScrub: exists && duration > 0) { time, size in
             guard exists else { return nil }
-            return await LibraryRemotionThumbnails.image(directory: directory, source: source, time: time,
+            return await LibraryRemotionThumbnails.image(title: name, directory: directory, source: source, time: time,
                                                          width: width, height: height, fps: fps, size: size)
         }
     }
@@ -70,13 +70,11 @@ extension RemotionProject: LibPreviewableProtocol {
 private enum LibraryRemotionThumbnails {
     static var tail: Task<Void, Never>?
 
-    static func image(directory: URL, source: String, time: Double, width: Int, height: Int, fps: Int, size: CGSize) async -> CGImage? {
+    static func image(title: String, directory: URL, source: String, time: Double, width: Int, height: Int, fps: Int, size: CGSize) async -> CGImage? {
         let previous = tail
         let work = Task { @MainActor () -> CGImage? in
             await previous?.value
             guard !Task.isCancelled else { return nil }
-            let engine = RemotionEngine(configuration: RemotionMapSettings.configuration)
-            defer { engine.closeAll() }
             do {
                 try RemotionRuntime.shared.prepareProjectDirectory(directory)
                 let sourceURL = directory.appendingPathComponent("src/Composition.tsx")
@@ -88,14 +86,17 @@ private enum LibraryRemotionThumbnails {
                 let scale = min(1, max(size.width / Double(max(1, width)), size.height / Double(max(1, height))))
                 let key = SHA256.hash(data: Data("\(directory.path):\(hash):\(frame):\(scale):\(RemotionMapSettings.fingerprint)".utf8))
                     .map { String(format: "%02x", $0) }.joined()
-                let root = FileManager.default.temporaryDirectory.appendingPathComponent("RxFilmStudio-LibraryFrames", isDirectory: true)
-                try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
-                let output = root.appendingPathComponent(key + ".png")
+                let output = RenderDiskCache.url(.remotionFrames, key: key, extension: "png")
                 if !FileManager.default.fileExists(atPath: output.path) {
-                    let project = try await engine.prepare(projectURL: directory)
-                    try Task.checkCancellation()
-                    try await engine.renderStill(project: project, frame: frame, to: output,
-                                                 settings: .init(width: width, height: height, fps: Double(fps), captureScale: scale))
+                    try FileManager.default.createDirectory(at: output.deletingLastPathComponent(), withIntermediateDirectories: true)
+                    try await RenderQueue.shared.run(.thumbnail, title: title) { @MainActor _ in
+                        let engine = RemotionEngine(configuration: RemotionMapSettings.configuration)
+                        defer { engine.closeAll() }
+                        let project = try await engine.prepare(projectURL: directory)
+                        try Task.checkCancellation()
+                        try await engine.renderStill(project: project, frame: frame, to: output,
+                                                     settings: .init(width: width, height: height, fps: Double(fps), captureScale: scale))
+                    }
                 }
                 return NSImage(contentsOf: output)?.cgImage(forProposedRect: nil, context: nil, hints: nil)
             } catch { return nil }

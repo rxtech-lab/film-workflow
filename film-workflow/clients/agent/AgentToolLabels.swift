@@ -41,6 +41,8 @@ nonisolated enum AgentToolLabels {
         "sequence_add_clip": String(localized: "Placing a clip…"),
         "sequence_remove_clip": String(localized: "Removing a clip…"),
         "sequence_set_timeline": String(localized: "Arranging the timeline…"),
+        "sequence_find_gaps": String(localized: "Checking for gaps…"),
+        "sequence_close_gap": String(localized: "Closing a gap…"),
         "remotion_write_file": String(localized: "Writing a card…"),
         "remotion_edit_file": String(localized: "Editing a card…"),
         "remotion_generate_image": String(localized: "Generating an image…"),
