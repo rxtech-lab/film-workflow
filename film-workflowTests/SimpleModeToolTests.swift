@@ -81,6 +81,9 @@ struct SimpleModeToolTests {
         #expect(wizard.contains("music_generate"))
         #expect(wizard.contains("remotion_write_file"))
         #expect(wizard.contains("remotion_take_screenshot"))
+        // The finishing check for black gaps between shots.
+        #expect(wizard.contains("sequence_find_gaps"))
+        #expect(wizard.contains("sequence_close_gap"))
 
         // The wizard's surface is narrower, and never includes a destructive
         // tool no policy exposes.

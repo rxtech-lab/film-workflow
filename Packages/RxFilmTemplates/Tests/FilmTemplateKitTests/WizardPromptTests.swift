@@ -66,9 +66,16 @@ struct WizardPromptTests {
         #expect(build.contains("project_template_apply"))
         #expect(build.contains("imported:1"))
         #expect(build.contains("application_id"))
+        // Both builds end by checking for black gaps between shots.
+        #expect(build.contains("sequence_find_gaps"))
+        #expect(build.contains("sequence_close_gap"))
+        let ownBuild = prompts.buildWithoutTemplate("{}", { $0 })
+        #expect(ownBuild.contains("sequence_find_gaps"))
+        #expect(ownBuild.contains("sequence_close_gap"))
 
         let refine = prompts.refine("make it shorter", { $0 })
         #expect(refine.contains("make it shorter"))
         #expect(refine.contains("Do not create"))
+        #expect(refine.contains("sequence_find_gaps"))
     }
 }

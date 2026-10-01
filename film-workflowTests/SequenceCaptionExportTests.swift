@@ -126,6 +126,23 @@ struct SequenceCaptionExportTests {
         #expect(!chinese.contains("Hello"))
     }
 
+    @Test("Caption files can accompany a burned-in render")
+    func filesWithBurnIn() async throws {
+        let film = try makeFilm()
+        defer { Task { await close(film) } }
+        var progress: [SequenceRenderProgress] = []
+        let output = try await SequenceRenderService.render(
+            sequence: film.sequence, document: film.document,
+            options: .init(video: .h264, audio: nil, captions: .burnIn),
+            captions: CaptionRenderRequest(trackLanguages: ["fr"], savesFiles: true, fileLanguages: ["", "zh-Hans"]),
+            destination: .folder(film.root)
+        ) { progress.append($0) }
+        #expect(progress.contains(.writingCaptions))
+        #expect(output.captionFiles.map(\.lastPathComponent) == ["Cut.en.srt", "Cut.zh-Hans.srt"])
+        #expect(CaptionRenderRequest(savesFiles: true).summary(for: .burnIn) == "Captions burned in (Original) · 1 caption file (Original, .srt)")
+        #expect(CaptionRenderRequest().summary(for: .none) == nil)
+    }
+
     @Test("A film render records its caption files and deletes them with the version")
     func sidecarInFilm() async throws {
         let film = try makeFilm()
@@ -203,6 +220,13 @@ struct SequenceCaptionExportTests {
         #expect(request.burnInLanguage == "zh-Hans")
         #expect(request.burnInBilingual)
         #expect(request.sidecarFormat == .vtt)
+        #expect(!request.savesFiles)
+        let withFiles = try MCPSequenceHandlers.captionRequest(
+            ["captions": "burn_in", "caption_languages": ["", "zh-Hans"], "caption_files": true],
+            options: &options, sequence: film.sequence, context: film.context
+        )
+        #expect(withFiles.savesFiles)
+        #expect(withFiles.fileLanguages == ["", "zh-Hans"])
 
         #expect(throws: MCPToolError.self) {
             _ = try MCPSequenceHandlers.captionRequest(["captions": "burn"], options: &options, sequence: film.sequence, context: film.context)
@@ -244,6 +268,9 @@ struct SequenceCaptionExportTests {
         #expect(narrowed.trackLanguages == ["de"])
         #expect(narrowed.sidecarFormat == .srt)
         #expect(request.narrowed(to: [""]).trackLanguages == [""])
+        let files = CaptionRenderRequest(savesFiles: true, fileLanguages: ["fr", "de"])
+        #expect(try JSONDecoder().decode(CaptionRenderRequest.self, from: JSONEncoder().encode(files)) == files)
+        #expect(files.narrowed(to: [""]).fileLanguages == [""])
         #expect(CaptionRenderRequest(burnInLanguage: "de", burnInBilingual: true).burnInSelection == .bilingual("de"))
         #expect(CaptionRenderRequest(burnInLanguage: "de").burnInSelection == .translation("de"))
         #expect(CaptionRenderRequest().burnInSelection == .original)

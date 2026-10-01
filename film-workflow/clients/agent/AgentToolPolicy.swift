@@ -91,6 +91,9 @@ enum AgentToolPolicy {
         "image_generate", "music_generate", "narration_generate",
         "sequence_list", "sequence_get", "sequence_create",
         "sequence_add_track", "sequence_reorder_tracks", "sequence_add_clip", "sequence_remove_clip", "sequence_set_timeline",
+        // The finishing check: a gap on the picture lane is a black screen
+        // the user only discovers in the preview.
+        "sequence_find_gaps", "sequence_close_gap",
         "caption_create",
     ] as Set<String>).union(wizardOnly).union(remotionAuthoringTools)
 

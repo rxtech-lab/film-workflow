@@ -1,6 +1,6 @@
-import AVFoundation
 import ImageIO
 import SwiftUI
+import VideoEditorCore
 import VideoEditorUI
 
 /// A shared 16:9 poster with a readable duration badge. Decode only a small
@@ -84,12 +84,9 @@ struct FootageThumbnail: View {
             if let poster { return poster }
         }
         guard !Task.isCancelled, let video else { return nil }
-        let generator = AVAssetImageGenerator(asset: AVURLAsset(url: video))
-        generator.appliesPreferredTrackTransform = true
-        generator.maximumSize = CGSize(width: 480, height: 270)
-        let time = CMTime(seconds: 0.5, preferredTimescale: 600)
-        if let frame = try? await generator.image(at: time).image { return frame }
+        let size = CGSize(width: 480, height: 270)
+        if let frame = await VideoFrameThumbnails.image(url: video, time: 0.5, maximumSize: size) { return frame }
         guard !Task.isCancelled else { return nil }
-        return try? await generator.image(at: .zero).image
+        return await VideoFrameThumbnails.image(url: video, time: 0, maximumSize: size)
     }
 }

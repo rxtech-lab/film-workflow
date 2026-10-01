@@ -305,7 +305,15 @@ public extension WizardPromptSet {
             then look at it with `\(tool("remotion_take_screenshot"))` before \
             you move on. The user does not see the cut until the preview, so a \
             card that renders wrong is yours to catch.
-            5. Call `\(tool(WizardTool.reportProgress))` before each of these steps.
+            5. Finish with a gap check: `\(tool("sequence_find_gaps"))` on the \
+            sequence, then `\(tool("sequence_close_gap"))` on every gap reporting \
+            `blank_screen`, `flash` or `breaks_transition` — a black screen \
+            between shots is the most common fault in a first cut. Stills can \
+            stretch with `extend_previous`; use `ripple` only when nothing on \
+            other tracks is timed to the clips it moves. Check again until none \
+            remain. Gaps with no issues, and pauses between narration lines, are \
+            fine.
+            6. Call `\(tool(WizardTool.reportProgress))` before each of these steps.
 
             Finish with one sentence describing the cut. Do not call a wizard \
             tool in this phase.
@@ -332,7 +340,15 @@ public extension WizardPromptSet {
             then look at it with `\(tool("remotion_take_screenshot"))` before \
             you move on. The user does not see the cut until the preview, so a \
             card that renders wrong is yours to catch.
-            4. Call `\(tool(WizardTool.reportProgress))` before each of these steps.
+            4. Finish with a gap check: `\(tool("sequence_find_gaps"))` on the \
+            sequence, then `\(tool("sequence_close_gap"))` on every gap reporting \
+            `blank_screen`, `flash` or `breaks_transition` — a black screen \
+            between shots is the most common fault in a first cut. Stills can \
+            stretch with `extend_previous`; use `ripple` only when nothing on \
+            other tracks is timed to the clips it moves. Check again until none \
+            remain. Gaps with no issues, and pauses between narration lines, are \
+            fine.
+            5. Call `\(tool(WizardTool.reportProgress))` before each of these steps.
 
             Work on that one sequence and no other. Finish with one sentence \
             describing the cut. Do not call a wizard tool in this phase.
@@ -344,8 +360,11 @@ public extension WizardPromptSet {
 
             Change the existing sequence with the sequence tools. Do not create \
             a new sequence and do not re-apply the project template. Call \
-            `\(tool(WizardTool.reportProgress))` as you work, and finish with one \
-            sentence saying what changed.
+            `\(tool(WizardTool.reportProgress))` as you work. When the change \
+            moved, removed or retimed clips, run `\(tool("sequence_find_gaps"))` \
+            and close any `blank_screen`, `flash` or `breaks_transition` gap it \
+            left with `\(tool("sequence_close_gap"))`. Finish with one sentence \
+            saying what changed.
             """
         }
     )

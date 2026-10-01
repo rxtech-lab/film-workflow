@@ -50,6 +50,26 @@ extension Skill {
                 the item's `transparentBackground` with \(tool("footage_update")) and \
                 keep its root background clear, then place it on an overlay track (or a \
                 second video track) above the footage with the same `start`.
+                - Before you call a cut finished, and before every \
+                \(tool("sequence_render")), run \(tool("sequence_find_gaps")) and \
+                work through the gaps that report `issues`. Fix every \
+                `blank_screen` between or before shots — it plays as a black \
+                screen — unless the user asked for a pause to black; fix every \
+                `flash` and `breaks_transition`, which are always accidents. A \
+                trailing `blank_screen` means sound outlasts the picture: extend \
+                the last shot or trim the sound. Gaps with no issues are fine: \
+                caption and overlay lanes between cues, an upper video lane over \
+                V1, sound ending before the sequence does. `silence` between \
+                narration lines is usually a deliberate beat; close it only when \
+                it sounds like a dropout.
+                - Fix a gap with \(tool("sequence_close_gap")): `extend_previous` \
+                for a still or a clip with media to spare, `extend_next` to start \
+                the next clip earlier, or `ripple` to pull later clips on that \
+                track left. Ripple moves only that track, so re-align any music, \
+                captions or overlays timed to the clips it moved. When neither \
+                clip has media left, place more footage or a still in the gap. \
+                Run \(tool("sequence_find_gaps")) again until no `blank_screen`, \
+                `flash` or `breaks_transition` remains.
                 - A Remotion composition needs no render before it goes on the \
                 timeline; \(tool("sequence_render")) renders changed compositions first. \
                 Rendering takes minutes on a long cut, so say what you are about to \

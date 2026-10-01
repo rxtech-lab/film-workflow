@@ -1,6 +1,7 @@
 import SwiftData
 import SwiftUI
 import TipKit
+import VideoEditorCore
 
 @main
 struct film_workflowApp: App {
@@ -37,6 +38,9 @@ struct film_workflowApp: App {
         // Audio chunks and multipart bodies staged during transcription can be
         // hundreds of megabytes; a crash mid-run would otherwise leak them.
         FileStorage.clearTemp()
+        // Thumbnails, waveforms and composition stills persist across launches;
+        // keep them bounded, oldest first, off the launch path.
+        Task.detached(priority: .background) { RenderDiskCache.prune() }
         // Installed marketplace fonts and effects are process-scoped; both are
         // registered before any editor window can render a caption or open
         // the effects browser.
@@ -153,6 +157,10 @@ struct film_workflowApp: App {
                     openWindow(id: MarketplaceWindowID.value)
                 }
                 .keyboardShortcut("m", modifiers: [.command, .option])
+                Button("Render Queue") {
+                    openWindow(id: RenderQueueWindowID.value)
+                }
+                .keyboardShortcut("q", modifiers: [.command, .option])
             }
             MediaImportCommands()
             AccountCommands()
@@ -200,6 +208,19 @@ struct film_workflowApp: App {
                 .whatsNewSheetPresenter()
         }
         .defaultSize(width: 1160, height: 720)
+
+        // Background renders are app-wide, so their queue is one window that
+        // opens in the top-trailing corner of the screen, capped at 400×300.
+        Window("Render Queue", id: RenderQueueWindowID.value) {
+            RenderQueueWindowView()
+        }
+        .windowResizability(.contentSize)
+        .defaultWindowPlacement { _, context in
+            let visible = context.defaultDisplay.visibleRect
+            let width: CGFloat = 400
+            let height: CGFloat = 300
+            return WindowPlacement(x: visible.maxX - width, y: visible.minY, width: width, height: height)
+        }
 
         Settings {
             SettingsView()

@@ -94,7 +94,12 @@ claude mcp add --transport http film http://127.0.0.1:7711/...
 **序列**
 
 `sequence_create`、`sequence_list`、`sequence_get`、`sequence_set_timeline`、`sequence_add_clip`、
-`sequence_remove_clip`、`sequence_render`、`sequence_renders`
+`sequence_remove_clip`、`sequence_find_gaps`、`sequence_close_gap`、`sequence_render`、`sequence_renders`
+
+`sequence_find_gaps` 按轨道列出片段之间的空隙，并标出可能出错的地方：`blank_screen`（没有画面轨覆盖，
+镜头之间会黑屏）、`flash`（片段之间只差几帧）、`breaks_transition`（转场两端的片段不再相接）和
+`silence`（音频空隙中没有其他声音）。`sequence_close_gap` 可填补一个空隙：`ripple` 把之后的片段左移，
+`extend_previous` 延长前一个片段，`extend_next` 让后一个片段提前开始。
 
 `sequence_render` 按 `captions` 参数处理时间线上的字幕片段：`burn_in`（烧录进画面）、`embedded`
 （每种语言一条内嵌字幕轨）、`sidecar`（每种语言一个 `.srt` 或 `.vtt` 文件，放在影片旁，格式由

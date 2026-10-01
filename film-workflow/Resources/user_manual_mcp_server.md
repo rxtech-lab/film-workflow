@@ -99,7 +99,13 @@ that `sequence_add_clip` places on a track.
 **Sequences**
 
 `sequence_create`, `sequence_list`, `sequence_get`, `sequence_set_timeline`, `sequence_add_clip`,
-`sequence_remove_clip`, `sequence_render`, `sequence_renders`
+`sequence_remove_clip`, `sequence_find_gaps`, `sequence_close_gap`, `sequence_render`, `sequence_renders`
+
+`sequence_find_gaps` lists the empty stretches on each track and flags the ones likely to be mistakes:
+`blank_screen` (no picture lane covers it, so black shows between shots), `flash` (a few frames
+between clips), `breaks_transition` (a transition's two clips no longer touch) and `silence` (nothing
+audible across an audio gap). `sequence_close_gap` fills one by rippling later clips left
+(`ripple`) or lengthening the clip before (`extend_previous`) or after (`extend_next`) it.
 
 `sequence_render` delivers the caption clips on the timeline the way `captions` asks: `burn_in`
 (drawn into the picture), `embedded` (one subtitle track per language inside the movie), `sidecar`
