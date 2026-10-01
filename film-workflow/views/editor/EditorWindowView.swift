@@ -238,6 +238,7 @@ struct EditorWindowView: View {
         }
         ToolbarSpacer(.flexible, placement: .automatic)
         ToolbarItemGroup(placement: .automatic) {
+            RenderQueueToolbarButton()
             Button {
                 FilmFeatureTip.sequenceRender.didPerform()
                 beginRender()

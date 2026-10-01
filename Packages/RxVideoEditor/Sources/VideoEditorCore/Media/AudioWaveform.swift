@@ -33,10 +33,32 @@ public struct AudioWaveform: Sendable {
         let blend = fraction * fraction * (3 - 2 * fraction)
         return peaks[lower] + (peaks[upper] - peaks[lower]) * blend
     }
-
 }
 
-/// Bounded, shared summaries: repeated timeline clips decode a file only once.
+extension AudioWaveform {
+    /// A compact little-endian encoding: the duration, then every peak.
+    var archive: Data {
+        var data = Data(capacity: 8 + peaks.count * 4)
+        withUnsafeBytes(of: duration.bitPattern.littleEndian) { data.append(contentsOf: $0) }
+        for peak in peaks { withUnsafeBytes(of: peak.bitPattern.littleEndian) { data.append(contentsOf: $0) } }
+        return data
+    }
+
+    init?(archive data: Data) {
+        guard data.count >= 8, (data.count - 8) % 4 == 0 else { return nil }
+        let bytes = [UInt8](data)
+        func word<T: FixedWidthInteger>(_ offset: Int, _: T.Type) -> T {
+            (0..<MemoryLayout<T>.size).reduce(T.zero) { $0 | T(bytes[offset + $1]) << ($1 * 8) }
+        }
+        let duration = Double(bitPattern: word(0, UInt64.self))
+        guard duration.isFinite, duration > 0 else { return nil }
+        self.duration = duration
+        self.peaks = stride(from: 8, to: bytes.count, by: 4).map { Float(bitPattern: word($0, UInt32.self)) }
+    }
+}
+
+/// Bounded, shared summaries: repeated timeline clips decode a file only once,
+/// and a decoded summary persists on disk so a relaunch does not decode it again.
 public actor AudioWaveformCache {
     public static let shared = AudioWaveformCache()
     private struct Key: Hashable {
@@ -46,19 +68,34 @@ public actor AudioWaveformCache {
     }
     private var jobs: [Key: Task<AudioWaveform?, Never>] = [:]
     private var order: [Key] = []
+    private let persists: Bool
+
+    public init(persists: Bool = true) { self.persists = persists }
 
     public func waveform(for url: URL) async -> AudioWaveform? {
         let attributes = try? url.resourceValues(forKeys: [.contentModificationDateKey, .fileSizeKey])
         let key = Key(url: url, modified: attributes?.contentModificationDate, size: attributes?.fileSize)
         if let job = jobs[key] { return await job.value }
-        let job = Task.detached(priority: .utility) { await Self.decode(url) }
+        let diskKey = persists ? RenderDiskCache.fingerprint(of: url).map { RenderDiskCache.key("waveform-v1", $0) } : nil
+        let job = Task.detached(priority: .utility) { () -> AudioWaveform? in
+            if let diskKey, let data = RenderDiskCache.data(.waveforms, key: diskKey, extension: "wave"),
+               let cached = AudioWaveform(archive: data) {
+                return cached
+            }
+            let decoded = try? await RenderQueue.shared.run(.waveform, title: url.lastPathComponent) { reporter in
+                await Self.decode(url, reporter: reporter)
+            }
+            guard let decoded = decoded ?? nil else { return nil }
+            if let diskKey { RenderDiskCache.store(decoded.archive, .waveforms, key: diskKey, extension: "wave") }
+            return decoded
+        }
         jobs[key] = job
         order.append(key)
         if order.count > 16 { jobs.removeValue(forKey: order.removeFirst()) }
         return await job.value
     }
 
-    private static func decode(_ url: URL) async -> AudioWaveform? {
+    private static func decode(_ url: URL, reporter: RenderQueue.Reporter? = nil) async -> AudioWaveform? {
         do {
             let asset = AVURLAsset(url: url)
             let tracks = try await asset.loadTracks(withMediaType: .audio)
@@ -81,11 +118,16 @@ public actor AudioWaveformCache {
             defer { reader.cancelReading() }
             let count = Int(min(100_000, max(1, ceil(duration * 100))))
             var peaks = [Float](repeating: 0, count: count)
+            var reported = 0.0
             while let buffer = output.copyNextSampleBuffer() {
                 guard !Task.isCancelled else { return nil }
                 guard let block = CMSampleBufferGetDataBuffer(buffer) else { continue }
                 let frames = CMSampleBufferGetNumSamples(buffer)
                 let start = CMTimeGetSeconds(CMSampleBufferGetPresentationTimeStamp(buffer))
+                if let reporter, start.isFinite, start / duration - reported >= 0.02 {
+                    reported = start / duration
+                    reporter.report(reported)
+                }
                 var samples = [Float](repeating: 0, count: frames * 2)
                 let status = samples.withUnsafeMutableBytes {
                     CMBlockBufferCopyDataBytes(block, atOffset: 0, dataLength: $0.count, destination: $0.baseAddress!)

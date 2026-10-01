@@ -4,8 +4,9 @@ import SwiftUI
 import VideoEditorCore
 import VideoEditorUI
 
-/// Output choices before a sequence render: video and audio codecs, size,
-/// container, how caption clips are delivered, and where the file goes. Menu
+/// Output choices before a sequence render, in two tabs: Video holds the
+/// codecs, size, container and destination; Captions holds how caption clips
+/// reach the movie and whether caption files are saved beside it. Menu
 /// pickers throughout; the last choices are remembered across films.
 struct SequenceRenderSheet: View {
     let sequence: SequenceProject
@@ -21,6 +22,12 @@ struct SequenceRenderSheet: View {
     /// that adoption does not read as the user picking a language.
     @State private var didAdoptCaptions = false
     @State private var destination: DestinationChoice = SequenceRenderDefaults.folder.map { .folder($0) } ?? .film
+    @State private var tab: Tab = .video
+
+    enum Tab: Hashable {
+        case video
+        case captions
+    }
 
     init(sequence: SequenceProject, onRender: @escaping (TimelineExporter.Options, CaptionRenderRequest, SequenceRenderDestination) -> Void, onCancel: @escaping () -> Void) {
         self.sequence = sequence
@@ -49,53 +56,22 @@ struct SequenceRenderSheet: View {
         VStack(alignment: .leading, spacing: 0) {
             header
             Divider()
+            Picker("", selection: $tab) {
+                Text("Video").tag(Tab.video)
+                Text("Captions").tag(Tab.captions)
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .fixedSize()
+            .frame(maxWidth: .infinity)
+            .padding(.top, 16)
             VStack(alignment: .leading, spacing: 12) {
-                row("Video") {
-                    Picker("", selection: $options.video) {
-                        ForEach(TimelineExporter.VideoCodec.allCases, id: \.self) { codec in
-                            Text(codec.displayName).tag(Optional(codec))
-                        }
-                        Divider()
-                        Text("None (Audio Only)").tag(Optional<TimelineExporter.VideoCodec>.none)
-                    }
-                }
-                row("Audio") {
-                    Picker("", selection: $options.audio) {
-                        ForEach(TimelineExporter.AudioCodec.allCases, id: \.self) { codec in
-                            Text(codec.displayName).tag(Optional(codec))
-                        }
-                        Divider()
-                        Text("None (Silent)").tag(Optional<TimelineExporter.AudioCodec>.none)
-                    }
-                }
-                row("Resolution") {
-                    Picker("", selection: $options.resolution) {
-                        ForEach(TimelineExporter.Resolution.allCases, id: \.self) { res in
-                            Text(resolutionLabel(res)).tag(res)
-                        }
-                    }
-                    .disabled(options.isAudioOnly)
-                }
-                row("Format") {
-                    Picker("", selection: $options.container) {
-                        ForEach(TimelineExporter.Container.choices(audioOnly: options.isAudioOnly), id: \.self) { container in
-                            Text("\(container.displayName) (.\(container.fileExtension))").tag(container)
-                        }
-                    }
-                }
-                CaptionRenderSection(options: $options, captions: $captions, style: $captionStyle,
-                                     available: availableLanguages, hasCaptions: hasCaptions)
-                row("Save To") {
-                    Picker("", selection: $destination) {
-                        Label("This Film · Version \(nextVersion)", systemImage: "film.stack").tag(DestinationChoice.film)
-                        if case .folder(let url) = destination {
-                            Label(url.lastPathComponent, systemImage: "folder").tag(DestinationChoice.folder(url))
-                        } else if let remembered = SequenceRenderDefaults.folder {
-                            Label(remembered.lastPathComponent, systemImage: "folder").tag(DestinationChoice.folder(remembered))
-                        }
-                        Divider()
-                        Text("Other Folder…").tag(DestinationChoice.choose)
-                    }
+                switch tab {
+                case .video:
+                    videoSettings
+                case .captions:
+                    CaptionRenderSection(options: $options, captions: $captions, style: $captionStyle,
+                                         available: availableLanguages, hasCaptions: hasCaptions)
                 }
                 summary
                 let stale = SequenceRenderService.unrenderedRemotionProjects(in: sequence, context: modelContext)
@@ -116,6 +92,13 @@ struct SequenceRenderSheet: View {
             // beyond the transcript does the sheet fall back to the language
             // the caption editor is showing.
             let available = availableLanguages
+            // "Separate File" used to be a delivery of its own; it is now the
+            // Captions tab's file toggle, which can accompany any delivery.
+            if options.captions == .sidecar {
+                options.captions = .none
+                captions.savesFiles = true
+                captions.fileLanguages = captions.trackLanguages
+            }
             if let chosen = SequenceCaptionSources.effectiveBurnInLanguages(in: sequence), chosen != [""] {
                 captions.burnInLanguage = chosen.last ?? ""
                 captions.burnInBilingual = chosen.count > 1
@@ -142,6 +125,55 @@ struct SequenceRenderSheet: View {
                 destination = .folder(url)
             } else {
                 destination = old
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var videoSettings: some View {
+        row("Video") {
+            Picker("", selection: $options.video) {
+                ForEach(TimelineExporter.VideoCodec.allCases, id: \.self) { codec in
+                    Text(codec.displayName).tag(Optional(codec))
+                }
+                Divider()
+                Text("None (Audio Only)").tag(Optional<TimelineExporter.VideoCodec>.none)
+            }
+        }
+        row("Audio") {
+            Picker("", selection: $options.audio) {
+                ForEach(TimelineExporter.AudioCodec.allCases, id: \.self) { codec in
+                    Text(codec.displayName).tag(Optional(codec))
+                }
+                Divider()
+                Text("None (Silent)").tag(Optional<TimelineExporter.AudioCodec>.none)
+            }
+        }
+        row("Resolution") {
+            Picker("", selection: $options.resolution) {
+                ForEach(TimelineExporter.Resolution.allCases, id: \.self) { res in
+                    Text(resolutionLabel(res)).tag(res)
+                }
+            }
+            .disabled(options.isAudioOnly)
+        }
+        row("Format") {
+            Picker("", selection: $options.container) {
+                ForEach(TimelineExporter.Container.choices(audioOnly: options.isAudioOnly), id: \.self) { container in
+                    Text("\(container.displayName) (.\(container.fileExtension))").tag(container)
+                }
+            }
+        }
+        row("Save To") {
+            Picker("", selection: $destination) {
+                Label("This Film · Version \(nextVersion)", systemImage: "film.stack").tag(DestinationChoice.film)
+                if case .folder(let url) = destination {
+                    Label(url.lastPathComponent, systemImage: "folder").tag(DestinationChoice.folder(url))
+                } else if let remembered = SequenceRenderDefaults.folder {
+                    Label(remembered.lastPathComponent, systemImage: "folder").tag(DestinationChoice.folder(remembered))
+                }
+                Divider()
+                Text("Other Folder…").tag(DestinationChoice.choose)
             }
         }
     }

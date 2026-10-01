@@ -2,6 +2,7 @@ import CryptoKit
 import Foundation
 import Observation
 import RxRemotion
+import VideoEditorCore
 
 extension Notification.Name {
     static let remotionPreviewChanged = Notification.Name("RemotionPreviewChanged")
@@ -135,18 +136,25 @@ enum RemotionPreviewRenderCache {
             .appendingPathComponent("com.rxlab.film-workflow/RemotionPreview/\(key)", isDirectory: true)
         let output = root.appendingPathComponent("source.mov")
         if FileManager.default.fileExists(atPath: output.path) { return output }
+        let title = project.name
         return try await jobs.value(for: key, progress: progress) { update in
-            let fm = FileManager.default
-            let work = root.appendingPathComponent(UUID().uuidString, isDirectory: true)
-            try fm.createDirectory(at: work, withIntermediateDirectories: true)
-            defer { try? fm.removeItem(at: work) }
-            try Task.checkCancellation()
-            let temporary = work.appendingPathComponent("rendering.mov")
-            try await RemotionRenderer.render(projectDir: projectDir, to: temporary, width: width, height: height,
-                                              fps: fps, preserveAlpha: true, captureScale: scale, onProgress: update)
-            try Task.checkCancellation()
-            if !fm.fileExists(atPath: output.path) { try fm.moveItem(at: temporary, to: output) }
-            return output
+            try await RenderQueue.shared.run(.remotion, title: title) { @MainActor reporter in
+                let fm = FileManager.default
+                if fm.fileExists(atPath: output.path) { return output }
+                let work = root.appendingPathComponent(UUID().uuidString, isDirectory: true)
+                try fm.createDirectory(at: work, withIntermediateDirectories: true)
+                defer { try? fm.removeItem(at: work) }
+                try Task.checkCancellation()
+                let temporary = work.appendingPathComponent("rendering.mov")
+                try await RemotionRenderer.render(projectDir: projectDir, to: temporary, width: width, height: height,
+                                                  fps: fps, preserveAlpha: true, captureScale: scale) { progress in
+                    update(progress)
+                    reporter.update(progress.fraction, detail: progress.detail ?? progress.stage.rawValue.capitalized)
+                }
+                try Task.checkCancellation()
+                if !fm.fileExists(atPath: output.path) { try fm.moveItem(at: temporary, to: output) }
+                return output
+            }
         }
     }
 }

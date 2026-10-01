@@ -261,4 +261,50 @@ struct MCPSequenceTrackTests {
         #expect(saved.timelineData == data)
         #expect(saved.updatedAt == updatedAt)
     }
+
+    @Test("Gap tools report a black gap between shots and close it")
+    func gaps() async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent("MCPSequenceGaps-\(UUID())")
+        let document = try ProjectDocumentController.shared.createDocument(
+            at: root.appendingPathComponent("Gaps.rxfilmstudio")
+        )
+        defer {
+            Task {
+                await ProjectDocumentController.shared.close(document)
+                try? FileManager.default.removeItem(at: root)
+            }
+        }
+        let context = document.container.mainContext
+        let still = ClipSource(id: "imported:\(UUID())", kind: .image, displayName: "Still")
+        let sequence = SequenceProject(name: "Cut")
+        var timeline = sequence.timeline
+        let v1 = try #require(timeline.tracks.first { $0.kind == .video }).id
+        try TimelineEditor.insert(&timeline, clip: Clip(source: still, start: 0, duration: 3), on: v1)
+        try TimelineEditor.insert(&timeline, clip: Clip(source: still, start: 4, duration: 3), on: v1)
+        sequence.timeline = timeline
+        context.insert(sequence)
+        try context.save()
+
+        let found = try payload(try await MCPToolRegistry.invoke(
+            name: "sequence_find_gaps",
+            arguments: ["sequence_id": sequence.id.uuidString, "issues_only": true],
+            container: document.container
+        ))
+        #expect(found["gaps_with_issues"] as? Int == 1)
+        let tracks = try #require(found["tracks"] as? [[String: Any]])
+        let gap = try #require((tracks.first?["gaps"] as? [[String: Any]])?.first)
+        #expect(tracks.first?["track"] as? String == "V1")
+        #expect(gap["start"] as? Double == 3)
+        #expect(gap["issues"] as? [String] == ["blank_screen"])
+        #expect((found["blank_picture"] as? [[String: Any]])?.count == 1)
+
+        let closed = try payload(try await MCPToolRegistry.invoke(
+            name: "sequence_close_gap",
+            arguments: ["sequence_id": sequence.id.uuidString, "track": "V1", "at": 3.0, "fill": "extend_previous"],
+            container: document.container
+        ))
+        #expect((closed["gaps"] as? [[String: Any]])?.isEmpty == true)
+        let after = try await readTimeline(sequenceID: sequence.id, container: document.container)
+        #expect(TimelineGapAnalyzer.blankPicture(after).isEmpty)
+    }
 }

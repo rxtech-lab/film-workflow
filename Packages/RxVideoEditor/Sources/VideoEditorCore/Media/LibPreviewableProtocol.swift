@@ -95,13 +95,9 @@ public extension LibPreviewSource {
                 }
                 return context?.makeImage()
             }
-            if (kind == .video || kind == .remotion), let url {
-                let generator = AVAssetImageGenerator(asset: AVURLAsset(url: url))
-                generator.appliesPreferredTrackTransform = true
-                generator.maximumSize = size
-                generator.requestedTimeToleranceBefore = CMTime(seconds: 0.1, preferredTimescale: 600)
-                generator.requestedTimeToleranceAfter = CMTime(seconds: 0.1, preferredTimescale: 600)
-                if let image = try? await generator.image(at: CMTime(seconds: time, preferredTimescale: 600)).image { return image }
+            if (kind == .video || kind == .remotion), let url,
+               let image = await VideoFrameThumbnails.image(url: url, time: time, maximumSize: size) {
+                return image
             }
             guard let url = poster ?? (kind == .image ? url : nil) else { return nil }
             return await Task.detached(priority: .utility) {
@@ -114,4 +110,38 @@ public extension LibPreviewSource {
             }.value
         }
     }
+}
+
+/// Video frames for library and timeline tiles. Frames persist on disk keyed by
+/// the file's fingerprint; a miss is generated through the shared render queue.
+public nonisolated enum VideoFrameThumbnails {
+    public static func image(url: URL, time: TimeInterval, maximumSize size: CGSize) async -> CGImage? {
+        // The generator tolerates ±0.1 s anyway, so snapping keeps the key stable
+        // across zoom levels without changing the picture.
+        let tenths = Int((max(0, time) * 10).rounded())
+        let key = RenderDiskCache.fingerprint(of: url).map {
+            RenderDiskCache.key("frame-v1", $0, String(tenths), "\(Int(size.width))x\(Int(size.height))")
+        }
+        if let key, let cached = await Task.detached(priority: .utility, operation: { RenderDiskCache.image(.thumbnails, key: key) }).value {
+            return cached
+        }
+        guard !Task.isCancelled else { return nil }
+        let image = try? await RenderQueue.shared.run(.thumbnail, title: url.lastPathComponent) { _ in
+            let generator = AVAssetImageGenerator(asset: AVURLAsset(url: url))
+            generator.appliesPreferredTrackTransform = true
+            generator.maximumSize = size
+            generator.requestedTimeToleranceBefore = CMTime(seconds: 0.1, preferredTimescale: 600)
+            generator.requestedTimeToleranceAfter = CMTime(seconds: 0.1, preferredTimescale: 600)
+            let frame = try await generator.image(at: CMTime(seconds: Double(tenths) / 10, preferredTimescale: 600)).image
+            if let key { RenderDiskCache.store(frame, .thumbnails, key: key) }
+            return SendableImage(frame)
+        }
+        return image?.image
+    }
+}
+
+/// `CGImage` is immutable; this only lets it cross the queue's isolation boundary.
+public struct SendableImage: @unchecked Sendable {
+    public let image: CGImage
+    public init(_ image: CGImage) { self.image = image }
 }

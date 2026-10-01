@@ -1,6 +1,8 @@
+import Link from "next/link";
 import HeroVideo from "./hero-video";
 import { ReelStage, type Reel } from "./reel-stage";
 import { getLatestRelease } from "./lib/release";
+import { Mark } from "./mark";
 import { getCurrentUser, type AppUser } from "@/lib/auth";
 
 const REELS: Reel[] = [
@@ -205,6 +207,12 @@ function Nav({
         </a>
 
         <div className="flex items-center gap-3 sm:gap-5">
+          <Link
+            href="/marketplace"
+            className="font-mono text-[11px] tracking-[0.14em] text-muted transition-colors hover:text-accent"
+          >
+            Marketplace
+          </Link>
           {/* Signed in, the same slot carries the name straight to the account. */}
           <a
             href={user ? "/dashboard" : "/login"}
@@ -377,28 +385,6 @@ function Reel() {
   );
 }
 
-function Mark() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true">
-      <rect
-        x="1"
-        y="1"
-        width="16"
-        height="16"
-        rx="3.5"
-        stroke="currentColor"
-        strokeWidth="1.4"
-        fill="none"
-      />
-      <rect x="4" y="4.5" width="2" height="2" rx="0.5" fill="#ffb020" />
-      <rect x="4" y="11.5" width="2" height="2" rx="0.5" fill="#ffb020" />
-      <rect x="12" y="4.5" width="2" height="2" rx="0.5" fill="#ffb020" />
-      <rect x="12" y="11.5" width="2" height="2" rx="0.5" fill="#ffb020" />
-      <rect x="7.5" y="7.5" width="3" height="3" rx="0.5" fill="currentColor" />
-    </svg>
-  );
-}
-
 function Footer({
   release,
 }: {
@@ -412,6 +398,9 @@ function Footer({
           <span>RxFilmStudio</span>
         </div>
         <div className="flex items-center gap-6">
+          <Link href="/marketplace" className="transition-colors hover:text-fg">
+            Marketplace
+          </Link>
           <a
             href="https://github.com/rxtech-lab/film-workflow"
             target="_blank"
