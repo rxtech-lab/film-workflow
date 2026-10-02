@@ -2319,6 +2319,16 @@
         }
       }
     },
+    "Background rendering" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "后台渲染"
+          }
+        }
+      }
+    },
     "Background rendering queue" : {
 
     },
@@ -2665,6 +2675,26 @@
         }
       }
     },
+    "Burn captions into the video" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "将字幕烧录到视频中"
+          }
+        }
+      }
+    },
+    "Burn in the original, a translation or both. Choose embedded subtitle tracks to let viewers switch languages in their player." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "烧录原文、译文或双语字幕。也可选择嵌入字幕轨道，让观众在播放器中切换语言。"
+          }
+        }
+      }
+    },
     "Buy" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -2958,6 +2988,16 @@
         }
       }
     },
+    "Captions in your exports" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "让字幕随影片导出"
+          }
+        }
+      }
+    },
     "Captions ready" : {
       "localizations" : {
         "zh-Hans" : {
@@ -2970,6 +3010,16 @@
     },
     "Capture Every Window of an App" : {
 
+    },
+    "Carry your words into the finished film." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "让你的文字出现在最终影片中。"
+          }
+        }
+      }
     },
     "Casual" : {
       "localizations" : {
@@ -3461,6 +3511,16 @@
     },
     "Choose your film's AI engine" : {
 
+    },
+    "Choose your languages" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "选择字幕语言"
+          }
+        }
+      }
     },
     "Choose…" : {
       "localizations" : {
@@ -6104,6 +6164,16 @@
         }
       }
     },
+    "Export SRT or VTT files beside your movie, one per selected language, even when captions are burned in or embedded." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在影片旁导出 SRT 或 VTT 文件，每种所选语言一个文件，即使字幕已烧录或嵌入也能同时保存。"
+          }
+        }
+      }
+    },
     "Export to Disk" : {
       "localizations" : {
         "zh-Hans" : {
@@ -7839,6 +7909,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "继续编辑"
+          }
+        }
+      }
+    },
+    "Keep editing while your media gets ready." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "素材在后台准备，剪辑无需等待。"
           }
         }
       }
@@ -9991,6 +10071,16 @@
         }
       }
     },
+    "One queue for every film" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "所有影片，共用一个队列"
+          }
+        }
+      }
+    },
     "One term per line, or separated by commas." : {
       "localizations" : {
         "zh-Hans" : {
@@ -10121,12 +10211,32 @@
         }
       }
     },
+    "Open Queue in the editor toolbar to follow composition prerenders, thumbnails and waveforms across your open films." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在编辑器工具栏中打开“队列”，查看所有已打开影片的合成预渲染、缩略图和波形任务。"
+          }
+        }
+      }
+    },
     "Open Recent" : {
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "打开最近项目"
+          }
+        }
+      }
+    },
+    "Open Render Queue" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "打开渲染队列"
           }
         }
       }
@@ -10681,6 +10791,16 @@
         }
       }
     },
+    "Place captions on your timeline, then choose Burn In in the render sheet's Captions tab. Adjust the style and see it in the viewer." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "将字幕放到时间线上，然后在渲染面板的“字幕”标签页中选择“烧录”。调整样式，并在预览中查看效果。"
+          }
+        }
+      }
+    },
     "Placing a clip…" : {
       "localizations" : {
         "zh-Hans" : {
@@ -10973,6 +11093,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "上一帧"
+          }
+        }
+      }
+    },
+    "Progress at a glance" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "进度一目了然"
           }
         }
       }
@@ -12590,6 +12720,16 @@
     "Save Caption Files" : {
 
     },
+    "Save caption files too" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "同时保存字幕文件"
+          }
+        }
+      }
+    },
     "Save Draft" : {
       "localizations" : {
         "zh-Hans" : {
@@ -12826,6 +12966,16 @@
     },
     "Secure input was omitted. Enter it manually during replay, then disable this step to continue." : {
 
+    },
+    "See waiting jobs and live progress. Failed composition prerenders stay visible until you clear them." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "查看等待中的任务和实时进度。失败的合成预渲染会保留在列表中，直到你将其清除。"
+          }
+        }
+      }
     },
     "Seed" : {
       "localizations" : {
@@ -15288,6 +15438,16 @@
     "Thumbnail" : {
 
     },
+    "Thumbnails and waveforms have their own rendering slots, so they can run alongside a composition prerender." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "缩略图和波形各有独立的渲染名额，可与合成预渲染同时进行。"
+          }
+        }
+      }
+    },
     "Tile URL" : {
       "localizations" : {
         "zh-Hans" : {
@@ -17198,6 +17358,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "你的登录会话已过期，请重新登录。"
+          }
+        }
+      }
+    },
+    "Your timeline keeps moving" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "时间线继续运转"
           }
         }
       }

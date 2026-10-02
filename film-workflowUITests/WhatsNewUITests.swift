@@ -2,7 +2,7 @@ import XCTest
 
 final class WhatsNewUITests: XCTestCase {
     @MainActor
-    func testAnnouncementMenuReplayAndMarketplaceNavigation() throws {
+    func testAnnouncementMenuReplayAndNewFilmNavigation() throws {
         continueAfterFailure = false
         let app = XCUIApplication()
         app.launchEnvironment["RXFILM_WHATS_NEW_TEST_SUITE"] = "WhatsNewUITests.\(UUID().uuidString)"
@@ -38,15 +38,25 @@ final class WhatsNewUITests: XCTestCase {
         app.buttons["whats-new.next"].click()
         waitForCard("Simple mode", in: app)
         XCTAssertTrue(app.staticTexts["Start from a template"].exists)
-        XCTAssertTrue(app.buttons["whats-new.explore"].exists)
+        XCTAssertFalse(app.buttons["whats-new.explore"].exists)
         let simpleLight = XCTAttachment(screenshot: app.screenshot())
         simpleLight.name = "Simple mode announcement — light"
         simpleLight.lifetime = .keepAlways
         add(simpleLight)
 
+        advanceToCaptionExport(in: app)
+        let captionsLight = XCTAttachment(screenshot: app.screenshot())
+        captionsLight.name = "Caption export announcement — light"
+        captionsLight.lifetime = .keepAlways
+        add(captionsLight)
+
         // Going back returns to the previous card, and the back control disappears on the first one.
         let back = app.buttons["whats-new.back"]
         XCTAssertTrue(back.exists)
+        back.click()
+        waitForCard("Background rendering", in: app)
+        back.click()
+        waitForCard("Simple mode", in: app)
         back.click()
         waitForCard("Project templates are here", in: app)
         back.click()
@@ -58,6 +68,7 @@ final class WhatsNewUITests: XCTestCase {
         waitForCard("Project templates are here", in: app)
         app.buttons["whats-new.next"].click()
         waitForCard("Simple mode", in: app)
+        advanceToCaptionExport(in: app)
         XCTAssertTrue(dismiss.waitForExistence(timeout: 5))
 
         dismiss.click()
@@ -76,8 +87,9 @@ final class WhatsNewUITests: XCTestCase {
         waitForCard("Project templates are here", in: app)
         app.buttons["whats-new.next"].click()
         waitForCard("Simple mode", in: app)
+        advanceToCaptionExport(in: app)
         let dark = XCTAttachment(screenshot: app.screenshot())
-        dark.name = "Simple mode announcement — dark"
+        dark.name = "Caption export announcement — dark"
         dark.lifetime = .keepAlways
         add(dark)
         close.click()
@@ -89,8 +101,8 @@ final class WhatsNewUITests: XCTestCase {
         waitForCard("Project templates are here", in: app)
         app.buttons["whats-new.next"].click()
         waitForCard("Simple mode", in: app)
-        // The Simple mode card's button starts a film rather than opening the
-        // Marketplace: each card sends the user to what it is about.
+        advanceToCaptionExport(in: app)
+        // The last card offers a new film so users can try caption export.
         let startFilm = app.buttons["whats-new.explore"]
         XCTAssertTrue(startFilm.waitForExistence(timeout: 5))
         startFilm.click()
@@ -111,6 +123,26 @@ final class WhatsNewUITests: XCTestCase {
         XCTAssertTrue(close.waitForExistence(timeout: 5))
         XCTAssertTrue(app.windows["Welcome to RxFilmStudio"].exists)
         close.click()
+    }
+
+    @MainActor
+    private func advanceToCaptionExport(in app: XCUIApplication) {
+        app.buttons["whats-new.next"].click()
+        waitForCard("Background rendering", in: app)
+        XCTAssertTrue(app.staticTexts["One queue for every film"].exists)
+        XCTAssertTrue(app.staticTexts["Your timeline keeps moving"].exists)
+        XCTAssertFalse(app.buttons["whats-new.dismiss"].exists)
+        let queue = XCTAttachment(screenshot: app.screenshot())
+        queue.name = "Background rendering announcement"
+        queue.lifetime = .keepAlways
+        add(queue)
+
+        app.buttons["whats-new.next"].click()
+        waitForCard("Captions in your exports", in: app)
+        XCTAssertTrue(app.staticTexts["Burn captions into the video"].exists)
+        XCTAssertTrue(app.staticTexts["Save caption files too"].exists)
+        XCTAssertTrue(app.buttons["whats-new.explore"].exists)
+        XCTAssertFalse(app.buttons["whats-new.next"].exists)
     }
 
     /// The paging transition briefly keeps both cards mounted, so wait for one title to remain.

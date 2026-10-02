@@ -43,7 +43,7 @@ final class SequenceProject: GroupableProject {
             // A save from another context refreshes timelineData directly.
             // The decoded cache is valid only for those exact stored bytes.
             if let cachedTimeline, cachedTimelineData == data { return cachedTimeline }
-            let decoded = (try? TimelineCodec.decode(data)) ?? Timeline(width: width, height: height, fps: fps)
+            let decoded = Self.repairingRemotionKinds((try? TimelineCodec.decode(data)) ?? Timeline(width: width, height: height, fps: fps))
             cachedTimeline = decoded
             cachedTimelineData = data
             return decoded
@@ -59,6 +59,21 @@ final class SequenceProject: GroupableProject {
             }
             cachedTimelineData = timelineData
         }
+    }
+
+    /// The source id is authoritative. A `remotion:` clip stored with another
+    /// kind (an agent-written timeline did this) skips the live preview and
+    /// sits on a "Not rendered yet" slate even when a render exists.
+    private static func repairingRemotionKinds(_ timeline: Timeline) -> Timeline {
+        var timeline = timeline
+        for t in timeline.tracks.indices {
+            for c in timeline.tracks[t].clips.indices {
+                let source = timeline.tracks[t].clips[c].source
+                guard source.kind != .remotion, DocumentMediaResolver.parse(source.id)?.0 == .remotion else { continue }
+                timeline.tracks[t].clips[c].source = ClipSource(id: source.id, kind: .remotion, displayName: source.displayName)
+            }
+        }
+        return timeline
     }
 
     /// Uses the window's native undo stack so Edit > Undo/Redo and their

@@ -80,6 +80,8 @@ private struct WhatsNewSheetPresenter: ViewModifier {
         case .startNewFilm:
             AppNavigation.shared.requestWelcomeRoute(.gallery)
             openWindow(id: WelcomeWindowID.value)
+        case .openRenderQueue:
+            openWindow(id: RenderQueueWindowID.value)
         case nil:
             break
         }

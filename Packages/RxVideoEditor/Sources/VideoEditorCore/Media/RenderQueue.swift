@@ -3,7 +3,8 @@ import Observation
 
 /// App-wide background rendering queue. Each kind of work runs with its own
 /// concurrency limit, so a long composition prerender never starves timeline
-/// thumbnails or waveforms. Items are listed while queued or running; a failed
+/// thumbnails or waveforms. Items are listed while queued or running; a
+/// finished item lingers briefly so fast renders don't flash by, and a failed
 /// item stays listed until it is cleared.
 @MainActor
 @Observable
@@ -23,7 +24,7 @@ public final class RenderQueue {
     }
 
     public enum State: Sendable, Equatable {
-        case queued, running, failed(String)
+        case queued, running, finished, failed(String)
     }
 
     public struct Item: Identifiable, Sendable, Equatable {
@@ -53,13 +54,18 @@ public final class RenderQueue {
 
     public private(set) var items: [Item] = []
 
-    public var activeCount: Int { items.count { !$0.isFailed } }
+    public var activeCount: Int { items.count { $0.isActive } }
     public var hasFailures: Bool { items.contains(where: \.isFailed) }
 
     private var running: [Kind: Int] = [:]
     private var waiters: [Kind: [(id: UUID, continuation: CheckedContinuation<Void, Error>)]] = [:]
 
-    public init() {}
+    /// How long a finished item stays listed before it is removed.
+    private let finishedLinger: Duration
+
+    public init(finishedLinger: Duration = .seconds(3)) {
+        self.finishedLinger = finishedLinger
+    }
 
     /// Waits for a slot of `kind`, then runs `operation` in the caller's task,
     /// so cancelling the caller cancels (or dequeues) the work.
@@ -77,7 +83,7 @@ public final class RenderQueue {
         if let index = items.firstIndex(where: { $0.id == id }) { items[index].state = .running }
         do {
             let value = try await operation(Reporter(id: id, queue: self))
-            items.removeAll { $0.id == id }
+            finish(id)
             return value
         } catch {
             // Thumbnails and waveforms are best-effort; only a failed prerender
@@ -93,6 +99,19 @@ public final class RenderQueue {
 
     public func clearFailures() {
         items.removeAll(where: \.isFailed)
+    }
+
+    private func finish(_ id: UUID) {
+        guard finishedLinger > .zero, let index = items.firstIndex(where: { $0.id == id }) else {
+            items.removeAll { $0.id == id }
+            return
+        }
+        items[index].state = .finished
+        items[index].fraction = 1
+        Task { [weak self, finishedLinger] in
+            try? await Task.sleep(for: finishedLinger)
+            self?.items.removeAll { $0.id == id && $0.state == .finished }
+        }
     }
 
     private func update(_ id: UUID, fraction: Double?, detail: String?) {
@@ -138,6 +157,9 @@ public final class RenderQueue {
 }
 
 public extension RenderQueue.Item {
+    /// Queued or running: still has work to do.
+    var isActive: Bool { state == .queued || state == .running }
+
     var isFailed: Bool {
         if case .failed = state { return true }
         return false

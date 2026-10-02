@@ -34,7 +34,7 @@ struct RenderQueueTests {
 
     @Test("Each kind respects its concurrency limit and runs waiters in order")
     func limits() async throws {
-        let queue = RenderQueue()
+        let queue = RenderQueue(finishedLinger: .zero)
         let gate = Gate()
         let jobs = (0..<3).map { index in
             Task { try await queue.run(.waveform, title: "\(index)") { _ in await gate.wait(); return index } }
@@ -51,7 +51,7 @@ struct RenderQueueTests {
 
     @Test("Cancelling a queued item removes it without running it")
     func cancelQueued() async throws {
-        let queue = RenderQueue()
+        let queue = RenderQueue(finishedLinger: .zero)
         let gate = Gate()
         let running = Task { try await queue.run(.remotion, title: "first") { _ in await gate.wait() } }
         let waiting = Task { try await queue.run(.remotion, title: "second") { _ in Issue.record("must not run") } }
@@ -67,7 +67,7 @@ struct RenderQueueTests {
 
     @Test("Progress is reported, and only prerender failures stay listed")
     func progressAndFailures() async throws {
-        let queue = RenderQueue()
+        let queue = RenderQueue(finishedLinger: .zero)
         let gate = Gate()
         let job = Task {
             try await queue.run(.remotion, title: "comp") { reporter in
@@ -88,6 +88,17 @@ struct RenderQueueTests {
         await #expect(throws: Failure.self) {
             try await queue.run(.thumbnail, title: "frame") { _ in throw Failure() }
         }
+        #expect(queue.items.isEmpty)
+    }
+
+    @Test("A finished item lingers before it is removed")
+    func finishedLingers() async throws {
+        let queue = RenderQueue(finishedLinger: .milliseconds(100))
+        try await queue.run(.remotion, title: "comp") { _ in }
+        #expect(queue.items.map(\.state) == [.finished])
+        #expect(queue.items.first?.fraction == 1)
+        #expect(queue.activeCount == 0 && !queue.hasFailures)
+        await settle { queue.items.isEmpty }
         #expect(queue.items.isEmpty)
     }
 
