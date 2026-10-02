@@ -36,18 +36,30 @@ struct RenderQueueToolbarButton: View {
 /// One app-wide window: the queue is shared by every open film.
 struct RenderQueueWindowView: View {
     private var queue: RenderQueue { .shared }
+    /// Debounced empty state: back-to-back renders briefly leave the queue
+    /// empty, which would otherwise flicker between the list and the empty page.
+    @State private var showsEmptyState = RenderQueue.shared.items.isEmpty
 
     var body: some View {
         NavigationStack {
             Group {
-                if queue.items.isEmpty {
+                if queue.items.isEmpty && showsEmptyState {
                     ContentUnavailableView("Nothing in the Queue", systemImage: "checkmark.circle",
                                            description: Text("Composition prerenders, thumbnails and waveforms appear here while they render."))
                 } else {
                     List(queue.items) { item in
                         RenderQueueRow(item: item)
                     }
+                    .animation(.default, value: queue.items.map(\.id))
                 }
+            }
+            .task(id: queue.items.isEmpty) {
+                guard queue.items.isEmpty else {
+                    showsEmptyState = false
+                    return
+                }
+                try? await Task.sleep(for: .seconds(1))
+                if !Task.isCancelled { showsEmptyState = true }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .navigationTitle("Render Queue")
@@ -92,6 +104,11 @@ private struct RenderQueueRow: View {
                         ProgressView().progressViewStyle(.linear)
                     }
                     Text(statusText).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                case .finished:
+                    ProgressView(value: 1).progressViewStyle(.linear).tint(.green)
+                    Label("Done", systemImage: "checkmark.circle.fill")
+                        .font(.caption)
+                        .foregroundStyle(.green)
                 case .failed(let message):
                     Text(message).font(.caption).foregroundStyle(.red).lineLimit(2)
                 }

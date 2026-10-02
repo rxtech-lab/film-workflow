@@ -263,7 +263,15 @@ enum MCPSequenceHandlers {
                                tracks: timeline.tracks.map { Track(id: $0.id, kind: $0.kind, name: $0.name, clips: [], isMuted: $0.isMuted, isEnabled: $0.isEnabled) },
                                backgroundHex: timeline.backgroundHex)
         for track in timeline.tracks {
-            for clip in track.sortedClips {
+            for var clip in track.sortedClips {
+                // Recompute the kind from the id rather than trusting the agent's
+                // JSON. Zoom clips and ids we don't own keep what they were sent.
+                if let (prefix, uuid) = DocumentMediaResolver.parse(clip.source.id), prefix != .recordingZoom {
+                    let kind = try canonicalKind(prefix: prefix, uuid: uuid, sourceID: clip.source.id, context: context)
+                    if kind != clip.source.kind {
+                        clip.source = ClipSource(id: clip.source.id, kind: kind, displayName: clip.source.displayName)
+                    }
+                }
                 do { try TimelineEditor.insert(&rebuilt, clip: clip, on: track.id) } catch {
                     throw MCPToolError.invalidArguments("clip \(clip.source.displayName) on \(track.name): \(error)")
                 }
@@ -314,6 +322,25 @@ enum MCPSequenceHandlers {
         return MCPToolRegistry.jsonResult(timelineJSON(sequence, context: context))
     }
 
+    /// The kind a source id implies. The id is the truth: an agent-supplied
+    /// kind that disagrees (a `remotion:` clip sent as `video`) would skip the
+    /// Remotion preview and leave the clip on a "Not rendered yet" slate.
+    private static func canonicalKind(prefix: DocumentMediaResolver.SourceKindPrefix, uuid: UUID, sourceID: String, context: ModelContext) throws -> SourceKind {
+        switch prefix {
+        case .music, .narration: return .audio
+        case .image: return .image
+        case .video: return .video
+        case .screenRecording: return try RecordingTimelineService.resolve(id: uuid, context: context).1.sourceKind
+        case .remotion: return .remotion
+        case .caption: return .captions
+        case .recordingZoom: throw MCPToolError.notFound(sourceID)
+        case .imported:
+            let asset = try context.fetch(FetchDescriptor<ImportedAsset>(predicate: #Predicate { $0.id == uuid })).first
+            guard let asset else { throw MCPToolError.notFound(sourceID) }
+            return asset.kindEnum == .image ? .image : (asset.kindEnum == .audio ? .audio : .video)
+        }
+    }
+
     private static func sequenceAddClip(_ arguments: [String: Any], context: ModelContext) async throws -> [String: Any] {
         let sequence = try fetchSequence(arguments, context: context)
         guard let sourceID = arguments["source_id"] as? String, let (prefix, uuid) = DocumentMediaResolver.parse(sourceID) else {
@@ -326,24 +353,13 @@ enum MCPSequenceHandlers {
             let ids = try RecordingTimelineService.insert(take: take, into: sequence, at: arguments["start"] as? Double ?? sequence.timeline.duration, undoManager: NSApp.keyWindow?.undoManager); try context.save(); return MCPToolRegistry.jsonResult(["clipIDs": ids.map(\.uuidString)])
         }
         let resolver = DocumentMediaResolver(document: document, width: sequence.width, height: sequence.height, fps: sequence.fps)
-        let kind: SourceKind
-        var displayName = sourceID
-        switch prefix {
-        case .music, .narration: kind = .audio
-        case .image: kind = .image
-        case .video: kind = .video
-        case .screenRecording: kind = try RecordingTimelineService.resolve(id: uuid, context: context).1.sourceKind
-        case .remotion: kind = .remotion
-        case .caption: kind = .captions
         // Zoom clips come with their recording; there is nothing to add on its own.
-        case .recordingZoom: throw MCPToolError.notFound(sourceID)
-        case .imported:
-            let asset = try context.fetch(FetchDescriptor<ImportedAsset>(predicate: #Predicate { $0.id == uuid })).first
-            guard let asset else { throw MCPToolError.notFound(sourceID) }
-            kind = asset.kindEnum == .image ? .image : (asset.kindEnum == .audio ? .audio : .video)
-            displayName = asset.name
-        }
-        if prefix != .imported {
+        if prefix == .recordingZoom { throw MCPToolError.notFound(sourceID) }
+        let kind = try canonicalKind(prefix: prefix, uuid: uuid, sourceID: sourceID, context: context)
+        var displayName = sourceID
+        if prefix == .imported {
+            displayName = try context.fetch(FetchDescriptor<ImportedAsset>(predicate: #Predicate { $0.id == uuid })).first?.name ?? sourceID
+        } else {
             displayName = try footageName(prefix: prefix, uuid: uuid, fallback: sourceID, context: context)
         }
         let source = ClipSource(id: sourceID, kind: kind, displayName: displayName)

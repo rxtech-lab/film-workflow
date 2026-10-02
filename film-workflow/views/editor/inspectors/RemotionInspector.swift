@@ -74,7 +74,10 @@ struct RemotionInspectorFooter: View {
         renderTask = Task { @MainActor in
             defer { showProgressSheet = false; renderTask = nil }
             do {
-                _ = try await RemotionRenderService.ensureRender(project: project, width: w, height: h, fps: fps, context: modelContext, force: true) { p in
+                // Alpha, because the timeline and sequence renders only look up
+                // the alpha variant — an opaque render would leave the clip on
+                // its "Not rendered yet" slate.
+                _ = try await RemotionRenderService.ensureRender(project: project, width: w, height: h, fps: fps, context: modelContext, force: true, preserveAlpha: true) { p in
                     renderProgress = p
                 }
                 refreshToken += 1

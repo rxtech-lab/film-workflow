@@ -36,11 +36,13 @@ struct WhatsNewFeature: Identifiable {
     enum CallToAction {
         case exploreMarketplace
         case startNewFilm
+        case openRenderQueue
 
         var label: LocalizedStringKey {
             switch self {
             case .exploreMarketplace: "Explore Marketplace"
             case .startNewFilm: "Start a Film"
+            case .openRenderQueue: "Open Render Queue"
             }
         }
 
@@ -48,6 +50,7 @@ struct WhatsNewFeature: Identifiable {
             switch self {
             case .exploreMarketplace: "storefront"
             case .startNewFilm: "sparkles"
+            case .openRenderQueue: "square.stack.3d.up"
             }
         }
     }
@@ -119,6 +122,54 @@ struct WhatsNewFeature: Identifiable {
                     icon: "play.rectangle",
                     title: "Watch it come together",
                     detail: "The preview follows along as each shot lands. Ask for changes in plain words, then open it in the full editor."
+                ),
+            ],
+            callToAction: .startNewFilm
+        ),
+        WhatsNewFeature(
+            id: "background-rendering-queue",
+            title: "Background rendering",
+            subtitle: "Keep editing while your media gets ready.",
+            imageName: "WhatsNewRenderQueue",
+            highlights: [
+                Highlight(
+                    icon: "square.stack.3d.up",
+                    title: "One queue for every film",
+                    detail: "Open Queue in the editor toolbar to follow composition prerenders, thumbnails and waveforms across your open films."
+                ),
+                Highlight(
+                    icon: "waveform",
+                    title: "Your timeline keeps moving",
+                    detail: "Thumbnails and waveforms have their own rendering slots, so they can run alongside a composition prerender."
+                ),
+                Highlight(
+                    icon: "exclamationmark.circle",
+                    title: "Progress at a glance",
+                    detail: "See waiting jobs and live progress. Failed composition prerenders stay visible until you clear them."
+                ),
+            ],
+            callToAction: .openRenderQueue
+        ),
+        WhatsNewFeature(
+            id: "video-caption-export",
+            title: "Captions in your exports",
+            subtitle: "Carry your words into the finished film.",
+            imageName: "WhatsNewCaptionExport",
+            highlights: [
+                Highlight(
+                    icon: "captions.bubble",
+                    title: "Burn captions into the video",
+                    detail: "Place captions on your timeline, then choose Burn In in the render sheet's Captions tab. Adjust the style and see it in the viewer."
+                ),
+                Highlight(
+                    icon: "character.bubble",
+                    title: "Choose your languages",
+                    detail: "Burn in the original, a translation or both. Choose embedded subtitle tracks to let viewers switch languages in their player."
+                ),
+                Highlight(
+                    icon: "doc.text",
+                    title: "Save caption files too",
+                    detail: "Export SRT or VTT files beside your movie, one per selected language, even when captions are burned in or embedded."
                 ),
             ],
             callToAction: .startNewFilm
