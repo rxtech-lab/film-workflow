@@ -84,3 +84,9 @@ Packages/*/.build/
 # Generated legacy runtime from older builds; no longer packaged.
 /RemotionRuntime/
 .artifact-build
+.env
+.env.*
+!.env.example
+
+# SwiftPM build output (vendored packages)
+.build/
