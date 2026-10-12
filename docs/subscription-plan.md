@@ -178,7 +178,7 @@ export function unitPrice(provider, model, unit): UnitPrice | null;   // longest
 export function unitCostNanoUsd({provider, model, unit, units}): number;
 export function estimateReservationPoints({provider, model, unit, units, floorPoints}): number;
 ```
-Seed rows (verify each against live provider pricing before shipping — these are starting estimates, not quotes): Azure Neural TTS per-1M-characters and a higher HD-voice row; Azure Fast Transcription per audio minute; Lyria `lyria-3-pro-preview` per audio second with a minimum; Gemini TTS approximated from audio-output tokens at ~4 chars/token; Imagen and `gpt-image-*` per image; `whisper-1` per audio minute.
+Seed rows (verify each against live provider pricing before shipping — these are starting estimates, not quotes): Azure Neural TTS per-1M-characters and a higher HD-voice row; Azure Fast Transcription per audio minute; Lyria `lyria-3.5` per audio second with a minimum; Gemini TTS approximated from audio-output tokens at ~4 chars/token; Imagen and `gpt-image-*` per image; `whisper-1` per audio minute.
 
 **Fail closed:** a model absent from both the gateway catalog *and* `UNIT_PRICES` must return HTTP 400 `PRICE_NOT_FOUND`, never settle at `costNanoUsd: 0`. `tests/unit-pricing.test.ts` asserts every model in `lib/ai/catalog.ts` has a price and that no `reviewedAt` is older than 180 days.
 

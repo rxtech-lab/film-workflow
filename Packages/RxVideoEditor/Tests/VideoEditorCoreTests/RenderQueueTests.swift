@@ -65,6 +65,25 @@ struct RenderQueueTests {
         #expect(queue.items.isEmpty)
     }
 
+    @Test("A paused kind holds queued work until every pause is released")
+    func pauseHoldsWork() async throws {
+        let queue = RenderQueue(finishedLinger: .zero)
+        var first: RenderQueue.Pause? = queue.pause(.thumbnail)
+        var second: RenderQueue.Pause? = queue.pause(.thumbnail)
+        let job = Task { try await queue.run(.thumbnail, title: "frame") { _ in 1 } }
+        let waveform = try await queue.run(.waveform, title: "audio") { _ in 2 }
+        #expect(waveform == 2)
+        await settle { queue.items.count == 1 }
+        #expect(queue.items.map(\.state) == [.queued])
+        first = nil
+        try? await Task.sleep(for: .milliseconds(50))
+        #expect(queue.items.map(\.state) == [.queued])
+        second = nil
+        #expect(try await job.value == 1)
+        #expect(!queue.isPaused(.thumbnail))
+        _ = (first, second)
+    }
+
     @Test("Progress is reported, and only prerender failures stay listed")
     func progressAndFailures() async throws {
         let queue = RenderQueue(finishedLinger: .zero)

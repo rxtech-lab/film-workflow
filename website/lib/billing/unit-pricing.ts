@@ -25,6 +25,9 @@ export const UNIT_PRICES: readonly UnitPrice[] = [
   { provider: "google", model: "gemini-3.1-flash-image:1K", unit: "images", nanoUsdPerUnit: 67_000_000, source: "https://ai.google.dev/gemini-api/docs/pricing", reviewedAt: "2026-08-14" },
   { provider: "google", model: "gemini-3.1-flash-image:2K", unit: "images", nanoUsdPerUnit: 101_000_000, source: "https://ai.google.dev/gemini-api/docs/pricing", reviewedAt: "2026-08-14" },
   { provider: "google", model: "gemini-3.1-flash-image:4K", unit: "images", nanoUsdPerUnit: 151_000_000, source: "https://ai.google.dev/gemini-api/docs/pricing", reviewedAt: "2026-08-14" },
+  { provider: "google", model: "gemini-nano-banana-2.1:1K", unit: "images", nanoUsdPerUnit: 33_600_000, source: "https://ai.google.dev/gemini-api/docs/pricing", reviewedAt: "2026-10-09" },
+  { provider: "google", model: "gemini-nano-banana-2.1:2K", unit: "images", nanoUsdPerUnit: 50_400_000, source: "https://ai.google.dev/gemini-api/docs/pricing", reviewedAt: "2026-10-09" },
+  { provider: "google", model: "gemini-nano-banana-2.1:4K", unit: "images", nanoUsdPerUnit: 113_000_000, source: "https://ai.google.dev/gemini-api/docs/pricing", reviewedAt: "2026-10-09" },
   { provider: "google", model: "gemini-3-pro-image:1K", unit: "images", nanoUsdPerUnit: 134_000_000, source: "https://ai.google.dev/gemini-api/docs/pricing", reviewedAt: "2026-08-14" },
   { provider: "google", model: "gemini-3-pro-image:2K", unit: "images", nanoUsdPerUnit: 134_000_000, source: "https://ai.google.dev/gemini-api/docs/pricing", reviewedAt: "2026-08-14" },
   { provider: "google", model: "gemini-3-pro-image:4K", unit: "images", nanoUsdPerUnit: 240_000_000, source: "https://ai.google.dev/gemini-api/docs/pricing", reviewedAt: "2026-08-14" },
@@ -64,7 +67,9 @@ export const UNIT_PRICES: readonly UnitPrice[] = [
   { provider: "google", model: "veo-3.0-fast-generate", unit: "video_seconds", nanoUsdPerUnit: 150_000_000, source: "https://ai.google.dev/gemini-api/docs/pricing", reviewedAt: "2026-09-13" },
   { provider: "google", model: "veo-2.0-generate", unit: "video_seconds", nanoUsdPerUnit: 350_000_000, source: "https://ai.google.dev/gemini-api/docs/pricing", reviewedAt: "2026-09-13" },
   { provider: "google", model: "gemini-3.1-flash-tts-preview", unit: "audio_seconds", nanoUsdPerUnit: 500_000, source: "https://ai.google.dev/gemini-api/docs/pricing", reviewedAt: "2026-08-13" },
-  { provider: "google", model: "lyria-3-pro-preview", unit: "audio_seconds", nanoUsdPerUnit: 444_445, minimumUnits: 180, source: "https://cloud.google.com/gemini-enterprise-agent-platform/generative-ai/pricing", reviewedAt: "2026-08-13" },
+  // Lyria bills $0.08 per song. Stored per second against a 180 s minimum so a
+  // typical song settles at $0.08 and an unusually long one scales from there.
+  { provider: "google", model: "lyria-3.5", unit: "audio_seconds", nanoUsdPerUnit: 444_445, minimumUnits: 180, source: "https://ai.google.dev/gemini-api/docs/pricing", reviewedAt: "2026-10-09" },
   { provider: "azure", model: "azure-neural-tts", unit: "characters", nanoUsdPerUnit: 16_000, source: "https://azure.microsoft.com/pricing/details/cognitive-services/speech-services/", reviewedAt: "2026-08-13" },
   { provider: "azure", model: "azure-hd-tts", unit: "characters", nanoUsdPerUnit: 30_000, source: "https://azure.microsoft.com/pricing/details/cognitive-services/speech-services/", reviewedAt: "2026-08-13" },
   { provider: "azure", model: "azure-fast-transcription", unit: "audio_minutes", nanoUsdPerUnit: 6_000_000, source: "https://azure.microsoft.com/pricing/details/cognitive-services/speech-services/", reviewedAt: "2026-08-13" },

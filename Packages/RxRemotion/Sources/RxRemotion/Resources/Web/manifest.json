@@ -1,22 +1,22 @@
 {
   "engine": "1.0.0",
   "dependencies": {
-    "@react-three/drei": "10.7.8",
-    "@react-three/fiber": "9.7.0",
-    "@remotion/player": "4.0.459",
-    "@remotion/three": "4.0.459",
+    "@react-three/drei": "10.7.9",
+    "@react-three/fiber": "9.8.1",
+    "@remotion/player": "4.0.534",
+    "@remotion/three": "4.0.534",
     "@tsparticles/engine": "3.9.1",
     "@tsparticles/react": "3.0.0",
     "@tsparticles/slim": "3.9.1",
-    "esbuild-wasm": "0.25.0",
+    "esbuild-wasm": "0.25.12",
     "leaflet": "1.9.4",
-    "mapbox-gl": "3.23.1",
-    "react": "19.2.0",
-    "react-dom": "19.2.0",
-    "react-map-gl": "8.1.1",
-    "remotion": "4.0.459",
-    "three": "0.185.0"
+    "mapbox-gl": "3.32.0",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "react-map-gl": "8.1.3",
+    "remotion": "4.0.534",
+    "three": "0.186.1"
   },
-  "lockHash": "2f4abffe89daede678233d4c1ca20e0634755cf0660b91786bb4255cf3815781",
+  "lockHash": "6a4049dc691fba10b154dbbf173561f313aa8c7a11173a9ce14531e9825d0bd7",
   "adapterHash": "89c4401977f2ed25753ea429dad0c02d2bd4bad5916147313061bcdb9707c7fa"
 }
