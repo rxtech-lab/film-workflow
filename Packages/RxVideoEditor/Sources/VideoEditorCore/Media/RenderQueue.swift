@@ -52,6 +52,23 @@ public final class RenderQueue {
         }
     }
 
+    /// Holds a kind paused until it is released or deallocated. Work already
+    /// running finishes; queued work waits until the last pause is released.
+    public final class Pause: Sendable {
+        let id = UUID()
+        let kind: Kind
+        let queue: RenderQueue
+
+        init(kind: Kind, queue: RenderQueue) {
+            self.kind = kind
+            self.queue = queue
+        }
+
+        deinit {
+            Task { @MainActor [queue, kind, id] in queue.endPause(kind, id: id) }
+        }
+    }
+
     public private(set) var items: [Item] = []
 
     public var activeCount: Int { items.count { $0.isActive } }
@@ -59,6 +76,7 @@ public final class RenderQueue {
 
     private var running: [Kind: Int] = [:]
     private var waiters: [Kind: [(id: UUID, continuation: CheckedContinuation<Void, Error>)]] = [:]
+    private var pauses: [Kind: Set<UUID>] = [:]
 
     /// How long a finished item stays listed before it is removed.
     private let finishedLinger: Duration
@@ -97,6 +115,17 @@ public final class RenderQueue {
         }
     }
 
+    public func isPaused(_ kind: Kind) -> Bool {
+        !(pauses[kind]?.isEmpty ?? true)
+    }
+
+    /// Stops starting new work of `kind` while the returned value is retained.
+    public func pause(_ kind: Kind) -> Pause {
+        let pause = Pause(kind: kind, queue: self)
+        pauses[kind, default: []].insert(pause.id)
+        return pause
+    }
+
     public func clearFailures() {
         items.removeAll(where: \.isFailed)
     }
@@ -122,7 +151,7 @@ public final class RenderQueue {
 
     private func acquire(_ kind: Kind, id: UUID) async throws {
         try Task.checkCancellation()
-        if running[kind, default: 0] < kind.limit {
+        if !isPaused(kind), running[kind, default: 0] < kind.limit {
             running[kind, default: 0] += 1
             return
         }
@@ -144,9 +173,19 @@ public final class RenderQueue {
         waiters[kind]!.remove(at: index).continuation.resume(throwing: CancellationError())
     }
 
+    private func endPause(_ kind: Kind, id: UUID) {
+        guard pauses[kind]?.remove(id) != nil, !isPaused(kind) else { return }
+        while running[kind, default: 0] < kind.limit, var queue = waiters[kind], !queue.isEmpty {
+            let next = queue.removeFirst()
+            waiters[kind] = queue
+            running[kind, default: 0] += 1
+            next.continuation.resume()
+        }
+    }
+
     /// Hands the slot straight to the next waiter, preserving FIFO order.
     private func release(_ kind: Kind) {
-        if var queue = waiters[kind], !queue.isEmpty {
+        if !isPaused(kind), var queue = waiters[kind], !queue.isEmpty {
             let next = queue.removeFirst()
             waiters[kind] = queue
             next.continuation.resume()

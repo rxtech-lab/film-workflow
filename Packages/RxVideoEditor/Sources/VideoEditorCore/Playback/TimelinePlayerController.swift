@@ -12,7 +12,16 @@ public final class TimelinePlayerController {
     public let player: AVPlayer
     public private(set) var currentTime: TimeInterval = 0
     public private(set) var duration: TimeInterval = 0
-    public private(set) var isPlaying = false
+    public private(set) var isPlaying = false {
+        // Thumbnail and waveform decoding compete with playback; hold them off while playing.
+        didSet {
+            if !isPlaying {
+                renderPauses = []
+            } else if renderPauses.isEmpty {
+                renderPauses = [RenderQueue.shared.pause(.thumbnail), RenderQueue.shared.pause(.waveform)]
+            }
+        }
+    }
     public private(set) var placeholders: [ClipSource] = []
     public private(set) var lastError: String?
     public private(set) var isBuffering = false
@@ -30,6 +39,7 @@ public final class TimelinePlayerController {
     private var loadedAudioOnly = false
     private var loadGeneration = 0
     private var audioTrackIDs: [UUID: CMPersistentTrackID] = [:]
+    @ObservationIgnored private var renderPauses: [RenderQueue.Pause] = []
 
     public convenience init() {
         self.init(player: AVPlayer())

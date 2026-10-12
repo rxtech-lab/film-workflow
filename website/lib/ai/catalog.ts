@@ -36,7 +36,7 @@ function unitModel(input: Omit<CatalogModel, "estimate">, unit: Exclude<UnitKind
 export const DIRECT_MODEL_CATALOG: readonly CatalogModel[] = [
   unitModel({ id: "gemini-3.1-flash-tts-preview", provider: "google", displayName: "Gemini 3.1 Flash TTS", capability: "speech" }, "audio_seconds"),
   unitModel({ id: "azure-neural-tts", provider: "azure", displayName: "Azure Neural TTS", capability: "speech" }, "characters"),
-  unitModel({ id: "lyria-3-pro-preview", provider: "google", displayName: "Lyria 3 Pro", capability: "music" }, "audio_seconds"),
+  unitModel({ id: "lyria-3.5", provider: "google", displayName: "Lyria 3.5", capability: "music" }, "audio_seconds"),
   unitModel({ id: "whisper-1", provider: "openai", displayName: "Whisper", capability: "transcription" }, "audio_minutes"),
   unitModel({ id: "azure-fast-transcription", provider: "azure", displayName: "Azure Fast Transcription", capability: "transcription" }, "audio_minutes"),
   unitModel({ id: "gemini-2.5-flash", provider: "google", displayName: "Gemini 2.5 Flash (diarized)", capability: "transcription" }, "audio_minutes"),

@@ -41,6 +41,8 @@ describe("RxFilm billing rules", () => {
     expect(googleImagePrice("gemini-3.1-flash-image")?.nanoUsdPerUnit).toBe(67_000_000);
     expect(googleImagePrice("gemini-3.1-flash-image", "4K")?.nanoUsdPerUnit).toBe(151_000_000);
     expect(googleImagePrice("gemini-3-pro-image", "4K")?.nanoUsdPerUnit).toBe(240_000_000);
+    expect(googleImagePrice("gemini-nano-banana-2.1")?.nanoUsdPerUnit).toBe(33_600_000);
+    expect(googleImagePrice("gemini-nano-banana-2.1", "4K")?.nanoUsdPerUnit).toBe(113_000_000);
     // A preview id is the same model at the same rate as its GA promotion.
     expect(googleImagePrice("gemini-3.1-flash-image-preview", "2K")?.nanoUsdPerUnit).toBe(101_000_000);
     // A tiered model has no bare row, so an unpriced tier fails closed.

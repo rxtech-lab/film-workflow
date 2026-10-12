@@ -715,7 +715,7 @@
 			repositoryURL = "https://github.com/rxtech-lab/RxSubscriptionIOS";
 			requirement = {
 				kind = exactVersion;
-				version = 1.1.1;
+				version = 1.2.0;
 			};
 		};
 		DF63B4203058621A0021FF67 /* XCRemoteSwiftPackageReference "RxAgentSDK" */ = {
