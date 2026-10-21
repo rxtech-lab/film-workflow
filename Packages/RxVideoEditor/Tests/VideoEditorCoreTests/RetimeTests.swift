@@ -187,7 +187,8 @@ struct RetimedMediaTests {
         let output = dir.appendingPathComponent("retimed.mp4")
         try await TimelineExporter.export(timeline, resolver: resolver, to: output, preset: .h264) { _ in }
         let asset = AVURLAsset(url: output)
-        #expect(abs(CMTimeGetSeconds(try await asset.load(.duration)) - 1) < 0.05)
+        let exportedDuration = CMTimeGetSeconds(try await asset.load(.duration))
+        #expect(abs(exportedDuration - 1) < 0.05, "Exported duration: \(exportedDuration)s; timeline duration: 1s")
         await reader.setSource(AudioLevelSource(asset: asset, mix: nil))
         #expect(await reader.level(at: 0.2).left < 0.2)
         #expect(await reader.level(at: 0.7).left > 0.5)

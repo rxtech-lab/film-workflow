@@ -149,6 +149,17 @@ final class CaptionOverlayRenderTests: XCTestCase {
                  description: "layers mount at \(seek)s")
         host.layoutSubtreeIfNeeded()
         host.displayIfNeeded()
+        // Mounting precedes the hosted surface's ready message. Until that
+        // arrives the real preview intentionally hides it behind buffering UI.
+        try wait(for: {
+            host.layoutSubtreeIfNeeded()
+            host.displayIfNeeded()
+            return controller.layers.filter { $0.clip.range.contains(seek) }
+                .allSatisfy { $0.live == nil || $0.live?.ready == true }
+                && !transport.isBuffering
+        }, description: "preview surfaces become ready")
+        host.layoutSubtreeIfNeeded()
+        host.displayIfNeeded()
         RunLoop.current.run(until: Date().addingTimeInterval(0.2))
 
         guard let layer = host.layer,
@@ -240,7 +251,13 @@ private struct StubLiveSurface: View {
     let playback: LivePreviewPlayback
 
     var body: some View {
-        Color.red.onAppear { playback.received(type: "ready") }
+        Color.red.task {
+            // A real hosted surface becomes ready asynchronously. Keep this
+            // longer than the old fixed capture delay to exercise the wait.
+            do { try await Task.sleep(for: .milliseconds(350)) }
+            catch { return }
+            playback.received(type: "ready")
+        }
     }
 }
 

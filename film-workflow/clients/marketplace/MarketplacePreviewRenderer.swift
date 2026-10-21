@@ -30,7 +30,12 @@ import VideoEffectsCore
             return try await mockImage(itemId: item.id, name: name, prompt: prompt)
         }
         let directory = try service.directory(for: item.id)
-        let signature = (item.contentRevision ?? item.contentText ?? item.item.contentFilename ?? "") + "\(item.item.contentSizeBytes ?? 0):\(start):\(duration):\(demoPath ?? "")"
+        // Validate before checking the cache so legacy slideshows cannot satisfy
+        // a request for a template demonstration.
+        let demonstration = try demonstrationURL(item: item, demoPath: demoPath, directory: directory)
+        let attributes = try demonstration.map { try FileManager.default.attributesOfItem(atPath: $0.path) }
+        let demoRevision = "\(attributes?[.modificationDate] ?? ""):\(attributes?[.size] ?? "")"
+        let signature = "authored-demo-v2:" + (item.contentRevision ?? item.contentText ?? item.item.contentFilename ?? "") + "\(item.item.contentSizeBytes ?? 0):\(start):\(duration):\(demonstration?.path ?? ""):\(demoRevision)"
         let key = SHA256.hash(data: Data(signature.utf8)).prefix(8).map { String(format: "%02x", $0) }.joined()
         let video = directory.appendingPathComponent("preview-\(key).mp4")
         let cover = directory.appendingPathComponent("cover-\(key).png")
@@ -56,55 +61,6 @@ import VideoEffectsCore
             return ClipSource(id: id, kind: kind, displayName: name)
         }
         switch item.item.kind {
-        case .projectTemplate:
-            guard let template = item.template else { throw MarketplaceAuthoringError.invalid("Save a template definition first.") }
-            try template.validate(publishing: true)
-            timeline.width = template.width; timeline.height = template.height; timeline.fps = template.fps
-            var time: Double = 0
-            let previewShots = Array(template.shots.prefix(max(1, Int(limit * Double(template.fps)))))
-            let total = previewShots.reduce(0) { $0 + $1.durationSeconds }
-            let ratio = min(1, limit / max(total, 0.01))
-            for (index, shot) in previewShots.enumerated() {
-                if time + 1 / Double(template.fps) > limit + 0.000001 { break }
-                // No source-film media enters this resolver. All pictures are generated mock scenes.
-                let mock = try await makeMock(name: "\(key)-shot-\(index)", prompt: "Create a fictional mock image for a video template preview. \(template.videoStyle). Shot: \(shot.instructions). Do not use any real project footage. No text or watermark.")
-                let clip = Clip(source: source(mock, kind: .image, name: shot.title), start: time, duration: min(limit - time, max(1 / Double(template.fps), shot.durationSeconds * ratio)))
-                visualClips.append(clip); time += clip.duration
-                progress(Double(index + 1) / Double(max(1, template.shots.count)) * 0.4)
-            }
-            // Resolve published modifier dependencies for the demo without copying any source footage.
-            for dependency in template.marketplaceItems {
-                let entry = try await service.get(dependency.itemId)
-                if [.transition, .effect].contains(entry.item.kind) {
-                    let local = try await loadContent(entry)
-                    let descriptor = try InstalledModifierLoader.descriptor(at: local, expecting: entry.item.kind)
-                    if temporaryUsers[descriptor.id] != nil || (ModifierCatalog.current.effect(descriptor.id) == nil && ModifierCatalog.current.transition(descriptor.id) == nil) {
-                        if temporaryDefinitions.insert(descriptor.id).inserted {
-                            if temporaryUsers[descriptor.id] == nil { register(descriptor) }
-                            temporaryUsers[descriptor.id, default: 0] += 1
-                        }
-                    }
-                } else if [.audio, .soundEffect].contains(entry.item.kind) {
-                    let local = try await loadContent(entry)
-                    let seconds = try await AVURLAsset(url: local).load(.duration).seconds
-                    let trackIndex = timeline.tracks.firstIndex { $0.kind == .audio }!
-                    if timeline.tracks[trackIndex].clips.isEmpty {
-                        timeline.tracks[trackIndex].clips = [Clip(source: source(local, kind: .audio, name: entry.item.title), start: 0, duration: min(seconds, time))]
-                    }
-                }
-            }
-            for index in visualClips.indices {
-                visualClips[index].effects = try template.shots[index].effects.map { modifier in
-                    guard ModifierCatalog.current.effect(modifier.modifierId) != nil else { throw MarketplaceAuthoringError.invalid("An effect required by the template is unavailable: \(modifier.modifierId)") }
-                    return EffectInstance(definitionID: modifier.modifierId, parameters: modifier.parameters)
-                }
-                if index + 1 < visualClips.count, let modifier = template.shots[index].transition {
-                    guard ModifierCatalog.current.transition(modifier.modifierId) != nil else { throw MarketplaceAuthoringError.invalid("A transition required by the template is unavailable: \(modifier.modifierId)") }
-                    timeline.transitions.append(.init(definitionID: modifier.modifierId, parameters: modifier.parameters,
-                        attachment: .between(outgoing: visualClips[index].id, incoming: visualClips[index + 1].id),
-                        duration: min(modifier.durationSeconds ?? 0.5, min(visualClips[index].duration, visualClips[index + 1].duration) / 2)))
-                }
-            }
         // A still has no duration and no video track to probe; it becomes a
         // held frame, the way the audio branch below holds its cover art.
         case .footage where item.item.footageMediaType == .image:
@@ -114,22 +70,26 @@ import VideoEffectsCore
             }
             timeline.width = Int(image.size.width); timeline.height = Int(image.size.height)
             visualClips = [Clip(source: source(local, kind: .image, name: item.item.title), start: 0, duration: min(limit, 5))]
-        case .footage, .remotion:
+        case .projectTemplate, .footage, .remotion:
             let local: URL
-            if item.item.kind == .remotion {
-                // The content file is an archive of the project's source, so the
-                // demonstration has to be a render supplied alongside it.
-                guard let demoPath else { throw MarketplaceAuthoringError.invalid("Supply this composition's rendered movie as demo_path.") }
-                local = URL(fileURLWithPath: demoPath).standardizedFileURL
-                guard local.path.hasPrefix(directory.standardizedFileURL.path + "/") else { throw MarketplaceAuthoringError.invalid("Use a render staged inside this item's authoring workspace.") }
-            } else { local = try await loadContent(item) }
+            if let demonstration { local = demonstration }
+            else { local = try await loadContent(item) }
             let asset = AVURLAsset(url: local)
             let seconds = try await asset.load(.duration).seconds
             guard seconds.isFinite, start < seconds else { throw MarketplaceAuthoringError.invalid("The preview starts after the clip ends.") }
-            if let track = try await asset.loadTracks(withMediaType: .video).first {
-                let size = try await track.load(.naturalSize), transform = try await track.load(.preferredTransform)
-                let oriented = size.applying(transform)
-                timeline.width = Int(abs(oriented.width)); timeline.height = Int(abs(oriented.height))
+            guard let track = try await asset.loadTracks(withMediaType: .video).first else {
+                throw MarketplaceAuthoringError.invalid("Supply a rendered movie with a video track.")
+            }
+            let size = try await track.load(.naturalSize), transform = try await track.load(.preferredTransform)
+            let oriented = size.applying(transform)
+            timeline.width = Int(abs(oriented.width)); timeline.height = Int(abs(oriented.height))
+            if let template = item.template {
+                let expected = Double(template.width) / Double(template.height)
+                let actual = abs(oriented.width / oriented.height)
+                guard actual.isFinite, abs(actual - expected) < 0.01 else {
+                    throw MarketplaceAuthoringError.invalid("Render the mock demonstration with the template's aspect ratio.")
+                }
+                timeline.fps = template.fps
             }
             visualClips = [Clip(source: source(local, kind: .video, name: item.item.title), start: 0, duration: min(limit, seconds - start), inPoint: start)]
         case .audio, .soundEffect:
@@ -183,6 +143,25 @@ import VideoEffectsCore
         try FileManager.default.moveItem(at: staging, to: video)
         return Output(video: video, cover: cover)
     }
+    /// Templates are executable creative plans. Their preview must be authored
+    /// from that plan; generating a still per shot loses layout and motion.
+    static func demonstrationURL(item: MarketplaceAuthoringItem, demoPath: String?, directory: URL) throws -> URL? {
+        guard item.item.kind == .projectTemplate || item.item.kind == .remotion else { return nil }
+        if item.item.kind == .projectTemplate {
+            guard let template = item.template else { throw MarketplaceAuthoringError.invalid("Save a template definition first.") }
+            try template.validate(publishing: true)
+        }
+        guard let demoPath, !demoPath.isEmpty else {
+            throw MarketplaceAuthoringError.invalid("Use marketplace_workspace to author a video from this item's prompt, style, editing guidance and shots with fictional mock elements and replaceable placeholders. Preserve its timing, layout and animation; inspect representative frames, render the sequence, then supply its movie as demo_path. A slideshow of generated stills is not a template demonstration.")
+        }
+        let local = URL(fileURLWithPath: demoPath).standardizedFileURL.resolvingSymlinksInPath()
+        let root = directory.standardizedFileURL.resolvingSymlinksInPath()
+        guard local.path.hasPrefix(root.path + "/"), FileManager.default.fileExists(atPath: local.path) else {
+            throw MarketplaceAuthoringError.invalid("Use an existing mock demonstration rendered inside this item's authoring workspace.")
+        }
+        return local
+    }
+
     static func mockImage(itemId: String, name: String, prompt: String) async throws -> URL {
         let service = MarketplaceAuthoringService.shared
         let path = try service.directory(for: itemId).appendingPathComponent("\(name).png")

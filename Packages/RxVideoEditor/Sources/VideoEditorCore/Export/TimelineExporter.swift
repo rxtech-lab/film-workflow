@@ -259,6 +259,9 @@ public enum TimelineExporter {
         guard let session = AVAssetExportSession(asset: composition, presetName: options.exportPreset) else {
             throw TimelineExportError.cannotCreateSession
         }
+        // Retimed audio can add encoder/time-pitch padding. The timeline,
+        // rather than the encoder's inferred duration, defines the movie end.
+        session.timeRange = CMTimeRange(start: .zero, duration: built.duration)
         if let size = options.outputSize(for: timeline.size) {
             built.videoComposition.renderSize = size
             session.videoComposition = built.videoComposition

@@ -90,3 +90,4 @@ Packages/*/.build/
 
 # SwiftPM build output (vendored packages)
 .build/
+*.mp4

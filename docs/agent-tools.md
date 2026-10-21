@@ -202,8 +202,14 @@ the card and preserved when reopening the conversation.
 Use `marketplace_generate` for supported content or covers, and
 `marketplace_render_preview` for a short rendered demonstration. These return
 persisted jobs; poll status, retry existing jobs/files after failure, and show
-the updated card on completion. For Remotion, use the separate film ID returned
-by `marketplace_workspace` with the existing composition and sequence tools.
+the updated card on completion. For templates and Remotion, `demo_path` is
+required. Use the separate film ID returned by `marketplace_workspace` with
+the composition and sequence tools to build the actual template/prompt using
+fictional mock elements and replaceable placeholders. Preserve timing, layout
+and animation, inspect representative frames, then render the full sequence.
+Pass its workspace movie to the preview tool; `start`/`duration` select an
+excerpt of at most 15 seconds without speeding up the plan. No still-image
+slideshow is generated for templates.
 
 Extraction requires a film and selected/explicit sequence. The portable
 result needs the agent's generalized prompt and directions before publication.
