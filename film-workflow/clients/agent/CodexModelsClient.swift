@@ -24,12 +24,12 @@ nonisolated enum CodexModelsError: LocalizedError {
 /// `base_instructions`, which is why parsing keeps only the handful of fields
 /// below and never stores the raw JSON.
 ///
-/// Caching mirrors `OpenAIModelsClient`: a 24-hour TTL, in memory and in
+/// Caching mirrors `OpenAIModelsClient`: a one-hour TTL, in memory and in
 /// `UserDefaults`, with `forceRefresh` for the Settings refresh button.
 actor CodexModelsClient {
     static let shared = CodexModelsClient()
 
-    private static let cacheTTL: TimeInterval = 24 * 60 * 60
+    private static let cacheTTL: TimeInterval = 60 * 60
     private static let userDefaultsKey = "codex.modelsCache"
 
     private var memoryCache: CacheEntry?
@@ -40,31 +40,36 @@ actor CodexModelsClient {
     private struct CacheEntry: Codable {
         let fetchedAt: Date
         let models: [AgentModelOption]
+        let runtimeIdentity: String?
     }
 
     private init() {}
 
     func models(forceRefresh: Bool = false) async throws -> [AgentModelOption] {
-        if !forceRefresh, let entry = currentCache(), !Self.isExpired(entry) {
+        guard let executable = CaptionCLILocator.find("codex") else { throw CodexModelsError.notInstalled }
+        let identity = Self.runtimeIdentity(executable: executable)
+        if !forceRefresh, let entry = currentCache(),
+           Self.canReuseCache(fetchedAt: entry.fetchedAt, cachedRuntime: entry.runtimeIdentity, currentRuntime: identity) {
             return entry.models
         }
 
         if let inFlight { return try await inFlight.value }
 
-        let task = Task<[AgentModelOption], Error> { try await Self.fetch() }
+        let task = Task<[AgentModelOption], Error> { try await Self.fetch(executable: executable) }
         inFlight = task
         defer { inFlight = nil }
 
         do {
             let models = try await task.value
-            let entry = CacheEntry(fetchedAt: Date(), models: models)
+            let entry = CacheEntry(fetchedAt: Date(), models: models, runtimeIdentity: identity)
             memoryCache = entry
             Self.persist(entry)
             return models
         } catch {
-            // A stale list beats no list: the CLI may be mid-upgrade, or the
-            // machine offline. Only surface the error when we have nothing.
-            if let entry = currentCache(), !entry.models.isEmpty { return entry.models }
+            // Automatic loads may retain this runtime's last list while offline.
+            // Explicit refreshes report failures rather than silently claiming success.
+            if !forceRefresh, let entry = currentCache(), entry.runtimeIdentity == identity,
+               !entry.models.isEmpty { return entry.models }
             throw error
         }
     }
@@ -87,11 +92,7 @@ actor CodexModelsClient {
         return nil
     }
 
-    private static func fetch() async throws -> [AgentModelOption] {
-        guard let executable = CaptionCLILocator.find("codex") else {
-            throw CodexModelsError.notInstalled
-        }
-
+    private static func fetch(executable: String) async throws -> [AgentModelOption] {
         let collector = OutputCollector()
         _ = try await CaptionCLIProcess.run(
             tool: "Codex",
@@ -197,8 +198,18 @@ actor CodexModelsClient {
 
     // MARK: - Cache
 
-    private static func isExpired(_ entry: CacheEntry) -> Bool {
-        Date().timeIntervalSince(entry.fetchedAt) > cacheTTL
+    static func canReuseCache(fetchedAt: Date, cachedRuntime: String?, currentRuntime: String,
+                              now: Date = Date()) -> Bool {
+        cachedRuntime == currentRuntime && now.timeIntervalSince(fetchedAt) < cacheTTL
+    }
+
+    /// Resolve symlinks so npm upgrades and switching between managed/system CLIs invalidate discovery.
+    static func runtimeIdentity(executable: String) -> String {
+        let file = URL(fileURLWithPath: executable).resolvingSymlinksInPath()
+        let attributes = try? FileManager.default.attributesOfItem(atPath: file.path)
+        let modified = (attributes?[.modificationDate] as? Date)?.timeIntervalSince1970 ?? 0
+        let size = (attributes?[.size] as? NSNumber)?.int64Value ?? 0
+        return "\(file.path):\(modified):\(size)"
     }
 
     private static func loadFromUserDefaults() -> CacheEntry? {

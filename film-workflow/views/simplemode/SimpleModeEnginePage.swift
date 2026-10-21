@@ -149,6 +149,8 @@ struct SimpleModeEnginePage: View {
             return String(localized: "The claude command on this Mac, billed to your Claude subscription.")
         case .codex:
             return String(localized: "The codex command on this Mac, billed to your OpenAI account.")
+        case .acp:
+            return String(localized: "Uses the ACP client selected in Agent settings on this Mac.")
         case .appleIntelligence:
             return ""
         }

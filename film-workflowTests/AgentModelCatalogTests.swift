@@ -99,6 +99,27 @@ struct AgentModelCatalogTests {
             #expect(throws: CodexModelsError.self) { try CodexModelsClient.parse(data) }
         }
 
+        @Test("Model caches expire and cannot cross runtime upgrades")
+        func cacheTracksRuntimeAndAge() {
+            let now = Date(timeIntervalSince1970: 1_000_000)
+            #expect(CodexModelsClient.canReuseCache(fetchedAt: now, cachedRuntime: "codex-0.163", currentRuntime: "codex-0.163", now: now))
+            #expect(!CodexModelsClient.canReuseCache(fetchedAt: now, cachedRuntime: "codex-0.156", currentRuntime: "codex-0.163", now: now))
+            #expect(!CodexModelsClient.canReuseCache(fetchedAt: now, cachedRuntime: nil, currentRuntime: "codex-0.163", now: now))
+            #expect(!CodexModelsClient.canReuseCache(fetchedAt: now.addingTimeInterval(-3601), cachedRuntime: "codex-0.163", currentRuntime: "codex-0.163", now: now))
+        }
+
+        @Test("Replacing a runtime invalidates its identity even at the same path")
+        func runtimeIdentityTracksReplacement() throws {
+            let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+            defer { try? FileManager.default.removeItem(at: directory) }
+            let runtime = directory.appendingPathComponent("codex")
+            try Data("old".utf8).write(to: runtime)
+            let old = CodexModelsClient.runtimeIdentity(executable: runtime.path)
+            try Data("updated runtime".utf8).write(to: runtime)
+            #expect(CodexModelsClient.runtimeIdentity(executable: runtime.path) != old)
+        }
+
         @Test("A missing display_name is derived from the slug")
         func displayNameFallsBackToSlug() {
             #expect(CodexModelsClient.displayName(for: "gpt-5.4-mini") == "GPT 5.4 Mini")

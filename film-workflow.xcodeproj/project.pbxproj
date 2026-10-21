@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		AAC100000000000000000001 /* RxAgentManagement in Frameworks */ = {isa = PBXBuildFile; productRef = AAC100000000000000000002 /* RxAgentManagement */; };
 		ABCA00010000000000000001 /* RxPet in Frameworks */ = {isa = PBXBuildFile; productRef = ABCA00020000000000000002 /* RxPet */; };
 		DF63A1A1305706A20021FF67 /* FilmTemplateKit in Frameworks */ = {isa = PBXBuildFile; productRef = DFFT0002000000000000E001 /* FilmTemplateKit */; };
 		DF63A1A2305706A20021FF67 /* JSONRenderUI in Frameworks */ = {isa = PBXBuildFile; productRef = DFFT0002000000000000E003 /* JSONRenderUI */; };
@@ -86,6 +87,7 @@
 				DFVE0001000000000000D001 /* VideoEditorCore in Frameworks */,
 				EFE000010000000000000002 /* VideoEffectsUI in Frameworks */,
 				DF63B41F305861EC0021FF67 /* RxAgentSDK in Frameworks */,
+				AAC100000000000000000001 /* RxAgentManagement in Frameworks */,
 				EFE000010000000000000001 /* VideoEffectsCore in Frameworks */,
 				DFAB0001000000000000D001 /* RxRemotion in Frameworks */,
 				DFVE0004000000000000D004 /* VideoEditorUI in Frameworks */,
@@ -167,6 +169,7 @@
 				DFFT0002000000000000E002 /* FilmTemplateUI */,
 				DF63AC8530585A0F0021FF67 /* RxSubscriptionIOS */,
 				DF63B41E305861EC0021FF67 /* RxAgentSDK */,
+				AAC100000000000000000002 /* RxAgentManagement */,
 				DF63B4213058621A0021FF67 /* RxAgentSDK */,
 			);
 			productName = "film-workflow";
@@ -264,6 +267,7 @@
 				DFFT0003000000000000E003 /* XCLocalSwiftPackageReference "Packages/RxFilmTemplates" */,
 				DF63AC8430585A0F0021FF67 /* XCRemoteSwiftPackageReference "RxSubscriptionIOS" */,
 				DF63B4203058621A0021FF67 /* XCRemoteSwiftPackageReference "RxAgentSDK" */,
+				AAC100000000000000000003 /* XCLocalSwiftPackageReference "Packages/RxAgentManagement" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = DF4F80FB2F9120D300DE82DA /* Products */;
@@ -683,6 +687,10 @@
 /* End XCConfigurationList section */
 
 /* Begin XCLocalSwiftPackageReference section */
+		AAC100000000000000000003 /* XCLocalSwiftPackageReference "Packages/RxAgentManagement" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = Packages/RxAgentManagement;
+		};
 		ABCA00030000000000000003 /* XCLocalSwiftPackageReference "Packages/RxPet" */ = {
 			isa = XCLocalSwiftPackageReference;
 			relativePath = Packages/RxPet;
@@ -723,7 +731,7 @@
 			repositoryURL = "https://github.com/rxtech-lab/RxAgentSDK";
 			requirement = {
 				kind = exactVersion;
-				version = 1.0.8;
+				version = 1.1.0;
 			};
 		};
 		DF9D8F0F302D630100CD3C3D /* XCRemoteSwiftPackageReference "RxAuthSwift" */ = {
@@ -753,6 +761,11 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
+		AAC100000000000000000002 /* RxAgentManagement */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = AAC100000000000000000003 /* XCLocalSwiftPackageReference "Packages/RxAgentManagement" */;
+			productName = RxAgentManagement;
+		};
 		ABCA00020000000000000002 /* RxPet */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = ABCA00030000000000000003 /* XCLocalSwiftPackageReference "Packages/RxPet" */;

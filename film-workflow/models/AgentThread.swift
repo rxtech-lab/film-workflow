@@ -1,3 +1,6 @@
+#if os(macOS)
+import RxAgentManagement
+#endif
 import Foundation
 import SwiftData
 
@@ -44,6 +47,9 @@ final class AgentThread {
     /// than resolved so a thread started on Codex keeps answering on Codex after
     /// the user changes the app default.
     var backendRaw: String = ""
+
+    /// Snapshot of the ACP launch configuration for this conversation.
+    var acpClientJSON: String?
 
     /// Native session ids for CLI backends, keyed by `AgentBackend.rawValue`,
     /// as JSON.
@@ -241,3 +247,20 @@ extension AgentThread {
         return thread
     }
 }
+
+#if os(macOS)
+// ACP selection is per conversation, just like native engine/model overrides.
+extension AgentThread {
+    var configuredACPClient: ManagedACPClient? {
+        acpClientJSON?.data(using: .utf8).flatMap { try? JSONDecoder().decode(ManagedACPClient.self, from: $0) }
+    }
+
+    func selectACPClient(_ client: ManagedACPClient) throws {
+        guard client.enabled else { return }
+        let configuration = String(data: try JSONEncoder().encode(client), encoding: .utf8)
+        if configuredACPClient?.id != client.id { setModelOverride(nil, for: .acp) }
+        acpClientJSON = configuration
+        backendOverride = .acp
+    }
+}
+#endif

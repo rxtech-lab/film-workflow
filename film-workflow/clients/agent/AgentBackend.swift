@@ -1,3 +1,6 @@
+#if os(macOS)
+import RxAgentManagement
+#endif
 import Foundation
 import FoundationModels
 import Observation
@@ -33,6 +36,7 @@ nonisolated enum AgentBackend: String, CaseIterable, Identifiable, Sendable {
     case claudeCode
     /// The `codex` CLI, same arrangement. macOS only.
     case codex
+    case acp
 
     var id: String { rawValue }
 
@@ -43,6 +47,7 @@ nonisolated enum AgentBackend: String, CaseIterable, Identifiable, Sendable {
         case .subscription: return "RxFilm subscription"
         case .claudeCode: return "Claude Code"
         case .codex: return "Codex"
+        case .acp: return "ACP Client"
         }
     }
 
@@ -56,6 +61,7 @@ nonisolated enum AgentBackend: String, CaseIterable, Identifiable, Sendable {
         case .subscription: return "RxFilm subscription"
         case .claudeCode: return "Claude Code"
         case .codex: return "Codex"
+        case .acp: return "ACP Client"
         }
     }
 
@@ -86,7 +92,7 @@ nonisolated enum AgentBackend: String, CaseIterable, Identifiable, Sendable {
         case .subscription: raw = config.subscriptionChatModel
         case .claudeCode: raw = config.claudeCodeModel
         case .codex: raw = config.codexModel
-        case .appleIntelligence: return ""
+        case .appleIntelligence, .acp: return ""
         }
         return raw.trimmingCharacters(in: .whitespaces)
     }
@@ -105,6 +111,7 @@ nonisolated enum AgentBackend: String, CaseIterable, Identifiable, Sendable {
     var requiresNetwork: Bool { self != .appleIntelligence }
 
     func supports(_ task: CaptionAITask) -> Bool {
+        if self == .acp { return task == .conversation }
         switch task {
         case .conversation, .transcriptReview:
             return true
@@ -125,7 +132,7 @@ nonisolated enum AgentBackend: String, CaseIterable, Identifiable, Sendable {
     /// Backends that only exist where we can spawn a subprocess.
     var isCommandLine: Bool {
         switch self {
-        case .claudeCode, .codex: return true
+        case .claudeCode, .codex, .acp: return true
         case .appleIntelligence, .openAICompatible, .subscription: return false
         }
     }
@@ -140,7 +147,7 @@ nonisolated enum AgentBackend: String, CaseIterable, Identifiable, Sendable {
         switch self {
         case .appleIntelligence: return 2_500
         case .openAICompatible, .subscription: return 40_000
-        case .claudeCode, .codex: return 40_000
+        case .claudeCode, .codex, .acp: return 40_000
         }
     }
 
@@ -157,7 +164,7 @@ nonisolated enum AgentBackend: String, CaseIterable, Identifiable, Sendable {
         switch self {
         case .appleIntelligence: return 900
         case .openAICompatible, .subscription: return 6_000
-        case .claudeCode, .codex: return 12_000
+        case .claudeCode, .codex, .acp: return 12_000
         }
     }
 
@@ -170,7 +177,7 @@ nonisolated enum AgentBackend: String, CaseIterable, Identifiable, Sendable {
         switch self {
         case .appleIntelligence: return 12
         case .openAICompatible, .subscription: return 60
-        case .claudeCode, .codex: return 120
+        case .claudeCode, .codex, .acp: return 120
         }
     }
 
@@ -332,6 +339,14 @@ final class AgentBackendAvailability {
     /// Resolved path to a CLI backend's binary, or nil when it isn't installed.
     func executablePath(for backend: AgentBackend) -> String? {
         guard backend.isCommandLine else { return nil }
+        #if os(macOS)
+        if backend == .acp {
+            guard let client = AgentManagementStore.shared.selected else { return nil }
+            return client.command.hasPrefix("/")
+                ? (FileManager.default.isExecutableFile(atPath: client.command) ? client.command : nil)
+                : CaptionCLILocator.find(client.command)
+        }
+        #endif
         if let cached = cliPathCache[backend] { return cached }
         let resolved = CaptionCLILocator.find(backend.executableName)
         cliPathCache[backend] = resolved
@@ -351,7 +366,7 @@ final class AgentBackendAvailability {
             // A thread can pin its own model from the composer, so the account
             // is the only thing that has to be set up here.
             return AuthManager.shared.isAuthenticated
-        case .claudeCode, .codex:
+        case .claudeCode, .codex, .acp:
             return executablePath(for: backend) != nil
         }
     }
@@ -370,6 +385,8 @@ final class AgentBackendAvailability {
             return "The claude command isn't installed."
         case .codex:
             return "The codex command isn't installed."
+        case .acp:
+            return "Add and select an ACP client in Settings › Agent › Clients & Accounts."
         }
     }
 
@@ -401,6 +418,7 @@ extension AgentBackend {
         switch self {
         case .claudeCode: return "claude"
         case .codex: return "codex"
+        case .acp: return ""
         case .appleIntelligence, .openAICompatible, .subscription: return ""
         }
     }

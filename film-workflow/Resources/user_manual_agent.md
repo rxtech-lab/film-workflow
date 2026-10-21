@@ -96,3 +96,40 @@ tools are withheld and only the proposal tool is available.
 
 For the full list and how to reach the same tools from your own software, see the MCP Server
 section.
+
+## Manage CLI accounts and ACP clients (macOS)
+
+Open **Settings → Agent → Manage ACP Clients & GPT / Claude Accounts**.
+
+- Codex, Claude Code and installed ACP clients appear in one runtime list with
+  their installation state, version and executable path. Each row has a **Manage**
+  dropdown for its account and management actions.
+- For Codex and Claude Code, choose **Manage → Sign In** to connect or switch
+  accounts in Terminal, then **Refresh Status**. **Sign Out** requires confirmation
+  and affects other apps using the same CLI. **Download & Install** or **Update
+  Runtime** installs the official npm package into Film Studio’s storage.
+- ACP **Sign In** uses the methods advertised by the client. **Sign Out** is
+  available when the client advertises the ACP logout capability. Otherwise,
+  manage credentials in its provider’s CLI.
+- **Add Client → Download from ACP Registry** opens the official agent catalogue. Choose an
+  agent and confirm installation. Binary archives are checked against their
+  registry checksum when provided. npm and Python distributions require npm or
+  uv respectively.
+- **Add Custom Client** opens an editor for an existing executable, arguments
+  (one per line), and its enabled state. The client menu provides edit, remove,
+  and default-selection actions.
+- Open **ACP Clients** in the conversation engine menu and choose an enabled
+  client by name. **Manage ACP Clients** opens the management sheet. Each
+  conversation keeps its own client selection.
+  Each conversation retains its launch configuration. Default changes and
+  updates apply to new conversations. Removing or disabling a client prevents
+  further turns in conversations that use it. ACP is available in the agent
+  window; caption batch tasks use the other engines.
+
+Downloads and client preferences are stored under
+`~/Library/Application Support/RxFilm/agents`. Removing a registry client removes
+its downloaded releases without signing out its provider account.
+
+The Codex model menu loads the catalogue from the selected runtime and offers
+**Refresh Models**. Switching or updating Codex invalidates the previous
+runtime’s model cache; otherwise the catalogue is cached for up to one hour.

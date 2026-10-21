@@ -1098,6 +1098,18 @@
         }
       }
     },
+    "ACP Account" : {
+
+    },
+    "ACP Client" : {
+
+    },
+    "ACP Clients" : {
+
+    },
+    "ACP Registry" : {
+
+    },
     "Action" : {
 
     },
@@ -1163,6 +1175,9 @@
           }
         }
       }
+    },
+    "Add and select an ACP client in Settings › Agent › Clients & Accounts." : {
+
     },
     "Add another language" : {
 
@@ -1230,6 +1245,9 @@
         }
       }
     },
+    "Add Client" : {
+
+    },
     "Add Clip" : {
       "localizations" : {
         "zh-Hans" : {
@@ -1259,6 +1277,9 @@
           }
         }
       }
+    },
+    "Add Custom Client…" : {
+
     },
     "Add effect" : {
       "localizations" : {
@@ -1534,6 +1555,15 @@
           }
         }
       }
+    },
+    "Agent Management" : {
+
+    },
+    "Agent Runtime" : {
+
+    },
+    "Agent Runtimes" : {
+
     },
     "Aggressive" : {
       "localizations" : {
@@ -2059,6 +2089,9 @@
           }
         }
       }
+    },
+    "Arguments (one per line)" : {
+
     },
     "Arrange footage, sound and captions on your timeline." : {
       "localizations" : {
@@ -3723,6 +3756,9 @@
         }
       }
     },
+    "Clients & Accounts" : {
+
+    },
     "Clip" : {
       "localizations" : {
         "zh-Hans" : {
@@ -4010,6 +4046,9 @@
         }
       }
     },
+    "Connecting to client…" : {
+
+    },
     "Connection" : {
       "localizations" : {
         "zh-Hans" : {
@@ -4095,6 +4134,15 @@
           }
         }
       }
+    },
+    "Could not load models" : {
+
+    },
+    "Could Not Refresh Models" : {
+
+    },
+    "Could Not Save" : {
+
     },
     "Couldn’t add footage" : {
       "localizations" : {
@@ -4579,6 +4627,9 @@
           }
         }
       }
+    },
+    "Default model" : {
+
     },
     "Default models" : {
       "localizations" : {
@@ -5268,6 +5319,12 @@
         }
       }
     },
+    "Download & Install" : {
+
+    },
+    "Download & Install…" : {
+
+    },
     "Download a Model…" : {
       "localizations" : {
         "zh-Hans" : {
@@ -5287,6 +5344,12 @@
           }
         }
       }
+    },
+    "Download from ACP Registry…" : {
+
+    },
+    "Download the latest %@ runtime from its official npm package." : {
+
     },
     "Download this model" : {
       "localizations" : {
@@ -5311,6 +5374,9 @@
     "Download to your library" : {
 
     },
+    "Downloaded files are removed. The provider account stays signed in." : {
+
+    },
     "Downloading — %lld%%" : {
       "localizations" : {
         "zh-Hans" : {
@@ -5321,6 +5387,9 @@
         }
       }
     },
+    "Downloading and installing…" : {
+
+    },
     "Downloading model…" : {
       "localizations" : {
         "zh-Hans" : {
@@ -5330,6 +5399,9 @@
           }
         }
       }
+    },
+    "Downloading runtime…" : {
+
     },
     "Downloading video…" : {
       "localizations" : {
@@ -5976,6 +6048,9 @@
         }
       }
     },
+    "Environment-key methods require configuration in the provider’s own CLI." : {
+
+    },
     "Epic" : {
       "localizations" : {
         "zh-Hans" : {
@@ -6096,6 +6171,9 @@
           }
         }
       }
+    },
+    "Executable path or command" : {
+
     },
     "Expand footage" : {
       "localizations" : {
@@ -7736,6 +7814,9 @@
         }
       }
     },
+    "Install %@?" : {
+
+    },
     "Install once. Create in any film." : {
       "localizations" : {
         "zh-Hans" : {
@@ -7745,6 +7826,9 @@
           }
         }
       }
+    },
+    "Install Runtime" : {
+
     },
     "Install this item first." : {
       "localizations" : {
@@ -8383,6 +8467,12 @@
         }
       }
     },
+    "Loading models…" : {
+
+    },
+    "Loading registry…" : {
+
+    },
     "Loading subscription catalog…" : {
       "localizations" : {
         "zh-Hans" : {
@@ -8525,6 +8615,15 @@
           }
         }
       }
+    },
+    "Manage" : {
+
+    },
+    "Manage ACP Clients & GPT / Claude Accounts…" : {
+
+    },
+    "Manage ACP Clients…" : {
+
     },
     "Manage credits and subscription usage." : {
       "localizations" : {
@@ -9474,6 +9573,9 @@
         }
       }
     },
+    "No enabled ACP clients" : {
+
+    },
     "No footage yet" : {
       "localizations" : {
         "zh-Hans" : {
@@ -9577,6 +9679,9 @@
           }
         }
       }
+    },
+    "No models reported" : {
+
     },
     "No models were returned. You can enter a model ID above." : {
       "localizations" : {
@@ -10473,6 +10578,9 @@
           }
         }
       }
+    },
+    "Other apps using this CLI account will also be signed out." : {
+
     },
     "Other Folder…" : {
       "localizations" : {
@@ -11598,7 +11706,16 @@
         }
       }
     },
+    "Refresh Models" : {
+
+    },
+    "Refresh runtime status" : {
+
+    },
     "Refresh Sources" : {
+
+    },
+    "Refresh Status" : {
 
     },
     "Regenerate Captions…" : {
@@ -11641,6 +11758,9 @@
           }
         }
       }
+    },
+    "Reload" : {
+
     },
     "Reload Preview" : {
       "localizations" : {
@@ -11761,7 +11881,13 @@
     "Remove %@" : {
 
     },
+    "Remove %@?" : {
+
+    },
     "Remove Camera" : {
+
+    },
+    "Remove Client" : {
 
     },
     "Remove effect" : {
@@ -11841,6 +11967,9 @@
         }
       }
     },
+    "Remove…" : {
+
+    },
     "Removing a clip…" : {
       "localizations" : {
         "zh-Hans" : {
@@ -11850,6 +11979,9 @@
           }
         }
       }
+    },
+    "Removing client…" : {
+
     },
     "Rename" : {
       "localizations" : {
@@ -12190,6 +12322,9 @@
           }
         }
       }
+    },
+    "Requires Node.js and npm. The runtime is installed in Film Studio’s Application Support folder." : {
+
     },
     "Reset parameters" : {
       "localizations" : {
@@ -12593,6 +12728,9 @@
         }
       }
     },
+    "Runtime Installation" : {
+
+    },
     "Russian" : {
       "localizations" : {
         "zh-Hans" : {
@@ -12793,6 +12931,9 @@
           }
         }
       }
+    },
+    "Saving client…" : {
+
     },
     "Saving take…" : {
 
@@ -13757,6 +13898,12 @@
         }
       }
     },
+    "Sign out of %@?" : {
+
+    },
+    "Sign out of this client?" : {
+
+    },
     "Sign out?" : {
       "localizations" : {
         "zh-Hans" : {
@@ -13766,6 +13913,9 @@
           }
         }
       }
+    },
+    "Sign Out…" : {
+
     },
     "Sign-in Unavailable" : {
       "localizations" : {
@@ -15200,6 +15350,12 @@
     "This choice applies to this conversation. Choose a model inside an engine's menu, or use Default to follow Settings." : {
 
     },
+    "This client does not advertise a sign-in method. Manage its credentials through the provider’s CLI." : {
+
+    },
+    "This client does not advertise ACP sign-out. Use its provider’s account settings or CLI to sign out." : {
+
+    },
     "This clip has no file to upload yet. Render it first." : {
       "localizations" : {
         "zh-Hans" : {
@@ -15260,6 +15416,9 @@
           }
         }
       }
+    },
+    "This downloads and runs third-party software from the ACP registry." : {
+
     },
     "This effect cannot be loaded: %@" : {
       "localizations" : {
@@ -16170,6 +16329,12 @@
         }
       }
     },
+    "Update Runtime…" : {
+
+    },
+    "Updating account…" : {
+
+    },
     "Updating footage…" : {
       "localizations" : {
         "zh-Hans" : {
@@ -16326,6 +16491,9 @@
         }
       }
     },
+    "Use for ACP engine" : {
+
+    },
     "Use in Current Film" : {
       "localizations" : {
         "zh-Hans" : {
@@ -16471,6 +16639,9 @@
           }
         }
       }
+    },
+    "Uses the ACP client selected in Agent settings on this Mac." : {
+
     },
     "Uses the endpoint and key from the AI Provider tab. Many gateways list audio models but don't implement /v1/audio/transcriptions — if you get a 404, use the provider's own endpoint." : {
       "extractionState" : "stale",
