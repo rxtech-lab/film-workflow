@@ -280,10 +280,17 @@ Previews use the normal timeline exporter at H.264 MP4 / 720p, preserving the
 aspect ratio, and are capped at 15 seconds. Footage previews excerpt the real
 clip; music/sound previews combine cover art with actual audible audio; font
 previews render a specimen with the supplied font; modifiers demonstrate the
-supplied descriptor on mock images. A Remotion demonstration is authored by
-the agent from the actual prompt and mock assets in the authoring workspace,
-then rendered and supplied to `marketplace_render_preview`. Template images
-are always generated mock scenes. Original film media never enters the
+supplied descriptor on mock images. Template and Remotion demonstrations are authored by
+an agent in `marketplace_workspace` from the actual prompt, visual style,
+editing guidance and shot instructions, using fictional mock elements and
+replaceable placeholders. Animated UI and typography should be implemented
+with Remotion. The agent inspects representative frames for duplicated text,
+clipping, legibility and scene changes, corrects defects, then renders the
+sequence and supplies its workspace movie as the required `demo_path` to
+`marketplace_render_preview`. The tool excerpts that movie at its original
+pace; it never compresses the shot plan or generates a still-image slideshow.
+Templates must retain their defined aspect ratio. A changed movie at the same
+path invalidates the preview cache. Template images are fictional mock assets. Original film media never enters the
 template preview resolver. Explicit playback supports sound; hover is muted.
 
 ## Portable project templates

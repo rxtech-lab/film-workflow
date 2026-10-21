@@ -330,6 +330,7 @@ final class MarketplaceAuthoringService {
         let account = try await requireAdmin()
         let item = try await get(itemId)
         if let current = jobs.values.first(where: { $0.itemId == itemId && $0.operation == "preview" && !($0.isFinished) }) { return current }
+        _ = try MarketplacePreviewRenderer.demonstrationURL(item: item, demoPath: demoPath, directory: directory(for: itemId))
         var job = existingJob ?? MarketplaceAuthoringJob(itemId: itemId, userId: account, operation: "preview", mock: item.item.kind == .projectTemplate)
         job.previewStart = start; job.previewDuration = duration; job.demoPath = demoPath; job.state = "queued"
         let started = job

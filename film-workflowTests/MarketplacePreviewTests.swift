@@ -7,21 +7,35 @@ import Testing
 
 @Suite("Marketplace preview rendering", .serialized) @MainActor
 struct MarketplacePreviewTests {
-    @Test("Template previews use only mock assets, remain short, and preserve portrait aspect")
+    @Test("Template previews require an authored workspace movie and never generate a slideshow")
     func mockTemplate() async throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent("PreviewTests-\(UUID())")
         defer { try? FileManager.default.removeItem(at: root) }
         let service = MarketplaceAuthoringService(root: root, authenticated: { true }, transport: { _, _, _ in Data(#"{"can_author":true,"user_id":"test"}"#.utf8) })
         try await service.requireAdmin()
         let id = UUID().uuidString, directory = try service.directory(for: id)
-        let image = try mockPNG(directory)
+        let path = try mockPNG(directory, width: 720, height: 1280)
+        // A deterministic movie fixture; this test verifies ingestion/excerpting,
+        // while the agent remains responsible for authoring and visual review.
+        let fixture = MarketplaceAuthoringItem(item: .init(id: id, kind: .footage, category: "test", title: "Fixture", metadata: .init(mediaType: "image")), categoryId: "test", status: "draft", updatedAt: "1")
+        let movie = try await MarketplacePreviewRenderer.render(item: fixture, start: 0, duration: 1, demoPath: nil, service: service, contentFile: { _ in path }) { _ in }
         var definition = ProjectTemplateTests().template(); definition.width = 720; definition.height = 1280
         definition.shots[0].durationSeconds = 60
         let item = MarketplaceAuthoringItem(item: .init(id: id, kind: .projectTemplate, category: "test", title: "Portrait"), categoryId: "test", status: "draft", updatedAt: "1", contentText: try definition.json())
-        var mockPrompts: [String] = []
-        let output = try await MarketplacePreviewRenderer.render(item: item, start: 0, duration: 0.5, demoPath: nil, service: service, contentFile: { _ in Issue.record("Template requested source media"); throw MarketplaceAuthoringError.invalid("No source media permitted") }, mockAsset: { _, prompt in mockPrompts.append(prompt); return image }) { _ in }
-        #expect(mockPrompts.count == 1)
-        #expect(mockPrompts[0].contains("fictional mock image"))
+        #expect(throws: (any Error).self) {
+            try MarketplacePreviewRenderer.demonstrationURL(item: item, demoPath: nil, directory: directory)
+        }
+        let outside = root.appendingPathComponent("outside.mp4")
+        try Data().write(to: outside)
+        #expect(throws: (any Error).self) {
+            try MarketplacePreviewRenderer.demonstrationURL(item: item, demoPath: outside.path, directory: directory)
+        }
+        let link = directory.appendingPathComponent("linked.mp4")
+        try FileManager.default.createSymbolicLink(at: link, withDestinationURL: outside)
+        #expect(throws: (any Error).self) {
+            try MarketplacePreviewRenderer.demonstrationURL(item: item, demoPath: link.path, directory: directory)
+        }
+        let output = try await MarketplacePreviewRenderer.render(item: item, start: 0.25, duration: 0.5, demoPath: movie.video.path, service: service, contentFile: { _ in Issue.record("Template requested source media"); throw MarketplaceAuthoringError.invalid("No source media permitted") }, mockAsset: { _, _ in Issue.record("Template must not generate a slideshow"); return path }) { _ in }
         let asset = AVURLAsset(url: output.video)
         #expect(try await asset.load(.duration).seconds <= 0.54)
         let track = try #require(try await asset.loadTracks(withMediaType: .video).first)
@@ -48,9 +62,17 @@ struct MarketplacePreviewTests {
         try await assertAudible(excerpt.video)
         #expect(try await AVURLAsset(url: excerpt.video).load(.duration).seconds < 0.31)
     }
-    private func mockPNG(_ directory: URL) throws -> URL {
+    private func mockPNG(_ directory: URL, width: Int = 1280, height: Int = 720) throws -> URL {
         let path = directory.appendingPathComponent("mock.png")
-        try MarketplacePreviewRenderer.drawSpecimen(title: "Mock Scene", font: .systemFont(ofSize: 64), to: path)
+        let bitmap = try #require(NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: width, pixelsHigh: height, bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0))
+        let pixels = try #require(bitmap.bitmapData)
+        for row in 0..<height {
+            for column in 0..<width {
+                let index = row * bitmap.bytesPerRow + column * 4
+                pixels[index] = 20; pixels[index + 1] = 140; pixels[index + 2] = 120; pixels[index + 3] = 255
+            }
+        }
+        try #require(bitmap.representation(using: .png, properties: [:])).write(to: path)
         return path
     }
     private func writeTone(_ url: URL) throws {

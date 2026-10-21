@@ -164,8 +164,8 @@ struct RetimedMediaTests {
         }
     }
 
-    @Test("Audio speed and reverse reach preview, meters and exported samples")
-    @MainActor func audioExport() async throws {
+    @Test("Audio speed and reverse reach preview, meters and exported samples", arguments: [2.0, 4.0])
+    @MainActor func audioExport(rate: Double) async throws {
         let dir = try Fixtures.directory()
         defer { try? FileManager.default.removeItem(at: dir) }
         let url = dir.appendingPathComponent("tone.caf")
@@ -173,24 +173,27 @@ struct RetimedMediaTests {
         let source = ClipSource(id: "audio", kind: .audio, displayName: "Tone")
         let clip = Clip(source: source, start: 0, duration: 2, sourceDuration: 2)
         var timeline = Timeline(width: 320, height: 180, tracks: [Track(kind: .audio, name: "A1", clips: [clip])])
-        try TimelineEditor.changeSpeed(&timeline, clipID: clip.id, rate: 2)
+        let duration = 2 / rate
+        try TimelineEditor.changeSpeed(&timeline, clipID: clip.id, rate: rate)
         try TimelineEditor.reverse(&timeline, clipID: clip.id)
-        _ = try TimelineEditor.split(&timeline, clipID: clip.id, at: 0.5)
+        _ = try TimelineEditor.split(&timeline, clipID: clip.id, at: duration / 2)
         let resolver = FixtureResolver(files: ["audio": .file(url, naturalDuration: 2, naturalSize: nil)])
         let built = try await TimelineCompositionBuilder(resolver: resolver).build(timeline, allowPlaceholders: false)
-        #expect(abs(CMTimeGetSeconds(built.duration) - 1) < 0.001)
+        #expect(abs(CMTimeGetSeconds(built.duration) - duration) < 0.001)
         #expect(built.audioMix?.inputParameters.allSatisfy { $0.audioTimePitchAlgorithm == .spectral } == true)
         let reader = AudioLevelReader()
         await reader.setSource(AudioLevelSource(asset: built.asset, mix: built.audioMix))
-        #expect(await reader.level(at: 0.2).left < 0.2)
-        #expect(await reader.level(at: 0.7).left > 0.5)
+        #expect(await reader.level(at: duration * 0.2).left < 0.2)
+        #expect(await reader.level(at: duration * 0.7).left > 0.5)
         let output = dir.appendingPathComponent("retimed.mp4")
         try await TimelineExporter.export(timeline, resolver: resolver, to: output, preset: .h264) { _ in }
         let asset = AVURLAsset(url: output)
-        #expect(abs(CMTimeGetSeconds(try await asset.load(.duration)) - 1) < 0.05)
+        let exportedDuration = CMTimeGetSeconds(try await asset.load(.duration))
+        #expect(abs(exportedDuration - duration) < 0.05,
+                "Exported duration: \(exportedDuration)s; timeline duration: \(duration)s at \(rate)x")
         await reader.setSource(AudioLevelSource(asset: asset, mix: nil))
-        #expect(await reader.level(at: 0.2).left < 0.2)
-        #expect(await reader.level(at: 0.7).left > 0.5)
+        #expect(await reader.level(at: duration * 0.2).left < 0.2)
+        #expect(await reader.level(at: duration * 0.7).left > 0.5)
     }
 
     @Test("Video speed maps source ranges into independent timeline segments")

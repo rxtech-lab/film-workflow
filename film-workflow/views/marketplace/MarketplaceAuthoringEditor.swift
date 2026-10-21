@@ -491,7 +491,12 @@ struct MarketplaceAuthoringEditor: View {
                     .font(.callout)
                     actionRow {
                         Button(input.kind == .audio || input.kind == .soundEffect ? "Choose Audio Preview…" : "Choose Preview Video…", systemImage: input.kind == .audio || input.kind == .soundEffect ? "waveform" : "film") { selectFile(role: "preview-video") }
-                        Button("Generate Preview", systemImage: "wand.and.stars") { generatePreview(layout) }
+                        if input.kind != .projectTemplate && input.kind != .remotion {
+                            Button("Generate Preview", systemImage: "wand.and.stars") { generatePreview(layout) }
+                        }
+                    }
+                    if input.kind == .projectTemplate || input.kind == .remotion {
+                        hint(String(localized: "Ask the agent to build a demonstration from this item's instructions with fictional mock elements and replaceable placeholders, review its animation, then render and upload a preview."))
                     }
                     hint(video.hint)
                 }

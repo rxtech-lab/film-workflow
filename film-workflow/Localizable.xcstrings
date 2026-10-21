@@ -2101,6 +2101,9 @@
         }
       }
     },
+    "Ask the agent to build a demonstration from this item's instructions with fictional mock elements and replaceable placeholders, review its animation, then render and upload a preview." : {
+
+    },
     "Ask the agent to do the work" : {
       "localizations" : {
         "zh-Hans" : {
