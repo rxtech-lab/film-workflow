@@ -125,7 +125,8 @@ final class AgentModelCatalog {
         #endif
     }
 
-    /// Re-reads `codex debug models`. Cheap when a fresh cache exists unless
+    /// Re-reads `codex debug models`. The cache tracks the selected executable, so runtime upgrades refresh it.
+    /// Cheap when a fresh cache exists unless
     /// `forceRefresh` is set.
     func loadCodexModels(forceRefresh: Bool) async {
         #if os(macOS)
@@ -176,7 +177,7 @@ final class AgentModelCatalog {
         case .claudeCode: return Self.claudeModels
         case .codex: return codexModels
         case .subscription: return subscriptionChatModels
-        case .appleIntelligence, .openAICompatible: return []
+        case .appleIntelligence, .openAICompatible, .acp: return []
         }
     }
 
@@ -249,7 +250,7 @@ final class AgentModelCatalog {
         switch backend {
         case .codex: return efforts(forCodexModel: model, in: options)
         case .claudeCode: return claudeEfforts
-        case .appleIntelligence, .openAICompatible, .subscription: return []
+        case .appleIntelligence, .openAICompatible, .subscription, .acp: return []
         }
     }
 

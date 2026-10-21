@@ -1,3 +1,6 @@
+#if os(macOS)
+import RxAgentManagement
+#endif
 import Foundation
 import RxAgentSDK
 
@@ -30,6 +33,7 @@ enum AgentClientFactory {
         case .subscription: AgentClientID("rxfilm-subscription")
         case .claudeCode: .claudeCode
         case .codex: .codex
+        case .acp: .acp("film-configured")
         }
     }
 
@@ -51,14 +55,16 @@ enum AgentClientFactory {
     ///   handler already knows which thread to tell.
     static func makeClients(
         config: AppConfig?,
+        acpConfiguration: String? = nil,
         onModelRejected: (@MainActor @Sendable (BackendError) -> Void)? = nil
     ) -> [any AgentClient] {
-        AgentBackend.supported.compactMap { make($0, config: config, onModelRejected: onModelRejected) }
+        AgentBackend.supported.compactMap { make($0, config: config, acpConfiguration: acpConfiguration, onModelRejected: onModelRejected) }
     }
 
     static func make(
         _ backend: AgentBackend,
         config: AppConfig?,
+        acpConfiguration: String? = nil,
         onModelRejected: (@MainActor @Sendable (BackendError) -> Void)? = nil
     ) -> (any AgentClient)? {
         switch backend {
@@ -102,6 +108,17 @@ enum AgentClientFactory {
                 )
             #else
                 return nil
+            #endif
+
+        case .acp:
+            #if os(macOS)
+            let pinned = acpConfiguration.flatMap { $0.data(using: .utf8) }
+                .flatMap { try? JSONDecoder().decode(ManagedACPClient.self, from: $0) }
+            guard let client = pinned ?? AgentManagementStore.shared.selected else { return nil }
+            return ACPClient(command: client.command, args: client.arguments,
+                displayName: client.name, id: clientID(for: backend))
+            #else
+            return nil
             #endif
 
         case .codex:
@@ -157,6 +174,7 @@ enum AgentClientFactory {
     /// turn arrives in one block. Everything else behaves identically.
     private static func subscriptionConfiguration(
         config: AppConfig?,
+        acpConfiguration: String? = nil,
         onModelRejected: (@MainActor @Sendable (BackendError) -> Void)? = nil
     ) -> OpenAIChatClient.Configuration {
         let configured = config?.subscriptionChatModel.trimmingCharacters(in: .whitespaces)

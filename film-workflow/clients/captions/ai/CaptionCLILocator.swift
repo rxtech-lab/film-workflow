@@ -14,6 +14,8 @@ nonisolated enum CaptionCLILocator {
     static var wellKnownDirectories: [String] {
         let home = NSHomeDirectory()
         return [
+            "\(home)/Library/Application Support/RxFilm/agents/runtimes/claude/node_modules/.bin",
+            "\(home)/Library/Application Support/RxFilm/agents/runtimes/codex/node_modules/.bin",
             "/opt/homebrew/bin",
             "/usr/local/bin",
             "\(home)/.local/bin",

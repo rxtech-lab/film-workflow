@@ -1,3 +1,6 @@
+#if os(macOS)
+import RxAgentManagement
+#endif
 import CoreGraphics
 import Foundation
 import Observation
@@ -58,6 +61,7 @@ final class AgentController {
     /// MCP holds taken per thread, released when the thread's agent is torn
     /// down. The server is refcounted, so overlapping threads share one.
     @ObservationIgnored private var mcpHolds: Set<UUID> = []
+    @ObservationIgnored private var agentACPConfigurations: [UUID: String] = [:]
 
     /// Bumped by `cancel(threadID:)`, so a send still awaiting its setup when
     /// the user hits Stop knows not to start the turn it was about to start.
@@ -137,11 +141,14 @@ final class AgentController {
     /// this controller.
     func prepare(thread: AgentThread, context: ModelContext) async {
         _ = await MarketplaceAuthoringService.shared.refreshAccess()
+        guard !Task.isCancelled else { return }
         let container = ProjectDocumentController.shared.document(for: thread)?.container
             ?? ProjectDocumentController.shared.activeDocument?.container
 
         do {
             _ = try await agent(for: thread, context: context, container: container)
+        } catch is CancellationError {
+            return
         } catch {
             setError(error.localizedDescription, for: thread.id)
         }
@@ -154,6 +161,7 @@ final class AgentController {
 
     /// Tears a thread's agent down, releasing its MCP hold and any child process.
     func clear(threadID: UUID) {
+        agentACPConfigurations.removeValue(forKey: threadID)
         // The mode goes with the agent: it gates which tools the CLI approval
         // hook allows, and a torn-down wizard thread must not keep answering
         // for a Simple mode allowlist.
@@ -381,15 +389,49 @@ final class AgentController {
         context: ModelContext,
         container: ModelContainer?
     ) async throws -> Agent {
+        #if os(macOS)
+        await AgentManagementStore.shared.load()
+        if thread.acpClientJSON == nil, let selected = AgentManagementStore.shared.selected {
+            thread.acpClientJSON = String(data: try JSONEncoder().encode(selected), encoding: .utf8)
+        }
+        if backend(for: thread) == .acp,
+           let data = thread.acpClientJSON?.data(using: .utf8),
+           let pinned = try? JSONDecoder().decode(ManagedACPClient.self, from: data) {
+            guard AgentManagementStore.shared.clients.contains(where: { $0.id == pinned.id && $0.enabled }) else {
+                throw CaptionAIError.backendUnavailable(.acp, "This conversation’s ACP client was removed or disabled. Start a new conversation with an enabled client.")
+            }
+        }
+        #endif
         let config = try? AppConfig.loadFromKeychain()
         lastConfig = config
         let preferred = backend(for: thread)
-        let resolved = try AgentBackendAvailability.shared.resolved(
-            preferred: preferred,
-            config: config,
-            for: .conversation
-        )
+        let resolved: AgentBackend
+        if preferred == .acp {
+            #if os(macOS)
+            guard AgentManagementStore.shared.loadError == nil,
+                  let data = thread.acpClientJSON?.data(using: .utf8),
+                  let pinned = try? JSONDecoder().decode(ManagedACPClient.self, from: data),
+                  FileManager.default.isExecutableFile(atPath: pinned.command.hasPrefix("/")
+                    ? pinned.command : CaptionCLILocator.find(pinned.command) ?? "") else {
+                throw CaptionAIError.backendUnavailable(.acp, "The ACP client is unavailable. Check Clients & Accounts in Agent settings.")
+            }
+            resolved = .acp
+            #else
+            throw CaptionAIError.backendUnavailable(.acp, "ACP clients require macOS.")
+            #endif
+        } else {
+            resolved = try AgentBackendAvailability.shared.resolved(preferred: preferred, config: config, for: .conversation)
+        }
 
+        if let existing = agents[thread.id],
+           (!existing.clients.contains(where: { $0.id == AgentClientFactory.clientID(for: resolved) })
+            || (resolved == .acp && agentACPConfigurations[thread.id] != thread.acpClientJSON)) {
+            await existing.shutdown()
+            agents[thread.id] = nil
+            #if os(macOS)
+            if mcpHolds.remove(thread.id) != nil { await AgentMCPBridge.release() }
+            #endif
+        }
         let agent: Agent
         if let existing = agents[thread.id] {
             agent = existing
@@ -400,6 +442,7 @@ final class AgentController {
                 container: container
             )
             agents[thread.id] = agent
+            agentACPConfigurations[thread.id] = thread.acpClientJSON
         }
 
         configure(
@@ -418,7 +461,7 @@ final class AgentController {
         container: ModelContainer?
     ) async throws -> Agent {
         let threadID = thread.id
-        let clients = AgentClientFactory.makeClients(config: config) { [weak self] error in
+        let clients = AgentClientFactory.makeClients(config: config, acpConfiguration: thread.acpClientJSON) { [weak self] error in
             self?.setUnavailableModel(UnavailableModelNotice(error), for: threadID)
         }
         guard !clients.isEmpty else { throw CaptionAIError.noBackendAvailable }

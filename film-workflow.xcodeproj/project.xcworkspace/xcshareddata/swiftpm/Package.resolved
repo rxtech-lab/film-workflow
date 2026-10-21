@@ -1,13 +1,13 @@
 {
-  "originHash" : "48efc569ecda17538ba78de1430dadfbf2ef6d0bb68b75d39649223b1bf728d8",
+  "originHash" : "a1dc370005e75e2b4d59914bc3a63f228d5d477c80f0c217586b5b2f88b2fedf",
   "pins" : [
     {
       "identity" : "rxagentsdk",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/rxtech-lab/RxAgentSDK",
       "state" : {
-        "revision" : "15cd2bde13eef44e9fa02e1c7197ba771ad6e53e",
-        "version" : "1.0.8"
+        "revision" : "b2c510b8e8638768f5c569bea4ee2b2c00a23dd5",
+        "version" : "1.1.0"
       }
     },
     {

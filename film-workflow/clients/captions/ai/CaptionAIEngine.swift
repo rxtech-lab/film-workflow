@@ -255,6 +255,9 @@ enum CaptionAIEngineFactory {
                 backend: .subscription
             )
 
+        case .acp:
+            throw CaptionAIError.backendUnavailable(backend, "ACP clients run in the agent window. Choose another engine for caption batch tasks.")
+
         case .claudeCode, .codex:
             #if os(macOS)
                 guard task == .translation else {

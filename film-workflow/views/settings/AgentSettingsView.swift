@@ -7,13 +7,26 @@ struct AgentSettingsView: View {
     @State private var availability = AgentBackendAvailability.shared
     @State private var config: AppConfig?
 
+    #if os(macOS)
+    @State private var managingClients = false
+    #endif
+
     var body: some View {
         Form {
+            #if os(macOS)
+            Section("Clients & Accounts") {
+                Button("Manage ACP Clients & GPT / Claude Accounts…") { managingClients = true }
+            }
+            #endif
             backendSection
             policySection
             limitsSection
         }
         .formStyle(.grouped)
+        #if os(macOS)
+        .sheet(isPresented: $managingClients) { AgentManagementView() }
+        .task { await AgentManagementStore.shared.load() }
+        #endif
         .onAppear {
             config = try? AppConfig.loadFromKeychain()
             availability.refresh()

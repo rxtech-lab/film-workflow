@@ -67,16 +67,9 @@ struct AgentThreadView: View {
                 set: { controller.setUnavailableModel($0, for: threadID) }
             )
         )
-        .task { await controller.prepare(thread: thread, context: modelContext) }
-        // The SDK composer hands the draft straight to the agent, so nothing
-        // re-runs `configure` at send time. An engine or model pick has to be
-        // applied the moment it is made, or the thread keeps answering on
-        // whatever was resolved when it first appeared.
-        .onChange(of: thread.backendRaw) { _, _ in
-            Task { await controller.prepare(thread: thread, context: modelContext) }
-        }
-        .onChange(of: thread.modelOverridesJSON) { _, _ in
-            Task { await controller.prepare(thread: thread, context: modelContext) }
+        // One preparation task covers engine, model and ACP configuration changes together.
+        .task(id: [thread.backendRaw, thread.modelOverridesJSON ?? "", thread.acpClientJSON ?? ""]) {
+            await controller.prepare(thread: thread, context: modelContext)
         }
         .onAppear { controller.markSeen(threadID) }
         .onChange(of: controller.isRunning(threadID)) { _, streaming in
