@@ -81,6 +81,11 @@ public final class RemotionEngine {
             try await NativeMedia.writePNG(image, to: output)
         }
     }
+    /// Retains one frozen source and renderer for a sequence of thumbnail requests.
+    public func makeStillSession(project: RemotionPreparedProject, settings: RemotionRenderSettings = .init()) async throws -> RemotionStillSession {
+        let frozen = try await project.frozenCopy()
+        return RemotionStillSession(project: frozen, settings: settings)
+    }
     public func snapshotMapKit(_ request: RemotionMapRequest) async throws -> RemotionMapSnapshot {
         try await mapMedia.mapSnapshot(JSONEncoder().encode(request))
     }

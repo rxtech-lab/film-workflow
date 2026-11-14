@@ -51,7 +51,7 @@ extension RemotionEngine {
                 try await withThrowingTaskGroup(of: MovieFrame.self) { group in
                     for worker in workers {
                         let frame = worker.index
-                        group.addTask { try await worker.render(frame: frame, preserveAlpha: preserveAlpha) }
+                        group.addTask { try await worker.render(frame: frame, preserveAlpha: preserveAlpha, frameIndependent: settings.frameIndependent == true) }
                     }
                     // At most one pending frame per worker. Do not schedule more until
                     // the next ordered frame has passed through the bounded encoder.
@@ -68,7 +68,7 @@ extension RemotionEngine {
                         let next = frame + count
                         if next < c.durationInFrames {
                             let worker = workers[result.worker]
-                            group.addTask { try await worker.render(frame: next, preserveAlpha: preserveAlpha) }
+                            group.addTask { try await worker.render(frame: next, preserveAlpha: preserveAlpha, frameIndependent: settings.frameIndependent == true) }
                         }
                         onProgress(.init(stage: .rendering, fraction: Double(frame + 1) / Double(c.durationInFrames),
                                          detail: "\(frame + 1) / \(c.durationInFrames)"))
@@ -104,11 +104,11 @@ private struct MovieFrame: Sendable {
     let page: RemotionWebPage
     private var previous = -1
     init(index: Int, page: RemotionWebPage) { self.index = index; self.page = page }
-    func render(frame: Int, preserveAlpha: Bool) async throws -> MovieFrame {
+    func render(frame: Int, preserveAlpha: Bool, frameIndependent: Bool) async throws -> MovieFrame {
         var audio: [RemotionAudioSample] = []
         // Replay intervening frames in every worker, preserving stateful canvases,
         // seeded randomness, effects and audio registration across worker boundaries.
-        for position in (previous + 1)...frame {
+        for position in (frameIndependent ? frame : previous + 1)...frame {
             try Task.checkCancellation()
             audio = try await page.advance(to: position)
             previous = position

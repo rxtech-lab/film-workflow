@@ -68,10 +68,13 @@ public struct RemotionRenderSettings: Codable, Equatable, Sendable {
     /// Scale captured pixels without changing the composition's logical viewport or timing.
     /// Nil keeps full resolution. Preview intermediates can use a value greater than zero and at most one.
     public var captureScale: Double?
+    /// Opt in only when every frame is a pure function of its timestamp.
+    /// Stateful canvases and effects must keep sequential replay (the default).
+    public var frameIndependent: Bool?
     public init(width: Int? = nil, height: Int? = nil, fps: Double? = nil, codec: Codec = .h264, concurrency: Int? = nil,
-                captureScale: Double? = nil) {
+                captureScale: Double? = nil, frameIndependent: Bool? = nil) {
         self.width = width; self.height = height; self.fps = fps; self.codec = codec; self.concurrency = concurrency
-        self.captureScale = captureScale
+        self.captureScale = captureScale; self.frameIndependent = frameIndependent
     }
     func capturedComposition(_ composition: RemotionComposition) -> RemotionComposition {
         let scale = captureScale ?? 1
