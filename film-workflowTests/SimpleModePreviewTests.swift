@@ -99,26 +99,41 @@ struct SimpleModePreviewTests {
         Issue.record("Preview did not reach the expected playback state")
     }
 
-    /// Samples the centre of the native live preview from a snapshot of the host.
+    /// Checks a snapshot of the host: the composition is the only magenta or cyan
+    /// content, so the expected colour must cover a large share of the pixels and
+    /// the other colour must be absent. Coordinate-free, so it is independent of
+    /// how the hosted accessibility frame maps to the bitmap.
     private func assertColor(_ color: NSColor, of element: HostedAccessibilityElement, in host: NSView) async throws {
         let expected = try #require(color.usingColorSpace(.sRGB))
+        // Saturated colours have two channels above 0.8 and one below 0.6; HDR
+        // snapshots lift a nominally zero channel to around 0.5.
+        func dominant(_ c: NSColor) -> (Bool, Bool, Bool) { (c.redComponent > 0.8, c.greenComponent > 0.8, c.blueComponent > 0.8) }
+        // Magenta (R, B) and cyan (G, B) differ in red and green.
+        let target = dominant(expected)
+        let opposite = (!target.0, !target.1, target.2)
+        var last = (0, 0, 0)
         for _ in 0..<40 {
             host.layoutSubtreeIfNeeded()
-            if let window = host.window, let bitmap = host.bitmapImageRepForCachingDisplay(in: host.bounds) {
+            if let bitmap = host.bitmapImageRepForCachingDisplay(in: host.bounds) {
                 host.cacheDisplay(in: host.bounds, to: bitmap)
-                let screen = element.accessibilityFrame()
-                let local = host.convert(window.convertFromScreen(screen), from: nil)
-                let scale = Double(bitmap.pixelsWide) / host.bounds.width
-                let x = Int(local.midX * scale)
-                let y = Int((host.isFlipped ? local.midY : host.bounds.height - local.midY) * scale)
-                if let actual = bitmap.colorAt(x: x, y: y)?.usingColorSpace(.sRGB),
-                   (actual.redComponent > 0.5) == (expected.redComponent > 0.5),
-                   (actual.greenComponent > 0.5) == (expected.greenComponent > 0.5),
-                   (actual.blueComponent > 0.5) == (expected.blueComponent > 0.5) { return }
+                var hits = 0, misses = 0, total = 0
+                for y in stride(from: 0, to: bitmap.pixelsHigh, by: 8) {
+                    for x in stride(from: 0, to: bitmap.pixelsWide, by: 8) {
+                        guard let c = bitmap.colorAt(x: x, y: y)?.usingColorSpace(.sRGB) else { continue }
+                        total += 1
+                        let high = [c.redComponent, c.greenComponent, c.blueComponent].filter { $0 > 0.8 }.count
+                        let low = [c.redComponent, c.greenComponent, c.blueComponent].filter { $0 < 0.6 }.count
+                        guard high == 2, low == 1 else { continue }
+                        let d = dominant(c)
+                        if d == target { hits += 1 } else if d == opposite { misses += 1 }
+                    }
+                }
+                last = (hits, misses, total)
+                if hits * 20 > total, misses * 100 < total { return }
                 try bitmap.representation(using: .png, properties: [:])?.write(to: URL(fileURLWithPath: "/tmp/film-wizard-live.png"))
             }
             try await Task.sleep(for: .milliseconds(100))
         }
-        Issue.record("The live preview did not show \(color) (\(String(describing: element.accessibilityValue())), frame \(String(describing: element.accessibilityFrame()))); see /tmp/film-wizard-live.png")
+        Issue.record("The live preview did not show \(color): \(last.0) matching, \(last.1) opposite of \(last.2) samples; see /tmp/film-wizard-live.png")
     }
 }
