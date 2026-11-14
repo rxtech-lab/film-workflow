@@ -99,9 +99,7 @@ final class RemotionWebPage: NSObject, WKNavigationDelegate {
         try Task.checkCancellation()
         let result: Any?
         do {
-            result = try await withTaskCancellationHandler {
-                try await webView.callAsyncJavaScript("return await window.rxRenderFrame(frame)", arguments: ["frame": frame], in: nil, contentWorld: .page)
-            } onCancel: { Task { @MainActor in self.dispose() } }
+            result = try await javascript("return await window.rxRenderFrame(frame)", arguments: ["frame": frame])
         } catch {
             try Task.checkCancellation()
             throw RemotionError.rendering((error as NSError).userInfo["WKJavaScriptExceptionMessage"] as? String ?? error.localizedDescription)
@@ -119,19 +117,21 @@ final class RemotionWebPage: NSObject, WKNavigationDelegate {
         // WKSnapshotConfiguration uses points and WKWebView paints an opaque backing.
         // Two known backgrounds recover premultiplied alpha without private WebKit APIs.
         let script = "window.rxOriginalBackground ??= document.body.style.backgroundColor; document.body.style.backgroundColor=color;"
-        _ = try await webView.callAsyncJavaScript(script, arguments: ["color": "black"], in: nil, contentWorld: .page)
+        _ = try await javascript(script, arguments: ["color": "black"])
         do {
             let black = try await snapshotImage(c)
             var white: CGImage?
             if preserveAlpha {
-                _ = try await webView.callAsyncJavaScript(script, arguments: ["color": "white"], in: nil, contentWorld: .page)
+                _ = try await javascript(script, arguments: ["color": "white"])
                 white = try await snapshotImage(c)
             }
-            _ = try await webView.evaluateJavaScript("document.body.style.backgroundColor=window.rxOriginalBackground||''")
+            _ = try await javascript("document.body.style.backgroundColor=window.rxOriginalBackground||''")
             let captured = captureSettings.capturedComposition(c)
             return try await CapturePixels.image(black: black, white: white, width: captured.width, height: captured.height)
         } catch {
-            _ = try? await webView.evaluateJavaScript("document.body.style.backgroundColor=window.rxOriginalBackground||''")
+            if !Task.isCancelled, !disposed {
+                _ = try? await javascript("document.body.style.backgroundColor=window.rxOriginalBackground||''")
+            }
             throw error
         }
     }
@@ -140,11 +140,37 @@ final class RemotionWebPage: NSObject, WKNavigationDelegate {
         config.rect = CGRect(x: 0, y: 0, width: c.width, height: c.height)
         config.snapshotWidth = NSNumber(value: captureSettings.capturedComposition(c).width)
         config.afterScreenUpdates = true
-        let image = try await webView.takeSnapshot(configuration: config)
+        let operation = WebPageOperation<NSImage>()
+        let image = try await withTaskCancellationHandler {
+            try await operation.wait { complete in
+                webView.takeSnapshot(with: config) { image, error in
+                    if let image { complete(.success(image)) }
+                    else { complete(.failure(error ?? RemotionError.rendering("WebKit returned no snapshot"))) }
+                }
+            }
+        } onCancel: {
+            Task { @MainActor in operation.cancel(); self.dispose() }
+        }
+        try Task.checkCancellation()
         guard let cg = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
             throw RemotionError.rendering("WebKit did not return a frame image")
         }
         return cg
+    }
+    private func javascript(_ script: String, arguments: [String: Any] = [:]) async throws -> Any? {
+        try Task.checkCancellation()
+        guard !disposed else { throw RemotionError.disposed }
+        let operation = WebPageOperation<Any>()
+        let result = try await withTaskCancellationHandler {
+            try await operation.wait { complete in
+                webView.callAsyncJavaScript(script, arguments: arguments, in: nil, in: .page,
+                                            completionHandler: complete)
+            }
+        } onCancel: {
+            Task { @MainActor in operation.cancel(); self.dispose() }
+        }
+        try Task.checkCancellation()
+        return result
     }
     func command(_ command: [String: Any]) async throws {
         guard !disposed else { throw RemotionError.disposed }
@@ -214,4 +240,31 @@ public final class RemotionPreviewSession {
         try await page.command(["serial": serial,"frame": frame,"playing": playing,"rate": rate,"volume": volume,"muted": muted])
     }
     public func dispose() { page.dispose() }
+}
+
+/// Complete exactly once, even if WebKit replies after cancellation or never replies.
+@MainActor
+final class WebPageOperation<Value> {
+    private var continuation: CheckedContinuation<Void, Error>?
+    private var result: Result<Value, Error>?
+    private var cancelled = false
+    func wait(_ start: (@escaping @MainActor (Result<Value, Error>) -> Void) -> Void) async throws -> Value {
+        try Task.checkCancellation()
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+            guard !cancelled else { continuation.resume(throwing: CancellationError()); return }
+            self.continuation = continuation
+            start { [weak self] result in
+                guard let pending = self?.continuation else { return }
+                self?.continuation = nil
+                self?.result = result
+                pending.resume()
+            }
+        }
+        return try result!.get()
+    }
+    func cancel() {
+        cancelled = true
+        let pending = continuation; continuation = nil
+        pending?.resume(throwing: CancellationError())
+    }
 }

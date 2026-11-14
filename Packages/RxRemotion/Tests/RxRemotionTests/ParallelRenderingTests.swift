@@ -78,6 +78,70 @@ struct ParallelRenderingTests {
         #expect(maxGap < 0.5, "MainActor was stalled for \(maxGap) seconds")
     }
 
+    @Test func independentFramesMatchSequentialReplay() async throws {
+        let root = try MediaIntegrationTests().project("""
+        import React from 'react';
+        import {Audio,staticFile,useCurrentFrame} from 'remotion';
+        export const COMPOSITION_WIDTH=160,COMPOSITION_HEIGHT=90,COMPOSITION_FPS=30,COMPOSITION_DURATION_IN_FRAMES=13;
+        export function MyComposition(){const f=useCurrentFrame();return <>
+          <div style={{position:'absolute',width:30,height:40,left:f*7,top:10,background:'rgba(40,220,80,0.5)'}}/>
+          <Audio src={staticFile('tone.wav')} volume={f=>0.2+f*0.01}/></>}
+        """)
+        defer { try? FileManager.default.removeItem(at: root) }
+        try MediaIntegrationTests.wav().write(to: root.appendingPathComponent("public/tone.wav"))
+        let engine = RemotionEngine(); defer { engine.closeAll() }
+        let project = try await engine.prepare(projectURL: root)
+        var reference: DecodedMovie?
+        for independent in [false, true] {
+            let output = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".mov")
+            defer { try? FileManager.default.removeItem(at: output) }
+            try await engine.renderMovie(project: project, to: output,
+                settings: .init(codec: .proRes4444, concurrency: 4, frameIndependent: independent))
+            let decoded = try await Self.decode(output)
+            #expect(decoded.frames.count == 13)
+            if let reference {
+                #expect(decoded.frames == reference.frames)
+                #expect(Self.audioError(decoded.audio, reference.audio) < 2)
+            } else { reference = decoded }
+        }
+    }
+
+    @Test func cancellingStalledFrameStopsWorkersAndPreservesDestination() async throws {
+        let root = try MediaIntegrationTests().project("""
+        import React,{useEffect} from 'react';
+        import {delayRender,useCurrentFrame} from 'remotion';
+        export const COMPOSITION_WIDTH=160,COMPOSITION_HEIGHT=90,COMPOSITION_FPS=30,COMPOSITION_DURATION_IN_FRAMES=30;
+        export function MyComposition(){const f=useCurrentFrame();
+          useEffect(()=>{if(f>0)delayRender('intentionally stalled')},[f]);
+          return <div style={{width:160,height:90,background:'red'}}/>}
+        """)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let engine = RemotionEngine(); defer { engine.closeAll() }
+        let project = try await engine.prepare(projectURL: root)
+        let output = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".mp4")
+        defer { try? FileManager.default.removeItem(at: output) }
+        let original = Data("existing export".utf8)
+        try original.write(to: output)
+        var render: Task<Void, Error>?
+        var canceller: Task<Void, Never>?
+        defer { canceller?.cancel() }
+        render = Task { @MainActor in
+            try await engine.renderMovie(project: project, to: output, settings: .init(concurrency: 4, frameIndependent: true)) {
+                if $0.stage == .rendering, canceller == nil {
+                    canceller = Task { @MainActor in
+                        try? await Task.sleep(for: .milliseconds(200))
+                        render?.cancel()
+                    }
+                }
+            }
+        }
+        let started = ContinuousClock.now
+        do { try await render!.value; Issue.record("Cancelled render unexpectedly succeeded") }
+        catch is CancellationError {}
+        #expect(started.duration(to: .now) < .seconds(10))
+        #expect(try Data(contentsOf: output) == original)
+    }
+
     private static func audioError(_ a: Data, _ b: Data) -> Double {
         let left = a.withUnsafeBytes { Array($0.bindMemory(to: Int16.self)) }
         let right = b.withUnsafeBytes { Array($0.bindMemory(to: Int16.self)) }

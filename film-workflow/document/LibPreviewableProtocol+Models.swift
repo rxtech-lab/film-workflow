@@ -69,37 +69,68 @@ extension RemotionProject: LibPreviewableProtocol {
 @MainActor
 private enum LibraryRemotionThumbnails {
     static var tail: Task<Void, Never>?
+    private static var session: RemotionStillSession?
+    private static var sessionKey: String?
+    private static var idleCleanup: Task<Void, Never>?
+
+    private static func releaseSession() async {
+        let old = session
+        session = nil; sessionKey = nil
+        await old?.close()
+    }
+
+    private static func scheduleCleanup() {
+        idleCleanup?.cancel()
+        idleCleanup = Task { @MainActor in
+            do { try await Task.sleep(for: .seconds(15)) } catch { return }
+            await releaseSession()
+        }
+    }
 
     static func image(title: String, directory: URL, source: String, time: Double, width: Int, height: Int, fps: Int, size: CGSize) async -> CGImage? {
         let previous = tail
         let work = Task { @MainActor () -> CGImage? in
             await previous?.value
             guard !Task.isCancelled else { return nil }
+            idleCleanup?.cancel()
+            defer { scheduleCleanup() }
             do {
                 try RemotionRuntime.shared.prepareProjectDirectory(directory)
                 let sourceURL = directory.appendingPathComponent("src/Composition.tsx")
                 if !FileManager.default.fileExists(atPath: sourceURL.path), !source.isEmpty {
                     try source.write(to: sourceURL, atomically: true, encoding: .utf8)
                 }
-                let hash = try RemotionSourceHasher.hash(projectDir: directory, width: width, height: height, fps: fps)
+                let hash = try await Task.detached(priority: .utility) {
+                    try RemotionSourceHasher.hash(projectDir: directory, width: width, height: height, fps: fps)
+                }.value
+                try Task.checkCancellation()
                 let frame = max(0, Int((time * Double(fps)).rounded(.down)))
                 let scale = min(1, max(size.width / Double(max(1, width)), size.height / Double(max(1, height))))
+                let renderKey = "\(directory.path):\(hash):\(scale):\(RemotionMapSettings.fingerprint)"
                 let key = SHA256.hash(data: Data("\(directory.path):\(hash):\(frame):\(scale):\(RemotionMapSettings.fingerprint)".utf8))
                     .map { String(format: "%02x", $0) }.joined()
                 let output = RenderDiskCache.url(.remotionFrames, key: key, extension: "png")
                 if !FileManager.default.fileExists(atPath: output.path) {
                     try FileManager.default.createDirectory(at: output.deletingLastPathComponent(), withIntermediateDirectories: true)
                     try await RenderQueue.shared.run(.thumbnail, title: title) { @MainActor _ in
-                        let engine = RemotionEngine(configuration: RemotionMapSettings.configuration)
-                        defer { engine.closeAll() }
-                        let project = try await engine.prepare(projectURL: directory)
+                        if sessionKey != renderKey || session == nil {
+                            await releaseSession()
+                            let engine = RemotionEngine(configuration: RemotionMapSettings.configuration)
+                            defer { engine.closeAll() }
+                            let project = try await engine.prepare(projectURL: directory)
+                            session = try await engine.makeStillSession(project: project,
+                                settings: .init(width: width, height: height, fps: Double(fps), captureScale: scale))
+                            sessionKey = renderKey
+                        }
                         try Task.checkCancellation()
-                        try await engine.renderStill(project: project, frame: frame, to: output,
-                                                     settings: .init(width: width, height: height, fps: Double(fps), captureScale: scale))
+                        try await session!.render(frame: frame, to: output)
                     }
                 }
                 return NSImage(contentsOf: output)?.cgImage(forProposedRect: nil, context: nil, hints: nil)
-            } catch { return nil }
+            } catch {
+                await releaseSession()
+                return nil
+            }
         }
         tail = Task { _ = await work.value }
         return await withTaskCancellationHandler { await work.value } onCancel: { work.cancel() }
