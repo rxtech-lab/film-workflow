@@ -509,15 +509,15 @@ enum MCPLibraryHandlers {
             try? RemotionCodeBuilder.writeComposition(project: p, source: source)
             try? context.save()
 
-            var previewStatus = "starting"
-            var previewURL: String?
+            // The composition is compiled natively; report whether it is ready to
+            // preview and render. Use the still tools to look at frames.
+            var previewStatus = "ready"
             do {
-                previewURL = try await RemotionPreviewSessions.shared.keepRunning(project: p).absoluteString
-                previewStatus = "running"
+                _ = try await MotionSwiftEngine.prepare(projectDir: p.projectDir)
             } catch {
                 previewStatus = "failed: \(error.localizedDescription)"
             }
-            payload["preview"] = ["status": previewStatus, "url": previewURL as Any] as [String: Any]
+            payload["preview"] = ["status": previewStatus] as [String: Any]
             payload["compositionSource"] = source
         }
         #endif
@@ -1305,11 +1305,10 @@ enum MCPLibraryHandlers {
         let providedSource = fields["compositionSource"] as? String
         if let s = providedSource { p.compositionSource = s }
 
-        // Keep src/Composition.tsx on disk in sync. Remotion's still/render CLI
-        // reads durationInFrames / fps / width / height from the COMPOSITION_*
-        // exports in this file (see Packages/RxRemotion/Sources/RxRemotion/Resources/Template/src/Root.tsx). If we
-        // only update the SwiftData model, `bun remotion still --frame N` keeps
-        // clamping to the old durationInFrames.
+        // Keep src/Composition.tsx on disk in sync. The scaffolded Root.tsx
+        // (RemotionRuntime) reads durationInFrames / fps / width / height from the
+        // COMPOSITION_* exports in this file. If we only update the SwiftData model,
+        // stills and renders keep clamping to the old durationInFrames.
         let constantKeys = ["durationSeconds", "compositionWidth", "compositionHeight", "compositionFps"]
         let touchedConstants = constantKeys.contains(where: { fields[$0] != nil })
         if providedSource != nil || touchedConstants {

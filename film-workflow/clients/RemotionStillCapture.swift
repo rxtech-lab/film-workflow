@@ -1,5 +1,4 @@
 import Foundation
-import RxRemotion
 
 struct StillCaptureResult { let frame: Int; let url: URL }
 @MainActor
@@ -8,10 +7,7 @@ enum RemotionStillCapture {
         try RemotionRuntime.shared.prepareProjectDirectory(projectDir)
         let outDir = projectDir.appendingPathComponent(".agent-stills").appendingPathComponent(runId)
         let output = outDir.appendingPathComponent("frame-\(frame).png")
-        let engine = RemotionEngine(configuration: RemotionMapSettings.configuration)
-        defer { engine.closeAll() }
-        let project = try await engine.prepare(projectURL: projectDir)
-        try await engine.renderStill(project: project, frame: frame, to: output, settings: .init(width: width, height: height))
+        try await MotionSwiftEngine.renderStill(projectDir: projectDir, frame: frame, width: width, height: height, to: output)
         return output
     }
 

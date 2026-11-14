@@ -1,42 +1,84 @@
-# Remotion footage playback
+# Remotion footage playback and rendering
+
+Remotion compositions are compiled, previewed, edited and rendered natively with
+[MotionSwift](https://github.com/rxtech-lab/MotionSwift) (Skia on Metal). There is no
+WebView, browser, Node, Bun or Studio process. The app links MotionSwift as a local
+Swift package at `../MotionSwift` (a checkout beside this repository, bootstrapped with
+`make bootstrap` so its native Skia archive and compiler resources exist).
+
+## Project layout
+
+`RemotionRuntime.scaffold(at:)` writes `src/index.ts`, `src/Root.tsx` (one `Main`
+composition sized by the `COMPOSITION_*` exports of `src/Composition.tsx`),
+`tsconfig.json` and `public/` for `staticFile()` assets. Missing scaffold files are added
+whenever a project is compiled; existing files are never overwritten.
+
+## Viewer and timeline
 
 Selecting Remotion footage opens a player with native play/pause, frame stepping,
-timecode, scrubbing, and reload controls. The viewer does not show a Studio picker.
-Source playback has its own clock and does not move the sequence playhead.
+timecode and scrubbing. Source playback has its own clock and does not move the
+sequence playhead.
 
 Drag a Remotion project onto a video or audio track, then move, trim, split, or
-change its speed with the existing timeline tools. Selecting or scrubbing a
-timeline clip activates the sequence viewer. Remotion clips remain linked to the
-composition; edits to source or public assets refresh their previews.
+change its speed with the existing timeline tools. Sequences containing Remotion use a
+layered stage; each Remotion layer is a `MotionLivePreviewView` that compiles the
+project (`MotionSwiftEngine.prepare`, cached per project) and follows the sequence
+clock through `LivePreviewPlayback` commands. Track order, placement, opacity, source
+in-points, volume and mute follow the timeline. At 1× the layer plays on its own
+clock with drift correction; other speeds follow the editor frame by frame. The
+composition's `<Audio>` and `<Video>` sound plays through MotionSwift's media preview.
 
-Sequences containing Remotion use a layered stage with native video, images,
-captions, and live web players. Track order, placement, opacity, source in-points,
-speed, volume, and mute follow the timeline. All surfaces follow the native
-sequence clock, including pausing together while an active surface buffers.
-Multiple instances of one composition keep independent playback positions.
+`RemotionProjectWatcher` polls the sources of every project on screen once a second
+and posts `.remotionPreviewChanged`, so edits from agents, the Source sheet or an
+external editor reload viewers, filmstrips and thumbnails.
 
-`Packages/RxRemotion` owns compilation, the scoped Swift resource server and native exports. The bundled esbuild Web Worker compiles editable source without Bun, Node, Chromium, Studio or external renderer processes. Compiled resources are shared per project; each WebView has an independent playback bridge. Browser modules, CSS and assets remain in the film. Native source watching refreshes previews.
+When a clip exceeds the live preview's speed or volume range, the app renders an
+alpha-preserving ProRes source into the app cache and plays that instead. These
+temporary previews do not add render versions.
 
-MCP `footage_create` for `kind: "remotion"` now returns `preview: {status, url}`. The URL is a native-hosted Player page, retained until the film closes or map settings change; it is not a Studio editing interface. Existing screenshot and file-editing tool names and arguments are unchanged. Edit files with those tools and watch the preview reload. `@rxlab/remotion-maps` exports `MapKitMap` and `OpenStreetMap`; configure an export-permitted tile provider in Settings → Maps before using OpenStreetMap.
+## Editing elements
 
-When a web player cannot decode its media, or the clip exceeds its supported
-speed or volume range, the app prepares an alpha-preserving ProRes source in the
-app cache and switches that source to native playback. These temporary previews
-do not add render versions. Source revision and canvas settings key the cache,
-so cuts and speed edits can reuse the same file. Cancellation releases the
-consumer and stops a render when no remaining viewer needs it.
+**Edit** in the Remotion inspector opens `MotionElementEditorSheet`, MotionSwift's
+`MotionEditorView`: select elements on the canvas, drag them, change text and styles in
+the inspector, and scrub the element timeline. Edits are written back to the TSX as they
+are committed; closing the sheet copies `src/Composition.tsx` into the document and
+reloads previews.
+
+## Rendering
+
+`MotionSwiftMovieRenderer` renders on Metal workers and encodes with AVFoundation:
+H.264 from shared IOSurface frames, or ProRes 4444 with alpha from CPU readbacks.
+`MotionSwiftAudioMix` mixes the per-frame `<Audio>`/`<Video>` voices with AVFoundation
+into AAC and muxes them without re-encoding the picture (MotionSwift's own mixer needs
+ffmpeg, which the app does not ship). Stills and library thumbnails use the same
+compiled project. Frame pipelines run one at a time because MotionSwift's render
+threads resolve `staticFile()` through a process-wide public directory.
 
 Final sequence exports use alpha-preserving Remotion intermediates at the
 composition's frame rate, followed by the sequence compositor's output sampling.
-Changing the sequence frame rate therefore does not change composition duration.
-Ordinary footage-only sequences continue using the existing native compositor.
 
-A composition with **Transparent Background** on paints no background fill:
-the seed template leaves the root `AbsoluteFill` clear and the agent is told
-not to add full-frame fills. Timeline renders keep alpha either way. Export to
-Disk writes such a composition as a ProRes 4444 `.mov` with alpha instead of an
-MP4, so it can be layered in other editors.
+A composition with **Transparent Background** on paints no background fill. Timeline
+renders keep alpha either way. Export to Disk writes such a composition as a ProRes 4444
+`.mov` with alpha.
 
-New cache fingerprints include the engine/dependency manifest, map configuration, source/assets and render settings. Existing render history remains intact, but old-runtime renders are not reused as current results. The old runtime installation is no longer packaged, started, signed or refreshed. Existing files left by older app builds are not deleted from user storage.
+## Compatibility
 
-See [package compatibility](../Packages/RxRemotion/Compatibility.md) and [validation](../Packages/RxRemotion/Validation.md) for capture boundaries and release checks.
+MotionSwift supports a defined subset of Remotion (see its `docs/compatibility.md`).
+Compositions outside it fail to compile or render, with the compiler or JavaScript
+error shown in the alert or returned to the agent. There is no WebKit fallback. The
+agent authoring instructions (`RemotionMCPHandlers.authoringInstructions`) describe the
+subset: bundled packages are react, remotion, `@remotion/paths`, `@remotion/shapes`,
+`@remotion/transitions`, `@remotion/three`, `@react-three/fiber`, three (plus the USD
+loader) and `@motionswift/map`. Inline styles only; no canvas, iframe or svg text;
+orthographic `ThreeCanvas` cameras, textures and shadows are not supported yet.
+
+Known MotionSwift limitation: the element editor's portable compiler does not see later
+names in a comma-separated export (`export const A = 1, B = 2`). The default templates
+declare each export on its own line, and agents are told to do the same.
+
+MCP `footage_create` for `kind: "remotion"` returns `preview: {status}` — `ready` when
+the seeded composition compiles, or the failure. Use the still tools to look at frames.
+
+Render cache fingerprints include `MotionSwiftEngine.fingerprint` (the MotionSwift
+vendor graph), source/assets and render settings, so renders from the previous
+WebKit runtime show as out of date and render again.

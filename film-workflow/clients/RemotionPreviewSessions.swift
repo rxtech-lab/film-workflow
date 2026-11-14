@@ -1,40 +1,19 @@
 import CryptoKit
 import Foundation
 import Observation
-import RxRemotion
 import VideoEditorCore
 
 extension Notification.Name {
+    /// Posted with `userInfo["directory"]` when a Remotion project's files change.
     static let remotionPreviewChanged = Notification.Name("RemotionPreviewChanged")
 }
 
-/// Compiled resources are shared by document/project directory, never by playback position.
+/// Live previews of Remotion projects play natively in `MotionLivePreviewView`. The
+/// preview descriptor's URL is the project directory; the view compiles it with
+/// MotionSwift and follows the editor's clock.
 @MainActor
-final class RemotionPreviewSessions {
-    static let shared = RemotionPreviewSessions()
-    private struct Entry {
-        let session: RemotionPreviewSession
-        var owners: Set<UUID>
-    }
-    private var entries: [URL: Entry] = [:]
-    private var toolLeases: [URL: RemotionPreviewLease] = [:]
-    func keepRunning(project: RemotionProject) async throws -> URL {
-        let directory = project.projectDir.standardizedFileURL
-        if let lease = toolLeases[directory] { return lease.url }
-        let lease = try await acquire(project: project)
-        toolLeases[directory] = lease
-        return lease.url
-    }
-    func configurationChanged() {
-        let directories = Array(entries.keys)
-        stopAll()
-        for directory in directories {
-            NotificationCenter.default.post(name: .remotionPreviewChanged, object: nil, userInfo: ["directory": directory])
-        }
-    }
-
-
-    func acquire(project: RemotionProject) async throws -> RemotionPreviewLease {
+enum RemotionLivePreview {
+    static func descriptor(project: RemotionProject, width: Int, height: Int) throws -> LivePreviewDescriptor {
         let directory = project.projectDir.standardizedFileURL
         try RemotionRuntime.shared.prepareProjectDirectory(directory)
         let source = directory.appendingPathComponent("src/Composition.tsx")
@@ -42,79 +21,57 @@ final class RemotionPreviewSessions {
             try RemotionCodeBuilder.writeComposition(project: project, source: project.compositionSource)
         }
         guard FileManager.default.fileExists(atPath: source.path) else {
-            throw RemotionError.resource("Create a composition to start the preview.")
+            throw MotionSwiftEngine.Failure(String(localized: "Create a composition to start the preview."))
         }
-        let owner = UUID()
-        if entries[directory] == nil {
-            entries[directory] = Entry(session: RemotionPreviewSession(directory: directory), owners: [])
-        }
-        entries[directory]!.owners.insert(owner)
-        let session = entries[directory]!.session
-        do {
-            let url = try await session.start()
-            try Task.checkCancellation()
-            return RemotionPreviewLease(directory: directory, owner: owner, url: url)
-        } catch {
-            release(directory: directory, owner: owner)
-            throw error
-        }
-    }
-
-    fileprivate func release(directory: URL, owner: UUID) {
-        guard var entry = entries[directory] else { return }
-        entry.owners.remove(owner)
-        if entry.owners.isEmpty {
-            entries.removeValue(forKey: directory)
-            entry.session.stop()
-        } else { entries[directory] = entry }
-    }
-
-    func stopAll(in package: URL? = nil) {
-        for directory in Array(toolLeases.keys) where package == nil || directory.path.hasPrefix(package!.path + "/") {
-            toolLeases.removeValue(forKey: directory)?.release()
-        }
-        for directory in Array(entries.keys) where package == nil || directory.path.hasPrefix(package!.path + "/") {
-            entries.removeValue(forKey: directory)?.session.stop()
-        }
+        let fps = max(1, project.compositionFps)
+        return LivePreviewDescriptor(url: directory, fps: fps,
+                                     frames: max(1, Int((project.durationSeconds * Double(fps)).rounded())),
+                                     width: width, height: height)
     }
 }
 
+/// Watches a project's sources while a preview shows it, so edits made outside the
+/// app's editors (agents, the Source sheet, an external editor) reload every viewer,
+/// filmstrip and thumbnail of that project.
 @MainActor
-final class RemotionPreviewLease {
-    let directory: URL
-    let owner: UUID
-    let url: URL
-    private var released = false
+final class RemotionProjectWatcher {
+    private static var watchers: [URL: (count: Int, task: Task<Void, Never>)] = [:]
 
-    fileprivate init(directory: URL, owner: UUID, url: URL) {
-        self.directory = directory; self.owner = owner; self.url = url
-    }
-
-    func release() {
-        guard !released else { return }
-        released = true
-        RemotionPreviewSessions.shared.release(directory: directory, owner: owner)
-    }
-
-    deinit {
-        let directory = directory, owner = owner
-        Task { @MainActor in RemotionPreviewSessions.shared.release(directory: directory, owner: owner) }
-    }
-}
-
-@MainActor
-private final class RemotionPreviewSession {
-    let directory: URL
-    private let engine = RemotionEngine(configuration: RemotionMapSettings.configuration)
-    init(directory: URL) { self.directory = directory }
-    func start() async throws -> URL {
-        let project = try await engine.prepare(projectURL: directory)
-        project.onRevisionChange = { [directory] in
-            NotificationCenter.default.post(name: .remotionPreviewChanged, object: nil, userInfo: ["directory": directory])
+    /// Starts watching `directory`; balance with `stop(_:)`.
+    static func start(_ directory: URL) {
+        let key = directory.standardizedFileURL
+        if let entry = watchers[key] { watchers[key] = (entry.count + 1, entry.task); return }
+        let task = Task.detached(priority: .utility) {
+            var last = try? RemotionSourceHasher.hash(projectDir: key, width: 0, height: 0, fps: 0)
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(1))
+                guard !Task.isCancelled else { return }
+                let current = try? RemotionSourceHasher.hash(projectDir: key, width: 0, height: 0, fps: 0)
+                if current != last {
+                    last = current
+                    await MainActor.run {
+                        NotificationCenter.default.post(name: .remotionPreviewChanged, object: nil, userInfo: ["directory": key])
+                    }
+                }
+            }
         }
-        return project.previewURL()
+        watchers[key] = (1, task)
     }
-    func stop() { engine.closeAll() }
+
+    static func stop(_ directory: URL) {
+        let key = directory.standardizedFileURL
+        guard let entry = watchers[key] else { return }
+        if entry.count > 1 { watchers[key] = (entry.count - 1, entry.task); return }
+        entry.task.cancel()
+        watchers.removeValue(forKey: key)
+    }
+
+    /// Stops watching projects inside a closing film package (or everything).
+    static func stopAll(in package: URL? = nil) {
+        for key in Array(watchers.keys) where package == nil || key.path.hasPrefix(package!.standardizedFileURL.path + "/") {
+            watchers.removeValue(forKey: key)?.task.cancel()
+        }
+    }
 }
 
 /// Disposable alpha-preserving media. It never inserts a RemotionRender version.
@@ -131,7 +88,7 @@ enum RemotionPreviewRenderCache {
         let fps = max(1, project.compositionFps)
         let scale = captureScale(width: width, height: height)
         let sourceHash = try RemotionSourceHasher.hash(projectDir: projectDir, width: width, height: height, fps: fps)
-        let key = SHA256.hash(data: Data("native-alpha-preview-v2-960:\(RemotionMapSettings.fingerprint):\(projectDir.path):\(sourceHash)".utf8)).map { String(format: "%02x", $0) }.joined()
+        let key = SHA256.hash(data: Data("native-alpha-preview-v3-960:\(MotionSwiftEngine.fingerprint):\(projectDir.path):\(sourceHash)".utf8)).map { String(format: "%02x", $0) }.joined()
         let root = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("com.rxlab.film-workflow/RemotionPreview/\(key)", isDirectory: true)
         let output = root.appendingPathComponent("source.mov")

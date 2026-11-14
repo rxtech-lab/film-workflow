@@ -202,7 +202,7 @@ final class ProjectDocument: Identifiable {
         if RecordingSession.shared.document?.id == id { await RecordingSession.shared.stop() }
         save()
         #if os(macOS)
-        RemotionPreviewSessions.shared.stopAll(in: packageURL)
+        RemotionProjectWatcher.stopAll(in: packageURL)
         #endif
         ProjectStorage.unregister(container: container)
     }

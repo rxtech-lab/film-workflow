@@ -96,7 +96,7 @@ struct ViewerPanel: View {
             case .sequence:
                 if let sequence {
                     SequenceViewerView(controller: state.player, fps: sequence.fps, stage: !sequence.timeline.hasActiveModifiers && sequence.timeline.renderedClips.contains(where: { $0.source.kind == .remotion }) ? AnyView(
-                        TimelineLayeredPreviewView(controller: state.preview) { AnyView(RemotionPlayerWebView(playback: $0)) }
+                        TimelineLayeredPreviewView(controller: state.preview) { AnyView(MotionLivePreviewView(playback: $0)) }
                             .overlay(alignment: .topTrailing) {
                                 if state.preview.lastError != nil || state.preview.layers.contains(where: { $0.error != nil || $0.live?.error != nil }) {
                                     Button("Retry Preview") {

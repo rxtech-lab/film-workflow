@@ -60,7 +60,7 @@ space (`tmp/`, cleared at launch), the agent store and two JSON caches.
 - Referenced imports (Finder files left in place) are stored as bookmarks.
   The app is not sandboxed, so a plain bookmark is used when a
   security-scoped one cannot be created.
-- `RemotionRender.sourceHash` includes the RxRemotion runtime/dependency manifest, map settings, browser sources/configuration, the
+- `RemotionRender.sourceHash` includes the MotionSwift renderer fingerprint, the
   output size and frame rate, and the path, size and modification time of
   everything under `public/`. Logs, `node_modules` and bundler caches are
   ignored.

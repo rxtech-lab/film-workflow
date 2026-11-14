@@ -1,5 +1,5 @@
 {
-  "originHash" : "a1dc370005e75e2b4d59914bc3a63f228d5d477c80f0c217586b5b2f88b2fedf",
+  "originHash" : "1a05c1ba3de3e7ffb3bad17b86d494d3a33ad328d0bc3794fb9552d0cdf86bf4",
   "pins" : [
     {
       "identity" : "rxagentsdk",
@@ -116,6 +116,15 @@
       "state" : {
         "revision" : "1bbc57cb7fe6410248a685b1c5a3c6d56adc2ed4",
         "version" : "1.1.1"
+      }
+    },
+    {
+      "identity" : "yoga",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/facebook/yoga.git",
+      "state" : {
+        "revision" : "042f5013152eb81c1552dec945b88f7b95ca350f",
+        "version" : "3.2.1"
       }
     }
   ],
