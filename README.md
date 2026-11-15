@@ -42,6 +42,7 @@ generated media. See `docs/document-package.md`.
 
 ## Requirements
 
+- Apple Silicon Mac (ARM64); Debug builds and Release archives target ARM64.
 - macOS 26.2 or later with Xcode 26
 - An RxLab account with credits; optionally your own OpenAI-compatible endpoint for chat
 

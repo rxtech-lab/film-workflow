@@ -42,6 +42,7 @@ xcodebuild -destination platform=macOS \
   -scheme film-workflow \
   -configuration Release \
   -archivePath "$ARCHIVE_PATH" \
+  ARCHS=arm64 \
   CODE_SIGN_IDENTITY="${SIGNING_CERTIFICATE_NAME}" \
   CODE_SIGN_STYLE=Manual \
   OTHER_CODE_SIGN_FLAGS="--options=runtime --timestamp" \
