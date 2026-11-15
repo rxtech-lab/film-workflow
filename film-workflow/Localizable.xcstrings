@@ -1929,9 +1929,6 @@
         }
       }
     },
-    "Apple Maps" : {
-
-    },
     "Apple Translation" : {
       "localizations" : {
         "zh-Hans" : {
@@ -2168,6 +2165,7 @@
       }
     },
     "Attribution" : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -2835,6 +2833,9 @@
           }
         }
       }
+    },
+    "Can't Open the Editor" : {
+
     },
     "Cancel" : {
       "localizations" : {
@@ -3919,6 +3920,9 @@
         }
       }
     },
+    "Compiling natively" : {
+
+    },
     "Complete the purchase in the browser window that just opened. Your balance updates here once it clears." : {
 
     },
@@ -3981,6 +3985,9 @@
     "Composition prerenders, thumbnails and waveforms appear here while they render." : {
 
     },
+    "Composition preview" : {
+
+    },
     "Composition.tsx" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -3991,6 +3998,12 @@
           }
         }
       }
+    },
+    "Compositions can draw OpenStreetMap and Apple Maps with @motionswift/map." : {
+
+    },
+    "Compositions render natively with Skia and Metal. Render more frames at once for faster exports; higher settings use more memory. Changes apply to the next render." : {
+
     },
     "Compression" : {
       "localizations" : {
@@ -4371,6 +4384,12 @@
         }
       }
     },
+    "Create a composition before editing its elements." : {
+
+    },
+    "Create a composition to start the preview." : {
+
+    },
     "Create a film or open an existing one.\nYour recent films will appear here." : {
       "localizations" : {
         "zh-Hans" : {
@@ -4487,6 +4506,7 @@
       }
     },
     "Credential header (optional)" : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -4497,6 +4517,7 @@
       }
     },
     "Credential value" : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -4507,6 +4528,7 @@
       }
     },
     "Credentials are stored in Keychain and sent only to your tile provider." : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -5722,6 +5744,9 @@
         }
       }
     },
+    "Edit the composition's elements on a native canvas" : {
+
+    },
     "Edit Timeline" : {
       "localizations" : {
         "zh-Hans" : {
@@ -6455,6 +6480,9 @@
     "Finish in Your Browser" : {
 
     },
+    "Finishing video" : {
+
+    },
     "Finishing your film." : {
       "localizations" : {
         "zh-Hans" : {
@@ -6655,6 +6683,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "帧率"
+          }
+        }
+      }
+    },
+    "Frame %lld of %lld · %lld fps native" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Frame %1$lld of %2$lld · %3$lld fps native"
           }
         }
       }
@@ -7465,9 +7503,6 @@
       }
     },
     "https://api.openai.com/v1" : {
-
-    },
-    "https://provider.example/{z}/{x}/{y}.png" : {
 
     },
     "I’ve Completed the Purchase" : {
@@ -8427,6 +8462,9 @@
         }
       }
     },
+    "Loading" : {
+
+    },
     "Loading Captions…" : {
       "localizations" : {
         "zh-Hans" : {
@@ -8654,7 +8692,11 @@
     "Manage this download" : {
 
     },
+    "Mapbox access token (optional)" : {
+
+    },
     "MapKit maps are ready to use in Remotion compositions." : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -8663,6 +8705,9 @@
           }
         }
       }
+    },
+    "Maps" : {
+
     },
     "Marketplace" : {
       "localizations" : {
@@ -8765,6 +8810,7 @@
       }
     },
     "Maximum zoom: %lld" : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -8876,6 +8922,7 @@
       }
     },
     "Minimum zoom: %lld" : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -8884,6 +8931,9 @@
           }
         }
       }
+    },
+    "Mixing audio" : {
+
     },
     "Model" : {
       "localizations" : {
@@ -9112,6 +9162,7 @@
       }
     },
     "My provider permits automated movie exports" : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -9242,6 +9293,9 @@
       }
     },
     "Narrow down this collection" : {
+
+    },
+    "Needed only for Mapbox map styles." : {
 
     },
     "Needed: %@ — %@" : {
@@ -10486,10 +10540,10 @@
         }
       }
     },
-    "Opening lyrics…" : {
+    "Opening composition…" : {
 
     },
-    "OpenStreetMap" : {
+    "Opening lyrics…" : {
 
     },
     "Optional" : {
@@ -12088,7 +12142,11 @@
         }
       }
     },
+    "Render failed: %@" : {
+
+    },
     "Render more frames at once for faster exports. Higher settings use more memory. Changes apply to the next render." : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -12184,6 +12242,9 @@
           }
         }
       }
+    },
+    "Rendered frame %lld" : {
+
     },
     "Rendering" : {
       "localizations" : {
@@ -15611,6 +15672,7 @@
       }
     },
     "Tile URL" : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -16422,6 +16484,7 @@
 
     },
     "Use a provider licensed for rendering. The public OpenStreetMap tile server is not available for automated exports." : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -16432,6 +16495,7 @@
       }
     },
     "Use a tile provider" : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
