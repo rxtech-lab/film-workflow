@@ -66,6 +66,7 @@ final class AgentController {
     /// Bumped by `cancel(threadID:)`, so a send still awaiting its setup when
     /// the user hits Stop knows not to start the turn it was about to start.
     @ObservationIgnored private var sendGenerations: [UUID: Int] = [:]
+    @ObservationIgnored private var transcriptTasks: [UUID: Task<Void, Never>] = [:]
 
     /// Caption proposals waiting for review, keyed by the captions item they
     /// apply to.
@@ -161,6 +162,7 @@ final class AgentController {
 
     /// Tears a thread's agent down, releasing its MCP hold and any child process.
     func clear(threadID: UUID) {
+        transcriptTasks.removeValue(forKey: threadID)?.cancel()
         agentACPConfigurations.removeValue(forKey: threadID)
         // The mode goes with the agent: it gates which tools the CLI approval
         // hook allows, and a torn-down wizard thread must not keep answering
@@ -734,14 +736,24 @@ final class AgentController {
         }
     }
 
-    /// Snapshot at block/tool boundaries, avoiding a rewrite for every token
-    /// while keeping completed prose interleaved with the calls around it.
+    /// Coalesce consecutive tool/block boundaries. A single tool often emits
+    /// several together; serializing the whole history for each blocks playback.
+    /// The delay is bounded even during a continuous stream, and turn end flushes.
     private func persistTranscript(thread: AgentThread, context: ModelContext) {
-        guard let agent = agents[thread.id] else { return }
-        AgentTranscriptStore.saveTranscript(from: agent.thread, to: thread, context: context)
+        let id = thread.id
+        guard transcriptTasks[id] == nil else { return }
+        transcriptTasks[id] = Task { @MainActor [weak self] in
+            do { try await Task.sleep(for: .milliseconds(250)) }
+            catch { return }
+            guard let self else { return }
+            self.transcriptTasks[id] = nil
+            guard let agent = self.agents[id], thread.modelContext != nil else { return }
+            AgentTranscriptStore.saveTranscript(from: agent.thread, to: thread, context: context)
+        }
     }
 
     private func persistTurnEnd(thread: AgentThread, context: ModelContext) {
+        transcriptTasks.removeValue(forKey: thread.id)?.cancel()
         guard let agent = agents[thread.id] else { return }
 
         AgentTranscriptStore.saveTranscript(from: agent.thread, to: thread, context: context)
@@ -797,6 +809,7 @@ final class AgentController {
     /// Deletes every message in a thread, here and in the SDK.
     func clearTranscript(_ thread: AgentThread, context: ModelContext) {
         cancel(threadID: thread.id)
+        transcriptTasks.removeValue(forKey: thread.id)?.cancel()
         for message in thread.messages {
             context.delete(message)
         }

@@ -4,7 +4,7 @@ import Foundation
 /// Project-tree introspection shared by the agent's `list_files` tool and the source viewer.
 /// Walks `src/` and `public/` plus the small set of root config files; skips heavy or
 /// generated dirs (node_modules, .agent-stills, build outputs).
-enum RemotionProjectFiles {
+nonisolated enum RemotionProjectFiles {
 
     private static let includeRoots: [String] = ["src", "public"]
     private static let includeRootFiles: [String] = ["package.json", "tsconfig.json", "remotion.config.ts"]

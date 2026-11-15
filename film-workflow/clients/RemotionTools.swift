@@ -1,10 +1,20 @@
 #if os(macOS)
 import Foundation
 
+/// Serial disk work stays off the UI executor. In particular, targeted edits
+/// must keep their read/replace/write together when agents run concurrently.
+actor RemotionFileWorker {
+    static let shared = RemotionFileWorker()
+
+    func perform<T: Sendable>(_ operation: @Sendable () throws -> T) rethrows -> T {
+        try operation()
+    }
+}
+
 /// Reusable implementations of the file/screenshot/image-gen tools the MCP
 /// server exposes for Remotion projects. Now the single implementation of each
 /// operation, reached identically by in-process and command-line agents.
-enum RemotionToolsError: LocalizedError {
+nonisolated enum RemotionToolsError: LocalizedError {
     case pathOutsideProject(String)
     case fileNotFound(String)
     case oldStringNotFound(path: String)
@@ -33,11 +43,11 @@ enum RemotionToolsError: LocalizedError {
 
 enum RemotionTools {
     /// Cap a single read_file response to avoid blowing the context window.
-    static let maxReadBytes = 200_000
+    nonisolated static let maxReadBytes = 200_000
 
     /// Project metadata is preserved for compatibility. Browser dependencies belong
     /// to the Swift package catalog; tools cannot install or replace npm packages.
-    static let writeProtectedPaths: Set<String> = [
+    nonisolated static let writeProtectedPaths: Set<String> = [
         "package.json",
         "package-lock.json",
         "bun.lockb",
@@ -47,7 +57,7 @@ enum RemotionTools {
 
     // MARK: - File ops
 
-    static func resolveProjectPath(_ relative: String, projectDir: URL) throws -> URL {
+    nonisolated static func resolveProjectPath(_ relative: String, projectDir: URL) throws -> URL {
         let trimmed = relative.trimmingCharacters(in: .whitespacesAndNewlines)
         if trimmed.isEmpty || trimmed.hasPrefix("/") || trimmed.contains("..") {
             throw RemotionToolsError.pathOutsideProject(relative)
@@ -63,7 +73,7 @@ enum RemotionTools {
 
     /// Throws if the relative path targets a runtime-managed file or a path
     /// inside `node_modules/`.
-    static func ensureWritable(_ relative: String) throws {
+    nonisolated static func ensureWritable(_ relative: String) throws {
         let trimmed = relative.trimmingCharacters(in: .whitespacesAndNewlines)
         if writeProtectedPaths.contains(trimmed) {
             throw RemotionToolsError.protectedPath(trimmed)
@@ -73,13 +83,13 @@ enum RemotionTools {
         }
     }
 
-    struct ReadResult {
+    nonisolated struct ReadResult: Sendable {
         let bytes: Int
         let truncated: Bool
         let text: String
     }
 
-    static func readFile(projectDir: URL, path: String) throws -> ReadResult {
+    nonisolated static func readFile(projectDir: URL, path: String) throws -> ReadResult {
         let url = try resolveProjectPath(path, projectDir: projectDir)
         guard FileManager.default.fileExists(atPath: url.path) else {
             throw RemotionToolsError.fileNotFound(path)
@@ -91,7 +101,7 @@ enum RemotionTools {
         return ReadResult(bytes: data.count, truncated: truncated, text: text)
     }
 
-    static func writeFile(projectDir: URL, path: String, content: String) throws {
+    nonisolated static func writeFile(projectDir: URL, path: String, content: String) throws {
         try ensureWritable(path)
         let url = try resolveProjectPath(path, projectDir: projectDir)
         try FileManager.default.createDirectory(
@@ -101,13 +111,13 @@ enum RemotionTools {
         try content.write(to: url, atomically: true, encoding: .utf8)
     }
 
-    struct EditResult {
+    nonisolated struct EditResult: Sendable {
         let path: String
         let content: String
         let summary: String
     }
 
-    static func editFile(
+    nonisolated static func editFile(
         projectDir: URL,
         path: String,
         oldString: String,

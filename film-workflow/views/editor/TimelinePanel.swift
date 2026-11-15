@@ -79,6 +79,7 @@ struct TimelinePanel: View {
                 primaryClipID: $state.primaryClipID,
                 pixelsPerSecond: Binding(get: { sequence.timelinePixelsPerSecond }, set: { sequence.timelinePixelsPerSecond = $0 }),
                 skimming: $state.skimsTimeline,
+                isPlaying: state.player.isPlaying || state.footagePlayer.isPlaying,
                 onSkim: { time in
                     if let time { state.skim(to: time) } else { state.endSkim() }
                 },

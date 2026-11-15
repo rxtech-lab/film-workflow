@@ -63,7 +63,7 @@ enum MotionSwiftMovieRenderer {
                                       scale: scale, sharedVideoFrames: !request.preserveAlpha)
         let start = Date()
         do {
-            try FramePipeline.run(bundle: prepared.bundle, composition: composition, frames: frames, props: "{}",
+            try FramePipeline.run(bundle: MotionSwiftEngine.renderBundle(prepared.bundle, composition: composition), composition: composition, frames: frames, props: "{}",
                                   options: options) { frame in
                 try cancellation.check()
                 if let video = frame.videoFrame { try writer.append(video.pixelBuffer) } else { try writer.append(rgba: frame.pixels) }

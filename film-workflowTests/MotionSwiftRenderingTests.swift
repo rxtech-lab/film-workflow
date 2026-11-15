@@ -3,6 +3,7 @@ import AppKit
 import Foundation
 import MotionCore
 import MotionEditor
+import MotionRuntime
 import MotionSwiftUI
 import Testing
 @testable import film_workflow
@@ -100,6 +101,63 @@ struct MotionSwiftRenderingTests {
         #expect(rep.pixelsWide == 320 && rep.pixelsHigh == 180)
         let red = try #require(rep.colorAt(x: 50, y: 90))
         #expect(red.redComponent > 0.9 && red.alphaComponent > 0.9)
+    }
+
+    @Test("Export size reaches every composition registration and rendered component")
+    func exportDimensionsOverrideRegistrations() async throws {
+        let root = try makeProject(source: """
+        import {AbsoluteFill, Sequence, useVideoConfig} from 'remotion';
+        export const COMPOSITION_WIDTH = 160;
+        export const COMPOSITION_HEIGHT = 90;
+        export const COMPOSITION_FPS = 30;
+        export const COMPOSITION_DURATION_IN_FRAMES = 2;
+        export const MyComposition = () => {
+          const {width, height} = useVideoConfig();
+          return <AbsoluteFill style={{backgroundColor: '#000000'}}>
+            <Sequence from={0}>
+              <div style={{position: 'absolute', left: width - 40, top: height - 40,
+                           width: 40, height: 40, backgroundColor: '#ff0000'}} />
+            </Sequence>
+          </AbsoluteFill>;
+        };
+        """)
+        defer { try? FileManager.default.removeItem(at: root) }
+        try """
+        import {Composition, Still} from 'remotion';
+        import {MyComposition} from './Composition';
+        export const RemotionRoot = () => <>
+          <Composition id="Main" component={MyComposition} width={160} height={90} fps={30} durationInFrames={2} />
+          <Composition id="Other" component={MyComposition} width={80} height={80} fps={30} durationInFrames={2} />
+          <Still id="Poster" component={MyComposition} width={100} height={100} />
+        </>;
+        """.write(to: root.appendingPathComponent("src/Root.tsx"), atomically: true, encoding: .utf8)
+        let prepared = try await MotionSwiftEngine.prepare(projectDir: root)
+        let composition = try MotionSwiftEngine.composition(prepared.composition, width: 640, height: 360, fps: nil)
+        let runtime = try Runtime(bundle: MotionSwiftEngine.renderBundle(prepared.bundle, composition: composition))
+        let catalog = try runtime.compositions()
+        #expect(catalog.count == 3)
+        #expect(catalog.allSatisfy { $0.width == 640 && $0.height == 360 })
+
+        // Pixel checks catch an output-sized canvas whose component still sees 160×90.
+        // Capture scaling must reduce pixels without changing the layout dimensions.
+        let still = root.appendingPathComponent("still.png")
+        try await MotionSwiftEngine.renderStill(projectDir: root, frame: 0, width: 640, height: 360, scale: 0.5, to: still)
+        let bitmap = try #require(NSBitmapImageRep(data: Data(contentsOf: still)))
+        #expect(bitmap.pixelsWide == 320 && bitmap.pixelsHigh == 180)
+        #expect((bitmap.colorAt(x: 310, y: 170)?.redComponent ?? 0) > 0.9)
+        #expect((bitmap.colorAt(x: 70, y: 35)?.redComponent ?? 1) < 0.1)
+
+        let movie = root.appendingPathComponent("out/resized.mp4")
+        try await MotionSwiftMovieRenderer.render(.init(projectDir: root, output: movie, width: 640, height: 360,
+                                                        fps: 30, preserveAlpha: false, captureScale: nil)) { _ in }
+        let generator = AVAssetImageGenerator(asset: AVURLAsset(url: movie))
+        generator.requestedTimeToleranceBefore = .zero; generator.requestedTimeToleranceAfter = .zero
+        let frame = NSBitmapImageRep(cgImage: try await generator.image(at: CMTime(value: 1, timescale: 30)).image)
+        #expect(frame.pixelsWide == 640 && frame.pixelsHigh == 360)
+        #expect((frame.colorAt(x: 620, y: 340)?.redComponent ?? 0) > 0.8)
+        #expect((frame.colorAt(x: 140, y: 70)?.redComponent ?? 1) < 0.2)
+        #expect(try String(contentsOf: root.appendingPathComponent("src/Composition.tsx"), encoding: .utf8)
+            .contains("COMPOSITION_WIDTH = 160"))
     }
 
     @Test("The element editor opens a Film Studio project and selects its elements")
