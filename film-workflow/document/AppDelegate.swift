@@ -28,7 +28,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         #if os(macOS)
         Task { @MainActor in
             if RecordingSession.shared.isActive { await RecordingSession.shared.stop() }
-            RemotionPreviewSessions.shared.stopAll()
+            RemotionProjectWatcher.stopAll()
             sender.reply(toApplicationShouldTerminate: true)
         }
         return .terminateLater

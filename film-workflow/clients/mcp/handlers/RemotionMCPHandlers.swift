@@ -20,20 +20,27 @@ extension Notification.Name {
 enum RemotionMCPHandlers {
     /// Shared by MCP tool descriptions and every in-app agent backend.
     static let authoringInstructions = """
-        Native RxRemotion compiles TS/TSX, CSS, JSON, assets, and project-local browser modules without Node. \
-        Bundled imports are available immediately without installation: react, react-dom, react-dom/client, \
-        remotion, @remotion/player, three, @react-three/fiber, @react-three/drei, @remotion/three, \
-        mapbox-gl, react-map-gl/mapbox, @tsparticles/react, @tsparticles/engine, @tsparticles/slim, \
-        leaflet, and @rxlab/remotion-maps (MapKitMap and OpenStreetMap). \
-        For 3D scenes, use ThreeCanvas from @remotion/three with width and height from useVideoConfig(). \
-        Drive animation with useCurrentFrame() and explicit transforms; do not accumulate useFrame() deltas \
-        or use wall-clock animation. Use Sequence layout="none" inside ThreeCanvas. \
-        Use WebGL, and hold delayRender/continueRender until custom models and textures are ready. \
-        Prefer local assets via staticFile(); remote textures require CORS. Only the listed package entrypoints \
-        are bundled; three/addons/*, three/examples/jsm/* and other unlisted subpath imports are unavailable. \
-        WebGPU, worker-owned OffscreenCanvas and CSS 3D/perspective exports are unsupported. \
-        Mapbox needs a valid access token. OpenStreetMap needs an export-permitted provider in Settings > Maps. \
-        Server frameworks, Node APIs and npm installation are unavailable. \
+        Compositions render natively with MotionSwift (Skia on Metal, no browser), which supports a defined \
+        subset of Remotion. Code outside it fails to compile or render, so stay inside it. \
+        Bundled imports, available without installation: react, remotion, @remotion/paths, @remotion/shapes, \
+        @remotion/transitions (with /fade, /slide, /wipe), @remotion/three, @react-three/fiber, three, \
+        three/addons/loaders/USDLoader.js, and @motionswift/map for OpenStreetMap, Apple Maps and Mapbox maps \
+        with routes and markers. No other packages or subpath imports are available (no react-dom, drei, \
+        leaflet, mapbox-gl, tsparticles, lottie or gif), and there is no npm installation, Node API or server code. \
+        remotion APIs: useCurrentFrame, useVideoConfig, Composition, AbsoluteFill, Sequence, Series, Loop, Freeze, \
+        interpolate, interpolateColors, Easing, spring, random, Img, staticFile, OffthreadVideo/Video, Audio, \
+        delayRender/continueRender. Elements: div, span, p, h1–h6 and other block boxes, img, and inline svg shapes \
+        (path, rect, circle, ellipse, line, polyline, polygon, g, gradients, clipPath, mask; no svg text). \
+        No canvas, iframe, table, form elements, raw video/audio tags or dangerouslySetInnerHTML. \
+        Style with inline style props only (no className, stylesheets or Tailwind): flexbox and absolute layout, \
+        backgrounds and gradients, borders and radii, opacity, box-shadow, filter, mix-blend-mode, \
+        backdrop-filter blur, clip-path, 2D/3D transforms, and text styling. \
+        Declare each export on its own line (export const COMPOSITION_FPS = 30;), not comma-separated. \
+        Drive all animation from useCurrentFrame(); no wall-clock time, timers or accumulated state. \
+        For 3D, use ThreeCanvas from @remotion/three with width and height from useVideoConfig(); meshes, \
+        standard geometries and materials, lights, fog and USDZ models via useLoader(USDLoader, staticFile(...)) \
+        are supported, but not textures, shadows or useFrame. \
+        Use local assets via staticFile() from public/; give images an explicit width and height. \
         When the item's transparentBackground is true, the composition overlays other footage: give the root \
         AbsoluteFill no background and paint no full-frame fills, so only the graphics are opaque and the \
         video below shows through the transparent pixels.

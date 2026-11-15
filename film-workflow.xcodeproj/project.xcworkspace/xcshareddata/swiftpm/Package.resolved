@@ -1,6 +1,15 @@
 {
-  "originHash" : "a1dc370005e75e2b4d59914bc3a63f228d5d477c80f0c217586b5b2f88b2fedf",
+  "originHash" : "22c29edac3b04f9ff1608258d2c1c3cac05a3bc9a18196c5d3ed9c9d69a64610",
   "pins" : [
+    {
+      "identity" : "motionswift",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/rxtech-lab/MotionSwift.git",
+      "state" : {
+        "revision" : "8fa27810679159e5b82eacfb5e670fb40a33651b",
+        "version" : "1.1.3"
+      }
+    },
     {
       "identity" : "rxagentsdk",
       "kind" : "remoteSourceControl",
@@ -116,6 +125,15 @@
       "state" : {
         "revision" : "1bbc57cb7fe6410248a685b1c5a3c6d56adc2ed4",
         "version" : "1.1.1"
+      }
+    },
+    {
+      "identity" : "yoga",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/facebook/yoga.git",
+      "state" : {
+        "revision" : "8e31207cf5d5e6bd9ec06b55a5a5b2d492dde2d9",
+        "version" : "3.2.2"
       }
     }
   ],

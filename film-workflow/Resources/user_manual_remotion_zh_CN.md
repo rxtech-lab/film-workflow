@@ -1,6 +1,6 @@
 # Remotion
 
-**Remotion 通过 React 组件生成视频。Film Workflow 使用 RxRemotion Swift 包、系统 WebView 和原生编码器完成预览与导出，无需安装 Node、Bun、Chromium 或 Remotion Studio，也没有首次运行时安装步骤。
+**Remotion 通过 React 组件生成视频。Film Workflow 使用 MotionSwift（基于 Metal 的 Skia）原生编译、预览和渲染合成，无需浏览器、Node、Bun、Chromium 或 Remotion Studio，也没有首次运行时安装步骤。MotionSwift 支持 Remotion 的一个子集：使用不受支持的包、元素或样式的合成会显示错误，而不会渲染。
 
 ## 新建项目
 
@@ -63,7 +63,9 @@ Command-Option-0 打开它，然后说出你想要的改动。
 
 右侧显示实时合成预览，提供原生播放、暂停、拖动和重新加载控件。源码或素材修改后预览会刷新。同一个合成在时间线中的多个片段拥有独立播放位置，导出不会停止实时预览。
 
-可以从 `@rxlab/remotion-maps` 导入 `MapKitMap` 和 `OpenStreetMap`。Apple Maps 使用原生快照。OpenStreetMap 需要在**设置 → Remotion**中配置允许视频导出的地图服务、署名、缩放范围和凭据；自动导出不会使用公共 OSM 瓦片服务器。
+检查器中的**编辑**会在原生画布上打开合成：选中元素后可以拖动，并在检查器中修改文字和样式。修改会保存到合成源码。
+
+地图来自 `@motionswift/map`（OpenStreetMap、Apple Maps 和 Mapbox，支持路线和标记）。Mapbox 样式需要在**设置 → Remotion**中填写访问令牌。
 
 ## 渲染
 
@@ -86,7 +88,7 @@ Command-Option-0 打开它，然后说出你想要的改动。
 ## 疑难排解
 
 - **预览无法启动。** 面板会显示编译或素材错误。检查入口文件与导入内容后重新加载；仅支持内置库和项目内的浏览器模块。
-- **效果无法导出。** 不支持的 WebKit 捕获效果会明确报错。请使用由帧驱动的二维效果，并查阅 Swift 包的兼容性说明。
+- **效果无法导出。** 原生渲染器会明确报告不受支持的包、元素和样式。请使用受支持的 Remotion 子集中的内联样式和由帧驱动的效果。
 - **渲染按钮不可用。** 说明合成还没有源码。使用**用 AI 生成…**，或让智能体写一份。
 - **预览中缺少素材。** 检查是否通过 `staticFile()` 并带上正确的子目录引用——音频用 `audio/`，
   智能体生成的图片用 `generated/`。

@@ -2,7 +2,7 @@
 
 **The Remotion tab is macOS only.** It does not appear on iPhone or iPad.
 
-Remotion builds video from React components. Film Workflow uses the RxRemotion Swift package and the system WebView for preview and native movie export. Everything needed is bundled; no runtime installation, Node, Bun, Chromium, or Studio is required.
+Remotion builds video from React components. Film Workflow compiles, previews and renders compositions natively with MotionSwift (Skia on Metal). Everything needed is bundled; no browser, Node, Bun, Chromium, or Studio is required. MotionSwift supports a subset of Remotion: compositions that use unsupported packages, elements or styles show an error instead of rendering.
 
 ## Create a project
 
@@ -73,7 +73,9 @@ you want.
 
 The right-hand panel shows a live composition with native play, pause, seek and reload controls. Source and asset edits refresh the preview. Each timeline instance keeps its own playback position. Preview and export use separate sessions, so exporting does not stop the live preview.
 
-`MapKitMap` and `OpenStreetMap` are available from `@rxlab/remotion-maps`. Apple Maps needs no web SDK credentials. For OpenStreetMap, configure your licensed tile URL, attribution, zoom limits and credentials in **Settings → Remotion**, and confirm that the provider permits movie exports. Public OSM tiles are not used for automated rendering.
+**Edit** in the inspector opens the composition on a native canvas: select an element, drag it, and change its text and style in the inspector. Changes are saved to the composition source.
+
+Maps come from `@motionswift/map` (OpenStreetMap, Apple Maps and Mapbox, with routes and markers). Mapbox styles need an access token in **Settings → Remotion**.
 
 ## Render
 
@@ -98,7 +100,7 @@ history.
 ## Troubleshooting
 
 - **Preview will not start.** The panel shows compilation or resource errors. Check the entrypoint and source imports, then reload. Only bundled libraries and project-local browser modules are supported.
-- **An effect cannot be exported.** The renderer reports unsupported effects explicitly. Use frame-driven 2D effects; check the package compatibility guide for WebKit capture limits.
+- **An effect cannot be exported.** The native renderer reports unsupported packages, elements and styles explicitly. Use inline styles and frame-driven effects from the supported Remotion subset.
 - **Render is disabled.** The composition has no source yet. Use **Generate with AI…** or ask the
   agent to write one.
 - **An asset is missing in the preview.** Check that you are referencing it through `staticFile()`

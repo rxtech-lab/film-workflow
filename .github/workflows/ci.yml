@@ -20,6 +20,7 @@ jobs:
             -scheme film-workflow \
             -destination 'generic/platform=macOS' \
             -configuration Debug \
+            ARCHS=arm64 \
             CODE_SIGNING_ALLOWED=NO
 
   test-video-editor:

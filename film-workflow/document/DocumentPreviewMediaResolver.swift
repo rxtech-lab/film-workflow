@@ -9,7 +9,6 @@ final class DocumentPreviewMediaResolver: TimelinePreviewResolver {
     private let width: Int
     private let height: Int
     private let fps: Int
-    private var leases: [String: RemotionPreviewLease] = [:]
     private var released = false
 
     init(document: ProjectDocument, width: Int, height: Int, fps: Int) {
@@ -29,15 +28,8 @@ final class DocumentPreviewMediaResolver: TimelinePreviewResolver {
             return .media(try await DocumentMediaResolver(document: document, width: width, height: height, fps: fps).resolve(source))
         }
         let project = try project(source)
-        let lease = try await RemotionPreviewSessions.shared.acquire(project: project)
-        guard !released, !Task.isCancelled else { lease.release(); throw CancellationError() }
-        leases[source.id]?.release()
-        leases[source.id] = lease
-        var url = URLComponents(url: lease.url, resolvingAgainstBaseURL: false)!
-        url.queryItems = [URLQueryItem(name: "width", value: String(width)), URLQueryItem(name: "height", value: String(height))]
-        return .live(LivePreviewDescriptor(url: url.url!, fps: max(1, project.compositionFps),
-                                           frames: max(1, Int((project.durationSeconds * Double(max(1, project.compositionFps))).rounded())),
-                                           width: width, height: height))
+        guard !released, !Task.isCancelled else { throw CancellationError() }
+        return .live(try RemotionLivePreview.descriptor(project: project, width: width, height: height))
     }
 
     func renderedPreview(_ source: ClipSource, progress: @escaping @MainActor (String) -> Void) async throws -> ResolvedMedia {
@@ -52,6 +44,5 @@ final class DocumentPreviewMediaResolver: TimelinePreviewResolver {
 
     func release() {
         released = true
-        leases.values.forEach { $0.release() }; leases = [:]
     }
 }

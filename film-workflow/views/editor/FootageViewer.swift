@@ -62,7 +62,7 @@ struct FootageViewer: View {
         // as appear-then-disappear, which used to leave the controller marked
         // invisible and buffering forever.
         if cell.kind == .remotion || cell.kind == .captions || (cell.kind == .video && player.usesGeneratedPreview) {
-            TimelineLayeredPreviewView(controller: player.generatedPreview) { AnyView(RemotionPlayerWebView(playback: $0)) }
+            TimelineLayeredPreviewView(controller: player.generatedPreview) { AnyView(MotionLivePreviewView(playback: $0)) }
         } else {
             switch cell.kind {
             case .remotion, .captions:

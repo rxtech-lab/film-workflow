@@ -24,7 +24,7 @@ struct SettingsView: View {
                 }
                 .tag(AppNavigation.SettingsSection.captions)
 
-            RemotionMapSettingsView()
+            RemotionSettingsView()
                 .tabItem { Label("Remotion", systemImage: "film") }
                 .tag(AppNavigation.SettingsSection.remotion)
 

@@ -5,7 +5,6 @@ import SwiftData
 import SwiftUI
 import Testing
 import VideoEditorCore
-import WebKit
 
 @testable import film_workflow
 
@@ -70,18 +69,18 @@ struct SimpleModePreviewTests {
         #expect(playback.usesLivePreview)
         #expect(playback.preview.layers.first?.live?.ready == true)
         #expect(playback.player.duration == 4)
-        let webView = try #require(webViews(in: host).first)
-        try await assertColor(.magenta, in: webView)
         let controls = hostedAccessibilityDescendants(host)
+        let live = try #require(controls.first { $0.accessibilityIdentifier() == "remotion.livePreview" })
+        try await assertColor(.magenta, of: live, in: host)
         let play = try #require(controls.first { $0.accessibilityIdentifier() == "sequence.viewer.play" })
         #expect(play.accessibilityPerformPress())
         try await wait { playback.player.currentTime > 2.2 }
         playback.player.pause()
         #expect((playback.preview.layers.first?.live?.command.frame ?? 0) > 20)
-        try await assertColor(.cyan, in: webView)
+        try await assertColor(.cyan, of: live, in: host)
         playback.player.seek(to: 0.5)
         try await wait { playback.preview.layers.first?.live?.command.frame == 5 }
-        try await assertColor(.magenta, in: webView)
+        try await assertColor(.magenta, of: live, in: host)
         #expect(controls.contains { $0.accessibilityIdentifier() == "wizard.preview.notes" })
         let stage = try #require(controls.first { $0.accessibilityIdentifier() == "sequence.viewer.stage" })
         #expect(stage.accessibilityFrame().height > 260, "Long notes must not crowd out the movie")
@@ -100,34 +99,41 @@ struct SimpleModePreviewTests {
         Issue.record("Preview did not reach the expected playback state")
     }
 
-    private func webViews(in view: NSView) -> [WKWebView] {
-        (view as? WKWebView).map { [$0] } ?? view.subviews.flatMap { webViews(in: $0) }
-    }
-
-    private func assertColor(_ color: NSColor, in webView: WKWebView) async throws {
+    /// Checks a snapshot of the host: the composition is the only magenta or cyan
+    /// content, so the expected colour must cover a large share of the pixels and
+    /// the other colour must be absent. Coordinate-free, so it is independent of
+    /// how the hosted accessibility frame maps to the bitmap.
+    private func assertColor(_ color: NSColor, of element: HostedAccessibilityElement, in host: NSView) async throws {
         let expected = try #require(color.usingColorSpace(.sRGB))
+        // Saturated colours have two channels above 0.8 and one below 0.6; HDR
+        // snapshots lift a nominally zero channel to around 0.5.
+        func dominant(_ c: NSColor) -> (Bool, Bool, Bool) { (c.redComponent > 0.8, c.greenComponent > 0.8, c.blueComponent > 0.8) }
+        // Magenta (R, B) and cyan (G, B) differ in red and green.
+        let target = dominant(expected)
+        let opposite = (!target.0, !target.1, target.2)
+        var last = (0, 0, 0)
         for _ in 0..<40 {
-            let image = try await webView.takeSnapshot(configuration: nil)
-            if let data = image.tiffRepresentation, let bitmap = NSBitmapImageRep(data: data) {
-                try bitmap.representation(using: .png, properties: [:])?.write(to: URL(fileURLWithPath: "/tmp/film-wizard-web.png"))
-            }
-            if let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) {
-                let bitmap = NSBitmapImageRep(cgImage: cgImage)
-                if let actual = bitmap.colorAt(x: bitmap.pixelsWide / 2, y: bitmap.pixelsHigh / 2)?.usingColorSpace(.sRGB),
-                   // HDR snapshots can lift a nominally zero channel to 0.25.
-                   // Distinguish magenta from cyan by their dominant channels.
-                   (actual.redComponent > 0.5) == (expected.redComponent > 0.5),
-                   (actual.greenComponent > 0.5) == (expected.greenComponent > 0.5),
-                   (actual.blueComponent > 0.5) == (expected.blueComponent > 0.5) { return }
+            host.layoutSubtreeIfNeeded()
+            if let bitmap = host.bitmapImageRepForCachingDisplay(in: host.bounds) {
+                host.cacheDisplay(in: host.bounds, to: bitmap)
+                var hits = 0, misses = 0, total = 0
+                for y in stride(from: 0, to: bitmap.pixelsHigh, by: 8) {
+                    for x in stride(from: 0, to: bitmap.pixelsWide, by: 8) {
+                        guard let c = bitmap.colorAt(x: x, y: y)?.usingColorSpace(.sRGB) else { continue }
+                        total += 1
+                        let high = [c.redComponent, c.greenComponent, c.blueComponent].filter { $0 > 0.8 }.count
+                        let low = [c.redComponent, c.greenComponent, c.blueComponent].filter { $0 < 0.6 }.count
+                        guard high == 2, low == 1 else { continue }
+                        let d = dominant(c)
+                        if d == target { hits += 1 } else if d == opposite { misses += 1 }
+                    }
+                }
+                last = (hits, misses, total)
+                if hits * 20 > total, misses * 100 < total { return }
+                try bitmap.representation(using: .png, properties: [:])?.write(to: URL(fileURLWithPath: "/tmp/film-wizard-live.png"))
             }
             try await Task.sleep(for: .milliseconds(100))
         }
-        let details = try await webView.evaluateJavaScript("JSON.stringify({html:document.getElementById('stage').innerHTML, visible:document.visibilityState})")
-        try String(describing: details).write(toFile: "/tmp/film-wizard-web.txt", atomically: true, encoding: .utf8)
-        let image = try await webView.takeSnapshot(configuration: nil)
-        let cg = try #require(image.cgImage(forProposedRect: nil, context: nil, hints: nil))
-        let bitmap = NSBitmapImageRep(cgImage: cg)
-        let actual = bitmap.colorAt(x: bitmap.pixelsWide / 2, y: bitmap.pixelsHigh / 2)?.usingColorSpace(.sRGB)
-        Issue.record("The visible video frame \(String(describing: actual)) did not match \(expected)")
+        Issue.record("The live preview did not show \(color): \(last.0) matching, \(last.1) opposite of \(last.2) samples; see /tmp/film-wizard-live.png")
     }
 }
