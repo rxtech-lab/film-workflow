@@ -250,18 +250,24 @@ enum RemotionMCPHandlers {
         let project = try MCPLibraryHandlers.fetchRemotion(id: footageID, context: context)
         let storage = ProjectStorage.forContainer(context.container)
         let projectDir = project.projectDir
-        _ = try? RemotionRuntime.shared.prepareProjectDirectory(projectDir)
+        await RemotionFileWorker.shared.perform {
+            _ = try? RemotionRuntime.scaffold(at: projectDir, includeComposition: false)
+        }
 
         switch name {
         case "remotion_list_files":
-            let entries = RemotionProjectFiles.list(projectDir: projectDir)
+            let entries = await RemotionFileWorker.shared.perform {
+                RemotionProjectFiles.list(projectDir: projectDir)
+            }
             return MCPToolRegistry.jsonResult(["files": entries] as [String: Any])
 
         case "remotion_read_file":
             guard let path = arguments["path"] as? String else {
                 throw MCPToolError.invalidArguments("missing path")
             }
-            let result = try RemotionTools.readFile(projectDir: projectDir, path: path)
+            let result = try await RemotionFileWorker.shared.perform {
+                try RemotionTools.readFile(projectDir: projectDir, path: path)
+            }
             return MCPToolRegistry.jsonResult([
                 "path": path,
                 "bytes": result.bytes,
@@ -274,7 +280,9 @@ enum RemotionMCPHandlers {
                   let content = arguments["content"] as? String else {
                 throw MCPToolError.invalidArguments("missing path or content")
             }
-            try RemotionTools.writeFile(projectDir: projectDir, path: path, content: content)
+            try await RemotionFileWorker.shared.perform {
+                try RemotionTools.writeFile(projectDir: projectDir, path: path, content: content)
+            }
             syncCompositionSourceIfNeeded(
                 project: project, projectDir: projectDir, path: path, content: content, context: context
             )
@@ -288,9 +296,11 @@ enum RemotionMCPHandlers {
             }
             let oldStr = (arguments["old_string"] as? String) ?? ""
             let newStr = (arguments["new_string"] as? String) ?? ""
-            let res = try RemotionTools.editFile(
-                projectDir: projectDir, path: path, oldString: oldStr, newString: newStr
-            )
+            let res = try await RemotionFileWorker.shared.perform {
+                try RemotionTools.editFile(
+                    projectDir: projectDir, path: path, oldString: oldStr, newString: newStr
+                )
+            }
             syncCompositionSourceIfNeeded(
                 project: project, projectDir: projectDir, path: res.path, content: res.content, context: context
             )
@@ -310,19 +320,22 @@ enum RemotionMCPHandlers {
             let url = try await RemotionStillCapture.still(
                 projectDir: projectDir, frame: frame, runId: String(runId)
             )
-            let data = try Data(contentsOf: url)
+            let image = try await RemotionFileWorker.shared.perform {
+                let data = try Data(contentsOf: url)
+                return (base64: data.base64EncodedString(), bytes: data.count)
+            }
             return [
                 "content": [
                     [
                         "type": "image",
-                        "data": data.base64EncodedString(),
+                        "data": image.base64,
                         "mimeType": "image/png"
                     ] as [String: Any]
                 ],
                 "structuredContent": [
                     "frame": frame,
                     "time_seconds": Double(frame) / Double(fps),
-                    "bytes": data.count
+                    "bytes": image.bytes
                 ]
             ]
 
@@ -341,20 +354,24 @@ enum RemotionMCPHandlers {
             var contentParts: [[String: Any]] = []
             var structured: [[String: Any]] = []
             for r in results {
-                let data = try Data(contentsOf: r.url)
+                let url = r.url
+                let image = try await RemotionFileWorker.shared.perform {
+                    let data = try Data(contentsOf: url)
+                    return (base64: data.base64EncodedString(), bytes: data.count)
+                }
                 contentParts.append([
                     "type": "text",
                     "text": "Frame \(r.frame) (\(String(format: "%.2f", Double(r.frame) / Double(fps)))s):"
                 ] as [String: Any])
                 contentParts.append([
                     "type": "image",
-                    "data": data.base64EncodedString(),
+                    "data": image.base64,
                     "mimeType": "image/png"
                 ] as [String: Any])
                 structured.append([
                     "frame": r.frame,
                     "time_seconds": Double(r.frame) / Double(fps),
-                    "bytes": data.count
+                    "bytes": image.bytes
                 ] as [String: Any])
             }
             return [

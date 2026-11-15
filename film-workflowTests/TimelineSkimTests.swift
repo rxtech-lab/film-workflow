@@ -1,3 +1,4 @@
+import AVFoundation
 import Foundation
 import Testing
 import VideoEditorCore
@@ -9,6 +10,37 @@ import VideoEditorCore
 struct TimelineSkimTests {
     private func defaults() -> UserDefaults {
         UserDefaults(suiteName: "TimelineSkimTests-\(UUID().uuidString)")!
+    }
+
+    @Test("Leaving a skim after playback starts does not seek back")
+    func playbackOutranksSkim() {
+        let state = EditorWindowState(defaults: defaults())
+        state.skimsTimeline = true
+        state.playhead = 4
+        state.skim(to: 9)
+        state.player.player.replaceCurrentItem(with: AVPlayerItem(asset: AVMutableComposition()))
+        state.player.play()
+        #expect(state.player.isPlaying)
+        let playingTime = state.player.currentTime
+        state.skim(to: 12)
+        state.endSkim()
+        #expect(state.player.isPlaying)
+        #expect(state.player.currentTime == playingTime)
+        #expect(state.playhead == playingTime)
+        state.player.pause()
+        state.player.unload()
+    }
+
+    @Test("Nonfinite hover positions do not leave a resting playhead")
+    func invalidSkimIsIgnored() {
+        let state = EditorWindowState(defaults: defaults())
+        state.skimsTimeline = true
+        state.playhead = 4
+        state.skim(to: .nan)
+        state.player.seek(to: 7)
+        #expect(state.playhead == 7)
+        state.endSkim()
+        #expect(state.player.currentTime == 7)
     }
 
     @Test("Skimming previews the pointer's frame and leaves the playhead alone")

@@ -19,7 +19,7 @@ enum MotionSwiftEngine {
     static let logger = Logger(subsystem: "com.rxlab.film-workflow", category: "MotionSwift")
     /// Identifies the renderer in cache keys: a new vendor graph (React/Remotion shim)
     /// or pipeline revision invalidates cached frames, previews and render versions.
-    static var fingerprint: String { "motionswift-1-" + String(Vendor.sha256.prefix(12)) }
+    static var fingerprint: String { "motionswift-2-" + String(Vendor.sha256.prefix(12)) }
 
     /// A compiled project, ready to render frames.
     struct Prepared: @unchecked Sendable {
@@ -85,6 +85,28 @@ enum MotionSwiftEngine {
         return composition
     }
 
+    /// MotionSwift currently uses the registered dimensions for useVideoConfig(), even
+    /// when FramePipeline receives an overridden composition. Override registrations
+    /// before the runtime loads the entry, including on its per-frame module resets.
+    /// This affects only this render's bundle; project source files stay untouched.
+    static func renderBundle(_ bundle: String, composition: Composition) -> String {
+        let registrationOverride = """
+        (() => {
+          const start = globalThis.__ms_start;
+          globalThis.__ms_start = () => {
+            const shim = __ms_require(__ms_ids.shim);
+            for (const name of ['Composition', 'Still']) {
+              const register = shim[name];
+              shim[name] = props => register({...props, width: \(composition.width), height: \(composition.height)});
+            }
+            return start();
+          };
+        })();
+        """
+        // Keep the compiled bundle's line offsets intact for MotionSwift's stack mapper.
+        return registrationOverride.split(separator: "\n").joined() + bundle
+    }
+
     /// Worker threads for a render. Each GPU worker owns a JavaScript VM and a Metal
     /// context, so the app's "frames at a time" preference doubles as a ceiling.
     static func workerCount(frames: Int) -> Int {
@@ -107,7 +129,7 @@ enum MotionSwiftEngine {
             try await run(on: renderQueue) {
                 var pixels: Data?
                 try withProject(prepared) {
-                    try FramePipeline.run(bundle: prepared.bundle, composition: composition, frames: [number], props: "{}",
+                    try FramePipeline.run(bundle: renderBundle(prepared.bundle, composition: composition), composition: composition, frames: [number], props: "{}",
                                           options: PipelineOptions(workers: 1, backend: .cpu, scale: scale)) { rendered in
                         try cancellation.check()
                         pixels = rendered.pixels

@@ -77,6 +77,7 @@ public struct SequenceTimelineView: View {
     /// Whether moving the pointer across the lanes previews the frame under
     /// it (skimming). The toolbar shows the toggle only when `onSkim` is set.
     @Binding private var skimming: Bool
+    private let isPlaying: Bool
     /// Called with the time under the pointer while skimming, and with nil
     /// once the pointer leaves the lanes so the host can restore its playhead.
     let onSkim: ((TimeInterval?) -> Void)?
@@ -151,6 +152,7 @@ public struct SequenceTimelineView: View {
         primaryClipID: Binding<UUID?> = .constant(nil),
         pixelsPerSecond: Binding<Double>,
         skimming: Binding<Bool> = .constant(false),
+        isPlaying: Bool = false,
         onSkim: ((TimeInterval?) -> Void)? = nil,
         resolver: (any MediaResolver)? = nil,
         previewRevision: String = "",
@@ -169,6 +171,7 @@ public struct SequenceTimelineView: View {
         _primaryClipID = primaryClipID
         _pixelsPerSecond = pixelsPerSecond
         _skimming = skimming
+        self.isPlaying = isPlaying
         self.onSkim = onSkim
         self.resolver = resolver
         self.previewRevision = previewRevision
@@ -228,7 +231,9 @@ public struct SequenceTimelineView: View {
                             .onContinuousHover(coordinateSpace: .local) { phase in
                                 switch phase {
                                 case .active(let point):
+                                    guard !isPlaying else { return }
                                     let time = timeline.quantized(min(max(0, point.x / pixelsPerSecond), contentDuration))
+                                    guard hoverTime != time else { return }
                                     hoverTime = time
                                     // A clip or marquee drag already moves things; skimming then would fight it.
                                     if skimming, dragState.clipID == nil, marquee == nil { onSkim?(time) }
@@ -308,6 +313,15 @@ public struct SequenceTimelineView: View {
         } message: { Text(editError ?? "") }
         .onChange(of: pixelsPerSecond) { previous, current in
             keepAnchorInPlace(from: previous, to: current)
+        }
+        .onChange(of: isPlaying) { _, playing in
+            if playing {
+                hoverTime = nil
+                hoveredHandle = nil
+                hoveredRetimeHandle = nil
+                hoveredVolumeClipID = nil
+                onSkim?(nil)
+            }
         }
     }
 
@@ -1186,12 +1200,16 @@ public struct SequenceTimelineView: View {
         .onContinuousHover { phase in
             switch phase {
             case .active(let location):
+                guard !isPlaying else { return }
                 let mode = TimelineClipInteraction.mode(at: location.x, y: location.y, width: width, capabilities: clip.source.capabilities, tool: tool, showsSpeedOverlay: showsSpeed, waveformTop: waveformTop)
-                hoveredRetimeHandle = mode?.isRetiming == true
+                let retimeHandle = mode?.isRetiming == true
                     ? TrimHandleID(clipID: clip.id, leading: mode == .retimeLeading) : nil
-                hoveredHandle = mode == .trimLeading || mode == .trimTrailing
+                let trimHandle = mode == .trimLeading || mode == .trimTrailing
                     ? TrimHandleID(clipID: clip.id, leading: mode == .trimLeading) : nil
-                hoveredVolumeClipID = mode == .volume ? clip.id : nil
+                let volumeClipID = mode == .volume ? clip.id : nil
+                if hoveredRetimeHandle != retimeHandle { hoveredRetimeHandle = retimeHandle }
+                if hoveredHandle != trimHandle { hoveredHandle = trimHandle }
+                if hoveredVolumeClipID != volumeClipID { hoveredVolumeClipID = volumeClipID }
             case .ended:
                 if hoveredHandle?.clipID == clip.id { hoveredHandle = nil }
                 if hoveredRetimeHandle?.clipID == clip.id { hoveredRetimeHandle = nil }

@@ -249,7 +249,7 @@ final class EditorWindowState {
     /// Previews `time` without moving the playhead. Ignored while the
     /// sequence plays, so skimming never interrupts playback.
     func skim(to time: TimeInterval) {
-        guard skimsTimeline, !player.isPlaying else { return }
+        guard skimsTimeline, !player.isPlaying, !footagePlayer.isPlaying, time.isFinite else { return }
         if restingPlayhead == nil { restingPlayhead = player.currentTime }
         player.seek(to: time)
     }
@@ -258,6 +258,9 @@ final class EditorWindowState {
     func endSkim() {
         guard let resting = restingPlayhead else { return }
         restingPlayhead = nil
+        // Playback may have started while the pointer was still skimming.
+        // Clearing hover must not seek a running player back to its old position.
+        guard !player.isPlaying else { return }
         player.seek(to: resting)
     }
     let player = TimelinePlayerController()

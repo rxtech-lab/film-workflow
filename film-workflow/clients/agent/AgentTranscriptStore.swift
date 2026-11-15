@@ -207,7 +207,7 @@ enum AgentTranscriptStore {
                              createdAt: message.timestamp, to: thread, context: context)
                 rowsByID[message.id] = row
             }
-            if row.kindEnum == .text { row.content = message.plainText }
+            if row.kindEnum == .text, row.content != message.plainText { row.content = message.plainText }
             // Sent attachments are immutable. Encode once, rather than copying
             // image bytes again at every assistant message boundary.
             if row.attachmentsData == nil, !message.attachments.isEmpty {
@@ -223,7 +223,8 @@ enum AgentTranscriptStore {
             saved.append(.init(id: message.id, blocks: blocks, error: message.error))
         }
         if let data = try? JSONEncoder().encode(TranscriptSnapshot(messages: saved)) {
-            thread.transcriptJSON = String(decoding: data, as: UTF8.self)
+            let json = String(decoding: data, as: UTF8.self)
+            if thread.transcriptJSON != json { thread.transcriptJSON = json }
         }
     }
 
