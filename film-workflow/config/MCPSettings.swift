@@ -10,11 +10,19 @@ import Security
 @Observable
 final class MCPSettings {
     static let shared = MCPSettings()
+    private let defaults: UserDefaults
+
+    /// Read for each request, so changing authentication takes effect immediately.
+    var requiresToken: Bool {
+        didSet {
+            defaults.set(requiresToken, forKey: Keys.requiresToken)
+        }
+    }
 
     var enabled: Bool {
         didSet {
             guard enabled != oldValue else { return }
-            UserDefaults.standard.set(enabled, forKey: Keys.enabled)
+            defaults.set(enabled, forKey: Keys.enabled)
             if enabled, (try? Self.loadToken()) == nil || (try? Self.loadToken())?.isEmpty == true {
                 _ = try? Self.regenerateToken()
             }
@@ -25,7 +33,7 @@ final class MCPSettings {
     var bindAll: Bool {
         didSet {
             guard bindAll != oldValue else { return }
-            UserDefaults.standard.set(bindAll, forKey: Keys.bindAll)
+            defaults.set(bindAll, forKey: Keys.bindAll)
             notify()
         }
     }
@@ -33,7 +41,7 @@ final class MCPSettings {
     var basePort: Int {
         didSet {
             guard basePort != oldValue else { return }
-            UserDefaults.standard.set(basePort, forKey: Keys.basePort)
+            defaults.set(basePort, forKey: Keys.basePort)
             notify()
         }
     }
@@ -53,8 +61,9 @@ final class MCPSettings {
     /// Bumped whenever a setting that requires a server restart changes.
     private(set) var revision: Int = 0
 
-    private init() {
-        let defaults = UserDefaults.standard
+    init(defaults: UserDefaults = .standard) {
+        self.defaults = defaults
+        self.requiresToken = defaults.object(forKey: Keys.requiresToken) as? Bool ?? true
         if defaults.object(forKey: Keys.basePort) == nil {
             defaults.set(7711, forKey: Keys.basePort)
         }
@@ -80,6 +89,7 @@ final class MCPSettings {
     }
 
     private enum Keys {
+        static let requiresToken = "mcp.requiresToken"
         static let enabled = "mcp.enabled"
         static let bindAll = "mcp.bindAll"
         static let basePort = "mcp.basePort"

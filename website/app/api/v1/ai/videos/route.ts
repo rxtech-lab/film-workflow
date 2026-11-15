@@ -2,7 +2,9 @@ import { z } from "zod";
 import { googleVideoPrice, requireCatalogModel } from "@/lib/ai/catalog";
 import { googleApiKey } from "@/lib/ai/google-models";
 import { aiRouteError, noStoreHeaders, providerError } from "@/lib/ai/http";
-import { veoRequestBody } from "@/lib/ai/veo";
+import { isOmniModel, omniRequestBody } from "@/lib/ai/omni";
+import { deleteObject, getObjectBytes } from "@/lib/storage/s3";
+import { veoDurations, veoFamily, veoRequestBody, type VideoInputImage } from "@/lib/ai/veo";
 import { VIDEO_FEATURE } from "@/lib/ai/video-jobs";
 import { requireApiUser } from "@/lib/auth/bearer";
 import { billingConfig, reserveWithMargin } from "@/lib/billing/config";
@@ -11,22 +13,24 @@ import { estimateReservationPoints } from "@/lib/billing/unit-pricing";
 import { db } from "@/lib/db";
 import { aiJobs } from "@/lib/db/schema";
 
-const image = z.object({ mime_type: z.enum(["image/png", "image/jpeg", "image/webp", "image/heic"]), base64: z.string().min(1).max(8_000_000) });
+export const maxDuration = 300;
+
+const image = z.object({ mime_type: z.enum(["image/png", "image/jpeg", "image/webp", "image/heic"]), base64: z.string().min(1).max(8_000_000).optional(), object_key: z.string().min(1).max(500).optional() }).refine((value) => Boolean(value.base64) !== Boolean(value.object_key), "Provide an uploaded image key.");
 
 const schema = z.object({
   model: z.string().min(1).max(160),
   prompt: z.string().min(1).max(20_000),
   negative_prompt: z.string().max(20_000).optional(),
   aspect_ratio: z.enum(["16:9", "9:16"]),
-  resolution: z.enum(["720p", "1080p", "4k"]).optional(),
-  duration_seconds: z.number().int().min(4).max(8),
+  resolution: z.enum(["360p", "720p", "1080p", "4k"]).optional(),
+  duration_seconds: z.number().int().min(3).max(15),
   person_generation: z.enum(["allow_all", "allow_adult", "dont_allow"]),
   number_of_videos: z.number().int().min(1).max(2).optional(),
   generate_audio: z.boolean().optional(),
   seed: z.number().int().optional(),
   first_frame: image.optional(),
   last_frame: image.optional(),
-  reference_images: z.array(image).max(3).optional(),
+  reference_images: z.array(image).max(6).optional(),
 });
 
 /**
@@ -36,6 +40,7 @@ const schema = z.object({
  * this function — Veo runs for minutes — loses nothing.
  */
 export async function POST(request: Request) {
+  const uploadedKeys: string[] = [];
   try {
     const user = await requireApiUser(request);
     const parsed = schema.safeParse(await request.json().catch(() => null));
@@ -43,7 +48,17 @@ export async function POST(request: Request) {
     const input = parsed.data;
     const model = await requireCatalogModel(input.model, "video");
     if (model.provider !== "google") throw new Error("MODEL_NOT_ALLOWED:video");
-    const { body, numberOfVideos, resolution } = veoRequestBody(model.id, {
+    async function loadImage(value: z.infer<typeof image> | undefined): Promise<VideoInputImage | undefined> {
+      if (!value) return undefined;
+      if (value.base64) return { mime_type: value.mime_type, base64: value.base64 };
+      const key = value.object_key!;
+      if (!key.startsWith(`video-inputs/${user.id}/`) || key.includes("..") || key.includes("\\")) throw new Error("VIDEO_OPTIONS_INVALID:Image belongs to another account.");
+      const object = await getObjectBytes(key, 6_000_000);
+      if (object.contentType !== value.mime_type) throw new Error("VIDEO_OPTIONS_INVALID:Image content type does not match.");
+      uploadedKeys.push(key);
+      return { mime_type: value.mime_type, base64: object.bytes.toString("base64") };
+    }
+    const videoInput = {
       prompt: input.prompt,
       negativePrompt: input.negative_prompt,
       aspectRatio: input.aspect_ratio,
@@ -53,10 +68,15 @@ export async function POST(request: Request) {
       numberOfVideos: input.number_of_videos,
       generateAudio: input.generate_audio,
       seed: input.seed,
-      firstFrame: input.first_frame,
-      lastFrame: input.last_frame,
-      referenceImages: input.reference_images,
-    });
+      firstFrame: await loadImage(input.first_frame),
+      lastFrame: await loadImage(input.last_frame),
+      referenceImages: await Promise.all((input.reference_images ?? []).map(async (value) => (await loadImage(value))!)),
+    };
+    const omni = isOmniModel(model.id);
+    if (!omni && (!veoDurations(veoFamily(model.id), input.resolution ?? "720p", Boolean(input.reference_images?.length)).includes(input.duration_seconds) || (input.reference_images?.length ?? 0) > 3)) throw new Error("VIDEO_OPTIONS_INVALID:Unsupported duration or reference images for this model.");
+    const { body, numberOfVideos, resolution } = omni
+      ? { body: omniRequestBody(model.id, videoInput), numberOfVideos: 1, resolution: input.resolution ?? "720p" }
+      : veoRequestBody(model.id, videoInput);
     const price = googleVideoPrice(model.id, resolution);
     if (!price) throw new Error(`PRICE_NOT_FOUND:google:${model.id}:video_seconds`);
     const key = googleApiKey();
@@ -68,16 +88,17 @@ export async function POST(request: Request) {
 
     let operationName: string;
     try {
-      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model.id)}:predictLongRunning`, {
+      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/${omni ? "interactions" : `models/${encodeURIComponent(model.id)}:predictLongRunning`}`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", "x-goog-api-key": key },
+        headers: { "Content-Type": "application/json", "x-goog-api-key": key, ...(omni ? { "Api-Revision": "2026-05-20" } : {}) },
         body: JSON.stringify(body),
         signal: AbortSignal.timeout(120_000),
       });
       if (!response.ok) await providerError(response);
-      const accepted = await response.json() as { name?: unknown };
-      if (typeof accepted.name !== "string" || !accepted.name) throw new Error("INVALID_PROVIDER_RESPONSE");
-      operationName = accepted.name;
+      const accepted = await response.json() as { name?: unknown; id?: unknown };
+      const handle = omni ? accepted.id : accepted.name;
+      if (typeof handle !== "string" || !handle) throw new Error("INVALID_PROVIDER_RESPONSE");
+      operationName = omni ? `interactions/${encodeURIComponent(handle)}` : handle;
     } catch (cause) {
       if (reservation) await closeReservation({ reservationId: reservation.id, userId: user.id, success: false }).catch(() => null);
       throw cause;
@@ -97,4 +118,5 @@ export async function POST(request: Request) {
     });
     return Response.json({ job_id: jobId, status: "running", poll_url: `/api/v1/jobs/${jobId}` }, { status: 202, headers: noStoreHeaders() });
   } catch (cause) { return aiRouteError(cause); }
+  finally { await Promise.all(uploadedKeys.map((key) => deleteObject(key).catch(() => null))); }
 }

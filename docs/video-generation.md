@@ -11,6 +11,68 @@ It follows the same vertical slice as every other tab — `VideoGenProject` /
 3. Option availability is **gated per model**, because Veo's parameter support
    differs between families and the API rejects invalid combinations.
 
+## Current Google models (November 15, 2026)
+
+Google shut down the Veo 3.1 Gemini API previews on October 22, 2026.
+Film Studio now supports `gemini-omni-1.2-flash` and `gemini-omni-1.1-flash`
+through `POST /v1beta/interactions` with background execution and URI delivery.
+The existing app API still returns a durable job ID and polls `/api/v1/jobs/:id`.
+Completed interactions wait for the generated Google Files resource to become
+`ACTIVE` before download, S3 storage and settlement. Existing Veo operations
+remain resumable, and Veo models still listed by Google retain their original
+request format. Retired previews are excluded from discovery.
+
+REST responses carry generated video in `steps` entries with
+`type: "model_output"`, inside `content` items with `type: "video"` and a `uri`.
+The `output_video` convenience field is SDK-only and must not be used by the
+backend's direct REST integration. Input video content is never treated as output.
+
+At 90%, generation has finished and the backend is transferring the result.
+Google downloads use 64 KiB ranges with four concurrent requests, a 30-second
+timeout per request, and at most three attempts for an interrupted range.
+The transfer has a 180-second overall budget. Transient failures release the
+finalization lock for another poll of the same job. Locks left by terminated
+functions can be reclaimed after 330 seconds using the row's update timestamp;
+active finalizers are left alone. Retry logs include the download, storage or
+billing stage to identify where a failure occurred.
+
+| Model | Resolution | Duration | Reference images |
+| --- | --- | --- | --- |
+| Omni Flash 1.2 | 360p, 720p, 1080p, 4K | 3–15 seconds | Up to 6 |
+| Omni Flash 1.1 | 360p, 720p, 1080p, 4K | 3–10 seconds | Up to 6 |
+
+First/last frame interpolation is limited to 10 seconds. Frames and reference
+images use separate generation modes. Native audio is automatic; describe audio
+and people in the prompt instead of sending Veo's audio, seed or person controls.
+Resolution no longer forces an 8-second duration for Omni.
+
+Input images upload directly to presigned S3 URLs from `/api/v1/uploads`.
+The video request contains `object_key` and `mime_type` for each image; the server
+verifies ownership and content type, loads the bytes and sends them to Google.
+Legacy inline images remain accepted for older app versions. No new binary
+upload passes through the serverless application request body. Upload progress
+is displayed in the existing generation sheet with percentage and byte counts.
+
+Per-second output estimates use Google's published tokens per second at each
+resolution and the applicable model's output token rate. At 720p this is
+$0.069504/s for 1.2 and $0.10136/s for 1.1. Google also charges for input tokens;
+these output estimates follow the existing video-seconds billing convention.
+
+Deployment: run `bun run db:migrate` to apply `0009_google_omni_video`, which adds
+both models without changing existing admin choices. The live model list and
+admin allowlist still determine which entries users can select. No production
+migration or paid provider generation is performed by local tests.
+
+Sources: [Google video migration](https://aistudio.google.com/docs/video),
+[Omni guide](https://aistudio.google.com/docs/omni),
+[model limits](https://aistudio.google.com/docs/models/gemini-omni-flash),
+[pricing](https://aistudio.google.com/docs/pricing#gemini-omni-1.2-flash).
+
+## Legacy Veo integration
+
+The following sections document the earlier Veo implementation. The current
+Google models above use the Interactions API instead.
+
 ## Provider: Google Veo (Gemini API)
 
 The only provider wired today. Uses the Google AI key from

@@ -31,7 +31,10 @@ Film Workflow 可以通过 HTTP **MCP** 端点对外暴露当前打开的影片�
 - 复制按钮把它放到剪贴板。
 - **重新生成令牌**会签发新的令牌。已用旧令牌连接的客户端将无法继续工作。
 
-绑定到所有网络接口时**必须**提供令牌；本机请求会跳过校验。请在每个请求上带上这个头：
+**Require bearer token（要求 Bearer 令牌）**默认开启，包括本机连接。关闭后无需令牌即可连接，修改立即生效。
+关闭认证后，任何能连接到服务器的客户端都可以操作影片并消耗你账户的点数。
+
+开启认证时，请在每个请求上带上这个头：
 
 ```
 Authorization: Bearer <令牌>
@@ -44,10 +47,10 @@ Authorization: Bearer <令牌>
 服务运行时，设置面板会显示一条已经填好你实际 URL 和令牌的现成命令。复制后执行即可：
 
 ```
-claude mcp add --transport http film http://127.0.0.1:7711/...
+claude mcp add --transport http film http://127.0.0.1:7711/mcp
 ```
 
-绑定到所有网络接口时，同一条命令会附带 `Authorization` 头。
+只有开启 **Require bearer token** 时，连接命令才会附带 `Authorization` 头。
 
 ## 工具覆盖范围
 

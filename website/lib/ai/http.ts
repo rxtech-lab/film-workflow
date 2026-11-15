@@ -19,6 +19,7 @@ export async function aiRouteError(cause: unknown) {
   const locale = await requestLocale();
   const headers = localizedNoStoreHeaders(locale);
   const code = cause instanceof Error ? cause.message : "AI_REQUEST_FAILED";
+  if (code.startsWith("VIDEO_OPTIONS_INVALID:")) return Response.json({ code: "bad_request", error: code.slice("VIDEO_OPTIONS_INVALID:".length) }, { status: 400, headers });
   if (code.startsWith("MODEL_NOT_ALLOWED:")) return Response.json({ code: "model_not_allowed", error: t(locale, "error.ai.modelNotAllowed") }, { status: 400, headers });
   if (code.startsWith("PRICE_NOT_FOUND:")) return Response.json({ code: "price_not_found", error: t(locale, "error.ai.priceNotFound") }, { status: 400, headers });
   if (code === "INVALID_PROVIDER_RESPONSE") {

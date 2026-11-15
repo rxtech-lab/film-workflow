@@ -96,7 +96,8 @@ enum VideoGenerationService {
                     : [],
                 // Scoped to the project so a retried submit re-attaches to the
                 // credit hold the first attempt took out.
-                idempotencyKey: "video:\(project.id.uuidString):\(UUID().uuidString)"
+                idempotencyKey: "video:\(project.id.uuidString):\(UUID().uuidString)",
+                onProgress: onProgress
             )
         }
 

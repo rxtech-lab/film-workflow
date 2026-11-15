@@ -20,7 +20,8 @@ struct VideoGenProjectParametersView: View {
     private var availableDurations: [VideoDuration] {
         family.durations(
             resolution: project.googleResolutionEnum,
-            usingReferenceImages: !project.googleReferenceImagePaths.isEmpty
+            usingReferenceImages: !project.googleReferenceImagePaths.isEmpty,
+            interpolating: project.googleFirstFrameImagePath != nil && project.googleLastFrameImagePath != nil
         )
     }
 
@@ -98,6 +99,8 @@ struct VideoGenProjectParametersView: View {
             }
             Task { await loadVeoModels(forceRefresh: false) }
         }
+        .onChange(of: project.googleFirstFrameImagePath) { _, _ in VeoModelFamily.clamp(project) }
+        .onChange(of: project.googleLastFrameImagePath) { _, _ in VeoModelFamily.clamp(project) }
         .onChange(of: project.googleModel) { _, _ in
             VeoModelFamily.clamp(project)
             project.updatedAt = Date()
@@ -179,12 +182,14 @@ struct VideoGenProjectParametersView: View {
             }
             .disabled(availableDurations.count <= 1)
 
-            Picker("People", selection: Binding(
-                get: { project.googlePersonGenerationEnum },
-                set: { project.googlePersonGenerationEnum = $0; project.updatedAt = Date() }
-            )) {
-                ForEach(VideoPersonGeneration.allCases) { value in
-                    Text(value.displayName).tag(value)
+            if !family.isOmni {
+                Picker("People", selection: Binding(
+                    get: { project.googlePersonGenerationEnum },
+                    set: { project.googlePersonGenerationEnum = $0; project.updatedAt = Date() }
+                )) {
+                    ForEach(VideoPersonGeneration.allCases) { value in
+                        Text(value.displayName).tag(value)
+                    }
                 }
             }
 
@@ -227,6 +232,7 @@ struct VideoGenProjectParametersView: View {
     }
 
     private var constraintFooter: LocalizedStringKey {
+        if family.isOmni { return "Native audio is included. Describe sound and people in the prompt. Frames and reference images are separate generation modes." }
         if !project.googleReferenceImagePaths.isEmpty {
             return "Reference images render 8-second clips only."
         }
@@ -258,6 +264,7 @@ struct VideoGenProjectParametersView: View {
                     project.updatedAt = Date()
                 }
             )
+            .disabled(family.isOmni && project.googleFirstFrameImagePath == nil)
         } header: {
             Text("Frames")
         } footer: {
@@ -281,6 +288,7 @@ struct VideoGenProjectParametersView: View {
                 Text(title)
                 Button("Choose…") { showPicker.wrappedValue = true }
                     .buttonStyle(.borderless)
+                    .disabled(family.isOmni && !project.googleReferenceImagePaths.isEmpty)
             }
 
             Spacer()
@@ -335,10 +343,11 @@ struct VideoGenProjectParametersView: View {
             } label: {
                 Label("Add Reference Images", systemImage: "photo.on.rectangle.angled")
             }
+            .disabled(project.googleReferenceImagePaths.count >= family.maxReferenceImages || (family.isOmni && (project.googleFirstFrameImagePath != nil || project.googleLastFrameImagePath != nil)))
         } header: {
             Text("Reference Images")
         } footer: {
-            Text("Keeps characters or objects consistent across shots. Describe the scene in the prompt — Veo has no token syntax for referring to them.")
+            Text("Keeps characters or objects consistent across shots. Describe how to use the images in your prompt.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
@@ -366,12 +375,13 @@ struct VideoGenProjectParametersView: View {
         defer { url.stopAccessingSecurityScopedResource() }
         guard let path = try? storage.copyImage(from: url) else { return }
         apply(path)
+        VeoModelFamily.clamp(project)
         project.updatedAt = Date()
     }
 
     private func handleReferenceImages(_ result: Result<[URL], Error>) {
         guard case .success(let urls) = result else { return }
-        for url in urls {
+        for url in urls.prefix(max(0, family.maxReferenceImages - project.googleReferenceImagePaths.count)) {
             guard url.startAccessingSecurityScopedResource() else { continue }
             defer { url.stopAccessingSecurityScopedResource() }
             if let path = try? storage.copyImage(from: url) {

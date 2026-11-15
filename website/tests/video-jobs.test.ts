@@ -88,6 +88,24 @@ beforeEach(() => vi.resetModules());
 afterEach(() => vi.unstubAllGlobals());
 
 describe("pollVideoJob", () => {
+  it("leaves a live finalizer alone without polling Google", async () => {
+    const { updates } = setup();
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    const { pollVideoJob } = await import("@/lib/ai/video-jobs");
+    const result = await pollVideoJob(job({ progressPercent: 90 }));
+    expect(result.finalize).toBeUndefined();
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(updates).toEqual([]);
+  });
+  it("reclaims a finalization lock abandoned beyond the function lifetime", async () => {
+    const { updates } = setup();
+    vi.stubGlobal("fetch", vi.fn(async () => Response.json(doneOperation())));
+    const { pollVideoJob } = await import("@/lib/ai/video-jobs");
+    const result = await pollVideoJob(job({ progressPercent: 90, updatedAt: new Date(Date.now() - 360_000) }));
+    expect(updates[0]).toMatchObject({ progressPercent: 50 });
+    expect(result.finalize).toBeTypeOf("function");
+  });
   it("only bumps the progress estimate while the operation is running", async () => {
     const { updates } = setup();
     vi.stubGlobal("fetch", vi.fn(async () => RUNNING.clone()));
@@ -168,5 +186,84 @@ describe("pollVideoJob", () => {
     // Back below the lock value, and the hold is left open for the retry.
     expect(updates.at(-1)).toMatchObject({ progressPercent: 50 });
     expect(reservations).toEqual([]);
+  });
+});
+
+
+describe("Omni interaction jobs", () => {
+  // Raw REST response: output_video exists only in Google's SDKs.
+  function completedInteraction(uri = "https://generativelanguage.googleapis.com/v1beta/files/omni123") {
+    return {
+      status: "completed",
+      steps: [
+        { type: "user_input", content: [{ type: "video", uri: "https://example.com/input.mp4" }] },
+        { type: "thought", content: [{ type: "text", text: "Planning the shot" }] },
+        { type: "model_output", content: [{ type: "text", text: "Generated video" }] },
+        { type: "model_output", content: [{ type: "video", uri, mime_type: "video/mp4" }] },
+      ],
+    };
+  }
+  function omniJob() {
+    return job({ requestJson: { operationName: "interactions/omni-job", model: "gemini-omni-1.2-flash", priceModel: "gemini-omni-1.2-flash:720p", durationSeconds: 15 } });
+  }
+  it("waits for the generated file to become ACTIVE without taking the lock", async () => {
+    const { updates, stored, reservations } = setup();
+    vi.stubGlobal("fetch", vi.fn(async (url: string) => new Response(JSON.stringify(url.includes("/interactions/")
+      ? completedInteraction()
+      : { state: "PROCESSING" }))));
+    const { pollVideoJob } = await import("@/lib/ai/video-jobs");
+    const result = await pollVideoJob(omniJob());
+    expect(result.finalize).toBeUndefined();
+    expect(result.job.status).toBe("running");
+    expect(updates).not.toContainEqual(expect.objectContaining({ progressPercent: 90 }));
+    expect(stored).toEqual([]);
+    expect(reservations).toEqual([]);
+  });
+  it("downloads and bills a completed interaction after file processing", async () => {
+    const { stored, usage, reservations } = setup();
+    vi.stubGlobal("fetch", vi.fn(async (url: string) => {
+      if (url.includes("/interactions/")) return Response.json(completedInteraction());
+      expect(url).toContain("/files/omni123");
+      if (!url.includes(":download")) return Response.json({ state: "ACTIVE" });
+      return new Response(new Uint8Array([1,2,3]), { headers: { "content-type": "video/mp4" } });
+    }));
+    const { pollVideoJob } = await import("@/lib/ai/video-jobs");
+    const result = await pollVideoJob(omniJob());
+    await result.finalize!();
+    expect(stored).toHaveLength(1);
+    expect(usage[0]).toMatchObject({ model: "gemini-omni-1.2-flash:720p", units: 15 });
+    expect(reservations).toEqual([{ success: true }]);
+  });
+  it("does not use an input video when model output has no video URI", async () => {
+    const { stored, usage, reservations } = setup();
+    const interaction = completedInteraction();
+    interaction.steps.pop();
+    const fetchMock = vi.fn(async () => Response.json(interaction));
+    vi.stubGlobal("fetch", fetchMock);
+    const { pollVideoJob } = await import("@/lib/ai/video-jobs");
+    const result = await pollVideoJob(omniJob());
+    expect(result.job.errorCode).toBe("INVALID_PROVIDER_RESPONSE");
+    expect(result.finalize).toBeUndefined();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(stored).toEqual([]);
+    expect(usage).toEqual([]);
+    expect(reservations).toEqual([{ success: false }]);
+  });
+  it.each(["not-a-url", "http://generativelanguage.googleapis.com/v1beta/files/x", "https://example.com/files/x"])("rejects invalid output URI %s without downloading", async (uri) => {
+    const { reservations } = setup();
+    const fetchMock = vi.fn(async () => Response.json(completedInteraction(uri)));
+    vi.stubGlobal("fetch", fetchMock);
+    const { pollVideoJob } = await import("@/lib/ai/video-jobs");
+    const result = await pollVideoJob(omniJob());
+    expect(result.job.errorMessage).toBe("The provider returned an invalid file URI.");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(reservations).toEqual([{ success: false }]);
+  });
+  it("releases the reservation on interaction failure", async () => {
+    const { reservations } = setup();
+    vi.stubGlobal("fetch", vi.fn(async () => Response.json({ status: "failed", error: { message: "Filtered" } })));
+    const { pollVideoJob } = await import("@/lib/ai/video-jobs");
+    expect((await pollVideoJob(omniJob())).job.status).toBe("failed");
+    expect(reservations).toEqual([{ success: false }]);
   });
 });

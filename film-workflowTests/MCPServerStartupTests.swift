@@ -4,6 +4,38 @@ import Testing
 
 @testable import film_workflow
 
+@Suite("MCP authentication settings")
+@MainActor
+struct MCPAuthenticationSettingsTests {
+    @Test("Authentication defaults on, persists opt-out, and applies to the next request")
+    func authenticationToggle() async throws {
+        let suite = "MCPAuthenticationTests-\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let settings = MCPSettings(defaults: defaults)
+        #expect(settings.requiresToken)
+
+        let request = MCPHTTP.Request(
+            method: "POST", path: "/mcp", headers: [:],
+            body: Data(#"{"jsonrpc":"2.0","id":1,"method":"initialize"}"#.utf8)
+        )
+        let rejected = await MCPRouter.handle(request: request, settings: settings)
+        #expect(String(decoding: rejected, as: UTF8.self).hasPrefix("HTTP/1.1 401"))
+
+        settings.requiresToken = false
+        #expect(!MCPSettings(defaults: defaults).requiresToken)
+        let accepted = await MCPRouter.handle(request: request, settings: settings)
+        let response = String(decoding: accepted, as: UTF8.self)
+        #expect(response.hasPrefix("HTTP/1.1 200"))
+        #expect(response.contains("serverInfo"))
+
+        settings.requiresToken = true
+        #expect(MCPSettings(defaults: defaults).requiresToken)
+        let rejectedAgain = await MCPRouter.handle(request: request, settings: settings)
+        #expect(String(decoding: rejectedAgain, as: UTF8.self).hasPrefix("HTTP/1.1 401"))
+    }
+}
+
 @Suite("MCP server startup", .serialized)
 @MainActor
 struct MCPServerStartupTests {

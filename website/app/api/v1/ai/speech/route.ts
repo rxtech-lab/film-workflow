@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { GEMINI_SPEECH_MODEL, geminiSpeechRequest, geminiSpeechAudio } from "@/lib/ai/gemini-speech";
 import { aiRouteError, noStoreHeaders, providerError } from "@/lib/ai/http";
 import { withMeteredOperation } from "@/lib/ai/meter";
 import { requireApiUser } from "@/lib/auth/bearer";
@@ -52,34 +53,14 @@ async function azureSpeech(ssml: string, format: string) {
 async function geminiSpeech(transcript: string, speakers: Array<{ name: string; voice: string }>) {
   const key = process.env.GOOGLE_GENERATIVE_AI_API_KEY?.trim();
   if (!key) throw new Error("GOOGLE_AI_NOT_CONFIGURED");
-  const speechConfig = speakers.length === 1
-    ? { voiceConfig: { prebuiltVoiceConfig: { voiceName: speakers[0].voice } } }
-    : { multiSpeakerVoiceConfig: { speakerVoiceConfigs: speakers.map((item) => ({ speaker: item.name, voiceConfig: { prebuiltVoiceConfig: { voiceName: item.voice } } })) } };
   const startedAt = Date.now();
-  const response = await fetch("https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-tts-preview:generateContent", { method: "POST", headers: { "Content-Type": "application/json", "x-goog-api-key": key }, body: JSON.stringify({ contents: [{ parts: [{ text: transcript }] }], generationConfig: { responseModalities: ["AUDIO"], speechConfig } }), signal: AbortSignal.timeout(290_000) });
+  const response = await fetch("https://generativelanguage.googleapis.com/v1beta/interactions", { method: "POST", headers: { "Content-Type": "application/json", "x-goog-api-key": key }, body: JSON.stringify(geminiSpeechRequest(transcript, speakers)), signal: AbortSignal.timeout(290_000) });
   console.info("Speech provider responded", { provider: "gemini", status: response.status, elapsedMs: Date.now() - startedAt, transcriptLength: transcript.length, speakers: speakers.map((item) => item.voice) });
   if (!response.ok) await providerError(response);
-  const body = await response.json() as {
-    promptFeedback?: { blockReason?: string; safetyRatings?: unknown };
-    candidates?: Array<{ finishReason?: string; safetyRatings?: unknown; content?: { parts?: Array<{ text?: string; inlineData?: { data?: string; mimeType?: string }; inline_data?: { data?: string; mime_type?: string } }> } }>;
-  };
-  for (const candidate of body.candidates ?? []) for (const part of candidate.content?.parts ?? []) {
-    const inline = part.inlineData ?? (part.inline_data ? { data: part.inline_data.data, mimeType: part.inline_data.mime_type } : undefined);
-    if (inline?.data) return { audio: Buffer.from(inline.data, "base64"), mime: inline.mimeType ?? "audio/L16;rate=24000" };
-  }
-  // A 200 with no audio part is the model declining or truncating, never a transport
-  // failure — the reason only lives in blockReason/finishReason, so log it before
-  // it collapses into a generic INVALID_PROVIDER_RESPONSE.
-  console.error("Gemini speech returned no audio", {
-    elapsedMs: Date.now() - startedAt,
-    blockReason: body.promptFeedback?.blockReason ?? null,
-    finishReasons: (body.candidates ?? []).map((candidate) => candidate.finishReason ?? null),
-    partKinds: (body.candidates ?? []).flatMap((candidate) => (candidate.content?.parts ?? []).map((part) => Object.keys(part).join("+"))),
-    textParts: (body.candidates ?? []).flatMap((candidate) => (candidate.content?.parts ?? []).map((part) => part.text).filter(Boolean)),
-    promptFeedback: body.promptFeedback ?? null,
-    safetyRatings: (body.candidates ?? []).map((candidate) => candidate.safetyRatings ?? null),
-    transcript: transcript.slice(0, 800),
-  });
+  const body: unknown = await response.json();
+  const audio = geminiSpeechAudio(body);
+  if (audio) return { audio, mime: "audio/L16;rate=24000" };
+  console.error("Gemini speech returned no audio", { model: GEMINI_SPEECH_MODEL, elapsedMs: Date.now() - startedAt });
   throw new Error("INVALID_PROVIDER_RESPONSE");
 }
 
@@ -118,7 +99,7 @@ export async function POST(request: Request) {
     const input = parsed.data;
     const operationKey = request.headers.get("idempotency-key")?.slice(0, 180) || `speech:${user.id}:${crypto.randomUUID()}`;
     const characters = billableCharacters(input.provider === "azure" ? input.ssml : input.transcript);
-    const model = input.provider === "azure" && /DragonHD/i.test(input.ssml) ? "azure-hd-tts" : input.provider === "azure" ? "azure-neural-tts" : "gemini-3.1-flash-tts-preview";
+    const model = input.provider === "azure" && /DragonHD/i.test(input.ssml) ? "azure-hd-tts" : input.provider === "azure" ? "azure-neural-tts" : GEMINI_SPEECH_MODEL;
     const estimated = input.provider === "azure"
       ? estimateReservationPoints({ provider: "azure", model, unit: "characters", units: characters, floorPoints: billingConfig.speechReservationPoints })
       : estimateReservationPoints({ provider: "google", model, unit: "audio_seconds", units: Math.max(1, characters / 12), floorPoints: billingConfig.speechReservationPoints });

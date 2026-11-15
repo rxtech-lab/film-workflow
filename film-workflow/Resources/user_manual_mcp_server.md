@@ -33,8 +33,11 @@ A token is generated for you the first time you enable the server.
 - **Regenerate token** issues a new one. Anything already connected with the old token will stop
   working.
 
-The token is **required when bound to all interfaces**. Localhost requests skip the check. Send it
-as a header on every request:
+**Require bearer token** is on by default for all connections, including localhost. Turn it off
+to connect without a token; the change applies immediately. With authentication off, any client
+that can reach the server can control your films and spend your account's credits.
+
+When enabled, send the token as a header on every request:
 
 ```
 Authorization: Bearer <token>
@@ -48,10 +51,10 @@ When the server is running, the settings pane shows a ready-made command with yo
 token filled in. Copy it and run it:
 
 ```
-claude mcp add --transport http film http://127.0.0.1:7711/...
+claude mcp add --transport http film http://127.0.0.1:7711/mcp
 ```
 
-Bound to all interfaces, the same command includes the `Authorization` header.
+The command includes the `Authorization` header only when **Require bearer token** is enabled.
 
 ## What the tools cover
 

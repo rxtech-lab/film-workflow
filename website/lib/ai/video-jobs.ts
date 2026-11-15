@@ -7,6 +7,7 @@ import { recordUnitUsage, type MeteringContext } from "@/lib/billing/usage";
 import { db } from "@/lib/db";
 import { aiJobs } from "@/lib/db/schema";
 import { putObject } from "@/lib/storage/s3";
+import { downloadVideo } from "@/lib/ai/video-download";
 
 /**
  * On-demand finalization of Veo jobs.
@@ -22,7 +23,7 @@ import { putObject } from "@/lib/storage/s3";
 
 export type VideoJob = typeof aiJobs.$inferSelect;
 
-export const VIDEO_FEATURE = "Video · Veo";
+export const VIDEO_FEATURE = "Video · Google";
 
 /** The lock value: a running video job at or past this is being finalized. */
 const FINALIZING_PERCENT = 90;
@@ -33,6 +34,9 @@ type VideoJobRequest = { operationName?: unknown; model?: unknown; priceModel?: 
 
 type Operation = {
   done?: boolean;
+  status?: string;
+  steps?: Array<{ type?: string; content?: Array<{ type?: string; uri?: string; mime_type?: string }> }>;
+
   error?: { code?: number; message?: string };
   response?: { generateVideoResponse?: { generatedSamples?: Array<{ video?: { uri?: string; mimeType?: string } }>; raiMediaFilteredCount?: number; raiMediaFilteredReasons?: string[] } };
 };
@@ -51,7 +55,7 @@ function isTransient(cause: unknown) {
   if (cause instanceof Error && (cause.name === "AbortError" || cause.name === "TimeoutError")) return true;
   // undici surfaces connection failures as a TypeError("fetch failed").
   if (cause instanceof TypeError) return true;
-  return cause instanceof Error && /^PROVIDER_5\d\d/.test(cause.message);
+  return cause instanceof Error && /^PROVIDER_(429|5\d\d)/.test(cause.message);
 }
 
 function running(job: VideoJob) {
@@ -65,41 +69,23 @@ async function failJob(job: VideoJob, code: string, message: string): Promise<Vi
   return { ...job, status: "failed", errorCode: code.slice(0, 120), errorMessage: message.slice(0, 600), updatedAt: now };
 }
 
-/** Downloads a Veo file URI. It redirects to a signed storage host and the key is stripped across the hop, so each hop is re-issued with the header. */
-async function downloadWithKey(uri: string, key: string) {
-  let url = uri;
-  for (let hop = 0; hop < 5; hop += 1) {
-    const response = await fetch(url, { headers: { "x-goog-api-key": key }, redirect: "manual", signal: AbortSignal.timeout(280_000) });
-    if (response.status >= 300 && response.status < 400) {
-      const location = response.headers.get("location");
-      if (!location) throw new Error("INVALID_PROVIDER_RESPONSE");
-      url = new URL(location, url).toString();
-      continue;
-    }
-    if (!response.ok) {
-      const text = await response.text().catch(() => "");
-      if (response.status >= 500) throw new TransientError(`PROVIDER_${response.status}:${text.slice(0, 200)}`);
-      throw new Error(`PROVIDER_${response.status}:${text.slice(0, 200)}`);
-    }
-    return { bytes: Buffer.from(await response.arrayBuffer()), contentType: response.headers.get("content-type") };
-  }
-  throw new Error("VIDEO_DOWNLOAD_REDIRECT_LOOP");
-}
-
 async function finalize(job: VideoJob, request: VideoJobRequest, operation: Operation) {
   const samples = operation.response?.generateVideoResponse?.generatedSamples ?? [];
   const first = samples[0]?.video;
   const priceModel = typeof request.priceModel === "string" ? request.priceModel : String(request.model ?? "");
   const durationSeconds = typeof request.durationSeconds === "number" ? request.durationSeconds : 8;
+  let stage = "download";
   try {
     if (!first?.uri) {
       const filtered = operation.response?.generateVideoResponse?.raiMediaFilteredCount ?? 0;
       const reasons = operation.response?.generateVideoResponse?.raiMediaFilteredReasons ?? [];
       throw new Error(filtered > 0 ? `VIDEO_FILTERED:${reasons.join("; ")}` : "INVALID_PROVIDER_RESPONSE");
     }
-    const downloaded = await downloadWithKey(first.uri, googleApiKey());
+    const downloaded = await downloadVideo(first.uri, googleApiKey());
     const mimeType = first.mimeType ?? downloaded.contentType ?? "video/mp4";
+    stage = "storage";
     const stored = await putObject({ key: `videos/${job.userId}/${job.id}.mp4`, body: downloaded.bytes, contentType: mimeType });
+    stage = "billing";
     const context: MeteringContext = { userId: job.userId, reservationId: job.reservationId, feature: VIDEO_FEATURE, capability: "video", operationId: job.reservationId ?? job.id };
     const usage = await recordUnitUsage({ context, provider: "google", model: priceModel, capability: "video", unit: "video_seconds", units: durationSeconds * samples.length, eventId: "video" });
     await db.update(aiJobs).set({
@@ -114,21 +100,32 @@ async function finalize(job: VideoJob, request: VideoJobRequest, operation: Oper
     const code = cause instanceof Error ? cause.message : "VIDEO_FINALIZE_FAILED";
     if (isTransient(cause)) {
       // Hand the lock back so the next poll tries again.
-      console.error("Video finalization will retry", { jobId: job.id, code });
+      console.error("Video finalization will retry", { jobId: job.id, stage, code });
       await db.update(aiJobs).set({ progressPercent: RETRY_PERCENT, updatedAt: new Date() }).where(running(job));
       return;
     }
-    console.error("Video job failed", { jobId: job.id, code });
+    console.error("Video job failed", { jobId: job.id, stage, code });
     await failJob(job, code, code.startsWith("VIDEO_FILTERED") ? "The provider filtered this video." : "Video generation could not be completed.");
   }
 }
 
 export async function pollVideoJob(job: VideoJob): Promise<VideoJobPoll> {
+  // A killed function never reaches the catch block to release its lock.
+  // Reclaim only after the route's 300-second maximum lifetime plus a margin.
+  if (job.progressPercent >= FINALIZING_PERCENT) {
+    if (Date.now() - job.updatedAt.getTime() < 330_000) return { job };
+    const reclaimed = await db.update(aiJobs)
+      .set({ progressPercent: RETRY_PERCENT, updatedAt: new Date() })
+      .where(and(running(job), eq(aiJobs.updatedAt, job.updatedAt)))
+      .returning({ id: aiJobs.id });
+    if (!reclaimed.length) return { job };
+    job = { ...job, progressPercent: RETRY_PERCENT };
+  }
   const request = (job.requestJson ?? {}) as VideoJobRequest;
   const operationName = typeof request.operationName === "string" ? request.operationName : "";
   if (!operationName) return { job: await failJob(job, "VIDEO_OPERATION_MISSING", "Video generation could not be completed.") };
 
-  const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/${operationName}`, { headers: { "x-goog-api-key": googleApiKey() }, signal: AbortSignal.timeout(30_000) });
+  const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/${operationName}`, { headers: { "x-goog-api-key": googleApiKey(), ...(operationName.startsWith("interactions/") ? { "Api-Revision": "2026-05-20" } : {}) }, signal: AbortSignal.timeout(30_000) });
   if (!response.ok) {
     // A bad minute at Google keeps the job running; an operation it no longer
     // knows will never complete.
@@ -137,6 +134,37 @@ export async function pollVideoJob(job: VideoJob): Promise<VideoJobPoll> {
     return { job: await failJob(job, `PROVIDER_${response.status}`, text.slice(0, 600) || "The provider rejected the poll.") };
   }
   const operation = await response.json() as Operation;
+  if (operationName.startsWith("interactions/")) {
+    if (["failed", "cancelled", "requires_action"].includes(operation.status ?? "")) {
+      return { job: await failJob(job, "VIDEO_INTERACTION_FAILED", operation.error?.message ?? "Video generation failed.") };
+    }
+    operation.done = operation.status === "completed";
+    if (operation.done && !operation.error) {
+      // output_video is an SDK convenience field, absent from raw REST JSON.
+      // Only model output counts: input steps may also contain video URIs.
+      const video = operation.steps
+        ?.filter((step) => step.type === "model_output")
+        .flatMap((step) => step.content ?? [])
+        .find((content) => content.type === "video" && content.uri);
+      if (!video?.uri) return { job: await failJob(job, "INVALID_PROVIDER_RESPONSE", "The provider returned no video URI.") };
+      // URI delivery creates a Files resource that can still be processing.
+      let fileURL: URL;
+      try {
+        fileURL = new URL(video.uri);
+      } catch {
+        return { job: await failJob(job, "INVALID_PROVIDER_RESPONSE", "The provider returned an invalid file URI.") };
+      }
+      const match = fileURL.pathname.match(/\/files\/([^/:]+)/);
+      if (fileURL.protocol !== "https:" || fileURL.hostname !== "generativelanguage.googleapis.com" || !match) return { job: await failJob(job, "INVALID_PROVIDER_RESPONSE", "The provider returned an invalid file URI.") };
+      const fileResponse = await fetch(`https://generativelanguage.googleapis.com/v1beta/files/${encodeURIComponent(match[1])}`, { headers: { "x-goog-api-key": googleApiKey() }, signal: AbortSignal.timeout(30_000) });
+      if (fileResponse.status >= 500 || fileResponse.status === 429) return { job };
+      if (!fileResponse.ok) return { job: await failJob(job, "VIDEO_FILE_FAILED", "The generated file could not be retrieved.") };
+      const file = await fileResponse.json() as { state?: string; mimeType?: string; downloadUri?: string };
+      if (file.state === "FAILED") return { job: await failJob(job, "VIDEO_FILE_FAILED", "The generated video could not be processed.") };
+      operation.done = file.state === "ACTIVE";
+      operation.response = { generateVideoResponse: { generatedSamples: [{ video: { uri: file.downloadUri ?? `https://generativelanguage.googleapis.com/v1beta/files/${encodeURIComponent(match[1])}:download?alt=media`, mimeType: file.mimeType ?? video.mime_type ?? "video/mp4" } }] } };
+    }
+  }
   if (operation.error) {
     return { job: await failJob(job, `PROVIDER_${operation.error.code ?? "ERROR"}`, operation.error.message ?? "Video generation failed.") };
   }

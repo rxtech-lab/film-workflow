@@ -8088,7 +8088,11 @@
     "Keep your film together" : {
 
     },
+    "Keeps characters or objects consistent across shots. Describe how to use the images in your prompt." : {
+
+    },
     "Keeps characters or objects consistent across shots. Describe the scene in the prompt — Veo has no token syntax for referring to them." : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -9293,6 +9297,9 @@
       }
     },
     "Narrow down this collection" : {
+
+    },
+    "Native audio is included. Describe sound and people in the prompt. Frames and reference images are separate generation modes." : {
 
     },
     "Needed only for Mapbox map styles." : {
@@ -12342,6 +12349,9 @@
     "Replay and Record" : {
 
     },
+    "Require bearer token" : {
+
+    },
     "Required" : {
       "localizations" : {
         "zh-Hans" : {
@@ -12352,7 +12362,11 @@
         }
       }
     },
+    "Required on every request, including localhost. Changes apply immediately." : {
+
+    },
     "Required on every request, localhost included: the generation tools spend your account's credits." : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -15772,6 +15786,9 @@
         }
       }
     },
+    "Token authentication is off. Any client that can reach this server can control your films and spend your account's credits." : {
+
+    },
     "Tool rounds per turn: %lld" : {
       "localizations" : {
         "zh-Hans" : {
@@ -16446,6 +16463,9 @@
           }
         }
       }
+    },
+    "Uploading images…" : {
+
     },
     "Uploads when you save the draft." : {
       "localizations" : {

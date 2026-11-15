@@ -34,7 +34,7 @@ function unitModel(input: Omit<CatalogModel, "estimate">, unit: Exclude<UnitKind
  * live model list.
  */
 export const DIRECT_MODEL_CATALOG: readonly CatalogModel[] = [
-  unitModel({ id: "gemini-3.1-flash-tts-preview", provider: "google", displayName: "Gemini 3.1 Flash TTS", capability: "speech" }, "audio_seconds"),
+  unitModel({ id: "gemini-3.8-flash-tts", provider: "google", displayName: "Gemini 3.8 Flash TTS", capability: "speech" }, "audio_seconds"),
   unitModel({ id: "azure-neural-tts", provider: "azure", displayName: "Azure Neural TTS", capability: "speech" }, "characters"),
   unitModel({ id: "lyria-3.5", provider: "google", displayName: "Lyria 3.5", capability: "music" }, "audio_seconds"),
   unitModel({ id: "whisper-1", provider: "openai", displayName: "Whisper", capability: "transcription" }, "audio_minutes"),
@@ -192,7 +192,10 @@ async function googleCatalog(): Promise<CatalogModel[]> {
   for (const model of models) {
     const entry = googleImageEntry(model) ?? googleVideoEntry(model);
     if (!entry) continue;
-    const key = `${entry.capability}:${entry.displayName}`;
+    // Distinct video versions can share a marketing name; keep both pickable.
+    const key = entry.capability === "video"
+      ? `video:${veoPriceId(entry.id)}`
+      : `${entry.capability}:${entry.displayName}`;
     const previous = canonical.get(key);
     if (!previous || preferredId(entry.id, previous.id) === entry.id) canonical.set(key, entry);
   }
