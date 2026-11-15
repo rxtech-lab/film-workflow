@@ -40,20 +40,21 @@ enum MCPRouter {
             return MCPHTTP.makeResponse(status: 405, contentType: "text/plain", body: Data("Method Not Allowed".utf8))
         }
 
-        // Every generation tool spends the account's prepaid credits, so even
-        // localhost requires the local MCP token.
-        let header = request.headers["authorization"] ?? ""
-        let provided = header.lowercased().hasPrefix("bearer ")
-            ? String(header.dropFirst("bearer ".count)).trimmingCharacters(in: .whitespaces)
-            : ""
-        let expected = settings.token ?? ""
-        if expected.isEmpty || provided != expected {
-            return MCPHTTP.makeResponse(
-                status: 401,
-                contentType: "application/json",
-                body: Data(#"{"error":"unauthorized"}"#.utf8),
-                extraHeaders: [("WWW-Authenticate", "Bearer")]
-            )
+        // Authentication is enabled by default, including for localhost.
+        if settings.requiresToken {
+            let header = request.headers["authorization"] ?? ""
+            let provided = header.lowercased().hasPrefix("bearer ")
+                ? String(header.dropFirst("bearer ".count)).trimmingCharacters(in: .whitespaces)
+                : ""
+            let expected = settings.token ?? ""
+            if expected.isEmpty || provided != expected {
+                return MCPHTTP.makeResponse(
+                    status: 401,
+                    contentType: "application/json",
+                    body: Data(#"{"error":"unauthorized"}"#.utf8),
+                    extraHeaders: [("WWW-Authenticate", "Bearer")]
+                )
+            }
         }
 
         let body = request.body

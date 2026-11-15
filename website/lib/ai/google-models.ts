@@ -107,13 +107,11 @@ export function googleImageMode(model: GoogleModel): GoogleImageMode | null {
   return null;
 }
 
-/**
- * True when the model is a Veo video model: the only family served over
- * `predictLongRunning`, and named for it. The method alone is not enough —
- * Google has parked other long-running experiments behind it — so the id has
- * to say "veo" too.
- */
-export function googleVideoMode(model: GoogleModel): "predictLongRunning" | null {
+/** Google video models use either Veo operations or Omni interactions. */
+export function googleVideoMode(model: GoogleModel): "predictLongRunning" | "interactions" | null {
   const id = model.id.toLowerCase();
+  if (["veo-3.1-generate-preview", "veo-3.1-fast-generate-preview", "veo-3.1-lite-generate-preview", "gemini-omni-flash-preview"].includes(id)) return null;
+  // The models list does not consistently advertise an interactions method.
+  if (["gemini-omni-1.2-flash", "gemini-omni-1.1-flash"].includes(id)) return "interactions";
   return model.supportedGenerationMethods.includes("predictLongRunning") && id.includes("veo") ? "predictLongRunning" : null;
 }

@@ -9,6 +9,8 @@
 /* Begin PBXBuildFile section */
 		AAC100000000000000000001 /* RxAgentManagement in Frameworks */ = {isa = PBXBuildFile; productRef = AAC100000000000000000002 /* RxAgentManagement */; };
 		ABCA00010000000000000001 /* RxPet in Frameworks */ = {isa = PBXBuildFile; productRef = ABCA00020000000000000002 /* RxPet */; };
+		D1A5000100000000000000A1 /* MotionSwift in Frameworks */ = {isa = PBXBuildFile; productRef = D1A5000200000000000000A1 /* MotionSwift */; };
+		D1A5000100000000000000A2 /* MotionCompiler in Frameworks */ = {isa = PBXBuildFile; productRef = D1A5000200000000000000A2 /* MotionCompiler */; };
 		DF63A1A1305706A20021FF67 /* FilmTemplateKit in Frameworks */ = {isa = PBXBuildFile; productRef = DFFT0002000000000000E001 /* FilmTemplateKit */; };
 		DF63A1A2305706A20021FF67 /* JSONRenderUI in Frameworks */ = {isa = PBXBuildFile; productRef = DFFT0002000000000000E003 /* JSONRenderUI */; };
 		DF63A1A3305706A20021FF67 /* FilmTemplateUI in Frameworks */ = {isa = PBXBuildFile; productRef = DFFT0002000000000000E002 /* FilmTemplateUI */; };
@@ -18,8 +20,6 @@
 		DF8C30C03054213400302857 /* appicon.icon in Resources */ = {isa = PBXBuildFile; fileRef = DF8C30BF3054213400302857 /* appicon.icon */; };
 		DF9D8F11302D630100CD3C3D /* RxAuthSwift in Frameworks */ = {isa = PBXBuildFile; productRef = DF9D8F10302D630100CD3C3D /* RxAuthSwift */; };
 		DF9D8F13302D630100CD3C3D /* RxAuthSwiftUI in Frameworks */ = {isa = PBXBuildFile; productRef = DF9D8F12302D630100CD3C3D /* RxAuthSwiftUI */; };
-		D1A5000100000000000000A1 /* MotionSwift in Frameworks */ = {isa = PBXBuildFile; productRef = D1A5000200000000000000A1 /* MotionSwift */; };
-		D1A5000100000000000000A2 /* MotionCompiler in Frameworks */ = {isa = PBXBuildFile; productRef = D1A5000200000000000000A2 /* MotionCompiler */; };
 		DFC60EA52FAF81D200B99679 /* Textual in Frameworks */ = {isa = PBXBuildFile; productRef = DFC60EA42FAF81D200B99679 /* Textual */; };
 		DFCA0001000000000000B001 /* WhisperKit in Frameworks */ = {isa = PBXBuildFile; productRef = DFCA0002000000000000B002 /* WhisperKit */; };
 		DFSP0001000000000000C001 /* Sparkle in Frameworks */ = {isa = PBXBuildFile; platformFilters = (macos, ); productRef = DFSP0002000000000000C002 /* Sparkle */; };
@@ -351,7 +351,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
-				ARCHS = arm64; // MotionSwiftNative supports Apple Silicon only.
+				ARCHS = arm64;
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
 				CLANG_ANALYZER_NONNULL = YES;
 				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
@@ -416,7 +416,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
-				ARCHS = arm64; // MotionSwiftNative supports Apple Silicon only.
+				ARCHS = arm64;
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
 				CLANG_ANALYZER_NONNULL = YES;
 				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
@@ -770,16 +770,6 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
-		D1A5000200000000000000A1 /* MotionSwift */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = D1A5000300000000000000A1 /* XCRemoteSwiftPackageReference "MotionSwift" */;
-			productName = MotionSwift;
-		};
-		D1A5000200000000000000A2 /* MotionCompiler */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = D1A5000300000000000000A1 /* XCRemoteSwiftPackageReference "MotionSwift" */;
-			productName = MotionCompiler;
-		};
 		AAC100000000000000000002 /* RxAgentManagement */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = AAC100000000000000000003 /* XCLocalSwiftPackageReference "Packages/RxAgentManagement" */;
@@ -789,6 +779,16 @@
 			isa = XCSwiftPackageProductDependency;
 			package = ABCA00030000000000000003 /* XCLocalSwiftPackageReference "Packages/RxPet" */;
 			productName = RxPet;
+		};
+		D1A5000200000000000000A1 /* MotionSwift */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = D1A5000300000000000000A1 /* XCRemoteSwiftPackageReference "MotionSwift" */;
+			productName = MotionSwift;
+		};
+		D1A5000200000000000000A2 /* MotionCompiler */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = D1A5000300000000000000A1 /* XCRemoteSwiftPackageReference "MotionSwift" */;
+			productName = MotionCompiler;
 		};
 		DF63AC8530585A0F0021FF67 /* RxSubscriptionIOS */ = {
 			isa = XCSwiftPackageProductDependency;

@@ -64,6 +64,7 @@ nonisolated struct VideoGenResult: Sendable {
 /// reports a real percentage.
 nonisolated enum VideoGenProgress: Sendable, Equatable {
     case submitting
+    case uploading(sent: Int64, total: Int64)
     /// `percent` is nil for providers whose job status carries no progress —
     /// a Veo operation is only ever "not done" until it is.
     case processing(percent: Double?, elapsedSeconds: Int)
@@ -72,6 +73,7 @@ nonisolated enum VideoGenProgress: Sendable, Equatable {
 
     var fraction: Double? {
         switch self {
+        case .uploading(let sent, let total): return total > 0 ? min(1, Double(sent) / Double(total)) : nil
         case .processing(let percent, _):
             guard let percent else { return nil }
             return min(max(percent / 100, 0), 1)
@@ -83,7 +85,9 @@ nonisolated enum VideoGenProgress: Sendable, Equatable {
     var title: LocalizedStringKey {
         switch self {
         case .submitting: return "Submitting…"
-        case .processing: return "Generating video…"
+        case .uploading: return "Uploading images…"
+        case .processing(let percent, _):
+            return (percent ?? 0) >= 90 ? "Downloading video…" : "Generating video…"
         case .downloading: return "Downloading video…"
         case .saving: return "Saving…"
         }
@@ -91,6 +95,9 @@ nonisolated enum VideoGenProgress: Sendable, Equatable {
 
     var detail: String {
         switch self {
+        case .uploading(let sent, let total):
+            let percent = total > 0 ? min(100, Int(Double(sent) / Double(total) * 100)) : 0
+            return "\(percent)% · \(sent) / \(total) bytes"
         case .submitting, .saving:
             return ""
         case .downloading(let elapsed):

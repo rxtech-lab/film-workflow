@@ -13,13 +13,13 @@
  * unit-testable as plain functions.
  */
 
-export type VeoFamily = "veo2" | "veo3" | "veo31" | "veo31Fast" | "veo31Lite" | "unknown";
+export type VeoFamily = "omni12" | "omni11" | "veo2" | "veo3" | "veo31" | "veo31Fast" | "veo31Lite" | "unknown";
 export type VideoAspectRatio = "16:9" | "9:16";
-export type VideoResolution = "720p" | "1080p" | "4k";
+export type VideoResolution = "360p" | "720p" | "1080p" | "4k";
 export type VideoPersonGeneration = "allow_all" | "allow_adult" | "dont_allow";
 export type VideoInputImage = { mime_type: string; base64: string };
 
-export const VIDEO_RESOLUTIONS: readonly VideoResolution[] = ["720p", "1080p", "4k"];
+export const VIDEO_RESOLUTIONS: readonly VideoResolution[] = ["360p", "720p", "1080p", "4k"];
 
 /** Veo renders 1080p and 4k as 8-second clips only. */
 export function resolutionRequiresEightSeconds(resolution: VideoResolution) {
@@ -28,6 +28,8 @@ export function resolutionRequiresEightSeconds(resolution: VideoResolution) {
 
 export function veoFamily(id: string): VeoFamily {
   const name = id.toLowerCase();
+  if (name === "gemini-omni-1.2-flash") return "omni12";
+  if (name === "gemini-omni-1.1-flash") return "omni11";
   if (name.includes("veo-3.1") || name.includes("veo-31")) {
     if (name.includes("lite")) return "veo31Lite";
     if (name.includes("fast")) return "veo31Fast";
@@ -56,23 +58,25 @@ export type VeoRules = {
 };
 
 export function veoRules(family: VeoFamily): VeoRules {
-  const resolutions: readonly VideoResolution[] = family === "veo2" ? ["720p"]
+  const omni = family === "omni12" || family === "omni11";
+  const resolutions: readonly VideoResolution[] = omni ? VIDEO_RESOLUTIONS : family === "veo2" ? ["720p"]
     : family === "veo31" || family === "veo31Fast" ? ["720p", "1080p", "4k"]
     : ["720p", "1080p"];
   const maxVideos = family === "veo2" ? 2 : 1;
   return {
     resolutions,
-    baseDurations: family === "veo2" ? [5, 6, 8] : [4, 6, 8],
+    baseDurations: omni ? Array.from({ length: family === "omni12" ? 13 : 8 }, (_, i) => i + 3) : family === "veo2" ? [5, 6, 8] : [4, 6, 8],
     maxVideos,
     supportsNumberOfVideos: maxVideos > 1,
-    supportsSeed: family !== "veo2",
-    supportsAudio: family !== "veo2" && family !== "veo31Lite",
-    supportsReferenceImages: family === "veo31" || family === "veo31Fast",
+    supportsSeed: !omni && family !== "veo2",
+    supportsAudio: !omni && family !== "veo2" && family !== "veo31Lite",
+    supportsReferenceImages: omni || family === "veo31" || family === "veo31Fast",
   };
 }
 
 /** 1080p/4k and reference images both force an 8-second clip. */
 export function veoDurations(family: VeoFamily, resolution: VideoResolution, usingReferenceImages: boolean): readonly number[] {
+  if (family === "omni12" || family === "omni11") return veoRules(family).baseDurations;
   if (resolutionRequiresEightSeconds(resolution) || usingReferenceImages) return [8];
   return veoRules(family).baseDurations;
 }

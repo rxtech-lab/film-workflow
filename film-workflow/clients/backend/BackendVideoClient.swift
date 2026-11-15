@@ -15,12 +15,49 @@ enum BackendVideoClient {
 
     private struct Image: Encodable {
         let mimeType: String
-        let base64: String
+        let objectKey: String
+    }
 
-        init(_ image: VideoInputImage) {
-            mimeType = image.mimeType
-            base64 = image.data.base64EncodedString()
+    private struct UploadRequest: Encodable {
+        let filename: String
+        let contentType: String
+        let sizeBytes: Int
+    }
+
+    private struct UploadAuthorization: Decodable {
+        let uploadUrl: String
+        let objectKey: String
+        let headers: [String: String]
+    }
+
+    nonisolated private final class UploadProgress: NSObject, URLSessionTaskDelegate, @unchecked Sendable {
+        let handler: VideoProgressHandler?
+        init(_ handler: VideoProgressHandler?) { self.handler = handler }
+        func urlSession(_ session: URLSession, task: URLSessionTask, didSendBodyData bytesSent: Int64, totalBytesSent: Int64, totalBytesExpectedToSend: Int64) {
+            let handler = handler
+            Task { @MainActor in handler?(.uploading(sent: totalBytesSent, total: totalBytesExpectedToSend)) }
         }
+    }
+
+    private static func uploadImage(_ image: VideoInputImage?, onProgress: VideoProgressHandler?) async throws -> Image? {
+        guard let image else { return nil }
+        let authorization: UploadAuthorization = try await BackendClient.shared.post(
+            "api/v1/uploads", body: UploadRequest(filename: "video-input", contentType: image.mimeType, sizeBytes: image.data.count)
+        )
+        guard let url = URL(string: authorization.uploadUrl), url.scheme == "https" else { throw VideoGenError.invalidResponse }
+        var request = URLRequest(url: url)
+        request.httpMethod = "PUT"
+        request.timeoutInterval = 300
+        for (name, value) in authorization.headers { request.setValue(value, forHTTPHeaderField: name) }
+        await report(onProgress, .uploading(sent: 0, total: Int64(image.data.count)))
+        let delegate = UploadProgress(onProgress)
+        let session = URLSession(configuration: .default, delegate: delegate, delegateQueue: nil)
+        defer { session.finishTasksAndInvalidate() }
+        let (_, response) = try await session.upload(for: request, from: image.data)
+        guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
+            throw VideoGenError.httpError((response as? HTTPURLResponse)?.statusCode ?? 0, "Image upload failed.")
+        }
+        return Image(mimeType: image.mimeType, objectKey: authorization.objectKey)
     }
 
     private struct Request: Encodable {
@@ -45,7 +82,7 @@ enum BackendVideoClient {
         let pollUrl: String
     }
 
-    private struct Job: Decodable {
+    struct Job: Decodable {
         struct ResultMeta: Decodable {
             let mimeType: String?
             let durationSeconds: Double?
@@ -76,7 +113,8 @@ enum BackendVideoClient {
         firstFrame: VideoInputImage?,
         lastFrame: VideoInputImage?,
         referenceImages: [VideoInputImage],
-        idempotencyKey: String
+        idempotencyKey: String,
+        onProgress: VideoProgressHandler? = nil
     ) async throws -> VideoGenJob {
         let trimmedModel = model.trimmingCharacters(in: .whitespacesAndNewlines)
         let trimmedPrompt = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -89,6 +127,15 @@ enum BackendVideoClient {
         // The server applies the family's own omission rules again; sending
         // only what this family accepts keeps the request honest about what
         // the user chose.
+        let uploadedFirst = try await uploadImage(firstFrame, onProgress: onProgress)
+        let uploadedLast = try await uploadImage(lastFrame, onProgress: onProgress)
+        var uploadedReferences: [Image] = []
+        if family.supportsReferenceImages {
+            for reference in referenceImages.prefix(family.maxReferenceImages) {
+                if let image = try await uploadImage(reference, onProgress: onProgress) { uploadedReferences.append(image) }
+            }
+        }
+        await report(onProgress, .submitting)
         let request = Request(
             model: trimmedModel,
             prompt: trimmedPrompt,
@@ -100,11 +147,9 @@ enum BackendVideoClient {
             numberOfVideos: family.supportsNumberOfVideos ? max(1, min(numberOfVideos, family.maxVideos)) : nil,
             generateAudio: family.supportsAudio ? generateAudio : nil,
             seed: family.supportsSeed ? seed : nil,
-            firstFrame: firstFrame.map(Image.init),
-            lastFrame: lastFrame.map(Image.init),
-            referenceImages: family.supportsReferenceImages && !referenceImages.isEmpty
-                ? referenceImages.map(Image.init)
-                : nil
+            firstFrame: uploadedFirst,
+            lastFrame: uploadedLast,
+            referenceImages: uploadedReferences.isEmpty ? nil : uploadedReferences
         )
 
         let started: Started
@@ -133,53 +178,80 @@ enum BackendVideoClient {
         timeout: TimeInterval = defaultWaitTimeout,
         onProgress: VideoProgressHandler?
     ) async throws -> VideoGenResult {
+        let job = try await waitForJob(
+            jobID: jobID, startedAt: startedAt, timeout: timeout, onProgress: onProgress
+        )
+        guard let rawURL = job.resultUrl, let url = URL(string: rawURL) else {
+            throw VideoGenError.noVideoInResponse
+        }
+        let result = try await download(
+            url: url, mimeType: job.resultMeta?.mimeType,
+            startedAt: startedAt, onProgress: onProgress
+        )
+        await CreditBalanceStore.shared.refresh()
+        return result
+    }
+
+    /// A failed status request says nothing about the provider's job. Retry
+    /// read-only polls within the overall wait budget; never resubmit here.
+    static func waitForJob(
+        jobID: String,
+        startedAt: Date,
+        timeout: TimeInterval = defaultWaitTimeout,
+        onProgress: VideoProgressHandler? = nil,
+        fetchJob: (String) async throws -> Job = { try await BackendClient.shared.get("api/v1/jobs/\($0)") },
+        sleep: (TimeInterval) async throws -> Void = { try await Task.sleep(for: .seconds($0)) }
+    ) async throws -> Job {
         let deadline = Date().addingTimeInterval(timeout)
-        // Backs off from a snappy first check to a polite steady state: Veo
-        // takes minutes, and polling every 3s for all of it is pure noise.
-        var interval = 3
+        var interval: TimeInterval = 3
+        var lastPercent: Double?
 
         while Date() < deadline {
             try Task.checkCancellation()
-
-            let job: Job
             do {
-                job = try await BackendClient.shared.get("api/v1/jobs/\(jobID)")
-            } catch BackendError.badRequest(let message) {
-                // `BackendClient` folds every 4xx into this case; on a poll
-                // that means the server no longer knows the job (404), so
-                // there is nothing left to resume. Treat it like a provider
-                // failure so the project stops offering to.
-                throw VideoGenError.jobFailed(message)
-            }
-
-            switch job.status {
-            case "succeeded":
-                guard let rawURL = job.resultUrl, let url = URL(string: rawURL) else {
-                    throw VideoGenError.noVideoInResponse
+                let job = try await fetchJob(jobID)
+                switch job.status {
+                case "succeeded":
+                    return job
+                case "failed", "cancelled":
+                    throw VideoGenError.jobFailed(job.error?.message ?? "Video generation failed.")
+                default:
+                    lastPercent = job.progressPercent > 0 ? Double(job.progressPercent) : nil
                 }
-                let result = try await download(
-                    url: url,
-                    mimeType: job.resultMeta?.mimeType,
-                    startedAt: startedAt,
-                    onProgress: onProgress
-                )
-                await CreditBalanceStore.shared.refresh()
-                return result
-            case "failed", "cancelled":
-                throw VideoGenError.jobFailed(job.error?.message ?? "Video generation failed.")
-            default:
-                let elapsed = Int(Date().timeIntervalSince(startedAt))
-                // The server's percentage is an elapsed-time estimate until
-                // the provider reports done; still better than nothing.
-                let percent = job.progressPercent > 0 ? Double(job.progressPercent) : nil
-                await report(onProgress, .processing(percent: percent, elapsedSeconds: elapsed))
+            } catch BackendError.badRequest(let message) {
+                // A rejected poll (including a missing job) cannot recover.
+                throw VideoGenError.jobFailed(message)
+            } catch {
+                try Task.checkCancellation()
+                guard isTransientPollError(error) else { throw error }
             }
 
-            try await Task.sleep(for: .seconds(interval))
+            await report(onProgress, .processing(
+                percent: lastPercent, elapsedSeconds: Int(Date().timeIntervalSince(startedAt))
+            ))
+            let remaining = deadline.timeIntervalSinceNow
+            guard remaining > 0 else { break }
+            try await sleep(min(interval, remaining))
             interval = min(interval + 1, 10)
         }
 
         throw VideoGenError.timedOut(elapsed: Date().timeIntervalSince(startedAt))
+    }
+
+    static func isTransientPollError(_ error: Error) -> Bool {
+        if let error = error as? URLError {
+            switch error.code {
+            case .timedOut, .networkConnectionLost, .notConnectedToInternet,
+                 .cannotFindHost, .cannotConnectToHost, .dnsLookupFailed:
+                return true
+            default:
+                return false
+            }
+        }
+        if case BackendError.server(let status, _) = error {
+            return status == 408 || status == 429 || (500...599).contains(status)
+        }
+        return false
     }
 
     // MARK: - Helpers

@@ -47,6 +47,15 @@ export const UNIT_PRICES: readonly UnitPrice[] = [
   // reply runs ~300 output tokens per minute of speech at $2.50 per 1M, another
   // $0.00075/min. Total $0.00267/min, stored as 2,670,000 nano-USD per minute.
   { provider: "google", model: "gemini-2.5-flash", unit: "audio_minutes", nanoUsdPerUnit: 2_670_000, source: "https://ai.google.dev/gemini-api/docs/pricing", reviewedAt: "2026-09-13" },
+  // Omni output token rates converted exactly to seconds at Google's published tokens/s.
+  { provider: "google", model: "gemini-omni-1.2-flash:360p", unit: "video_seconds", nanoUsdPerUnit: 23172000, source: "https://aistudio.google.com/docs/pricing", reviewedAt: "2026-11-15" },
+  { provider: "google", model: "gemini-omni-1.2-flash:720p", unit: "video_seconds", nanoUsdPerUnit: 69504000, source: "https://aistudio.google.com/docs/pricing", reviewedAt: "2026-11-15" },
+  { provider: "google", model: "gemini-omni-1.2-flash:1080p", unit: "video_seconds", nanoUsdPerUnit: 104256000, source: "https://aistudio.google.com/docs/pricing", reviewedAt: "2026-11-15" },
+  { provider: "google", model: "gemini-omni-1.2-flash:4k", unit: "video_seconds", nanoUsdPerUnit: 208512000, source: "https://aistudio.google.com/docs/pricing", reviewedAt: "2026-11-15" },
+  { provider: "google", model: "gemini-omni-1.1-flash:360p", unit: "video_seconds", nanoUsdPerUnit: 33792500, source: "https://aistudio.google.com/docs/pricing", reviewedAt: "2026-11-15" },
+  { provider: "google", model: "gemini-omni-1.1-flash:720p", unit: "video_seconds", nanoUsdPerUnit: 101360000, source: "https://aistudio.google.com/docs/pricing", reviewedAt: "2026-11-15" },
+  { provider: "google", model: "gemini-omni-1.1-flash:1080p", unit: "video_seconds", nanoUsdPerUnit: 152040000, source: "https://aistudio.google.com/docs/pricing", reviewedAt: "2026-11-15" },
+  { provider: "google", model: "gemini-omni-1.1-flash:4k", unit: "video_seconds", nanoUsdPerUnit: 304080000, source: "https://aistudio.google.com/docs/pricing", reviewedAt: "2026-11-15" },
   // Veo is priced per second of output, audio included. Veo 3.1 tiers by
   // resolution, so those rows are keyed `model:resolution` with no bare row —
   // an unpriced tier fails closed, like Gemini images. Ids carry no `-preview`
@@ -66,6 +75,8 @@ export const UNIT_PRICES: readonly UnitPrice[] = [
   { provider: "google", model: "veo-3.0-generate", unit: "video_seconds", nanoUsdPerUnit: 400_000_000, source: "https://ai.google.dev/gemini-api/docs/pricing", reviewedAt: "2026-09-13" },
   { provider: "google", model: "veo-3.0-fast-generate", unit: "video_seconds", nanoUsdPerUnit: 150_000_000, source: "https://ai.google.dev/gemini-api/docs/pricing", reviewedAt: "2026-09-13" },
   { provider: "google", model: "veo-2.0-generate", unit: "video_seconds", nanoUsdPerUnit: 350_000_000, source: "https://ai.google.dev/gemini-api/docs/pricing", reviewedAt: "2026-09-13" },
+  // Google publishes $0.00225/10s through 2026, then $0.0045/10s.
+  { provider: "google", model: "gemini-3.8-flash-tts", unit: "audio_seconds", get nanoUsdPerUnit() { return Date.now() < Date.UTC(2027, 0, 1) ? 225_000 : 450_000; }, source: "https://ai.google.dev/gemini-api/docs/pricing", reviewedAt: "2026-11-15" },
   { provider: "google", model: "gemini-3.1-flash-tts-preview", unit: "audio_seconds", nanoUsdPerUnit: 500_000, source: "https://ai.google.dev/gemini-api/docs/pricing", reviewedAt: "2026-08-13" },
   // Lyria bills $0.08 per song. Stored per second against a 180 s minimum so a
   // typical song settles at $0.08 and an unusually long one scales from there.

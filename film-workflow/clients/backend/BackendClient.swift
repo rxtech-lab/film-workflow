@@ -136,6 +136,9 @@ actor BackendClient {
             // `BackendError.namingModel(_:capability:)`.
             if payload?.code == "model_not_allowed" { throw BackendError.modelUnavailable(model: "", capability: nil) }
             if payload?.code == "price_not_found" { throw BackendError.priceUnavailable(payload?.error ?? "model") }
+            if http.statusCode == 408 || http.statusCode == 429 {
+                throw BackendError.server(http.statusCode, payload?.error)
+            }
             if (400..<500).contains(http.statusCode) { throw BackendError.badRequest(payload?.error ?? "The request was rejected.") }
             throw BackendError.server(http.statusCode, payload?.error)
         }
@@ -205,6 +208,9 @@ actor BackendClient {
             }
             if payload?.code == "price_not_found" {
                 throw BackendError.priceUnavailable(payload?.error ?? "model")
+            }
+            if http.statusCode == 408 || http.statusCode == 429 {
+                throw BackendError.server(http.statusCode, payload?.error)
             }
             if (400..<500).contains(http.statusCode) {
                 throw BackendError.badRequest(payload?.error ?? "The request was rejected.")

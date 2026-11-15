@@ -85,41 +85,51 @@ struct MCPSettingsView: View {
             }
 
             Section {
-                HStack {
-                    if let token = settings.token {
-                        Text(revealToken ? token : maskedToken(token))
-                            .font(.system(.body, design: .monospaced))
-                            .textSelection(.enabled)
-                            .lineLimit(1)
-                            .truncationMode(.middle)
-                        Spacer()
-                        Button(revealToken ? "Hide" : "Show") {
-                            revealToken.toggle()
-                        }
-                        .buttonStyle(.borderless)
-                        copyIconButton(key: "token", value: token)
-                    } else {
-                        Text("(not generated)")
-                            .foregroundStyle(.secondary)
-                        Spacer()
+                Toggle("Require bearer token", isOn: $settings.requiresToken)
+                    .onChange(of: settings.requiresToken) { _, _ in
+                        #if !os(macOS)
+                        UISelectionFeedbackGenerator().selectionChanged()
+                        #endif
                     }
+                if settings.requiresToken {
+                    HStack {
+                        if let token = settings.token {
+                            Text(revealToken ? token : maskedToken(token))
+                                .font(.system(.body, design: .monospaced))
+                                .textSelection(.enabled)
+                                .lineLimit(1)
+                                .truncationMode(.middle)
+                            Spacer()
+                            Button(revealToken ? "Hide" : "Show") {
+                                revealToken.toggle()
+                            }
+                            .buttonStyle(.borderless)
+                            copyIconButton(key: "token", value: token)
+                        } else {
+                            Text("(not generated)")
+                                .foregroundStyle(.secondary)
+                            Spacer()
+                        }
+                    }
+                    Button("Regenerate token") {
+                        _ = try? settings.regenerateToken()
+                        revealToken = false
+                    }
+                    .disabled(!settings.enabled)
                 }
-                Button("Regenerate token") {
-                    _ = try? settings.regenerateToken()
-                    revealToken = false
-                }
-                .disabled(!settings.enabled)
             } header: {
                 Text("Bearer token")
             } footer: {
-                Text("Required on every request, localhost included: the generation tools spend your account's credits.")
+                Text(settings.requiresToken
+                     ? "Required on every request, including localhost. Changes apply immediately."
+                     : "Token authentication is off. Any client that can reach this server can control your films and spend your account's credits.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
 
             if let url = server.displayURL, settings.enabled {
                 Section("Connect from Claude Code") {
-                    let cmd = connectCommand(url: url, requiresToken: requiresToken, token: settings.token)
+                    let cmd = connectCommand(url: url, requiresToken: settings.requiresToken, token: settings.token)
                     HStack(alignment: .top) {
                         Text(cmd)
                             .font(.system(.caption, design: .monospaced))
@@ -159,9 +169,6 @@ struct MCPSettingsView: View {
         }
         return settings.statusMessage
     }
-
-    /// Always: the generation tools spend the signed-in account's credits.
-    private var requiresToken: Bool { true }
 
     private func commitPort() {
         if let n = Int(portText), n >= 1024, n <= 65535 {

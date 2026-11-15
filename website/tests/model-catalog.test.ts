@@ -109,7 +109,7 @@ describe("model catalog", () => {
     // a priced model does not inherit its wildcard rate.
     expect(image.map((model) => model.id)).not.toContain("bfl/flux-2-flex");
     expect(image.map((model) => model.id)).not.toContain("openai/gpt-image-1-mini");
-    expect(await forCapability(discoveredCatalog, "speech")).toEqual([expect.objectContaining({ id: "azure-neural-tts" }), expect.objectContaining({ id: "gemini-3.1-flash-tts-preview" })]);
+    expect(await forCapability(discoveredCatalog, "speech")).toEqual([expect.objectContaining({ id: "azure-neural-tts" }), expect.objectContaining({ id: "gemini-3.8-flash-tts" })]);
     expect((await forCapability(discoveredCatalog, "transcription")).map((model) => model.id)).toEqual(["azure-fast-transcription", "gemini-2.5-flash", "whisper-1"]);
     // Veo comes from Google's own list, never the gateway: the gateway prices
     // video by a shape this app does not call.
