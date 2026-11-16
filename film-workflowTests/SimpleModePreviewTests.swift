@@ -66,21 +66,21 @@ struct SimpleModePreviewTests {
             Task { await document.close(); try? FileManager.default.removeItem(at: root) }
         }
         try await wait { playback.player.player.currentItem != nil && !playback.player.isBuffering && !playback.player.isLoading }
-        #expect(playback.usesLivePreview)
-        #expect(playback.preview.layers.first?.live?.ready == true)
         #expect(playback.player.duration == 4)
         let controls = hostedAccessibilityDescendants(host)
-        let live = try #require(controls.first { $0.accessibilityIdentifier() == "remotion.livePreview" })
-        try await assertColor(.magenta, of: live, in: host)
+        // MotionSwift draws the picture; its label names the rendered frame.
+        let stagePicture = try #require(controls.first { $0.accessibilityIdentifier() == "sequence.motionStage" })
+        try await wait { (stagePicture.accessibilityLabel() ?? "").hasPrefix("Rendered frame") }
+        try await assertColor(.magenta, of: stagePicture, in: host)
         let play = try #require(controls.first { $0.accessibilityIdentifier() == "sequence.viewer.play" })
         #expect(play.accessibilityPerformPress())
         try await wait { playback.player.currentTime > 2.2 }
         playback.player.pause()
-        #expect((playback.preview.layers.first?.live?.command.frame ?? 0) > 20)
-        try await assertColor(.cyan, of: live, in: host)
+        try await wait { (Int((stagePicture.accessibilityLabel() ?? "").split(separator: " ").last ?? "") ?? 0) > 20 }
+        try await assertColor(.cyan, of: stagePicture, in: host)
         playback.player.seek(to: 0.5)
-        try await wait { playback.preview.layers.first?.live?.command.frame == 5 }
-        try await assertColor(.magenta, of: live, in: host)
+        try await wait { stagePicture.accessibilityLabel() == "Rendered frame 5" }
+        try await assertColor(.magenta, of: stagePicture, in: host)
         #expect(controls.contains { $0.accessibilityIdentifier() == "wizard.preview.notes" })
         let stage = try #require(controls.first { $0.accessibilityIdentifier() == "sequence.viewer.stage" })
         #expect(stage.accessibilityFrame().height > 260, "Long notes must not crowd out the movie")

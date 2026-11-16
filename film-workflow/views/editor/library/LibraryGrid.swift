@@ -40,6 +40,8 @@ struct LibraryGrid: View {
     var player: FootagePlayer?
     var onSkim: (LibraryItemID, FootageCell, Double?) -> Void = { _, _, _ in }
     var onSeek: (LibraryItemID, FootageCell, Double) -> Void = { _, _, _ in }
+    /// Double-clicking a row opens what it contains (a Remotion composition's timeline).
+    var onOpen: (LibraryRow) -> Void = { _ in }
 
     @State private var collapsed: Set<UUID> = []
     @State private var ungroupedCollapsed = false
@@ -115,11 +117,18 @@ struct LibraryGrid: View {
                         })
         .modifier(LibraryGroupDropTarget(groupID: row.groupID, onMove: move))
         .onTapGesture { selection = row.id }
+        // Simultaneous, so a single click still selects at once; the second click opens.
+        .simultaneousGesture(TapGesture(count: 2).onEnded { onOpen(row) })
         .simultaneousGesture(DragGesture(minimumDistance: 0).onChanged { _ in
             if selection != row.id { selection = row.id }
         })
         .accessibilityAction { selection = row.id }
         .contextMenu {
+            if row.id.kind == .remotion {
+                Button { onOpen(row) } label: { Label("Open Composition", systemImage: "sparkles.rectangle.stack") }
+                    .help("Edit the composition's elements on the timeline and canvas")
+                Divider()
+            }
             versionsMenu(row)
             MusicLyricsContextMenu(sourceID: row.id.kind == .caption
                                    ? DocumentMediaResolver.sourceID(.caption, row.id.id)

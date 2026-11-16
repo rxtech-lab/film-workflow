@@ -72,6 +72,9 @@ public struct SequenceTimelineView: View {
     /// Host-supplied context-menu items for a clip. Nil, or an empty result,
     /// adds nothing.
     let clipMenuItems: ((Clip, Timeline) -> [ClipMenuItem])?
+    /// Called when a clip body is double-clicked, to open what the clip contains (a nested
+    /// composition, say). Nil leaves double-clicks to the speed and volume strips only.
+    let onOpenClip: ((Clip) -> Void)?
 
     @Binding private var pixelsPerSecond: Double
     /// Whether moving the pointer across the lanes previews the frame under
@@ -163,7 +166,8 @@ public struct SequenceTimelineView: View {
         clipMenuItems: ((Clip, Timeline) -> [ClipMenuItem])? = nil,
         selectedTransitionID: UUID? = nil,
         onInspectEffects: ((UUID) -> Void)? = nil,
-        onInspectTransition: ((UUID) -> Void)? = nil
+        onInspectTransition: ((UUID) -> Void)? = nil,
+        onOpenClip: ((Clip) -> Void)? = nil
     ) {
         _timeline = timeline
         _playhead = playhead
@@ -183,6 +187,7 @@ public struct SequenceTimelineView: View {
         self.selectedTransitionID = selectedTransitionID
         self.onInspectEffects = onInspectEffects
         self.onInspectTransition = onInspectTransition
+        self.onOpenClip = onOpenClip
     }
 
     private var contentDuration: TimeInterval {
@@ -1242,6 +1247,9 @@ public struct SequenceTimelineView: View {
                 case .volume:
                     // Double-clicking the waveform restores 100%, like the speed strip.
                     performEdit { try TimelineEditor.update(&timeline, clipID: clip.id) { $0.volume = 1 } }
+                case .move, nil:
+                    // The clip body: open what it contains.
+                    if tool != .blade { onOpenClip?(clip) }
                 default:
                     break
                 }

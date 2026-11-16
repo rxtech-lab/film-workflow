@@ -67,13 +67,19 @@ Refining the composition happens in the **agent window**, not here — the agent
 project, so composition editing lives there. Open it with Command-Option-0 and ask for the change
 you want.
 
-**View Source** in the toolbar shows the composition's TSX with syntax highlighting.
+**Source** opens the project's files in an editor with syntax highlighting. Edit the code and press ⌘S to save; the previews reload. You're asked before unsaved edits are discarded, and before overwriting a file the agent changed while you were editing.
 
 ## Preview
 
 The right-hand panel shows a live composition with native play, pause, seek and reload controls. Source and asset edits refresh the preview. Each timeline instance keeps its own playback position. Preview and export use separate sessions, so exporting does not stop the live preview.
 
 **Edit** in the inspector opens the composition on a native canvas: select an element, drag it, and change its text and style in the inspector. Changes are saved to the composition source.
+
+The **Elements** tab in the inspector lists the composition's editable elements, also when a Remotion clip is selected on the timeline. Choose an element to change its text and style in place. Double-click the clip on the timeline (or choose **Open Composition**) to edit the composition in place: its elements become lanes on the timeline, where you move and trim them, and the viewer becomes a canvas for moving and resizing them. Press Esc or the back button to return to the sequence. The timeline preview updates as soon as you save.
+
+Text the code generates can be edited too. When a title comes from a variable, a list of data, or a component's props, the inspector shows each piece of text it is built from, with the line it's written on. Edit a piece and only that text changes in the code. Pieces marked **shared** are used by more than one element and change everywhere. Text that code calculates (for example a counter) can be replaced with fixed text — you're asked first, and Undo brings the code back — or opened in the Source editor with **Edit in Code…**.
+
+Remotion clips play live in sequences and export with them, so a sequence render no longer renders them to movies first.
 
 Maps come from `@motionswift/map` (OpenStreetMap, Apple Maps and Mapbox, with routes and markers). Mapbox styles need an access token in **Settings → Remotion**.
 

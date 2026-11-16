@@ -13,14 +13,6 @@ struct SequenceInspector: View {
 
     @Environment(\.modelContext) private var modelContext
     @Environment(\.undoManager) private var undoManager
-    @State private var isRenderingRemotion = false
-    @State private var remotionProgress: SequenceRenderProgress?
-    @State private var remotionTask: Task<Void, Never>?
-    @State private var remotionError: String?
-
-    private var stale: [RemotionProject] {
-        SequenceRenderService.unrenderedRemotionProjects(in: sequence, context: modelContext)
-    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -33,26 +25,8 @@ struct SequenceInspector: View {
                 }
                 Section("Remotion Clips") {
                     let count = SequenceRenderService.remotionProjects(in: sequence, context: modelContext).count
-                    if count == 0 {
-                        Text("None on the timeline").foregroundStyle(.secondary)
-                    } else {
-                        let staleCount = stale.count
-                        HStack {
-                            Text(staleCount == 0 ? "All \(count) rendered for this size" : "\(staleCount) of \(count) need rendering")
-                                .foregroundStyle(staleCount == 0 ? Color.secondary : Color.orange)
-                            Spacer()
-                            Button(isRenderingRemotion ? "Rendering…" : "Render Remotion Clips") { renderRemotion() }
-                                .disabled(staleCount == 0 || isRenderingRemotion)
-                                .controlSize(.small)
-                                .filmTip(.sequenceRemotion, when: staleCount > 0 && !isRenderingRemotion)
-                        }
-                        if let remotionProgress, isRenderingRemotion {
-                            ProgressView(value: remotionProgress.fraction ?? 0) { Text(remotionProgress.label).font(.caption) }
-                        }
-                        if let remotionError {
-                            Text(remotionError).font(.caption).foregroundStyle(.red)
-                        }
-                    }
+                    Text(count == 0 ? "None on the timeline" : "\(count) drawn live by MotionSwift. Double-click one on the timeline to edit its composition.")
+                        .foregroundStyle(.secondary)
                 }
             }
             .formStyle(.grouped)
@@ -68,22 +42,6 @@ struct SequenceInspector: View {
             .disabled(sequence.timeline.isEmpty)
             .filmTip(.sequenceRender, when: !sequence.timeline.isEmpty)
             .padding(10)
-        }
-    }
-
-    private func renderRemotion() {
-        FilmFeatureTip.sequenceRemotion.didPerform()
-        isRenderingRemotion = true
-        remotionError = nil
-        remotionTask = Task { @MainActor in
-            defer { isRenderingRemotion = false; remotionProgress = nil }
-            do {
-                try await SequenceRenderService.renderRemotionClips(in: sequence, context: modelContext) { remotionProgress = $0 }
-                sequence.updatedAt = Date()   // nudges the preview to reload with the new render
-            } catch is CancellationError {
-            } catch {
-                remotionError = error.localizedDescription
-            }
         }
     }
 }

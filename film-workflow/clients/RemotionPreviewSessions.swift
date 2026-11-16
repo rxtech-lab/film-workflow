@@ -8,7 +8,7 @@ extension Notification.Name {
     static let remotionPreviewChanged = Notification.Name("RemotionPreviewChanged")
 }
 
-/// Live previews of Remotion projects play natively in `MotionLivePreviewView`. The
+/// Live previews of Remotion projects play natively through MotionSwift. The
 /// preview descriptor's URL is the project directory; the view compiles it with
 /// MotionSwift and follows the editor's clock.
 @MainActor

@@ -1,4 +1,5 @@
 #if os(macOS)
+import AppKit
 import Foundation
 import SwiftUI
 
@@ -18,7 +19,7 @@ enum TSXHighlighter {
             for (name, color) in groups {
                 let r = match.range(withName: name)
                 if r.location != NSNotFound, r.length > 0 {
-                    setColor(&result, source: source, range: r, color: color)
+                    setColor(&result, source: source, range: r, color: Color(nsColor: color))
                     break
                 }
             }
@@ -27,13 +28,31 @@ enum TSXHighlighter {
         return result
     }
 
-    private static let groups: [(String, Color)] = [
-        ("comment", Color(nsColor: .systemGray)),
-        ("string",  Color(red: 0.80, green: 0.30, blue: 0.30)),
-        ("jsxTag",  Color(red: 0.30, green: 0.50, blue: 0.85)),
-        ("keyword", Color(red: 0.62, green: 0.32, blue: 0.75)),
-        ("type",    Color(red: 0.20, green: 0.55, blue: 0.55)),
-        ("number",  Color(red: 0.85, green: 0.55, blue: 0.20))
+    /// Colors the text storage of an editable code view in place, keeping selection and undo.
+    static func apply(to storage: NSTextStorage, font: NSFont) {
+        let source = storage.string
+        let full = NSRange(location: 0, length: (source as NSString).length)
+        storage.beginEditing()
+        storage.setAttributes([.font: font, .foregroundColor: NSColor.textColor], range: full)
+        for match in regex?.matches(in: source, range: full) ?? [] {
+            for (name, color) in groups {
+                let range = match.range(withName: name)
+                if range.location != NSNotFound, range.length > 0 {
+                    storage.addAttribute(.foregroundColor, value: color, range: range)
+                    break
+                }
+            }
+        }
+        storage.endEditing()
+    }
+
+    private static let groups: [(String, NSColor)] = [
+        ("comment", .systemGray),
+        ("string",  NSColor(red: 0.80, green: 0.30, blue: 0.30, alpha: 1)),
+        ("jsxTag",  NSColor(red: 0.30, green: 0.50, blue: 0.85, alpha: 1)),
+        ("keyword", NSColor(red: 0.62, green: 0.32, blue: 0.75, alpha: 1)),
+        ("type",    NSColor(red: 0.20, green: 0.55, blue: 0.55, alpha: 1)),
+        ("number",  NSColor(red: 0.85, green: 0.55, blue: 0.20, alpha: 1))
     ]
 
     private static let regex: NSRegularExpression? = {

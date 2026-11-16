@@ -497,6 +497,9 @@
         }
       }
     },
+    "%@ was changed by the agent or the editor after you opened it. Overwrite those changes, or reload and lose your edits?" : {
+
+    },
     "%@ will be removed from this device. You can download it again later." : {
       "localizations" : {
         "zh-Hans" : {
@@ -624,6 +627,9 @@
         }
       }
     },
+    "%lld drawn live by MotionSwift. Double-click one on the timeline to edit its composition." : {
+
+    },
     "%lld fps" : {
 
     },
@@ -648,6 +654,7 @@
       }
     },
     "%lld of %lld need rendering" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -703,6 +710,7 @@
       }
     },
     "%lld Remotion clip%@ will be rendered first: %@" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -1698,6 +1706,7 @@
       }
     },
     "All %lld rendered for this size" : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -1719,6 +1728,9 @@
           }
         }
       }
+    },
+    "All Elements" : {
+
     },
     "All interfaces (0.0.0.0)" : {
       "localizations" : {
@@ -2330,6 +2342,9 @@
         }
       }
     },
+    "Back to element list" : {
+
+    },
     "Back to Recording" : {
 
     },
@@ -2342,6 +2357,9 @@
           }
         }
       }
+    },
+    "Back to the sequence timeline" : {
+
     },
     "Background" : {
       "localizations" : {
@@ -2364,6 +2382,9 @@
       }
     },
     "Background rendering queue" : {
+
+    },
+    "Backward One Frame" : {
 
     },
     "Base port" : {
@@ -2834,8 +2855,28 @@
         }
       }
     },
-    "Can't Open the Editor" : {
+    "Can't Open the Composition" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法打开合成"
+          }
+        }
+      }
+    },
+    "Can’t Open the Composition" : {
 
+    },
+    "Can't Read the Composition" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法读取合成"
+          }
+        }
+      }
     },
     "Cancel" : {
       "localizations" : {
@@ -3985,9 +4026,6 @@
     "Composition prerenders, thumbnails and waveforms appear here while they render." : {
 
     },
-    "Composition preview" : {
-
-    },
     "Composition.tsx" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -4290,6 +4328,16 @@
         }
       }
     },
+    "Couldn’t Preview Sequence" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法预览序列"
+          }
+        }
+      }
+    },
     "Couldn’t reach the subscription service. Try again in a moment." : {
 
     },
@@ -4307,6 +4355,9 @@
 
     },
     "Couldn’t Remove Take" : {
+
+    },
+    "Couldn't Save" : {
 
     },
     "Couldn’t Save Lyrics" : {
@@ -4383,9 +4434,6 @@
           }
         }
       }
-    },
-    "Create a composition before editing its elements." : {
-
     },
     "Create a composition to start the preview." : {
 
@@ -5272,6 +5320,9 @@
         }
       }
     },
+    "Discard Changes" : {
+
+    },
     "Discard this film?" : {
       "localizations" : {
         "zh-Hans" : {
@@ -5281,6 +5332,9 @@
           }
         }
       }
+    },
+    "Discard unsaved changes?" : {
+
     },
     "Dismiss" : {
 
@@ -5721,6 +5775,17 @@
     "Edit Lyrics & Timing…" : {
 
     },
+    "Edit on Canvas…" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在画布上编辑…"
+          }
+        }
+      }
+    },
     "Edit Recording Movement" : {
 
     },
@@ -5744,7 +5809,10 @@
         }
       }
     },
-    "Edit the composition's elements on a native canvas" : {
+    "Edit the composition's elements on the timeline and canvas" : {
+
+    },
+    "Edit the elements' timing on the timeline and move or resize them on the canvas" : {
 
     },
     "Edit Timeline" : {
@@ -5769,6 +5837,9 @@
           }
         }
       }
+    },
+    "Edited" : {
+
     },
     "Editing a card…" : {
 
@@ -5858,6 +5929,29 @@
           }
         }
       }
+    },
+    "Element" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "元素"
+          }
+        }
+      }
+    },
+    "Elements" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "元素"
+          }
+        }
+      }
+    },
+    "Elements (%lld)" : {
+
     },
     "Embedding captions" : {
       "localizations" : {
@@ -6394,6 +6488,9 @@
         }
       }
     },
+    "File changed on disk" : {
+
+    },
     "File missing" : {
       "localizations" : {
         "zh-Hans" : {
@@ -6512,6 +6609,9 @@
           }
         }
       }
+    },
+    "Fit" : {
+
     },
     "Fit to Viewer" : {
       "localizations" : {
@@ -6677,6 +6777,9 @@
         }
       }
     },
+    "Forward One Frame" : {
+
+    },
     "FPS" : {
       "localizations" : {
         "zh-Hans" : {
@@ -6713,6 +6816,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "帧"
+          }
+        }
+      }
+    },
+    "Frames %lld–%lld" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "第 %1$lld–%2$lld 帧"
           }
         }
       }
@@ -6967,6 +7080,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "生成预览"
+          }
+        }
+      }
+    },
+    "Generate the composition, then edit its elements here." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "先生成合成，然后在这里编辑其元素。"
           }
         }
       }
@@ -8466,9 +8589,6 @@
         }
       }
     },
-    "Loading" : {
-
-    },
     "Loading Captions…" : {
       "localizations" : {
         "zh-Hans" : {
@@ -9098,6 +9218,17 @@
         }
       }
     },
+    "Move, resize and keyframe elements on a native canvas" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在原生画布上移动、调整大小并为元素添加关键帧"
+          }
+        }
+      }
+    },
     "music" : {
 
     },
@@ -9621,6 +9752,16 @@
         }
       }
     },
+    "No Composition Yet" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "尚无合成"
+          }
+        }
+      }
+    },
     "No Credit Packs Available" : {
 
     },
@@ -9634,7 +9775,23 @@
         }
       }
     },
+    "No Editable Elements" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "没有可编辑的元素"
+          }
+        }
+      }
+    },
+    "No Element Selected" : {
+
+    },
     "No enabled ACP clients" : {
+
+    },
+    "No File Selected" : {
 
     },
     "No footage yet" : {
@@ -10334,6 +10491,9 @@
         }
       }
     },
+    "Open Composition" : {
+
+    },
     "Open Credits Page" : {
 
     },
@@ -10468,6 +10628,9 @@
     "Open the browser, then drag an effect onto a clip or a transition onto a clip edge. Adjust it in the inspector." : {
 
     },
+    "Open the composition's elements on the timeline and canvas" : {
+
+    },
     "Open the source to review or edit the composition. Source changes refresh the live preview." : {
 
     },
@@ -10548,7 +10711,14 @@
       }
     },
     "Opening composition…" : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在打开合成…"
+          }
+        }
+      }
     },
     "Opening lyrics…" : {
 
@@ -10713,6 +10883,9 @@
           }
         }
       }
+    },
+    "Overwrite" : {
+
     },
     "Owned" : {
       "localizations" : {
@@ -11571,6 +11744,16 @@
         }
       }
     },
+    "Reading composition…" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在读取合成…"
+          }
+        }
+      }
+    },
     "Reading the timeline…" : {
       "localizations" : {
         "zh-Hans" : {
@@ -11682,6 +11865,9 @@
 
     },
     "Recover a running generation" : {
+
+    },
+    "Redo" : {
 
     },
     "Reference Image" : {
@@ -11821,6 +12007,12 @@
       }
     },
     "Reload" : {
+
+    },
+    "Reload Composition" : {
+
+    },
+    "Reload from Disk" : {
 
     },
     "Reload Preview" : {
@@ -12139,6 +12331,9 @@
     "Render creates a video take of this composition. Previous renders stay in Versions so you can compare or export them." : {
 
     },
+    "Render Error" : {
+
+    },
     "Render failed" : {
       "localizations" : {
         "zh-Hans" : {
@@ -12148,9 +12343,6 @@
           }
         }
       }
-    },
-    "Render failed: %@" : {
-
     },
     "Render more frames at once for faster exports. Higher settings use more memory. Changes apply to the next render." : {
       "extractionState" : "stale",
@@ -12178,6 +12370,7 @@
 
     },
     "Render Remotion Clips" : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -12193,6 +12386,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "渲染序列"
+          }
+        }
+      }
+    },
+    "Render sequences with MotionSwift" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "使用 MotionSwift 渲染序列"
           }
         }
       }
@@ -12250,9 +12454,6 @@
         }
       }
     },
-    "Rendered frame %lld" : {
-
-    },
     "Rendering" : {
       "localizations" : {
         "zh-Hans" : {
@@ -12264,6 +12465,9 @@
       }
     },
     "Rendering %lld item(s) in the background" : {
+
+    },
+    "Rendering composition…" : {
 
     },
     "Rendering frames" : {
@@ -12313,6 +12517,7 @@
       }
     },
     "Rendering…" : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -12420,6 +12625,9 @@
           }
         }
       }
+    },
+    "Reset zoom, pan and rotation" : {
+
     },
     "Resolution" : {
       "localizations" : {
@@ -12933,6 +13141,9 @@
         }
       }
     },
+    "Save and Close" : {
+
+    },
     "Save Caption Files" : {
 
     },
@@ -12987,7 +13198,6 @@
       }
     },
     "Saved" : {
-      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -13008,6 +13218,9 @@
       }
     },
     "Saving client…" : {
+
+    },
+    "Saving composition" : {
 
     },
     "Saving take…" : {
@@ -13303,6 +13516,23 @@
     "Select an Action" : {
 
     },
+    "Select an element on the canvas or the timeline to edit it." : {
+
+    },
+    "Select an element to edit its text and style. Open the composition to change its timing, or move and resize it on the canvas. Double-clicking the clip on the timeline does the same." : {
+
+    },
+    "Select an element to edit its text and style. Use Edit on Canvas to move, resize or keyframe it." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "选择一个元素来编辑其文字和样式。使用“在画布上编辑”来移动、调整大小或添加关键帧。"
+          }
+        }
+      }
+    },
     "Select an item" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -13313,6 +13543,9 @@
           }
         }
       }
+    },
+    "Select any element on the canvas, timeline, or from this list to inspect and edit its text, props, and style." : {
+
     },
     "Select Area…" : {
 
@@ -13461,6 +13694,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "序列已准备就绪"
+          }
+        }
+      }
+    },
+    "Sequences" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "序列"
           }
         }
       }
@@ -14052,6 +14296,12 @@
           }
         }
       }
+    },
+    "Snap" : {
+
+    },
+    "Snap to canvas and sibling edges and centers" : {
+
     },
     "Snap to Caption Bounds" : {
       "localizations" : {
@@ -15451,6 +15701,16 @@
         }
       }
     },
+    "This composition has no elements MotionSwift can edit." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此合成中没有 MotionSwift 可编辑的元素。"
+          }
+        }
+      }
+    },
     "This composition has no source files to publish yet." : {
       "localizations" : {
         "zh-Hans" : {
@@ -15460,6 +15720,9 @@
           }
         }
       }
+    },
+    "This composition has no visual elements to place on lanes." : {
+
     },
     "This composition's files come to %@, which is more than the marketplace accepts. Remove large assets from its public folder and try again." : {
       "localizations" : {
@@ -16291,6 +16554,9 @@
         }
       }
     },
+    "Undo" : {
+
+    },
     "Ungrouped" : {
       "localizations" : {
         "zh-Hans" : {
@@ -16420,6 +16686,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "正在更新素材…"
+          }
+        }
+      }
+    },
+    "Updating preview" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在更新预览"
           }
         }
       }
@@ -16911,6 +17187,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "视频轨道"
+          }
+        }
+      }
+    },
+    "Video, image, audio and Remotion clips preview and export natively, with Remotion clips playing live instead of being rendered to movies first. Turn off to use the Core Image compositor. Timelines with installed Core Image transitions always use the compositor." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "视频、图片、音频和 Remotion 片段以原生方式预览和导出，Remotion 片段实时播放，无需先渲染成影片。关闭后将使用 Core Image 合成器。使用已安装 Core Image 转场的时间线始终使用合成器。"
           }
         }
       }
@@ -17535,6 +17822,9 @@
           }
         }
       }
+    },
+    "Your edits to %@ haven't been saved." : {
+
     },
     "Your Endpoint" : {
       "localizations" : {

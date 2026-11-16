@@ -71,7 +71,10 @@ struct TimelinePanel: View {
 
     @ViewBuilder
     private var timelineContent: some View {
-        if let sequence {
+        if let composition = state.composition {
+            RemotionCompositionTimelinePanel(session: composition, sequenceName: sequence?.name, skimming: $state.skimsTimeline) { state.closeComposition() }
+                .id(composition.projectID)
+        } else if let sequence {
             SequenceTimelineView(
                 timeline: Binding(get: { sequence.timeline }, set: { sequence.editTimeline($0, undoManager: undoManager) }),
                 playhead: Binding(get: { state.playhead }, set: { state.playhead = $0 }),
@@ -99,11 +102,13 @@ struct TimelinePanel: View {
                     CaptionAudioAlignment.alignment(for: clip, in: timeline, context: modelContext)
                 },
                 clipMenuItems: { clip, _ in
-                    narrativeCaptionItems(for: clip, in: sequence) + musicLyricsItems(for: clip) + marketplaceItems(for: clip, in: sequence)
+                    (clip.source.kind == .remotion ? [ClipMenuItem(id: "open-composition", title: String(localized: "Open Composition"), systemImage: "sparkles.rectangle.stack") { openComposition(for: clip) }] : [])
+                        + narrativeCaptionItems(for: clip, in: sequence) + musicLyricsItems(for: clip) + marketplaceItems(for: clip, in: sequence)
                 },
                 selectedTransitionID: state.selectedTransitionID,
                 onInspectEffects: { state.inspectEffects($0) },
-                onInspectTransition: { state.inspectTransition($0) }
+                onInspectTransition: { state.inspectTransition($0) },
+                onOpenClip: { clip in openComposition(for: clip) }
             )
             .alert("Couldn’t add footage", isPresented: Binding(get: { dropError != nil }, set: { if !$0 { dropError = nil } })) {
                 Button("OK") { dropError = nil }
@@ -132,6 +137,13 @@ struct TimelinePanel: View {
             .onTapGesture { state.select(nil) }
 
         }
+    }
+
+    /// Double-clicking a Remotion clip replaces the timeline with its composition's elements.
+    private func openComposition(for clip: Clip) {
+        guard clip.source.kind == .remotion, let (prefix, id) = DocumentMediaResolver.parse(clip.source.id), prefix == .remotion,
+              let project = try? modelContext.fetch(FetchDescriptor<RemotionProject>(predicate: #Predicate { $0.id == id })).first else { return }
+        state.openComposition(project, clipID: clip.id)
     }
 
     private func musicLyricsItems(for clip: Clip) -> [ClipMenuItem] {

@@ -74,12 +74,6 @@ struct SequenceRenderSheet: View {
                                          available: availableLanguages, hasCaptions: hasCaptions)
                 }
                 summary
-                let stale = SequenceRenderService.unrenderedRemotionProjects(in: sequence, context: modelContext)
-                if !stale.isEmpty {
-                    Label("\(stale.count) Remotion clip\(stale.count == 1 ? "" : "s") will be rendered first: \(stale.map(\.name).joined(separator: ", "))", systemImage: "atom")
-                        .font(.caption)
-                        .foregroundStyle(.orange)
-                }
             }
             .padding(20)
             Divider()

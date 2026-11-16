@@ -6,6 +6,7 @@ import VideoEditorCore
 /// Left column: folders of footage cards on top, the selected project's
 /// footage underneath.
 struct LibraryPanel: View {
+    @Environment(\.modelContext) private var libraryContext
     let index: LibraryIndex
     let groups: [ProjectGroup]
     @Bindable var state: EditorWindowState
@@ -229,8 +230,17 @@ struct LibraryPanel: View {
                 if let fraction { state.skimFootage(item, cellID: cell.id, fraction: fraction) }
                 else { state.endFootageSkim() }
             },
-            onSeek: { item, cell, fraction in state.seekFootage(item, cellID: cell.id, fraction: fraction) }
+            onSeek: { item, cell, fraction in state.seekFootage(item, cellID: cell.id, fraction: fraction) },
+            onOpen: { row in openComposition(row.id) }
         )
+    }
+
+    /// Double-clicking a Remotion item replaces the timeline with its composition's elements.
+    private func openComposition(_ item: LibraryItemID) {
+        guard item.kind == .remotion else { return }
+        let id = item.id
+        guard let project = try? libraryContext.fetch(FetchDescriptor<RemotionProject>(predicate: #Predicate { $0.id == id })).first else { return }
+        state.openComposition(project)
     }
 
     @ViewBuilder

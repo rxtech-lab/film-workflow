@@ -61,8 +61,8 @@ enum SequenceRenderProgress: Equatable {
     }
 }
 
-/// Renders a sequence: stale Remotion clips first, then the AVFoundation
-/// export, recorded as a new `SequenceRender` version.
+/// Renders a sequence with MotionSwift (Remotion clips nested live) and records the result
+/// as a new `SequenceRender` version.
 @MainActor
 enum SequenceRenderService {
     static func renders(for sequence: SequenceProject, context: ModelContext) -> [SequenceRender] {
@@ -74,13 +74,6 @@ enum SequenceRenderService {
         return (try? context.fetch(descriptor)) ?? []
     }
 
-    /// Remotion projects on the timeline that have no render for the sequence's size.
-    static func unrenderedRemotionProjects(in sequence: SequenceProject, context: ModelContext) -> [RemotionProject] {
-        remotionProjects(in: sequence, context: context).filter {
-            RemotionRenderService.cachedRender(project: $0, width: sequence.width, height: sequence.height, fps: $0.compositionFps, context: context, preserveAlpha: true) == nil
-        }
-    }
-
     static func remotionProjects(in sequence: SequenceProject, context: ModelContext) -> [RemotionProject] {
         var ids: [UUID] = []
         for clip in sequence.timeline.renderedClips where clip.source.kind == .remotion {
@@ -90,28 +83,6 @@ enum SequenceRenderService {
         }
         return ids.compactMap { id in
             try? context.fetch(FetchDescriptor<RemotionProject>(predicate: #Predicate { $0.id == id })).first
-        }
-    }
-
-    /// Renders every Remotion clip that is missing or stale for the sequence size.
-    static func renderRemotionClips(
-        in sequence: SequenceProject,
-        context: ModelContext,
-        onProgress: @escaping @MainActor (SequenceRenderProgress) -> Void
-    ) async throws {
-        let stale = unrenderedRemotionProjects(in: sequence, context: context)
-        for (index, project) in stale.enumerated() {
-            try Task.checkCancellation()
-            _ = try await RemotionRenderService.ensureRender(
-                project: project,
-                width: sequence.width,
-                height: sequence.height,
-                fps: project.compositionFps,
-                context: context,
-                preserveAlpha: true
-            ) { p in
-                onProgress(.preparingRemotion(clipIndex: index, total: stale.count, p))
-            }
         }
     }
 
@@ -152,7 +123,6 @@ enum SequenceRenderService {
         var options = options.normalized
         if !SequenceCaptionSources.hasCaptions(in: sequence) { options.captions = .none }
         let captions = captions.narrowed(to: SequenceCaptionSources.availableLanguages(in: sequence, context: context))
-        try await renderRemotionClips(in: sequence, context: context, onProgress: onProgress)
 
         let storage = document.storage
         let version = (renders(for: sequence, context: context).map(\.versionNumber).max() ?? 0) + 1
@@ -184,7 +154,7 @@ enum SequenceRenderService {
         defer { isExporting = false }
         var captionFiles: [URL] = []
         do {
-            try await TimelineExporter.export(timeline, resolver: resolver, to: exportURL, options: options) { fraction in
+            let report: @Sendable (Double) -> Void = { fraction in
                 Task { @MainActor in
                     // Export callbacks may already be queued when the exporter
                     // returns. Do not let them replace finalizing or reopen a
@@ -193,6 +163,8 @@ enum SequenceRenderService {
                     onProgress(.exporting(fraction))
                 }
             }
+            try await MotionSequenceEngine.export(timeline, document: document, resolver: resolver, to: exportURL,
+                                                  options: options, progress: report)
             isExporting = false
             if options.captions == .embedded {
                 onProgress(.embeddingCaptions)

@@ -38,15 +38,12 @@ struct LibPreviewableTests {
         let cell = try #require(LibraryIndex(captions: [project]).footage(for: .init(kind: .caption, id: project.projectUUID)).first)
         let player = FootagePlayer()
         await player.load(cell, document: document)
-        player.generatedPreview.setVisible(true)
+        // Caption footage plays as a one-clip film drawn by MotionSwift.
+        #expect(player.usesGeneratedPreview)
+        let stageClip = try #require(player.stageTimeline?.allClips.first)
+        #expect(stageClip.source.kind == .captions)
         player.skim(toFraction: 2.0 / 3)
         #expect(player.currentTime == 2)
-        for _ in 0..<100 where player.generatedPreview.isLoading { try await Task.sleep(for: .milliseconds(20)) }
-        #expect(player.generatedPreview.lastError == nil)
-        let layer = try #require(player.generatedPreview.layers.first)
-        if case .media(.captions(let cues)) = layer.source {
-            #expect(cues.first(where: { $0.start <= player.currentTime && player.currentTime < $0.end })?.text == "SECOND CAPTION")
-        } else { Issue.record("Caption preview must resolve timed text") }
         player.endSkim()
         #expect(player.currentTime == 0)
         player.unload()
@@ -145,11 +142,13 @@ struct LibPreviewableTests {
         window.isReleasedWhenClosed = false; window.contentView = host; window.orderBack(nil)
         defer { window.close(); player.unload() }
         for _ in 0..<100 {
-            if player.player.currentItem?.status == .readyToPlay, player.duration > 0 { break }
+            if player.usesGeneratedPreview, !player.generatedTransport.isLoading, player.duration > 0 { break }
             try await Task.sleep(for: .milliseconds(50))
         }
-        #expect(!player.usesGeneratedPreview)
-        #expect((player.player.currentItem?.asset as? AVURLAsset)?.url == render.videoURL)
+        // The saved version's movie, drawn by MotionSwift rather than the current composition.
+        #expect(player.usesGeneratedPreview)
+        let stageSource = try #require(player.stageTimeline?.allClips.first?.source)
+        #expect(try await player.stageResolver?.resolve(stageSource).fileURL == render.videoURL)
         let elements = hostedAccessibilityDescendants(host)
         let play = try #require(elements.first { $0.accessibilityIdentifier() == "viewer.play" })
         #expect(!elements.contains { $0.accessibilityValue() as? String == "Still" || $0.accessibilityLabel() == "Still" })

@@ -11,9 +11,16 @@ struct ViewerPanel: View {
     let document: ProjectDocument
     let sequence: SequenceProject?
 
-    var onRetryModifierPreview: () -> Void = {}
-
     var body: some View {
+        if let composition = state.composition {
+            RemotionCompositionViewer(session: composition)
+                .background(Color(nsColor: .underPageBackgroundColor))
+        } else {
+            mainBody
+        }
+    }
+
+    private var mainBody: some View {
         VStack(spacing: 0) {
             if case .sequence = content {
                 HStack {
@@ -95,27 +102,10 @@ struct ViewerPanel: View {
                                  message: "Generate footage from the inspector, then play it here.")
             case .sequence:
                 if let sequence {
-                    SequenceViewerView(controller: state.player, fps: sequence.fps, stage: !sequence.timeline.hasActiveModifiers && sequence.timeline.renderedClips.contains(where: { $0.source.kind == .remotion }) ? AnyView(
-                        TimelineLayeredPreviewView(controller: state.preview) { AnyView(MotionLivePreviewView(playback: $0)) }
-                            .overlay(alignment: .topTrailing) {
-                                if state.preview.lastError != nil || state.preview.layers.contains(where: { $0.error != nil || $0.live?.error != nil }) {
-                                    Button("Retry Preview") {
-                                        state.preview.load(sequence.timeline, resolver: DocumentPreviewMediaResolver(document: document, width: sequence.width, height: sequence.height, fps: sequence.fps))
-                                    }.padding()
-                                }
-                            }
+                    SequenceViewerView(controller: state.player, fps: sequence.fps, stage: MotionSequenceEngine.previews(sequence.timeline) ? AnyView(
+                        MotionSequenceStage(timeline: sequence.timeline, document: document, controller: state.player)
+                            .id(sequence.id)
                     ) : nil)
-                    .overlay {
-                        if let error = state.modifierPreviewError {
-                            VStack(spacing: 8) {
-                                Text(error).font(.callout).multilineTextAlignment(.center)
-                                Button("Retry Preview", action: onRetryModifierPreview)
-                            }.padding().background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8)).padding()
-                        } else if let progress = state.modifierPreviewProgress {
-                            VStack(spacing: 8) { ProgressView(); Text(progress).font(.callout) }
-                                .padding().background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8))
-                        }
-                    }
                 } else {
                     StudioEmptyState(title: "Ready for your story", symbol: "play.rectangle",
                                      message: "Select footage to preview, or create a sequence to start editing.")

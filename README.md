@@ -18,8 +18,10 @@ generated media. See `docs/document-package.md`.
 - Every generation is kept as a version; Remotion compositions render natively with MotionSwift and are cached by source hash
 - Edit a Remotion composition's elements on a native canvas (select, drag, text and style inspector)
 - Timeline: drag footage from the library, trim, move, split; captions burn in
-- Render: Remotion clips are rendered first, then the sequence exports as a new
-  version in the film or to a folder, with codec, audio, resolution and format options
+- Sequences preview and export natively with MotionSwift: video, image, audio and Remotion
+  clips (nested live, no pre-render), transitions, effects and captions; Remotion clips are
+  editable from the inspector's Elements tab. Renders land as a new version in the film or in a
+  folder, with codec, audio, resolution and format options. See `docs/motionswift-sequences.md`.
 - An embedded MCP server and agent window that can build and render films
   (`footage_list`, `sequence_add_clip`, `sequence_render`, …). See
   `docs/agent-tools.md`.
@@ -32,7 +34,8 @@ generated media. See `docs/document-package.md`.
 - `film-workflow/` – app source (SwiftUI views, models, clients, document layer)
 - `../MotionSwift` – local MotionSwift checkout providing the native Remotion compiler, renderer and element editor
 - `Packages/RxVideoEditor/` – the video editor package: `VideoEditorCore`
-  (timeline model, AVFoundation composition and export) and `VideoEditorUI`
+  (timeline model, the MotionSwift sequence composer and processor, and the AVFoundation
+  compositor kept as a fallback) and `VideoEditorUI`
   (timeline, viewer, inspectors)
 - `film-workflowTests/` – app unit tests; `Packages/RxVideoEditor/Tests` – package tests
 - `film-workflow.xcodeproj/` – Xcode project

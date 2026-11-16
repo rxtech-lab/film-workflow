@@ -4,11 +4,11 @@ import CoreVideo
 import Foundation
 
 /// Ordered AVFoundation video writer for MotionSwift frames: H.264 for opaque renders
-/// or ProRes 4444 with alpha. Shared Metal IOSurface frames are appended without a CPU
+/// or HEVC for opaque renders, or ProRes 4444 with alpha. Shared Metal IOSurface frames are appended without a CPU
 /// copy; CPU readbacks (unpremultiplied RGBA) are converted into pooled BGRA buffers.
 /// Call only from the pipeline's consumer thread.
 final class MotionSwiftMovieWriter {
-    enum Codec { case h264, proRes4444 }
+    enum Codec { case h264, hevc, proRes4444 }
 
     private let writer: AVAssetWriter
     private let input: AVAssetWriterInput
@@ -20,14 +20,14 @@ final class MotionSwiftMovieWriter {
     private var frames = 0
 
     init(output: URL, width: Int, height: Int, fps: Double, codec: Codec, cancellation: CancellationFlag) throws {
-        if codec == .h264, !width.isMultiple(of: 2) || !height.isMultiple(of: 2) {
-            throw MotionSwiftEngine.Failure("H.264 export requires even pixel dimensions")
+        if codec != .proRes4444, !width.isMultiple(of: 2) || !height.isMultiple(of: 2) {
+            throw MotionSwiftEngine.Failure("H.264 and HEVC export require even pixel dimensions")
         }
         try? FileManager.default.removeItem(at: output)
         let fileType: AVFileType = output.pathExtension.lowercased() == "mp4" ? .mp4 : .mov
         writer = try AVAssetWriter(outputURL: output, fileType: fileType)
         var settings: [String: Any] = [
-            AVVideoCodecKey: codec == .proRes4444 ? AVVideoCodecType.proRes4444 : AVVideoCodecType.h264,
+            AVVideoCodecKey: codec == .proRes4444 ? AVVideoCodecType.proRes4444 : codec == .hevc ? AVVideoCodecType.hevc : AVVideoCodecType.h264,
             AVVideoWidthKey: width, AVVideoHeightKey: height,
             AVVideoColorPropertiesKey: [AVVideoColorPrimariesKey: AVVideoColorPrimaries_ITU_R_709_2,
                                         AVVideoTransferFunctionKey: AVVideoTransferFunction_ITU_R_709_2,
@@ -37,6 +37,11 @@ final class MotionSwiftMovieWriter {
             settings[AVVideoCompressionPropertiesKey] = [
                 AVVideoAverageBitRateKey: max(4_000_000, Int(Double(width * height) * fps * 0.15)),
                 AVVideoProfileLevelKey: AVVideoProfileLevelH264HighAutoLevel,
+                AVVideoExpectedSourceFrameRateKey: fps,
+            ]
+        } else if codec == .hevc {
+            settings[AVVideoCompressionPropertiesKey] = [
+                AVVideoAverageBitRateKey: max(3_000_000, Int(Double(width * height) * fps * 0.1)),
                 AVVideoExpectedSourceFrameRateKey: fps,
             ]
         }
