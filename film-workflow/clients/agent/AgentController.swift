@@ -34,7 +34,6 @@ final class AgentController {
     @ObservationIgnored private let logger = Logger(subsystem: "rxlab.film-workflow", category: "Agent")
 
     struct Run {
-        var input: String = ""
         var errorMessage: String?
         /// Set when the gateway refuses the model this thread is pointed at.
         ///
@@ -50,6 +49,13 @@ final class AgentController {
     }
 
     private var runs: [UUID: Run] = [:]
+
+    /// Each thread's unsent composer text.
+    ///
+    /// Kept apart from `runs` so a keystroke only invalidates the composer.
+    /// Inside `Run` it invalidated every view reading any run state — the
+    /// thread menu's status icons included — on every character typed.
+    private var drafts: [UUID: String] = [:]
 
     /// One SDK agent per open thread. Created lazily and kept, because a thread
     /// the user switches away from must keep streaming.
@@ -99,8 +105,13 @@ final class AgentController {
         agents.reduce(into: 0) { $0 += ($1.value.phase.isBusy ? 1 : 0) }
     }
 
+    func input(for threadID: UUID) -> String {
+        drafts[threadID] ?? ""
+    }
+
     func setInput(_ text: String, for threadID: UUID) {
-        mutate(threadID) { $0.input = text }
+        guard drafts[threadID] ?? "" != text else { return }
+        drafts[threadID] = text.isEmpty ? nil : text
     }
 
     func setError(_ message: String?, for threadID: UUID) {
@@ -170,9 +181,11 @@ final class AgentController {
         threadModes[threadID] = nil
         guard let agent = agents.removeValue(forKey: threadID) else {
             runs[threadID] = nil
+            drafts[threadID] = nil
             return
         }
         runs[threadID] = nil
+        drafts[threadID] = nil
         releaseMCP(threadID: threadID)
         Task { await agent.shutdown() }
     }
@@ -330,8 +343,8 @@ final class AgentController {
         let trimmed = instruction.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
 
+        setInput("", for: threadID)
         mutate(threadID) {
-            $0.input = ""
             $0.errorMessage = nil
             $0.unavailableModel = nil
             $0.hasUnseenCompletion = false
@@ -814,6 +827,7 @@ final class AgentController {
             context.delete(message)
         }
         thread.messages = []
+        thread.autoTitle = ""
         thread.transcriptJSON = nil
         thread.summary = ""
         // The CLI engines keep their own copy of the history; a resume after

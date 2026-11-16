@@ -129,6 +129,11 @@ struct AgentWindowView: View {
             }
         }
         .task {
+            // Threads saved before `autoTitle` existed get it once, here,
+            // rather than the menu deriving it from every message on each update.
+            for thread in threads where thread.title.isEmpty && thread.autoTitle.isEmpty {
+                thread.refreshAutoTitleIfNeeded()
+            }
             if let requested = navigation.pendingAgentThreadID { selectedThreadID = requested; navigation.pendingAgentThreadID = nil }
             else if threads.isEmpty { newThread() }
         }

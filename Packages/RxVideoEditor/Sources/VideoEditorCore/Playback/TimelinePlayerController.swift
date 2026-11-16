@@ -40,6 +40,8 @@ public final class TimelinePlayerController {
     private var loadGeneration = 0
     private var audioTrackIDs: [UUID: CMPersistentTrackID] = [:]
     @ObservationIgnored private var renderPauses: [RenderQueue.Pause] = []
+    @ObservationIgnored private var pendingSeek: TimeInterval?
+    @ObservationIgnored private var isChasingSeek = false
 
     public convenience init() {
         self.init(player: AVPlayer())
@@ -184,7 +186,23 @@ public final class TimelinePlayerController {
         onTransportChange?()
         let clamped = min(currentTime, max(0, duration))
         guard player.currentItem != nil else { return }
-        Task { await seekPlayer(to: clamped) }
+        chaseSeek(to: clamped)
+    }
+
+    /// Keeps at most one exact seek in flight and lands on the newest target
+    /// when it finishes. Issuing one per pointer move made each cancel the
+    /// last, so a skim spent its time starting seeks instead of finishing them.
+    private func chaseSeek(to time: TimeInterval) {
+        pendingSeek = time
+        guard !isChasingSeek else { return }
+        isChasingSeek = true
+        Task { @MainActor in
+            while let target = pendingSeek {
+                pendingSeek = nil
+                await seekPlayer(to: target)
+            }
+            isChasingSeek = false
+        }
     }
 
     public func step(frames: Int) {

@@ -231,7 +231,11 @@ struct AgentMessageRow: View {
         guard MCPToolName.bare(call.name) == "caption_propose_edits",
               !call.isError, call.isComplete
         else { return nil }
-        return thread.orderedMessages.last { $0.kindEnum == .proposal }
+        // Newest proposal by a linear scan: sorting the whole transcript here
+        // ran once per tool-call row on every render.
+        return thread.messages
+            .filter { $0.kindEnum == .proposal }
+            .max { $0.createdAt < $1.createdAt }
     }
 
     private func proposalCard(_ row: AgentMessage) -> some View {

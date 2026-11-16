@@ -261,6 +261,10 @@ final class FootagePlayer {
     @ObservationIgnored private var callbackCount = 0
     @ObservationIgnored private var suppressedCallbackCount = 0
     @ObservationIgnored private var isScrubbing = false
+    /// Newest position asked for while a seek was still decoding.
+    @ObservationIgnored private var chaseTarget: TimeInterval?
+    @ObservationIgnored private var seekInFlight = false
+    @ObservationIgnored private var seekSerial = 0
 
     init() {
         let transport = TimelinePlayerController()
@@ -324,6 +328,7 @@ final class FootagePlayer {
         startDiagnostics()
         nativeDuration = cell.duration ?? 0
         let asset = AVURLAsset(url: url)
+        seekSerial += 1; seekInFlight = false; chaseTarget = nil
         player.replaceCurrentItem(with: AVPlayerItem(asset: asset))
         let natural = await MediaDurationCache.duration(of: url)
         guard !Task.isCancelled, loadGeneration == generation else { return }
@@ -376,6 +381,7 @@ final class FootagePlayer {
         log.info("unload uiTime=\(self.currentTime)")
         diagnosticsTask?.cancel()
         diagnosticsTask = nil
+        seekSerial += 1; seekInFlight = false; chaseTarget = nil
         player.pause()
         player.replaceCurrentItem(with: nil)
         nativeIsPlaying = false
@@ -411,7 +417,30 @@ final class FootagePlayer {
         guard time.isFinite else { return }
         if usesGeneratedPreview { generatedTransport.seek(to: min(max(0, time), duration)); return }
         nativeCurrentTime = min(max(0, time), max(0, duration))
-        player.seek(to: CMTime(seconds: currentTime, preferredTimescale: 600), toleranceBefore: .zero, toleranceAfter: .zero)
+        chaseSeek(to: nativeCurrentTime)
+    }
+
+    /// One exact seek in flight at a time, landing on the newest target when
+    /// it completes. A seek per pointer move cancelled the one decoding, so a
+    /// skim showed very few frames.
+    private func chaseSeek(to time: TimeInterval) {
+        chaseTarget = time
+        guard !seekInFlight else { return }
+        startSeek()
+    }
+
+    private func startSeek() {
+        guard let target = chaseTarget else { seekInFlight = false; return }
+        chaseTarget = nil
+        seekInFlight = true
+        seekSerial += 1
+        let serial = seekSerial
+        player.seek(to: CMTime(seconds: target, preferredTimescale: 600), toleranceBefore: .zero, toleranceAfter: .zero) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                guard let self, self.seekSerial == serial else { return }
+                self.startSeek()
+            }
+        }
     }
 
     /// Scrubbing pauses playback and resume when the thumb is released.

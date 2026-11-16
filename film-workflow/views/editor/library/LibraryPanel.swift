@@ -191,7 +191,17 @@ struct LibraryPanel: View {
     }
 
     private var libraryGrid: some View {
-        LibraryGrid(
+        // Each card asks for its current footage many times per render (the
+        // card, its drag payload, and several context-menu entries), and
+        // `index.footage(for:)` builds a cell for every version each time.
+        // Resolve it once per row up front — the flow layout renders every row
+        // anyway — and answer the closures from that.
+        let rows = rows
+        let resolved = Dictionary(
+            rows.map { ($0.id, resolveCurrent(for: $0.id)) },
+            uniquingKeysWith: { first, _ in first }
+        )
+        return LibraryGrid(
             rows: rows,
             groups: groups,
             selection: Binding(get: { state.selection }, set: { state.select($0) }),
@@ -208,10 +218,12 @@ struct LibraryPanel: View {
             onCreateCaptions: onCreateCaptions,
             onGenerateCaptions: onGenerateCaptions,
             hasCaptions: hasCaptions,
-            currentVersion: { currentVersion(for: $0) },
+            currentVersion: { resolved[$0]?.version ?? currentVersion(for: $0) },
             onSelectVersion: selectVersion,
-            dragPayload: dragPayload,
-            footage: currentFootage,
+            dragPayload: { row in
+                dragPayload(for: row, cell: resolved[row.id].map { $0.cell } ?? currentFootage(for: row.id))
+            },
+            footage: { resolved[$0].map { $0.cell } ?? currentFootage(for: $0) },
             player: state.footagePlayer,
             onSkim: { item, cell, fraction in
                 if let fraction { state.skimFootage(item, cellID: cell.id, fraction: fraction) }
@@ -287,9 +299,20 @@ struct LibraryPanel: View {
     /// project's active transcript, else the newest.
     private func currentVersion(for item: LibraryItemID) -> UUID? {
         if item.kind == .caption { return index.caption(item.id)?.activeVersionID }
-        let cells = index.footage(for: item)
+        return currentVersion(for: item, in: index.footage(for: item))
+    }
+
+    private func currentVersion(for item: LibraryItemID, in cells: [FootageCell]) -> UUID? {
+        if item.kind == .caption { return index.caption(item.id)?.activeVersionID }
         if let selected = state.currentVersion(for: item), cells.contains(where: { $0.id == selected }) { return selected }
         return cells.first?.id
+    }
+
+    /// The version in force and its cell, from one `footage(for:)` call.
+    private func resolveCurrent(for item: LibraryItemID) -> (version: UUID?, cell: FootageCell?) {
+        let cells = index.footage(for: item)
+        let version = currentVersion(for: item, in: cells)
+        return (version, version.flatMap { id in cells.first { $0.id == id } } ?? cells.first)
     }
 
     private func removeTake(_ cell: FootageCell) {
@@ -320,8 +343,7 @@ struct LibraryPanel: View {
         }
     }
 
-    private func dragPayload(for row: LibraryRow) -> FootageDragPayload? {
-        let cell = currentFootage(for: row.id)
+    private func dragPayload(for row: LibraryRow, cell: FootageCell?) -> FootageDragPayload? {
         guard let cell else { return row.dragItem.map { FootageDragPayload(item: $0, thumbnailURL: nil) } }
         var item = cell.drag
         if item.duration == nil, let url = cell.mediaURL, let cached = MediaDurationCache.cached(url) {
@@ -331,8 +353,7 @@ struct LibraryPanel: View {
     }
 
     private func currentFootage(for item: LibraryItemID) -> FootageCell? {
-        let cells = index.footage(for: item)
-        return currentVersion(for: item).flatMap { id in cells.first { $0.id == id } } ?? cells.first
+        resolveCurrent(for: item).cell
     }
 
     /// Reads the length of every generated audio take once, so a row dragged

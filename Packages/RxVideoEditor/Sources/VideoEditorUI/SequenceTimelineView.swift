@@ -1270,27 +1270,20 @@ public struct SequenceTimelineView: View {
                    : (targets.count > 1 ? "Disable \(targets.count) Clips" : "Disable")) {
                 performEdit { try TimelineEditor.setEnabled(&timeline, clipIDs: targets, isEnabled: enabling) }
             }
-            if let alignment = alignment?(clip, timeline) {
-                Button(alignment.title) {
-                    guard let target = alignment.targetClipID else { return }
-                    performEdit { try TimelineEditor.align(&timeline, clipID: clip.id, with: target) }
-                }
-                .disabled(alignment.targetClipID == nil)
-            }
-            let hostItems = clipMenuItems?(clip, timeline) ?? []
-            if !hostItems.isEmpty {
-                Divider()
-                ForEach(hostItems) { item in
-                    Button(action: item.action) {
-                        if let symbol = item.systemImage {
-                            Label(item.title, systemImage: symbol)
-                        } else {
-                            Text(item.title)
-                        }
+            // The host's items are resolved in a child view's body rather than
+            // here: this builder runs for every clip on every timeline render
+            // (each skim frame included), and the host answers with model
+            // fetches. A child body is only evaluated when the menu is.
+            if alignment != nil || clipMenuItems != nil {
+                ClipHostMenuSection(
+                    clip: clip,
+                    timeline: timeline,
+                    alignment: alignment,
+                    clipMenuItems: clipMenuItems,
+                    align: { target in
+                        performEdit { try TimelineEditor.align(&timeline, clipID: clip.id, with: target) }
                     }
-                    .disabled(!item.isEnabled)
-                }
-                Divider()
+                )
             }
             Button(targets.count > 1 ? "Delete \(targets.count) Clips" : "Delete", role: .destructive) { delete(targets) }
             Button(targets.count > 1 ? "Ripple Delete \(targets.count) Clips" : "Ripple Delete", role: .destructive) {
@@ -1887,6 +1880,45 @@ extension TrackKind {
         case .caption: return SourceKind.captions.clipColor
         case .overlay: return SourceKind.remotion.clipColor
         case .zoom: return SourceKind.zoom.clipColor
+        }
+    }
+}
+
+/// The host-supplied part of a clip's context menu: the caption alignment
+/// item and any app-specific items.
+///
+/// A separate view so the host closures run in this body, which SwiftUI
+/// evaluates when the menu is resolved, instead of in the clip's
+/// `.contextMenu` builder, which runs on every timeline render.
+private struct ClipHostMenuSection: View {
+    let clip: Clip
+    let timeline: Timeline
+    let alignment: ((Clip, Timeline) -> ClipAlignment?)?
+    let clipMenuItems: ((Clip, Timeline) -> [ClipMenuItem])?
+    let align: (UUID) -> Void
+
+    var body: some View {
+        if let alignment = alignment?(clip, timeline) {
+            Button(alignment.title) {
+                guard let target = alignment.targetClipID else { return }
+                align(target)
+            }
+            .disabled(alignment.targetClipID == nil)
+        }
+        let hostItems = clipMenuItems?(clip, timeline) ?? []
+        if !hostItems.isEmpty {
+            Divider()
+            ForEach(hostItems) { item in
+                Button(action: item.action) {
+                    if let symbol = item.systemImage {
+                        Label(item.title, systemImage: symbol)
+                    } else {
+                        Text(item.title)
+                    }
+                }
+                .disabled(!item.isEnabled)
+            }
+            Divider()
         }
     }
 }

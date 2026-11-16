@@ -84,7 +84,7 @@ struct AgentThreadView: View {
         AgentChatView(
             agent: agent,
             draft: Binding(
-                get: { controller.run(for: threadID).input },
+                get: { controller.input(for: threadID) },
                 set: { controller.setInput($0, for: threadID) }
             ),
             completions: completionSources,

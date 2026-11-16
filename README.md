@@ -30,8 +30,7 @@ generated media. See `docs/document-package.md`.
 ## Project Structure
 
 - `film-workflow/` – app source (SwiftUI views, models, clients, document layer)
-- `MotionSwift` v1.1.3 (`https://github.com/rxtech-lab/MotionSwift.git`) – native Remotion compiler, renderer and element editor, linked as a
-  remote Swift package pinned to the release tag
+- `../MotionSwift` – local MotionSwift checkout providing the native Remotion compiler, renderer and element editor
 - `Packages/RxVideoEditor/` – the video editor package: `VideoEditorCore`
   (timeline model, AVFoundation composition and export) and `VideoEditorUI`
   (timeline, viewer, inspectors)
@@ -48,7 +47,7 @@ generated media. See `docs/document-package.md`.
 
 ## Getting Started
 
-1. Keep an `RxAgentSDK` checkout beside this repository (`../RxAgentSDK`); the Xcode project uses it as a local package so SDK chat fixes are included in the app build. MotionSwift is resolved from its remote Swift package at v1.1.3, including generated compiler resources and a versioned native XCFramework download. Open `film-workflow.xcodeproj` in Xcode and run the macOS target.
+1. Keep an `RxAgentSDK` checkout beside this repository (`../RxAgentSDK`); the Xcode project uses it as a local package so SDK chat fixes are included in the app build. Keep a `MotionSwift` checkout beside this repository (`../MotionSwift`); the Xcode project links its local `MotionSwift` and `MotionCompiler` products. MotionSwift uses `native/MotionSwiftNative.xcframework` when present, otherwise it downloads its versioned native XCFramework. The checkout must also contain its generated compiler resources. Open `film-workflow.xcodeproj` in Xcode and run the macOS target.
 2. Create a film from the Welcome window (**New Film…**).
 3. Add footage with the **New** menu, set parameters in the inspector and click **Generate**.
 4. Create a **Sequence**, drag footage onto its timeline, and click **Render**.
