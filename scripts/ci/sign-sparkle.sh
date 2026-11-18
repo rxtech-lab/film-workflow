@@ -1,8 +1,8 @@
 #!/bin/bash
 # sign-sparkle.sh
 #
-# Re-signs the Sparkle framework and the app wrapper with the Developer ID
-# identity and the Hardened Runtime.
+# Signs the bundled compiler tools and Sparkle helpers with Developer ID and
+# Hardened Runtime before re-sealing the archived app.
 #
 # Xcode signs Sparkle.framework with the identity used for the archive, but its
 # nested helpers (Updater.app, Autoupdate, the XPC services) need to be signed
@@ -45,6 +45,33 @@ sign() {
   codesign --force --options runtime --timestamp --sign "${SIGNING_CERTIFICATE_NAME}" "$target"
 }
 
+WORK_DIR="$(mktemp -d "${RUNNER_TEMP:-${TMPDIR:-/tmp}}/film-workflow-sign.XXXXXX")"
+trap 'rm -rf "$WORK_DIR"' EXIT
+
+# The compiler extracts these npm archives to run esbuild and TypeScript.
+# The app signature seals the archive files without signing their executables.
+TOOLCHAINS_DIR="$APP_PATH/Contents/Resources/MotionSwift_MotionCompiler.bundle/Contents/Resources/Resources/Toolchains"
+
+sign_compiler_archive() {
+  local archive="$1"
+  local executable="$2"
+  local unpacked
+  if [ ! -f "$archive" ]; then
+    echo "Error: missing MotionSwift compiler archive: $archive" >&2
+    exit 1
+  fi
+  unpacked="$(mktemp -d "$WORK_DIR/toolchain.XXXXXX")"
+  tar -xzf "$archive" -C "$unpacked"
+  if [ ! -x "$unpacked/$executable" ]; then
+    echo "Error: $archive is missing executable $executable" >&2
+    exit 1
+  fi
+  echo "Signing $executable in ${archive##*/}"
+  sign "$unpacked/$executable"
+  codesign --verify --strict "$unpacked/$executable"
+  tar -czf "$WORK_DIR/${archive##*/}" -C "$unpacked" package
+}
+
 # Inside-out: the main framework binary, then the helpers it ships with.
 sign "$SPARKLE_VERSIONED/Sparkle"
 sign "$SPARKLE_VERSIONED/Updater.app"
@@ -59,7 +86,7 @@ sign "$SPARKLE_FRAMEWORK"
 # the app. `codesign --force` without --entitlements drops them, which would
 # silently strip com.apple.developer.associated-domains and break passkey
 # sign-in — codesign itself would not complain.
-ENTITLEMENTS_PLIST="${RUNNER_TEMP:-/tmp}/film-workflow.entitlements.plist"
+ENTITLEMENTS_PLIST="$WORK_DIR/archived-entitlements.plist"
 codesign -d --entitlements "$ENTITLEMENTS_PLIST" --xml "$APP_PATH" 2>/dev/null
 
 if [ ! -s "$ENTITLEMENTS_PLIST" ]; then
@@ -69,6 +96,14 @@ fi
 
 echo "Preserving archived entitlements:"
 /usr/bin/plutil -p "$ENTITLEMENTS_PLIST" || true
+
+for archive in "$TOOLCHAINS_DIR"/esbuild-darwin-*.tgz; do
+  sign_compiler_archive "$archive" package/bin/esbuild
+done
+for archive in "$TOOLCHAINS_DIR"/typescript-typescript-darwin-*.tgz; do
+  sign_compiler_archive "$archive" package/lib/tsc
+done
+mv -- "$WORK_DIR"/*.tgz "$TOOLCHAINS_DIR/"
 
 codesign --force --options runtime --timestamp --entitlements "$ENTITLEMENTS_PLIST" \
   --sign "${SIGNING_CERTIFICATE_NAME}" "$APP_PATH/Contents/MacOS/$APP_BINARY_NAME"
@@ -81,7 +116,7 @@ codesign --force --options runtime --timestamp --entitlements "$ENTITLEMENTS_PLI
 # means the check tracks film-workflow.entitlements instead of drifting from
 # it — the previous list still demanded the JIT entitlements the removed Bun
 # runtime needed and failed every release after they were dropped.
-RESEALED_PLIST="${RUNNER_TEMP:-/tmp}/film-workflow.resealed-entitlements.plist"
+RESEALED_PLIST="$WORK_DIR/resealed-entitlements.plist"
 codesign -d --entitlements "$RESEALED_PLIST" --xml "$APP_PATH" 2>/dev/null
 
 if ! diff <(/usr/bin/plutil -convert xml1 -o - "$ENTITLEMENTS_PLIST") \
