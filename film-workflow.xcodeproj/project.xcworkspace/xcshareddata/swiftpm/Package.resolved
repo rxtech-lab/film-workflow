@@ -1,6 +1,15 @@
 {
-  "originHash" : "09c6bf24f011df51e779ce3f7a7b4623f7a07cec18eb77b01697052ac1564390",
+  "originHash" : "22c29edac3b04f9ff1608258d2c1c3cac05a3bc9a18196c5d3ed9c9d69a64610",
   "pins" : [
+    {
+      "identity" : "motionswift",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/rxtech-lab/MotionSwift.git",
+      "state" : {
+        "revision" : "d5cd21c80f3b8ec435ae350f6f8a80b495ebbb38",
+        "version" : "1.2.0"
+      }
+    },
     {
       "identity" : "rxagentsdk",
       "kind" : "remoteSourceControl",

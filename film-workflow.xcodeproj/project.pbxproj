@@ -265,7 +265,7 @@
 				DFVE0003000000000000D003 /* XCLocalSwiftPackageReference "Packages/RxVideoEditor" */,
 				ABCA00030000000000000003 /* XCLocalSwiftPackageReference "Packages/RxPet" */,
 				EFE000030000000000000001 /* XCLocalSwiftPackageReference "Packages/RxVideoEffects" */,
-				D1A5000300000000000000A1 /* XCLocalSwiftPackageReference "../MotionSwift" */,
+				D1A5000300000000000000A1 /* XCRemoteSwiftPackageReference "MotionSwift" */,
 				DF9D8F0F302D630100CD3C3D /* XCRemoteSwiftPackageReference "RxAuthSwift" */,
 				DFFT0003000000000000E003 /* XCLocalSwiftPackageReference "Packages/RxFilmTemplates" */,
 				DF63AC8430585A0F0021FF67 /* XCRemoteSwiftPackageReference "RxSubscriptionIOS" */,
@@ -701,10 +701,6 @@
 			isa = XCLocalSwiftPackageReference;
 			relativePath = Packages/RxPet;
 		};
-		D1A5000300000000000000A1 /* XCLocalSwiftPackageReference "../MotionSwift" */ = {
-			isa = XCLocalSwiftPackageReference;
-			relativePath = ../MotionSwift;
-		};
 		DFFT0003000000000000E003 /* XCLocalSwiftPackageReference "Packages/RxFilmTemplates" */ = {
 			isa = XCLocalSwiftPackageReference;
 			relativePath = Packages/RxFilmTemplates;
@@ -724,6 +720,14 @@
 /* End XCLocalSwiftPackageReference section */
 
 /* Begin XCRemoteSwiftPackageReference section */
+		D1A5000300000000000000A1 /* XCRemoteSwiftPackageReference "MotionSwift" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/rxtech-lab/MotionSwift.git";
+			requirement = {
+				kind = exactVersion;
+				version = 1.2.0;
+			};
+		};
 		DF63AC8430585A0F0021FF67 /* XCRemoteSwiftPackageReference "RxSubscriptionIOS" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/rxtech-lab/RxSubscriptionIOS";
@@ -779,12 +783,12 @@
 		};
 		D1A5000200000000000000A1 /* MotionSwift */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = D1A5000300000000000000A1 /* XCLocalSwiftPackageReference "../MotionSwift" */;
+			package = D1A5000300000000000000A1 /* XCRemoteSwiftPackageReference "MotionSwift" */;
 			productName = MotionSwift;
 		};
 		D1A5000200000000000000A2 /* MotionCompiler */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = D1A5000300000000000000A1 /* XCLocalSwiftPackageReference "../MotionSwift" */;
+			package = D1A5000300000000000000A1 /* XCRemoteSwiftPackageReference "MotionSwift" */;
 			productName = MotionCompiler;
 		};
 		DF63AC8530585A0F0021FF67 /* RxSubscriptionIOS */ = {
