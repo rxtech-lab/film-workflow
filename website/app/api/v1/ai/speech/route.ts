@@ -1,6 +1,7 @@
+import { flowcyMedia, mediaPayload } from "@/lib/ai/flowcy-media";
 import { z } from "zod";
-import { GEMINI_SPEECH_MODEL, geminiSpeechRequest, geminiSpeechAudio } from "@/lib/ai/gemini-speech";
-import { aiRouteError, noStoreHeaders, providerError } from "@/lib/ai/http";
+import { GEMINI_SPEECH_MODEL } from "@/lib/ai/gemini-speech";
+import { aiRouteError, noStoreHeaders } from "@/lib/ai/http";
 import { withMeteredOperation } from "@/lib/ai/meter";
 import { requireApiUser } from "@/lib/auth/bearer";
 import { billingConfig, reserveWithMargin } from "@/lib/billing/config";
@@ -18,56 +19,6 @@ const schema = z.discriminatedUnion("provider", [
 
 function billableCharacters(ssml: string) {
   return ssml.replace(/<[^>]*>/g, "").replace(/&(?:amp|lt|gt|quot|apos);/g, "x").length;
-}
-
-function azureRegion() {
-  const value = process.env.AZURE_SPEECH_REGION?.trim() || process.env.AZURE_SPEECH_ENDPOINT?.trim();
-  if (!value) throw new Error("AZURE_SPEECH_NOT_CONFIGURED");
-  try {
-    const host = new URL(value).host;
-    return host.split(".")[0];
-  } catch { return value; }
-}
-
-function azureMime(format: string) {
-  if (format.includes("mp3")) return "audio/mpeg";
-  if (format.includes("ogg")) return "audio/ogg";
-  return "audio/wav";
-}
-
-async function azureSpeech(ssml: string, format: string) {
-  const key = process.env.AZURE_SPEECH_KEY?.trim();
-  if (!key) throw new Error("AZURE_SPEECH_NOT_CONFIGURED");
-  const startedAt = Date.now();
-  const response = await fetch(`https://${azureRegion()}.tts.speech.microsoft.com/cognitiveservices/v1`, { method: "POST", headers: { "Ocp-Apim-Subscription-Key": key, "Content-Type": "application/ssml+xml", "X-Microsoft-OutputFormat": format, "User-Agent": "RxFilm-Studio" }, body: ssml, signal: AbortSignal.timeout(290_000) });
-  console.info("Speech provider responded", { provider: "azure", status: response.status, elapsedMs: Date.now() - startedAt, ssmlLength: ssml.length, format });
-  if (!response.ok) await providerError(response);
-  const audio = Buffer.from(await response.arrayBuffer());
-  if (!audio.length) {
-    console.error("Azure speech returned an empty body", { status: response.status, elapsedMs: Date.now() - startedAt, ssml: ssml.slice(0, 800) });
-    throw new Error("INVALID_PROVIDER_RESPONSE");
-  }
-  return { audio, mime: response.headers.get("content-type") ?? azureMime(format) };
-}
-
-async function geminiSpeech(transcript: string, speakers: Array<{ name: string; voice: string }>) {
-  const key = process.env.GOOGLE_GENERATIVE_AI_API_KEY?.trim();
-  if (!key) throw new Error("GOOGLE_AI_NOT_CONFIGURED");
-  const startedAt = Date.now();
-  const response = await fetch("https://generativelanguage.googleapis.com/v1beta/interactions", { method: "POST", headers: { "Content-Type": "application/json", "x-goog-api-key": key }, body: JSON.stringify(geminiSpeechRequest(transcript, speakers)), signal: AbortSignal.timeout(290_000) });
-  console.info("Speech provider responded", { provider: "gemini", status: response.status, elapsedMs: Date.now() - startedAt, transcriptLength: transcript.length, speakers: speakers.map((item) => item.voice) });
-  if (!response.ok) await providerError(response);
-  const body: unknown = await response.json();
-  const audio = geminiSpeechAudio(body);
-  if (audio) return { audio, mime: "audio/L16;rate=24000" };
-  console.error("Gemini speech returned no audio", { model: GEMINI_SPEECH_MODEL, elapsedMs: Date.now() - startedAt });
-  throw new Error("INVALID_PROVIDER_RESPONSE");
-}
-
-function pcmDurationSeconds(audio: Buffer, mime: string) {
-  const rate = Number(mime.match(/rate=(\d+)/)?.[1] ?? 24_000);
-  if (mime.toLowerCase().includes("l16") || mime.toLowerCase().includes("pcm")) return audio.length / (rate * 2);
-  return Math.max(1, audio.length / 6_000);
 }
 
 function pcm16ToWav(audio: Buffer, sampleRate: number) {
@@ -105,12 +56,14 @@ export async function POST(request: Request) {
       : estimateReservationPoints({ provider: "google", model, unit: "audio_seconds", units: Math.max(1, characters / 12), floorPoints: billingConfig.speechReservationPoints });
     console.info("Speech request", { provider: input.provider, model, characters, estimatedPoints: estimated, operationKey });
     const { value } = await withMeteredOperation({ user, feature: input.provider === "azure" ? "Narrative · Azure TTS" : "Narrative · Gemini TTS", capability: "speech", operationKey, reservePoints: reserveWithMargin(estimated), run: async (context) => {
-      const output = input.provider === "azure" ? await azureSpeech(input.ssml, input.format) : await geminiSpeech(input.transcript, input.speakers);
+      const delegated = new Request(request.url, { method: "POST", headers: { ...Object.fromEntries(request.headers), "idempotency-key": operationKey }, body: JSON.stringify(input) });
+      const remote = await mediaPayload(await flowcyMedia(delegated, "/api/v1/ai/speech")) as { audio_base64: string; mime_type: string; duration_seconds: number };
+      const output = { audio: Buffer.from(remote.audio_base64, "base64"), mime: remote.mime_type };
       const usage = input.provider === "azure"
         ? await recordUnitUsage({ context, provider: "azure", model, capability: "speech", unit: "characters", units: characters, eventId: "speech" })
-        : await recordUnitUsage({ context, provider: "google", model, capability: "speech", unit: "audio_seconds", units: pcmDurationSeconds(output.audio, output.mime), eventId: "speech" });
+        : await recordUnitUsage({ context, provider: "google", model, capability: "speech", unit: "audio_seconds", units: remote.duration_seconds, eventId: "speech" });
       const sampleRate = Number(output.mime.match(/rate=(\d+)/)?.[1] ?? 24_000);
-      const responseAudio = input.provider === "gemini" ? pcm16ToWav(output.audio, sampleRate) : output.audio;
+      const responseAudio = input.provider === "gemini" && output.mime.includes("L16") ? pcm16ToWav(output.audio, sampleRate) : output.audio;
       const responseMime = input.provider === "gemini" ? "audio/wav" : output.mime;
       return { audio: responseAudio.toString("base64"), mime: responseMime, chargedPoints: usage?.chargedPoints ?? 0 };
     } });

@@ -3,8 +3,8 @@ import Foundation
 
 /// Reverses PCM frames in bounded chunks, preserving channel order. One cached
 /// file per source lets speed, cuts and trims reuse it during playback/export.
-actor ReversedAudioCache {
-    static let shared = ReversedAudioCache()
+public actor ReversedAudioCache {
+    public static let shared = ReversedAudioCache()
 
     private struct Key: Hashable {
         let url: URL
@@ -17,7 +17,7 @@ actor ReversedAudioCache {
 
     deinit { try? FileManager.default.removeItem(at: directory) }
 
-    func file(for url: URL) throws -> URL {
+    public func file(for url: URL) throws -> URL {
         let values = try url.resourceValues(forKeys: [.contentModificationDateKey, .fileSizeKey])
         let key = Key(url: url, modified: values.contentModificationDate, size: values.fileSize)
         if let cached = files[key], FileManager.default.fileExists(atPath: cached.path) { return cached }

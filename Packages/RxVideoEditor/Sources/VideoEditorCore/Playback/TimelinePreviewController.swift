@@ -89,23 +89,43 @@ public final class TimelinePreviewLayer: Identifiable {
         guard let player else { return }
         let local = min(clip.duration, max(0, time - clip.start))
         let desired = active && playing
-        let drift = abs(player.currentTime().seconds - local)
-        let needsSeek = lastPlaying != desired || (!desired && seekTarget != local) || (desired && drift > 0.08)
+        let transition = lastPlaying != desired
         lastPlaying = desired
-        if !desired { player.pause() }
-        if needsSeek && (!desired || !seekInFlight) {
+        if desired {
+            let drift = abs(player.currentTime().seconds - local)
+            if (transition || drift > 0.08) && !seekInFlight {
+                seek(player, to: local, thenPlay: true)
+            } else if player.rate == 0 && !seekInFlight {
+                player.play()
+            }
+        } else {
+            if player.rate != 0 { player.pause() }
+            guard transition || seekTarget != local else { return }
+            // Chase the pointer rather than restarting on every move: a new
+            // exact seek cancels the one decoding, so while skimming almost no
+            // frame ever landed. Keep one in flight and jump to the latest
+            // target when it completes.
             seekTarget = local
-            seekInFlight = true
-            seekSerial += 1
-            let serial = seekSerial
-            player.seek(to: CMTime(seconds: local, preferredTimescale: 600), toleranceBefore: .zero, toleranceAfter: .zero) { [weak self] finished in
-                Task { @MainActor [weak self] in
-                    guard let self, self.seekSerial == serial else { return }
-                    self.seekInFlight = false
-                    if finished, desired, self.lastPlaying { player.play() }
+            if !seekInFlight { seek(player, to: local, thenPlay: false) }
+        }
+    }
+
+    private func seek(_ player: AVPlayer, to local: Double, thenPlay: Bool) {
+        seekTarget = local
+        seekInFlight = true
+        seekSerial += 1
+        let serial = seekSerial
+        player.seek(to: CMTime(seconds: local, preferredTimescale: 600), toleranceBefore: .zero, toleranceAfter: .zero) { [weak self] finished in
+            Task { @MainActor [weak self] in
+                guard let self, self.seekSerial == serial, let player = self.player else { return }
+                self.seekInFlight = false
+                if self.lastPlaying {
+                    if finished, thenPlay { player.play() }
+                } else if let target = self.seekTarget, target != local {
+                    self.seek(player, to: target, thenPlay: false)
                 }
             }
-        } else if desired && player.rate == 0 && !seekInFlight { player.play() }
+        }
     }
 
     func releaseNative() {
@@ -286,17 +306,26 @@ public final class TimelinePreviewController {
         synchronizing = true
         defer { synchronizing = false }
         let time = transport.currentTime
-        if !transport.isLoading, let error = transport.lastError { lastError = error }
+        // This runs on a 60 Hz ticker and on every skim step. Observable
+        // setters notify even when the value is unchanged, so each write below
+        // is guarded — otherwise every tick invalidated every view reading a
+        // layer, and the preview redrew constantly while the pointer moved.
+        if !transport.isLoading, let error = transport.lastError, lastError != error { lastError = error }
         if let item = transport.player.currentItem, item.status == .failed {
-            lastError = item.error?.localizedDescription ?? "The sequence audio could not be played."
+            let message = item.error?.localizedDescription ?? "The sequence audio could not be played."
+            if lastError != message { lastError = message }
         }
         var blocked = isLoading || lastError != nil || transport.isLoading
         if let item = transport.player.currentItem, item.status != .readyToPlay || item.isPlaybackBufferEmpty { blocked = true }
         for layer in layers {
-            if let live = layer.live { layer.naturalDuration = live.descriptor.duration }
+            if let live = layer.live, layer.naturalDuration != live.descriptor.duration {
+                layer.naturalDuration = live.descriptor.duration
+            }
             let inSource = layer.naturalDuration.map { layer.clip.sourceTime(at: time) < $0 } ?? true
-            layer.active = layer.clip.range.contains(time) && inSource
-            layer.mounted = time >= layer.clip.start - 2 && time < layer.clip.end && inSource
+            let active = layer.clip.range.contains(time) && inSource
+            if layer.active != active { layer.active = active }
+            let mounted = time >= layer.clip.start - 2 && time < layer.clip.end && inSource
+            if layer.mounted != mounted { layer.mounted = mounted }
             if layer.mounted {
                 layer.prepareNative()
                 if let live = layer.live, live.limitation != nil || (live.ready && (layer.clip.playbackRate > 10 || layer.clip.volume > 1)) {

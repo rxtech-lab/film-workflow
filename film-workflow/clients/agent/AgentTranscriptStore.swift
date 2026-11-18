@@ -171,6 +171,7 @@ enum AgentTranscriptStore {
         if let id, let existing = thread.messages.first(where: { $0.id == id }) {
             existing.content = content
             if let createdAt { existing.createdAt = createdAt }
+            captureAutoTitle(from: existing, in: thread)
             return existing
         }
         let row = AgentMessage(role: role, content: content)
@@ -185,6 +186,15 @@ enum AgentTranscriptStore {
         context.insert(row)
         thread.messages.append(row)
         thread.updatedAt = Date()
+        captureAutoTitle(from: row, in: thread)
+    }
+
+    /// Records the thread's derived title the first time a user text turn
+    /// with content arrives, so the thread menu never has to search for it.
+    private static func captureAutoTitle(from row: AgentMessage, in thread: AgentThread) {
+        guard thread.autoTitle.isEmpty, row.roleEnum == .user, row.kindEnum == .text,
+              !row.content.isEmpty else { return }
+        thread.autoTitle = AgentThread.titleLine(from: row.content)
     }
 
     /// Saves text/thinking/tool references in exactly the order the live SDK
@@ -207,7 +217,10 @@ enum AgentTranscriptStore {
                              createdAt: message.timestamp, to: thread, context: context)
                 rowsByID[message.id] = row
             }
-            if row.kindEnum == .text, row.content != message.plainText { row.content = message.plainText }
+            if row.kindEnum == .text, row.content != message.plainText {
+                row.content = message.plainText
+                captureAutoTitle(from: row, in: thread)
+            }
             // Sent attachments are immutable. Encode once, rather than copying
             // image bytes again at every assistant message boundary.
             if row.attachmentsData == nil, !message.attachments.isEmpty {

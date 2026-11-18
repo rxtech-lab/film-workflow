@@ -1,4 +1,6 @@
 import Foundation
+import MotionEditor
+import MotionSwiftUI
 import Observation
 import SwiftUI
 import VideoEditorCore
@@ -132,10 +134,27 @@ final class EditorWindowState {
         modifierSelection = .transition(id)
         showSequenceViewer()
     }
-    var modifierPreviewGeneration = UUID()
-    var modifierPreviewTask: Task<Void, Never>?
-    var modifierPreviewProgress: String?
-    var modifierPreviewError: String?
+    /// The Remotion clip drilled into, if any: while set, the timeline panel shows its
+    /// composition's elements, the viewer its canvas and the inspector the selected element.
+    private(set) var composition: RemotionCompositionSession?
+
+    /// Opens `project`'s composition in place of the sequence timeline.
+    func openComposition(_ project: RemotionProject, clipID: UUID? = nil) {
+        guard composition?.projectID != project.id else { return }
+        player.pause()
+        footagePlayer.pause()
+        composition?.model?.player.pause()
+        composition = RemotionCompositionSession(project: project, clipID: clipID)
+    }
+
+    /// Returns to the sequence timeline.
+    func closeComposition() {
+        composition?.model?.player.pause()
+        let clipID = composition?.clipID
+        composition = nil
+        if let clipID { selectedClipIDs = [clipID] }
+        showSequenceViewer()
+    }
 
     var inspectorTabID: String {
         didSet { defaults.set(inspectorTabID, forKey: Self.inspectorTabKey) }
@@ -264,7 +283,6 @@ final class EditorWindowState {
         player.seek(to: resting)
     }
     let player = TimelinePlayerController()
-    @ObservationIgnored lazy var preview = TimelinePreviewController(transport: player)
 
     func showSequenceViewer() {
         if let id = currentSequenceID { viewerSelection = LibraryItemID(kind: .sequence, id: id) }
@@ -285,6 +303,12 @@ final class EditorWindowState {
         // the app, or while the window was not key — would otherwise keep that
         // take in the viewer however often the user picked something else.
         endFootageSkim()
+        // Picking a sequence (or any footage) in the media panel jumps out of an opened
+        // Remotion composition to it.
+        if item != nil, composition != nil {
+            composition?.model?.player.pause()
+            composition = nil
+        }
         // Picking something of this film's own takes the viewer back from
         // whatever the Marketplace tab was showing.
         marketplaceSelection = nil

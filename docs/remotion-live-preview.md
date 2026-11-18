@@ -2,9 +2,8 @@
 
 Remotion compositions are compiled, previewed, edited and rendered natively with
 [MotionSwift](https://github.com/rxtech-lab/MotionSwift) (Skia on Metal). There is no
-WebView, browser, Node, Bun or Studio process. The app links MotionSwift as a local
-Swift package at `../MotionSwift` (a checkout beside this repository, bootstrapped with
-`make bootstrap` so its native Skia archive and compiler resources exist).
+WebView, browser, Node, Bun or Studio process. Xcode resolves MotionSwift from the
+release pinned in the project, including the compiler resources and native XCFramework.
 
 ## Project layout
 

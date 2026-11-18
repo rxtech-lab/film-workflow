@@ -53,7 +53,12 @@ Older documents decode both collections as empty. Unrecognized definitions and
 their parameters survive saving. Their inspector identifies them as unavailable;
 disable or remove them before export.
 
-Preview and export use the same Core Image compositor: effect stack, clip
+With MotionSwift sequence rendering on (the default), the built-in transitions are drawn as
+per-frame CSS in the generated film and effects run through the same Core Image effect code via
+MotionSwift's host processor; see `motionswift-sequences.md`. Installed transitions, effects on
+Remotion clips, and the preference turned off use the compositor described below.
+
+The compositor drives preview and export the same way: effect stack, clip
 placement/opacity, transitions, then picture-track compositing. Dissolves and
 wipes at single edges reveal lower layers; Fade through Color uses its chosen
 RGB color. Pair transitions use unused frames beyond trimmed edges, accounting

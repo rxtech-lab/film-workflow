@@ -123,14 +123,9 @@ private struct SimpleModePreviewContent: View {
     }
 
     private var stage: AnyView? {
-        guard playback.usesLivePreview else { return nil }
-        return AnyView(TimelineLayeredPreviewView(controller: playback.preview) {
-            AnyView(MotionLivePreviewView(playback: $0))
-        }.overlay(alignment: .topTrailing) {
-            if playback.preview.lastError != nil || playback.preview.layers.contains(where: { $0.error != nil || $0.live?.error != nil }) {
-                Button("Retry Preview", action: reload).buttonStyle(.glass).padding()
-            }
-        })
+        guard let timeline = playback.timeline else { return nil }
+        return AnyView(MotionSequenceStage(timeline: timeline, document: document, controller: playback.player)
+            .id(sequence?.id))
     }
 
     private var emptyStage: some View {

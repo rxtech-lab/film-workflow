@@ -1,3 +1,4 @@
+import { sharedVideoJob } from "@/lib/ai/flowcy-video-jobs";
 import { and, eq } from "drizzle-orm";
 import { after } from "next/server";
 import { aiRouteError, noStoreHeaders } from "@/lib/ai/http";
@@ -18,6 +19,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ jobI
     const { jobId } = await params;
     let job = (await db.select().from(aiJobs).where(and(eq(aiJobs.id, jobId), eq(aiJobs.userId, user.id))).limit(1))[0];
     if (!job) return Response.json({ code: "not_found", error: "Job not found." }, { status: 404, headers: noStoreHeaders() });
+    if (job.id.startsWith("flowcy-")) return await sharedVideoJob(request, job);
     if (job.capability === "video" && job.status === "running") {
       const polled = await pollVideoJob(job);
       job = polled.job;

@@ -17,6 +17,11 @@ import SwiftData
 final class AgentThread {
     var id: UUID = UUID()
     var title: String = ""
+    /// The first line of the first thing the user said, captured when that
+    /// message is recorded. Lets `displayTitle` answer without faulting in and
+    /// sorting every message — the thread menu asks for every thread's title
+    /// on each window update, which made typing and streaming hang.
+    var autoTitle: String = ""
     var createdAt: Date = Date()
     var updatedAt: Date = Date()
 
@@ -154,12 +159,28 @@ final class AgentThread {
     /// user said, so a thread is recognizable without being named by hand.
     var displayTitle: String {
         if !title.isEmpty { return title }
-        guard let first = orderedMessages.first(where: { $0.roleEnum == .user && $0.kindEnum == .text })
-        else { return "New Thread" }
-        let line = first.content
+        if !autoTitle.isEmpty { return autoTitle }
+        return "New Thread"
+    }
+
+    /// Fills `autoTitle` from the earliest user text message, once.
+    ///
+    /// A linear scan rather than `orderedMessages`: only the earliest match is
+    /// needed, not the whole transcript sorted.
+    func refreshAutoTitleIfNeeded() {
+        guard autoTitle.isEmpty else { return }
+        let first = messages
+            .filter { $0.roleEnum == .user && $0.kindEnum == .text && !$0.content.isEmpty }
+            .min { $0.createdAt < $1.createdAt }
+        guard let first else { return }
+        autoTitle = Self.titleLine(from: first.content)
+    }
+
+    static func titleLine(from content: String) -> String {
+        let line = content
             .split(separator: "\n")
             .first
-            .map(String.init) ?? first.content
+            .map(String.init) ?? content
         return line.count > 48 ? String(line.prefix(48)) + "…" : line
     }
 

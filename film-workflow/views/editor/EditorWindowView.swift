@@ -91,7 +91,7 @@ struct EditorWindowView: View {
                                  onGenerateCaptions: generateCaptions)
                         .frame(minWidth: 240, idealWidth: geometry.size.width / 3, maxWidth: .infinity, maxHeight: .infinity)
                         .background(.regularMaterial)
-                    ViewerPanel(index: index, state: state, document: document, sequence: currentSequence, onRetryModifierPreview: reloadPlayer)
+                    ViewerPanel(index: index, state: state, document: document, sequence: currentSequence)
                         .frame(minWidth: 320, idealWidth: max(320, geometry.size.width * 2 / 3 - 320), maxWidth: .infinity, maxHeight: .infinity)
                         .background(PersistedPanelSplit(document: document, panel: .editorColumns))
                     InspectorPanel(index: index, state: state, document: document, sequence: currentSequence, onRender: beginRender)
@@ -124,6 +124,10 @@ struct EditorWindowView: View {
             }
             reloadPlayer()
         }
+        .onChange(of: remotions.map(\.id)) { _, ids in
+            // The opened composition's project was deleted.
+            if let id = state.composition?.projectID, !ids.contains(id) { state.closeComposition() }
+        }
         .onChange(of: remotions.map { "\($0.id):\($0.durationSeconds):\($0.compositionFps):\($0.compositionWidth):\($0.compositionHeight):\($0.compositionSource.isEmpty)" }) { _, _ in
             if currentSequence?.timeline.renderedClips.contains(where: { $0.source.kind == .remotion }) == true { reloadPlayer() }
         }
@@ -131,7 +135,7 @@ struct EditorWindowView: View {
             defer { isFirstFocus = false }
             await followTimelineFocus()
         }
-        .onDisappear { state.modifierPreviewGeneration = UUID(); state.modifierPreviewTask?.cancel(); state.preview.unload(); state.player.unload() }
+        .onDisappear { state.player.unload() }
         .task(id: unmeasuredAudioIDs) { await backfillAudioDurations() }
         // A pointer that leaves with the app never reports the hover ending, so
         // the skim it started would outlive the visit and pin the viewer to
@@ -489,55 +493,14 @@ struct EditorWindowView: View {
     }
 
     private func reloadPlayer() {
-        state.modifierPreviewTask?.cancel()
-        state.modifierPreviewGeneration = UUID()
-        state.modifierPreviewProgress = nil
-        state.modifierPreviewError = nil
         guard let sequence = currentSequence else {
-            state.preview.unload()
             state.player.unload()
             return
         }
-        if sequence.timeline.hasActiveModifiers && sequence.timeline.renderedClips.contains(where: { $0.source.kind == .remotion }) {
-            loadRenderedModifierPreview(sequence)
-        } else if sequence.timeline.renderedClips.contains(where: { $0.source.kind == .remotion }) {
-            state.preview.load(sequence.timeline, resolver: DocumentPreviewMediaResolver(document: document, width: sequence.width, height: sequence.height, fps: sequence.fps))
-        } else {
-            state.preview.unload()
-            let resolver = DocumentMediaResolver(document: document, width: sequence.width, height: sequence.height, fps: sequence.fps)
-            state.player.load(sequence.timeline, resolver: resolver)
-        }
-    }
-
-    private func loadRenderedModifierPreview(_ sequence: SequenceProject) {
-        state.preview.unload()
-        state.player.setBuffering(true)
-        state.modifierPreviewProgress = "Preparing rendered preview…"
-        let timeline = sequence.timeline
-        let resolver = DocumentPreviewMediaResolver(document: document, width: sequence.width, height: sequence.height, fps: sequence.fps)
-        let fallback = DocumentMediaResolver(document: document, width: sequence.width, height: sequence.height, fps: sequence.fps)
-        let generation = state.modifierPreviewGeneration
-        state.modifierPreviewTask = Task { @MainActor in
-            defer { resolver.release() }
-            do {
-                var files: [String: ResolvedMedia] = [:]
-                for clip in timeline.renderedClips where clip.source.kind == .remotion && files[clip.source.id] == nil {
-                    files[clip.source.id] = try await resolver.renderedPreview(clip.source) { label in
-                        if state.modifierPreviewGeneration == generation { state.modifierPreviewProgress = label }
-                    }
-                    try Task.checkCancellation()
-                }
-                guard state.modifierPreviewGeneration == generation else { return }
-                state.player.setBuffering(false)
-                state.player.load(timeline, resolver: RenderedModifierMediaResolver(files: files, fallback: fallback))
-                state.modifierPreviewProgress = nil
-            } catch {
-                guard !Task.isCancelled, state.modifierPreviewGeneration == generation else { return }
-                state.modifierPreviewProgress = nil
-                state.modifierPreviewError = error.localizedDescription
-                state.player.setBuffering(true)
-            }
-        }
+        // MotionSwift draws every picture (MotionSequenceStage); the transport is the clock
+        // and plays file audio, which it mixes sample-accurately.
+        let resolver = DocumentMediaResolver(document: document, width: sequence.width, height: sequence.height, fps: sequence.fps)
+        state.player.load(sequence.timeline, resolver: resolver, audioOnly: true)
     }
 
     private func beginRender() {

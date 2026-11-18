@@ -16,10 +16,11 @@ struct RemotionSettingsTab: View {
 /// Source and Render for a Remotion project, shown under its inspector tabs.
 struct RemotionInspectorFooter: View {
     let project: RemotionProject
+    /// Opens the composition in the editor (timeline, canvas and inspector) instead of a sheet.
+    var onEdit: () -> Void = {}
     @Environment(\.modelContext) private var modelContext
 
     @State private var showSourceSheet = false
-    @State private var showElementEditor = false
     @State private var showExportSheet = false
     @State private var exportOptions = RemotionExportOptions()
     @State private var renderTask: Task<Void, Never>?
@@ -37,11 +38,9 @@ struct RemotionInspectorFooter: View {
             } label: { Label("Source", systemImage: "doc.text") }
                 .disabled(project.compositionSource.isEmpty)
                 .filmTip(.remotionSource, when: !project.compositionSource.isEmpty && !showSourceSheet && !showProgressSheet)
-            Button {
-                showElementEditor = true
-            } label: { Label("Edit", systemImage: "cursorarrow.motionlines") }
+            Button(action: onEdit) { Label("Edit", systemImage: "cursorarrow.motionlines") }
                 .disabled(project.compositionSource.isEmpty || showProgressSheet)
-                .help("Edit the composition's elements on a native canvas")
+                .help("Open the composition's elements on the timeline and canvas")
                 .accessibilityIdentifier("remotion.editElements")
             GenerateButton(title: "Render", isBusy: showProgressSheet, isEnabled: !project.compositionSource.isEmpty, tip: FilmFeatureTip.remotionRender) {
                 beginRender()
@@ -49,10 +48,8 @@ struct RemotionInspectorFooter: View {
         }
         .padding(10)
         .sheet(isPresented: $showSourceSheet) {
-            RemotionSourceSheetView(projectDir: project.projectDir, refreshToken: refreshToken) { showSourceSheet = false }
-        }
-        .sheet(isPresented: $showElementEditor) {
-            MotionElementEditorSheet(project: project) { showElementEditor = false; refreshToken += 1 }
+            RemotionSourceSheetView(projectDir: project.projectDir, refreshToken: refreshToken,
+                                    onSaved: { _ in project.syncCompositionSourceFromDisk(context: modelContext) }) { showSourceSheet = false }
         }
         .sheet(isPresented: $showExportSheet) {
             RemotionExportSheet(projectName: project.name, sourceWidth: project.compositionWidth, sourceHeight: project.compositionHeight,

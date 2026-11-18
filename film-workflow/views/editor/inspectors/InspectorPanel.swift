@@ -16,6 +16,18 @@ struct InspectorPanel: View {
     let onRender: () -> Void
 
     var body: some View {
+        if let composition = state.composition {
+            VStack(spacing: 0) {
+                StudioPanelHeader(title: "Inspector", symbol: "slider.horizontal.3")
+                RemotionCompositionInspector(session: composition)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            }
+        } else {
+            mainBody
+        }
+    }
+
+    @ViewBuilder private var mainBody: some View {
         let context = InspectorContext(document: document, state: state, index: index, sequence: sequence, onRender: onRender)
         let footage = context.footage
         let lyricsID = context.lyricsProject?.projectUUID

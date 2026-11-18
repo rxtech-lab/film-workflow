@@ -6,8 +6,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/rxtech-lab/MotionSwift.git",
       "state" : {
-        "revision" : "8fa27810679159e5b82eacfb5e670fb40a33651b",
-        "version" : "1.1.3"
+        "revision" : "d5cd21c80f3b8ec435ae350f6f8a80b495ebbb38",
+        "version" : "1.2.0"
       }
     },
     {

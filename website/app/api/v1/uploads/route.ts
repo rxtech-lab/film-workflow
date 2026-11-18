@@ -1,3 +1,4 @@
+import { flowcyMedia } from "@/lib/ai/flowcy-media";
 import { z } from "zod";
 import { requireApiUser, UnauthorizedError, unauthorizedResponse } from "@/lib/auth/bearer";
 import { createPresignedUpload, createTranscriptionUpload, storageLimits } from "@/lib/storage/s3";
@@ -13,13 +14,14 @@ const schema = z.object({
 export async function POST(request: Request) {
   try {
     const user = await requireApiUser(request);
-    const parsed = schema.safeParse(await request.json().catch(() => null));
+    const parsed = schema.safeParse(await request.clone().json().catch(() => null));
     if (!parsed.success) {
       return Response.json(
         { code: "bad_request", error: parsed.error.issues[0]?.message ?? "Invalid upload request." },
         { status: 400, headers: { "Cache-Control": "private, no-store" } },
       );
     }
+    if (parsed.data.content_type.startsWith("image/")) return await flowcyMedia(request, "/api/v1/uploads");
     const uploadInput = {
       userId: user.id,
       filename: parsed.data.filename,

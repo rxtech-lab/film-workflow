@@ -61,8 +61,11 @@ struct FootageViewer: View {
         // Two sibling branches sharing one controller let SwiftUI order a swap
         // as appear-then-disappear, which used to leave the controller marked
         // invisible and buffering forever.
-        if cell.kind == .remotion || cell.kind == .captions || (cell.kind == .video && player.usesGeneratedPreview) {
-            TimelineLayeredPreviewView(controller: player.generatedPreview) { AnyView(MotionLivePreviewView(playback: $0)) }
+        if player.usesGeneratedPreview, let document, let timeline = player.stageTimeline, let resolver = player.stageResolver {
+            // Video, Remotion, caption and recording footage draw through MotionSwift; the
+            // transport is the clock and plays the sound.
+            MotionSequenceStage(timeline: timeline, document: document, controller: player.generatedTransport, resolver: resolver)
+                .id(player.loadedCellID)
         } else {
             switch cell.kind {
             case .remotion, .captions:
@@ -231,8 +234,11 @@ private struct FootagePlaybackPosition: View {
 final class FootagePlayer {
     private let mediaPlayer = AVPlayer()
     let generatedTransport: TimelinePlayerController
-    let generatedPreview: TimelinePreviewController
+    /// Whether the footage plays as a one-clip film drawn by MotionSwift (`stageTimeline`)
+    /// rather than straight from `mediaPlayer`.
     private(set) var usesGeneratedPreview = false
+    private(set) var stageTimeline: Timeline?
+    @ObservationIgnored private(set) var stageResolver: (any MediaResolver)?
     private var nativeCurrentTime: TimeInterval = 0
     private var nativeDuration: TimeInterval = 0
     private var nativeIsPlaying = false
@@ -261,11 +267,14 @@ final class FootagePlayer {
     @ObservationIgnored private var callbackCount = 0
     @ObservationIgnored private var suppressedCallbackCount = 0
     @ObservationIgnored private var isScrubbing = false
+    /// Newest position asked for while a seek was still decoding.
+    @ObservationIgnored private var chaseTarget: TimeInterval?
+    @ObservationIgnored private var seekInFlight = false
+    @ObservationIgnored private var seekSerial = 0
 
     init() {
         let transport = TimelinePlayerController()
         generatedTransport = transport
-        generatedPreview = TimelinePreviewController(transport: transport)
         player.actionAtItemEnd = .pause
         timeObserver = player.addPeriodicTimeObserver(forInterval: CMTime(value: 1, timescale: 30), queue: .main) { [weak self] time in
             Task { @MainActor [weak self] in
@@ -297,25 +306,41 @@ final class FootagePlayer {
         nativeDuration = cell.duration ?? 0
         if let document, let (prefix, id) = DocumentMediaResolver.parse(cell.drag.source.id), prefix == .screenRecording,
            let take = try? RecordingTimelineService.take(id: id, context: document.container.mainContext), let timeline = try? RecordingTimelineService.previewTimeline(take) {
-            usesGeneratedPreview = true; frameRate = Double(timeline.fps)
-            generatedPreview.load(timeline, resolver: LibraryFootagePreviewResolver(document: document, width: timeline.width, height: timeline.height, fps: timeline.fps, captionAudio: nil))
+            loadStage(timeline, resolver: FootageStageResolver(document: document, timeline: timeline))
             applyRequestedPosition(for: cell.id); return
         }
         if let document, cell.kind == .remotion || cell.kind == .captions {
-            usesGeneratedPreview = true
-            frameRate = Double(max(1, cell.previewFPS))
+            let fps = max(1, cell.previewFPS)
             let width = cell.drag.naturalWidth ?? 1920
             let height = cell.drag.naturalHeight ?? 1080
             let clip = Clip(id: cell.id, source: cell.drag.source, start: 0, duration: max(0.1, duration),
                             sourceDuration: duration, text: cell.captionStyle)
             var tracks = [Track(kind: cell.kind == .captions ? .caption : .video, name: cell.title, clips: [clip])]
-            if cell.captionAudioURL != nil {
+            var overrides: [String: ResolvedMedia] = [:]
+            if let audio = cell.captionAudioURL {
                 let source = ClipSource(id: "library-caption-audio", kind: .audio, displayName: cell.title)
                 tracks.append(Track(kind: .audio, name: "Source audio", clips: [Clip(source: source, start: 0, duration: max(0.1, duration))]))
+                overrides[source.id] = .file(audio, naturalDuration: nil, naturalSize: nil)
             }
-            let timeline = Timeline(width: width, height: height, fps: max(1, Int(frameRate)), tracks: tracks)
-            generatedPreview.load(timeline, resolver: LibraryFootagePreviewResolver(document: document, width: width, height: height,
-                                                                                   fps: max(1, Int(frameRate)), captionAudio: cell.captionAudioURL))
+            let timeline = Timeline(width: width, height: height, fps: fps, tracks: tracks)
+            loadStage(timeline, resolver: FootageStageResolver(document: document, timeline: timeline, overrides: overrides))
+            applyRequestedPosition(for: cell.id)
+            return
+        }
+        if let document, cell.kind == .video, let url = cell.mediaURL {
+            // The exact version file, drawn by MotionSwift like the sequence.
+            let natural = await MediaDurationCache.duration(of: url)
+            let size = await MotionSequenceEngine.videoInfo(url).0
+            guard !Task.isCancelled, loadGeneration == generation else { return }
+            let length = max(0.1, natural ?? cell.duration ?? 1)
+            nativeDuration = length
+            let width = size.map { Int($0.width.rounded()) } ?? cell.drag.naturalWidth ?? 1920
+            let height = size.map { Int($0.height.rounded()) } ?? cell.drag.naturalHeight ?? 1080
+            let source = ClipSource(id: "library-footage", kind: .video, displayName: cell.title)
+            let timeline = Timeline(width: max(2, width), height: max(2, height), fps: max(1, cell.previewFPS),
+                                    tracks: [Track(kind: .video, name: cell.title, clips: [Clip(id: cell.id, source: source, start: 0, duration: length, sourceDuration: length)])])
+            loadStage(timeline, resolver: FootageStageResolver(document: document, timeline: timeline,
+                                                               overrides: [source.id: .file(url, naturalDuration: natural, naturalSize: size)]))
             applyRequestedPosition(for: cell.id)
             return
         }
@@ -324,6 +349,7 @@ final class FootagePlayer {
         startDiagnostics()
         nativeDuration = cell.duration ?? 0
         let asset = AVURLAsset(url: url)
+        seekSerial += 1; seekInFlight = false; chaseTarget = nil
         player.replaceCurrentItem(with: AVPlayerItem(asset: asset))
         let natural = await MediaDurationCache.duration(of: url)
         guard !Task.isCancelled, loadGeneration == generation else { return }
@@ -335,6 +361,14 @@ final class FootagePlayer {
            !Task.isCancelled, loadGeneration == generation {
             frameRate = Double(rate)
         }
+    }
+
+    private func loadStage(_ timeline: Timeline, resolver: any MediaResolver) {
+        usesGeneratedPreview = true
+        frameRate = Double(timeline.fps)
+        stageResolver = resolver
+        stageTimeline = timeline
+        generatedTransport.load(timeline, resolver: resolver, audioOnly: true)
     }
 
     private func applyRequestedPosition(for cellID: UUID) {
@@ -365,9 +399,10 @@ final class FootagePlayer {
     }
 
     func unload() {
-        generatedPreview.unload()
         generatedTransport.unload()
         usesGeneratedPreview = false
+        stageTimeline = nil
+        stageResolver = nil
         loadGeneration = UUID()
         loadedCellID = nil
         frameRate = 30
@@ -376,6 +411,7 @@ final class FootagePlayer {
         log.info("unload uiTime=\(self.currentTime)")
         diagnosticsTask?.cancel()
         diagnosticsTask = nil
+        seekSerial += 1; seekInFlight = false; chaseTarget = nil
         player.pause()
         player.replaceCurrentItem(with: nil)
         nativeIsPlaying = false
@@ -411,7 +447,30 @@ final class FootagePlayer {
         guard time.isFinite else { return }
         if usesGeneratedPreview { generatedTransport.seek(to: min(max(0, time), duration)); return }
         nativeCurrentTime = min(max(0, time), max(0, duration))
-        player.seek(to: CMTime(seconds: currentTime, preferredTimescale: 600), toleranceBefore: .zero, toleranceAfter: .zero)
+        chaseSeek(to: nativeCurrentTime)
+    }
+
+    /// One exact seek in flight at a time, landing on the newest target when
+    /// it completes. A seek per pointer move cancelled the one decoding, so a
+    /// skim showed very few frames.
+    private func chaseSeek(to time: TimeInterval) {
+        chaseTarget = time
+        guard !seekInFlight else { return }
+        startSeek()
+    }
+
+    private func startSeek() {
+        guard let target = chaseTarget else { seekInFlight = false; return }
+        chaseTarget = nil
+        seekInFlight = true
+        seekSerial += 1
+        let serial = seekSerial
+        player.seek(to: CMTime(seconds: target, preferredTimescale: 600), toleranceBefore: .zero, toleranceAfter: .zero) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                guard let self, self.seekSerial == serial else { return }
+                self.startSeek()
+            }
+        }
     }
 
     /// Scrubbing pauses playback and resume when the thumb is released.
@@ -520,4 +579,24 @@ private final class FootagePlayerHostView: NSView {
     }
 
     required init?(coder: NSCoder) { nil }
+}
+
+/// Resolves a footage preview film: fixed files for the footage itself, the document for the rest.
+nonisolated struct FootageStageResolver: MediaResolver {
+    let base: DocumentMediaResolver
+    let overrides: [String: ResolvedMedia]
+
+    @MainActor init(document: ProjectDocument, timeline: Timeline, overrides: [String: ResolvedMedia] = [:]) {
+        base = DocumentMediaResolver(document: document, width: timeline.width, height: timeline.height, fps: timeline.fps)
+        self.overrides = overrides
+    }
+
+    func resolve(_ source: ClipSource) async throws -> ResolvedMedia {
+        if let media = overrides[source.id] { return media }
+        return try await base.resolve(source)
+    }
+
+    func thumbnail(for source: ClipSource, at time: TimeInterval) async -> CGImage? {
+        await base.thumbnail(for: source, at: time)
+    }
 }

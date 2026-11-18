@@ -18,8 +18,10 @@ generated media. See `docs/document-package.md`.
 - Every generation is kept as a version; Remotion compositions render natively with MotionSwift and are cached by source hash
 - Edit a Remotion composition's elements on a native canvas (select, drag, text and style inspector)
 - Timeline: drag footage from the library, trim, move, split; captions burn in
-- Render: Remotion clips are rendered first, then the sequence exports as a new
-  version in the film or to a folder, with codec, audio, resolution and format options
+- Sequences preview and export natively with MotionSwift: video, image, audio and Remotion
+  clips (nested live, no pre-render), transitions, effects and captions; Remotion clips are
+  editable from the inspector's Elements tab. Renders land as a new version in the film or in a
+  folder, with codec, audio, resolution and format options. See `docs/motionswift-sequences.md`.
 - An embedded MCP server and agent window that can build and render films
   (`footage_list`, `sequence_add_clip`, `sequence_render`, …). See
   `docs/agent-tools.md`.
@@ -30,10 +32,11 @@ generated media. See `docs/document-package.md`.
 ## Project Structure
 
 - `film-workflow/` – app source (SwiftUI views, models, clients, document layer)
-- `MotionSwift` v1.1.3 (`https://github.com/rxtech-lab/MotionSwift.git`) – native Remotion compiler, renderer and element editor, linked as a
-  remote Swift package pinned to the release tag
+- [MotionSwift v1.2.0](https://github.com/rxtech-lab/MotionSwift/releases/tag/v1.2.0) –
+  native Remotion compiler, renderer and element editor, linked as a pinned Swift package
 - `Packages/RxVideoEditor/` – the video editor package: `VideoEditorCore`
-  (timeline model, AVFoundation composition and export) and `VideoEditorUI`
+  (timeline model, the MotionSwift sequence composer and processor, and the AVFoundation
+  compositor kept as a fallback) and `VideoEditorUI`
   (timeline, viewer, inspectors)
 - `film-workflowTests/` – app unit tests; `Packages/RxVideoEditor/Tests` – package tests
 - `film-workflow.xcodeproj/` – Xcode project
@@ -48,7 +51,8 @@ generated media. See `docs/document-package.md`.
 
 ## Getting Started
 
-1. Keep an `RxAgentSDK` checkout beside this repository (`../RxAgentSDK`); the Xcode project uses it as a local package so SDK chat fixes are included in the app build. MotionSwift is resolved from its remote Swift package at v1.1.3, including generated compiler resources and a versioned native XCFramework download. Open `film-workflow.xcodeproj` in Xcode and run the macOS target.
+1. Open `film-workflow.xcodeproj` in Xcode and run the macOS target. Xcode resolves
+   the pinned Swift packages and downloads MotionSwift’s versioned native XCFramework.
 2. Create a film from the Welcome window (**New Film…**).
 3. Add footage with the **New** menu, set parameters in the inspector and click **Generate**.
 4. Create a **Sequence**, drag footage onto its timeline, and click **Render**.

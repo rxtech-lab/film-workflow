@@ -57,11 +57,19 @@ extension VideoGenProject: InspectorProtocol {
     func makeInspectorFooter(_ context: InspectorContext) -> AnyView? { AnyView(VideoInspectorFooter(project: self)) }
 }
 
-extension RemotionProject: InspectorProtocol {
+extension RemotionProject: InspectorProtocol, EditorTabProviding {
     var libraryItemID: LibraryItemID { LibraryItemID(kind: .remotion, id: id) }
     var footageName: String { name }
     func makeSettingsTab(_ context: InspectorContext) -> AnyView { AnyView(RemotionSettingsTab(project: self)) }
-    func makeInspectorFooter(_ context: InspectorContext) -> AnyView? { AnyView(RemotionInspectorFooter(project: self)) }
+    func makeInspectorFooter(_ context: InspectorContext) -> AnyView? {
+        AnyView(RemotionInspectorFooter(project: self) { context.state.openComposition(self) })
+    }
+    var editorTabID: String { "elements" }
+    var editorTabTitle: LocalizedStringKey { "Elements" }
+    var editorTabSystemImage: String { "square.on.square.dashed" }
+    func makeEditorTab(_ context: InspectorContext) -> AnyView {
+        AnyView(RemotionElementsTab(project: self) { context.state.openComposition(self) }.id(id).accessibilityIdentifier("remotion.elements"))
+    }
 }
 
 extension ImportedAsset: InspectorProtocol {
