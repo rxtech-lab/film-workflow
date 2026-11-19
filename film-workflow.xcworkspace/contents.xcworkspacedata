@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Workspace
+   version = "1.0">
+   <!-- Local development: the sibling MotionSwift checkout overrides the pinned
+        remote package (same package identity). CI and release archives build
+        film-workflow.xcodeproj directly and keep the pinned version. -->
+   <FileRef
+      location = "group:../MotionSwift">
+   </FileRef>
+   <FileRef
+      location = "group:film-workflow.xcodeproj">
+   </FileRef>
+</Workspace>

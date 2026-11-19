@@ -2,8 +2,12 @@ import AVFoundation
 import AppKit
 import Foundation
 import MotionCore
+import MotionSwiftUI
+import SkiaKit
+import SwiftUI
 import Testing
 import VideoEditorCore
+import VideoEditorUI
 import VideoEffectsCore
 @testable import film_workflow
 
@@ -71,6 +75,56 @@ struct MotionSequenceRenderingTests {
 
     private func color(_ image: CGImage, x: Int, y: Int) throws -> NSColor {
         try #require(NSBitmapImageRep(cgImage: image).colorAt(x: x, y: y))
+    }
+
+    @Test("Changing preview resolution re-renders the same frame at the new pixel size")
+    func changesPreviewResolutionInPlace() async throws {
+        let clip = Clip(source: ClipSource(id: "still", kind: .image, displayName: "Still"),
+                        start: 0, duration: 2, isEnabled: false)
+        let timeline = Timeline(width: 1080, height: 1920, tracks: [Track(kind: .video, name: "V1", clips: [clip])])
+        let film = try MotionSequenceComposer.compose(timeline, sources: MotionSequenceSources())
+        let compiled = try await MotionSequenceEngine.compile(film)
+        let suite = "PreviewResolution-\(UUID())"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        defaults.set(PreviewResolution.low.rawValue, forKey: PreviewResolution.storageKey)
+
+        let player = MotionPlayer(configuration: .init(scale: 1, backend: .gpu))
+        let host = NSHostingView(rootView: Color.clear
+            .modifier(MotionPreviewResolution(player: player, width: timeline.width, height: timeline.height))
+            .defaultAppStorage(defaults))
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 200, height: 200),
+                              styleMask: [.titled], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        window.contentView = host
+        window.orderFront(nil)
+        defer { window.close() }
+
+        let menu = NSHostingMenu(rootView: PreviewResolutionPicker()
+            .defaultAppStorage(defaults)
+            .environment(\.locale, Locale(identifier: "en")))
+        menu.update()
+        let options = menu.item(withTitle: "Preview Resolution")?.submenu ?? menu
+        options.update()
+
+        await player.load(.bundle(compiled.bundle), compositionID: MotionSequenceComposition.compositionID)
+        player.seek(to: 12)
+        for (title, width, height) in [("Low", 360, 640), ("Standard", 720, 1280), ("Low", 360, 640)] {
+            let index = options.indexOfItem(withTitle: title)
+            try #require(index >= 0, "Available preview options: \(options.items.map(\.title))")
+            options.performActionForItem(at: index)
+            func hasExpectedFrame() -> Bool {
+                guard let frame = player.displayedFrame else { return false }
+                return frame.frame == 12 && frame.image.width == width && frame.image.height == height
+            }
+            let deadline = ContinuousClock.now + .seconds(5)
+            while !hasExpectedFrame(), ContinuousClock.now < deadline {
+                try await Task.sleep(for: .milliseconds(20))
+            }
+            #expect(hasExpectedFrame(), "Expected frame 12 at \(width)×\(height) in \(title)")
+            #expect(player.currentFrame == 12)
+        }
+        #expect(player.composition?.width == timeline.width && player.composition?.height == timeline.height)
     }
 
     @Test("Video, captions, effects and a nested Remotion project export through MotionSwift")

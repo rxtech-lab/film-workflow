@@ -78,6 +78,8 @@ struct RemotionCompositionViewer: View {
                     }
                     .animation(.snappy, value: model.notice)
                     .accessibilityIdentifier("composition.canvas")
+                    .modifier(MotionPreviewResolution(player: model.player, width: session.project.compositionWidth,
+                                                      height: session.project.compositionHeight))
                 transport(model)
             } else if let error = session.setupError {
                 ContentUnavailableView("Can’t Open the Composition", systemImage: "exclamationmark.triangle", description: Text(error))
@@ -112,6 +114,10 @@ struct RemotionCompositionViewer: View {
                 .font(.callout.monospacedDigit())
                 .accessibilityIdentifier("composition.timecode")
             Spacer()
+            PreviewResolutionPicker()
+                .labelsHidden()
+                .fixedSize()
+                .help("Preview Resolution")
             Toggle(isOn: Binding(get: { model.snapsToGuides }, set: { model.snapsToGuides = $0 })) {
                 Label("Snap", systemImage: "square.and.line.vertical.and.square")
             }
@@ -191,8 +197,10 @@ struct RemotionCompositionTimelinePanel: View {
                     },
                     onDrop: { _, _, _ in },
                     onDeleteClips: { _ in },
-                    onDeselect: { session.selectedClipIDs = [] }
+                    onDeselect: { session.selectedClipIDs = [] },
+                    trackTypeNames: session.elementTypesByTrackID
                 )
+                .accessibilityElement(children: .contain)
                 .accessibilityIdentifier("composition.timeline")
                 .overlay {
                     if session.timeline.tracks.isEmpty {
@@ -280,19 +288,8 @@ struct RemotionCompositionInspector: View {
 
     @ViewBuilder private var content: some View {
         if let model = session.model, model.selection != nil {
-            NavigationStack {
-                EditorInspector(model: model) { codeLocation = RemotionSourceLocation(file: $0.file, line: $0.line) }
-                    .navigationTitle(selectedTitle(in: model))
-                    .toolbar {
-                        ToolbarItem(placement: .navigation) {
-                            Button("All Elements", systemImage: "chevron.backward") {
-                                session.selectedClipIDs = []
-                            }
-                            .help("Back to element list")
-                        }
-                    }
-            }
-            .accessibilityIdentifier("composition.inspector")
+            EditorInspector(model: model) { codeLocation = RemotionSourceLocation(file: $0.file, line: $0.line) }
+                .accessibilityIdentifier("composition.inspector")
         } else if let model = session.model, !model.timelineTracks.isEmpty {
             List {
                 Section {
@@ -328,11 +325,6 @@ struct RemotionCompositionInspector: View {
             ContentUnavailableView("No Element Selected", systemImage: "cursorarrow.click",
                                    description: Text("Select an element on the canvas or the timeline to edit it."))
         }
-    }
-
-    private func selectedTitle(in model: EditorModel) -> String {
-        guard let track = model.selectedTrack else { return String(localized: "Element") }
-        return RemotionCompositionSession.displayLabel(for: track)
     }
 
     private func detail(_ track: ObjectTrack, in model: EditorModel) -> String {

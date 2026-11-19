@@ -4,6 +4,7 @@ import MotionSwiftUI
 import SkiaKit
 import SwiftUI
 import VideoEditorCore
+import VideoEditorUI
 
 /// The sequence (and footage) viewer's picture, drawn by MotionSwift from the generated film. The timeline's
 /// `TimelinePlayerController` stays the clock and plays file audio through AVFoundation; this
@@ -15,20 +16,13 @@ struct MotionSequenceStage: View {
     @Bindable var controller: TimelinePlayerController
     /// Resolves the film's media; the document's resolver when nil.
     var resolver: (any MediaResolver)? = nil
-    @State private var player: MotionPlayer
+    @State private var player = MotionPlayer(configuration: .init(scale: 1, backend: .gpu))
     @State private var processor: MotionSequenceProcessor?
-    @State private var error: String?
+    @State private var loadError: String?
     @State private var compiling = false
     @State private var reloadToken = 0
 
-    init(timeline: Timeline, document: ProjectDocument, controller: TimelinePlayerController, resolver: (any MediaResolver)? = nil) {
-        self.timeline = timeline
-        self.document = document
-        self.controller = controller
-        self.resolver = resolver
-        let longest = Double(max(timeline.width, timeline.height, 1))
-        _player = State(initialValue: MotionPlayer(configuration: .init(scale: min(1, controller.previewMaxWidth / longest), backend: .gpu)))
-    }
+    private var error: String? { loadError ?? player.renderError }
 
     private struct LoadKey: Hashable {
         let timeline: Timeline
@@ -80,9 +74,9 @@ struct MotionSequenceStage: View {
         .accessibilityLabel(player.displayedFrame.map { "Rendered frame \($0.frame)" } ?? (error ?? "Loading preview"))
         .accessibilityIdentifier("sequence.motionStage")
         .task(id: LoadKey(timeline: timeline, token: reloadToken)) { await load() }
+        .modifier(MotionPreviewResolution(player: player, width: timeline.width, height: timeline.height))
         .onChange(of: controller.currentTime) { follow() }
         .onChange(of: controller.isPlaying) { follow(force: true) }
-        .onChange(of: player.renderError) { _, message in if let message { error = message } }
         .onReceive(NotificationCenter.default.publisher(for: .remotionPreviewChanged)) { _ in
             // A nested composition changed on disk; its sources are read when the film is composed.
             if timeline.renderedClips.contains(where: { $0.source.kind == .remotion }) { reloadToken += 1 }
@@ -116,11 +110,11 @@ struct MotionSequenceStage: View {
             previous?.unregister()
             if case .failed(let message) = player.status { throw MotionSwiftEngine.Failure(message) }
             player.loops = false
-            error = nil
+            loadError = nil
             follow(force: true)
         } catch is CancellationError {
         } catch {
-            self.error = error.localizedDescription
+            loadError = error.localizedDescription
         }
     }
 
@@ -139,6 +133,29 @@ struct MotionSequenceStage: View {
         } else {
             if player.isPlaying { player.pause() }
             if player.currentFrame != frame || force { player.seek(to: frame) }
+        }
+    }
+}
+
+/// Applies the saved preview setting to the live renderer, preserving its playhead.
+struct MotionPreviewResolution: ViewModifier {
+    @AppStorage(PreviewResolution.storageKey) private var resolution = PreviewResolution.standard
+    let player: MotionPlayer
+    let width: Int
+    let height: Int
+
+    private struct Request: Equatable {
+        let playerID: ObjectIdentifier
+        let scale: Double
+    }
+
+    func body(content: Content) -> some View {
+        let scale = resolution.scale(width: player.composition?.width ?? width, height: player.composition?.height ?? height)
+        let request = Request(playerID: ObjectIdentifier(player), scale: scale)
+        content.onChange(of: request, initial: true) { _, request in
+            var configuration = player.configuration
+            configuration.scale = request.scale
+            player.update(configuration: configuration)
         }
     }
 }

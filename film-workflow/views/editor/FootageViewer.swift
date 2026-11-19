@@ -146,6 +146,9 @@ struct FootageViewer: View {
         HStack(spacing: 6) {
             Menu {
                 Toggle("Fit to Viewer", isOn: $fitsViewer)
+                if player.usesGeneratedPreview {
+                    PreviewResolutionPicker()
+                }
                 if cell.kind == .captions || cell.kind == .remotion {
                     Button("Reload Preview") { previewRevision += 1 }
                 }

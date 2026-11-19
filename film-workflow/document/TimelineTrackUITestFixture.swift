@@ -36,6 +36,22 @@ enum TimelineTrackUITestFixture {
                 tracks.append(Track(id: UUID(uuidString: "00000000-0000-0000-0000-000000000004")!, kind: .audio, name: "A2"))
                 sequence.timeline = Timeline(width: 320, height: 180, tracks: tracks)
                 document.container.mainContext.insert(sequence)
+                let composition = RemotionProject(name: "Track Types")
+                composition.id = UUID(uuidString: "00000000-0000-0000-0000-000000000005")!
+                composition.compositionWidth = 320; composition.compositionHeight = 180
+                composition.compositionFps = 30; composition.durationSeconds = 3
+                composition.compositionSource = """
+                import {AbsoluteFill} from 'remotion';
+                export const COMPOSITION_WIDTH = 320, COMPOSITION_HEIGHT = 180, COMPOSITION_FPS = 30, COMPOSITION_DURATION_IN_FRAMES = 90;
+                export const MyComposition = () => (
+                    <AbsoluteFill style={{backgroundColor: '#224488'}}>
+                        <div data-ms-label="Heading" style={{color: 'white'}}>Header</div>
+                        <span data-ms-label="Badge" style={{color: 'white'}}>Badge</span>
+                    </AbsoluteFill>
+                );
+                """
+                document.container.mainContext.insert(composition)
+                try RemotionCodeBuilder.writeComposition(project: composition, source: composition.compositionSource)
                 document.setPanelSizes([400, 340], for: .editorRows)
                 document.save()
                 document.focusTimeline(sequenceID: sequence.id, time: 0)

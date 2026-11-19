@@ -5,16 +5,14 @@
 # output/output.xcarchive. Shared by the release build and the PR signing
 # check so both exercise the exact same xcodebuild invocation.
 #
-# Manual signing with a Developer ID identity. The profile is pinned to the
-# app target's Release build settings in project.pbxproj
-# (PROVISIONING_PROFILE_SPECIFIER), NOT passed on the command line: a
-# command-line PROVISIONING_PROFILE* applies to every target in the graph —
-# including the SPM package targets, which don't support provisioning profiles
-# — and fails the archive. CODE_SIGN_STYLE and CODE_SIGN_IDENTITY stay global:
-# the package targets sign with the identity but need no profile.
+# Release.xcconfig uses SIGNING_PROFILE_UUID to select the profile for the
+# app target. Setting PROVISIONING_PROFILE_SPECIFIER on the command line
+# would also apply it to Swift package targets, which don't support profiles.
 #
 # Env:
 #   SIGNING_CERTIFICATE_NAME  required
+#   SIGNING_PROFILE_UUID      provisioned app profile, from the install step
+#   SIGNING_TEAM_ID           team ID from that profile
 #   BUILD_NUMBER              CURRENT_PROJECT_VERSION override so every release
 #                             has a unique build number (github.run_number)
 #                             without committing churn to project.pbxproj.
@@ -26,6 +24,11 @@ ARCHIVE_PATH="${ARCHIVE_PATH:-output/output.xcarchive}"
 
 if [ -z "${SIGNING_CERTIFICATE_NAME}" ]; then
   echo "Error: SIGNING_CERTIFICATE_NAME is not set"
+  exit 1
+fi
+
+if [ -z "${SIGNING_PROFILE_UUID}" ] || [ -z "${SIGNING_TEAM_ID}" ]; then
+  echo "Error: SIGNING_PROFILE_UUID and SIGNING_TEAM_ID are required from the profile install step" >&2
   exit 1
 fi
 
@@ -45,6 +48,8 @@ xcodebuild -destination platform=macOS \
   ARCHS=arm64 \
   CODE_SIGN_IDENTITY="${SIGNING_CERTIFICATE_NAME}" \
   CODE_SIGN_STYLE=Manual \
+  DEVELOPMENT_TEAM="${SIGNING_TEAM_ID}" \
+  SIGNING_PROFILE_UUID="${SIGNING_PROFILE_UUID}" \
   OTHER_CODE_SIGN_FLAGS="--options=runtime --timestamp" \
   CURRENT_PROJECT_VERSION="${BUILD_NUMBER}" \
   archive 2>&1 | tee xcodebuild-archive.log | xcpretty || {

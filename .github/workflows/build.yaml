@@ -42,6 +42,7 @@ jobs:
           p12-password: ${{ secrets.P12_PASSWORD }}
 
       - name: Install provisioning profile
+        id: signing-profile
         run: ./scripts/ci/install-provisioning-profile.sh
         env:
           MACOS_PROVISIONING_PROFILE_BASE64: ${{ secrets.MACOS_PROVISIONING_PROFILE_BASE64 }}
@@ -59,6 +60,8 @@ jobs:
         run: ./scripts/ci/archive.sh
         env:
           SIGNING_CERTIFICATE_NAME: ${{ secrets.SIGNING_CERTIFICATE_NAME }}
+          SIGNING_PROFILE_UUID: ${{ steps.signing-profile.outputs.profile_uuid }}
+          SIGNING_TEAM_ID: ${{ steps.signing-profile.outputs.team_id }}
           BUILD_NUMBER: ${{ github.run_number }}
 
       - name: Sign Sparkle

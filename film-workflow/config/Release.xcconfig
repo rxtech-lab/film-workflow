@@ -1,3 +1,6 @@
 #include "Base.xcconfig"
 APP_API_BASE_URL = https:/$()/filmstudio.rxlab.app
 APP_WEB_BASE_URL = https:/$()/filmstudio.rxlab.app
+
+// The CI archive supplies the installed profile UUID for the app target.
+PROVISIONING_PROFILE_SPECIFIER[sdk=macosx*] = $(SIGNING_PROFILE_UUID)

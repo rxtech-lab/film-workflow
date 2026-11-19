@@ -4,19 +4,7 @@ import XCTest
 final class TimelineTrackOrderUITests: XCTestCase {
     @MainActor
     func testDragReorderUndoCancelAndPersistence() throws {
-        continueAfterFailure = false
-        let root = FileManager.default.temporaryDirectory.appendingPathComponent("TrackOrderUITests-\(UUID())")
-        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
-        let app = XCUIApplication()
-        app.launchArguments = ["-uiTesting", "-skipStartupAuth", "-AppleLanguages", "(en)", "-AppleLocale", "en_US",
-                               "-NSQuitAlwaysKeepsWindows", "NO", "-ApplePersistenceIgnoreState", "YES"]
-        app.launchEnvironment["RXFILM_TRACK_UI_TEST_ROOT"] = root.path
-        addTeardownBlock { @MainActor in app.terminate(); try? FileManager.default.removeItem(at: root) }
-        app.launch()
-        let window = app.windows["Track Order UI Test"]
-        XCTAssertTrue(window.waitForExistence(timeout: 30),
-                      (try? String(contentsOf: root.appendingPathComponent("fixture-error.txt"), encoding: .utf8)) ?? app.debugDescription)
-        window.click()
+        let (app, window) = try launchFixture()
         let overlay = header(1, in: app), video = header(2, in: app)
         XCTAssertTrue(overlay.waitForExistence(timeout: 10), app.debugDescription)
         XCTAssertLessThan(overlay.frame.minY, video.frame.minY)
@@ -62,6 +50,128 @@ final class TimelineTrackOrderUITests: XCTestCase {
         XCTAssertTrue(video.waitForExistence(timeout: 10))
         XCTAssertLessThan(video.frame.minY, overlay.frame.minY)
         XCTAssertGreaterThan(audio.frame.minY, audio1.frame.minY)
+    }
+
+    @MainActor
+    func testFilterShowsMultipleTrackTypesWithoutChangingPlayback() throws {
+        let (app, _) = try launchFixture()
+        let overlay = header(1, in: app), video = header(2, in: app)
+        let audio1 = header(3, in: app), audio2 = header(4, in: app)
+        XCTAssertTrue(overlay.waitForExistence(timeout: 10), app.debugDescription)
+        assertCenterColor(.blue, in: app)
+
+        let filter = app.buttons["timeline.filter"]
+        let apply = app.buttons["timeline.filter.apply"]
+        filter.click()
+        let overlayType = app.checkBoxes["timeline.filter.type.overlay"]
+        XCTAssertTrue(overlayType.waitForExistence(timeout: 5), app.debugDescription)
+        overlayType.click()
+        app.checkBoxes["timeline.filter.type.caption"].click()
+        app.checkBoxes["timeline.filter.type.zoom"].click()
+        apply.click()
+
+        XCTAssertTrue(overlay.waitForNonExistence(timeout: 5), app.debugDescription)
+        XCTAssertTrue(video.exists)
+        XCTAssertTrue(audio1.exists)
+        XCTAssertTrue(audio2.exists)
+        XCTAssertLessThan(video.frame.minY, audio1.frame.minY)
+        XCTAssertLessThan(audio1.frame.minY, audio2.frame.minY)
+        assertCenterColor(.blue, in: app)
+
+        filter.click()
+        let videoType = app.checkBoxes["timeline.filter.type.video"]
+        XCTAssertTrue(videoType.waitForExistence(timeout: 5), app.debugDescription)
+        videoType.click()
+        app.checkBoxes["timeline.filter.type.audio"].click()
+        apply.click()
+
+        let empty = app.staticTexts["No tracks match the filter"]
+        XCTAssertTrue(empty.waitForExistence(timeout: 5), app.debugDescription)
+        XCTAssertFalse(video.exists)
+        XCTAssertFalse(audio1.exists)
+        XCTAssertFalse(audio2.exists)
+        assertCenterColor(.blue, in: app)
+
+        filter.click()
+        let showAll = app.buttons["timeline.filter.show-all"]
+        XCTAssertTrue(showAll.waitForExistence(timeout: 5), app.debugDescription)
+        showAll.click()
+        apply.click()
+
+        XCTAssertTrue(overlay.waitForExistence(timeout: 5), app.debugDescription)
+        XCTAssertLessThan(overlay.frame.minY, video.frame.minY)
+        assertCenterColor(.blue, in: app)
+    }
+
+    @MainActor
+    func testFilterCompositionTimelineByElementType() throws {
+        let (app, window) = try launchFixture()
+        let card = window.descendants(matching: .any).matching(identifier: "library.item.00000000-0000-0000-0000-000000000005").firstMatch
+        XCTAssertTrue(card.waitForExistence(timeout: 10), "The fixture composition card should appear in the library")
+        card.doubleClick()
+
+        let headers = window.descendants(matching: .any).matching(NSPredicate(format: "identifier BEGINSWITH %@", "timeline.track.drag."))
+        let heading = headers.matching(NSPredicate(format: "label BEGINSWITH %@", "Reorder Heading")).firstMatch
+        let badge = headers.matching(NSPredicate(format: "label BEGINSWITH %@", "Reorder Badge")).firstMatch
+        XCTAssertTrue(heading.waitForExistence(timeout: 10), "The composition timeline should show the renamed div")
+        XCTAssertTrue(badge.exists)
+        let timecode = window.staticTexts["composition.timecode"]
+        XCTAssertTrue(timecode.exists)
+        let originalTime = (timecode.value as? String) ?? timecode.label
+        XCTAssertEqual(originalTime, "00:00:00:00")
+
+        let filter = app.buttons["timeline.filter"]
+        XCTAssertTrue(filter.waitForExistence(timeout: 5), window.debugDescription.split(separator: "\n")
+            .filter { $0.contains("timeline") || $0.contains("Filter") }.joined(separator: "\n"))
+        let clear = app.buttons["timeline.filter.clear-all"]
+        let apply = app.buttons["timeline.filter.apply"]
+        filter.click()
+        let div = app.checkBoxes["timeline.filter.type.div"]
+        XCTAssertTrue(div.waitForExistence(timeout: 5), "The sheet should list div as a type")
+        XCTAssertTrue(app.checkBoxes["timeline.filter.type.span"].exists)
+        clear.click()
+        div.click()
+        apply.click()
+        XCTAssertTrue(badge.waitForNonExistence(timeout: 5))
+        XCTAssertTrue(heading.exists)
+        XCTAssertEqual((timecode.value as? String) ?? timecode.label, originalTime)
+
+        filter.click()
+        XCTAssertTrue(clear.waitForExistence(timeout: 5))
+        clear.click()
+        app.sheets.buttons["Cancel"].click()
+        XCTAssertTrue(apply.waitForNonExistence(timeout: 5))
+        XCTAssertTrue(heading.exists)
+        XCTAssertFalse(badge.exists)
+
+        filter.click()
+        XCTAssertTrue(clear.waitForExistence(timeout: 5))
+        clear.click()
+        apply.click()
+        let reset = app.buttons["Show All Tracks"]
+        XCTAssertTrue(reset.waitForExistence(timeout: 5))
+        XCTAssertFalse(heading.exists)
+        reset.click()
+        XCTAssertTrue(badge.waitForExistence(timeout: 5))
+        XCTAssertTrue(heading.exists)
+    }
+
+    @MainActor
+    private func launchFixture() throws -> (XCUIApplication, XCUIElement) {
+        continueAfterFailure = false
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent("TrackOrderUITests-\(UUID())")
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        let app = XCUIApplication()
+        app.launchArguments = ["-uiTesting", "-skipStartupAuth", "-AppleLanguages", "(en)", "-AppleLocale", "en_US",
+                               "-NSQuitAlwaysKeepsWindows", "NO", "-ApplePersistenceIgnoreState", "YES"]
+        app.launchEnvironment["RXFILM_TRACK_UI_TEST_ROOT"] = root.path
+        addTeardownBlock { @MainActor in app.terminate(); try? FileManager.default.removeItem(at: root) }
+        app.launch()
+        let window = app.windows["Track Order UI Test"]
+        XCTAssertTrue(window.waitForExistence(timeout: 30),
+                      (try? String(contentsOf: root.appendingPathComponent("fixture-error.txt"), encoding: .utf8)) ?? app.debugDescription)
+        window.click()
+        return (app, window)
     }
 
     @MainActor

@@ -103,7 +103,8 @@ Required secrets (org- or repo-level):
 | --- | --- |
 | `SPARKLE_KEY` | EdDSA private key signing the appcast; its public half is `SUPublicEDKey` in `Info.plist` |
 | `BUILD_CERTIFICATE_BASE64` / `P12_PASSWORD` | Developer ID certificate imported into the runner keychain |
-| `SIGNING_CERTIFICATE_NAME` | Identity name passed to `codesign` |
+| `SIGNING_CERTIFICATE_NAME` | Developer ID identity used by Xcode and `codesign` |
+| `MACOS_PROVISIONING_PROFILE_BASE64` | Matching Developer ID provisioning profile for `rxlab.film-workflow`. CI reads the signing team and profile UUID from this file. |
 | `APPLE_ID` / `APPLE_ID_PWD` / `APPLE_TEAM_ID` | Notarization credentials (`APPLE_ID_PWD` is an app-specific password) |
 | `RELEASE_TOKEN` | PAT used by semantic-release, so the created release triggers the build workflow |
 

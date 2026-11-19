@@ -25,6 +25,8 @@ final class RemotionCompositionSession {
     private(set) var setupError: String?
     /// The element lanes, rebuilt whenever the composition's tracks change.
     private(set) var timeline = Timeline(tracks: [])
+    /// JSX tag names keyed by lane ID. Unresolved elements share a fallback filter option.
+    private(set) var elementTypesByTrackID: [UUID: String] = [:]
     var selectedClipIDs: Set<UUID> = [] {
         didSet { selectionChanged() }
     }
@@ -32,6 +34,7 @@ final class RemotionCompositionSession {
 
     @ObservationIgnored private var clipIDsBySource: [String: UUID] = [:]
     @ObservationIgnored private var sourcesByClipID: [UUID: String] = [:]
+    @ObservationIgnored private var filesUsedForElementTypes: [String: String] = [:]
     private var restingFrame: Int?
 
     init(project: RemotionProject, clipID: UUID?) {
@@ -156,8 +159,9 @@ final class RemotionCompositionSession {
         guard let model, let composition = model.player.composition else { return }
         let fps = max(1, composition.fps)
         let duration = composition.durationInFrames
+        let objectTracks = model.timelineTracks.reversed()
         var tracks: [Track] = []
-        for track in model.timelineTracks.reversed() {
+        for track in objectTracks {
             let clipID = id(for: track.src, salt: "clip")
             let start = Double(track.start) / fps
             let end = Double(max(track.start + 1, track.end(in: duration))) / fps
@@ -171,7 +175,39 @@ final class RemotionCompositionSession {
         var next = Timeline(id: id(for: projectID.uuidString, salt: "timeline"), width: composition.width, height: composition.height,
                             fps: Int(fps.rounded()), tracks: tracks)
         next.backgroundHex = "#000000"
-        if next != timeline { timeline = next }
+        let timelineChanged = next != timeline
+        if timelineChanged || filesUsedForElementTypes != model.files {
+            updateElementTypes(for: zip(tracks, objectTracks), files: model.files)
+        }
+        if timelineChanged { timeline = next }
+    }
+
+    private func updateElementTypes(
+        for lanes: some Sequence<(Track, ObjectTrack)>, files: [String: String]
+    ) {
+        var linesByFile: [String: [Substring]] = [:]
+        var types: [UUID: String] = [:]
+        for (track, object) in lanes {
+            guard let stamp = SourceStamp(object.src), let source = files[stamp.file] else { continue }
+            let lines = linesByFile[stamp.file] ?? source.split(omittingEmptySubsequences: false) {
+                $0 == "\n" || $0 == "\r" || $0 == "\r\n" || $0 == "\u{2028}" || $0 == "\u{2029}"
+            }
+            linesByFile[stamp.file] = lines
+            types[track.id] = Self.elementType(in: source, lines: lines, stamp: stamp)
+        }
+        filesUsedForElementTypes = files
+        if elementTypesByTrackID != types { elementTypesByTrackID = types }
+    }
+
+    /// MotionSwift stamps the opening JSX bracket with a 1-based UTF-16 column.
+    /// The track's display label can be renamed independently of that tag.
+    private static func elementType(in source: String, lines: [Substring], stamp: SourceStamp) -> String? {
+        guard stamp.line > 0, stamp.line <= lines.count, stamp.column > 0 else { return nil }
+        let line = lines[stamp.line - 1]
+        guard let column = line.utf16.index(line.utf16.startIndex, offsetBy: stamp.column - 1, limitedBy: line.utf16.endIndex),
+              let opening = String.Index(column, within: line), opening < line.endIndex, line[opening] == "<" else { return nil }
+        let tag = source[opening...].dropFirst().drop(while: \.isWhitespace).prefix { !$0.isWhitespace && !"/>{".contains($0) }
+        return tag.isEmpty ? nil : String(tag)
     }
 
     /// Applies what the timeline view changed: moved or trimmed spans become `setTiming` writes
