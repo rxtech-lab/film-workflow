@@ -22,7 +22,7 @@ struct RemotionCompositionSessionTests {
     export const MyComposition = () => (
       <AbsoluteFill style={{backgroundColor: '#000000'}}>
         <Sequence from={0} durationInFrames={30}>
-          <div style={{position: 'absolute', left: 10, top: 10, width: 100, height: 40, color: 'white', fontSize: 20}}>Title</div>
+          {/* 🎬 */}<div data-ms-label="Opening title" style={{position: 'absolute', left: 10, top: 10, width: 100, height: 40, color: 'white', fontSize: 20}}>Title</div>
         </Sequence>
       </AbsoluteFill>
     );
@@ -90,8 +90,8 @@ struct RemotionCompositionSessionTests {
         let model = try #require(session.model)
         #expect(session.timeline.width == 320 && session.timeline.fps == 30)
         #expect(!session.timeline.tracks.isEmpty)
-        let lane = try #require(session.timeline.tracks.first { $0.clips.first?.source.displayName.contains("div") == true || $0.name.contains("Sequence") }
-                                ?? session.timeline.tracks.first)
+        let lane = try #require(session.timeline.tracks.first { $0.name == "Opening title · Title" })
+        #expect(session.elementTypesByTrackID[lane.id] == "div")
         let clip = try #require(lane.clips.first)
         #expect(clip.source.capabilities.contains(.drag))
 

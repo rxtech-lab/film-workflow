@@ -71,6 +71,9 @@ public struct SequenceViewerView: View {
                 Button("Go to End") { controller.pause(); controller.seek(to: controller.duration) }
                 Divider()
                 Toggle("Mute", isOn: Binding(get: { controller.player.isMuted }, set: { controller.player.isMuted = $0 }))
+                if stage != nil {
+                    PreviewResolutionPicker()
+                }
             } label: { Image(systemName: "slider.horizontal.3") }
             .menuStyle(.borderlessButton)
             .fixedSize()

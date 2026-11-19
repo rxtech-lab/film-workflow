@@ -1729,9 +1729,6 @@
         }
       }
     },
-    "All Elements" : {
-
-    },
     "All interfaces (0.0.0.0)" : {
       "localizations" : {
         "zh-Hans" : {
@@ -2341,9 +2338,6 @@
           }
         }
       }
-    },
-    "Back to element list" : {
-
     },
     "Back to Recording" : {
 
@@ -8724,6 +8718,17 @@
     "Looking for files…" : {
 
     },
+    "Low" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "低"
+          }
+        }
+      }
+    },
     "Lyrics" : {
       "localizations" : {
         "zh-Hans" : {
@@ -11368,6 +11373,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "预览"
+          }
+        }
+      }
+    },
+    "Preview Resolution" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "预览分辨率"
           }
         }
       }
@@ -14530,6 +14545,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "SSML 预览"
+          }
+        }
+      }
+    },
+    "Standard" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "标准"
           }
         }
       }

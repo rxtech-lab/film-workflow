@@ -24,4 +24,21 @@ final class TimelineViewportTests: XCTestCase {
         let offset = TimelineViewport.scrollOffset(keeping: 1, from: 20, to: 2, offsetX: 0, viewportWidth: 800)
         XCTAssertEqual(offset, 0)
     }
+
+    func testLargeTimelineMountsOnlyNearbyRows() {
+        let offset: CGFloat = 20 + 900 * 53
+        let window = TimelineRowWindow(offset: offset, height: 318, rulerHeight: 20, rowHeight: 53)
+        let nearby = TimelineRowWindow(offset: offset + 15, height: 318, rulerHeight: 20, rowHeight: 53)
+
+        XCTAssertEqual(window, nearby)
+        XCTAssertEqual(window.indices(trackCount: 1_931, pinnedRows: [], activeRow: nil, clipRowOffset: 0), Array(896..<912))
+        XCTAssertEqual(window.indices(trackCount: 902, pinnedRows: [], activeRow: nil, clipRowOffset: 0), Array(896..<902))
+    }
+
+    func testVisiblePinsAndDragSourcesOutsideTheWindowAreMounted() {
+        let window = TimelineRowWindow(offset: 20 + 900 * 53, height: 106, rulerHeight: 20, rowHeight: 53)
+        let indices = window.indices(trackCount: 1_931, pinnedRows: [0, 20, 30], activeRow: 1_000, clipRowOffset: 100)
+
+        XCTAssertEqual(indices, [0, 20] + Array(796..<808) + Array(896..<908) + [1_000])
+    }
 }
